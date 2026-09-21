@@ -1103,7 +1103,7 @@ compile error.
 `Each` needs **no syntax of its own**. It is an ordinary runtime component
 whose `children` is a slot function; params on a component
 (see [Slots](#params-on-a-component-children-is-the-default-slot)) do the rest.
-The only thing the compiler adds is key enforcement.
+The only thing the compiler adds is a key check.
 
 `.map()` keeps working — it parses today, so it keeps its meaning.
 
@@ -1127,8 +1127,8 @@ No fragment, no wrapper: `Each` returns the array of whatever the body returns.
 
 ```tsx
 // .rtsx
-<Each items key={item.id} { item, index }>
-  <p>{item.name} is {index + 1}</p>
+<Each items { item, index }>
+  <p key={item.id}>{item.name} is {index + 1}</p>
 </Each>
 ```
 
@@ -1141,35 +1141,21 @@ No fragment, no wrapper: `Each` returns the array of whatever the body returns.
 </Each>
 ```
 
-Three steps, two of them general:
+Both steps are general rules; nothing here is specific to `Each`:
 
 1. `items` → `items={items}` — *Shorthand props*.
 2. params → the body becomes the `children` callback — *Slots*.
-3. **`key` on `Each` moves onto the root of the body.** `Each` is recognised by
-   import origin for this step only. The key expression may use the params.
 
-A key written directly on the body root is simply left there:
+The `key` is written where React wants it: on the root element of the body.
+It may use the params.
 
-```tsx
-// .rtsx
-<Each items={users} { item: user }>
-  <UserRow key={user.id} user />
-</Each>
-```
+**The key is enforced at compile time.** `Each` is recognised by import origin
+for this check only: the body must be a single element that carries `key`. A
+body of several children or text has nowhere to put one — wrap it in an
+element, or in `<Fragment key={…}>`.
 
-```tsx
-// .tsx
-<Each items={users}>
-  {({ item: user }) => <UserRow key={user.id} user={user} />}
-</Each>
-```
-
-**The key is enforced at compile time**: one of the two forms must be present.
-
-If the body is not a single element (several children, text), the slot-body
-rule already turns it into `<>…</>`; a key moved from `Each` lands on that
-fragment (`<Fragment key={…}>`). A key cannot be *written* on such a body, so
-there `key` on `Each` is the only form.
+`key` on `<Each>` itself keeps its React meaning: it keys the `Each` element,
+not the iterations.
 
 ### Typing behaviour
 
@@ -1186,16 +1172,13 @@ All TS7, from `EachProps<T>`:
 
 | Code | Message | Condition | Needs |
 | --- | --- | --- | --- |
-| each-no-key | Each iteration needs a `key` | no `key` on `Each`, and the body is not a single element with `key` | syntax |
-| each-double-key | | `key` on `Each` and on the body root | syntax |
+| each-no-key | Each iteration needs a `key` on the root element of the body | the body is not a single element with `key` | syntax |
 | params-required | `Each` requires params | body without params (general slot error; write `{}` to ignore the values) | types |
 
 ### Edge cases
 
 - **`key={index}`** is legal and explicit — the author has decided the list is
   static. The compiler does not second-guess it.
-- **`key` on `Each` never reaches `Each`** — it is always moved, so `Each`
-  itself cannot be keyed. Wrap it if that is ever needed.
 - **Hooks** are not allowed directly in the body: it is a callback run inside
   `Each`'s render.
 - **Slot elements in the body** — `<Select><Each …><$Option /></Each></Select>`
