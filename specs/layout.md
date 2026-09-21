@@ -176,12 +176,12 @@ ordinary slot syntax — there is no new syntax here.
 </Dialog>
 ```
 
-Roughly:
+Roughly: the markup becomes a `<template>` at compile time, and at runtime
 
 ```tsx
-dialog.open({
-  $Title: { children: title },
-  $Contents: { children: <Dynamic><CustomComponent /></Dynamic> },
+dialog.open("Dialog-a1", {
+  holes: { _dynamic_b1: title, _dynamic_b2: <CustomComponent /> },
+  onClose,
 });
 ```
 
@@ -194,30 +194,72 @@ shell API from effects:
 
 | In the island | Call on the shell component |
 | --- | --- |
-| element mounts | `dialog.open(slots)` |
-| slot values or options change | `dialog.update(slots)` |
+| element mounts | `dialog.open(template, holes)` |
+| hole values or options change | `dialog.update(holes)` |
 | element unmounts | `dialog.close()` |
 | the user closes it (Esc, backdrop) | the shell calls `onClose`; the island unmounts the element |
 
 So open/closed is ordinary island state: `<Match on={open}><Dialog …/></Match>`.
 
-### What may cross from an island into a shell component
+### Slot bodies are shell code, compiled ahead of time
 
-The shell cannot render React elements. A slot or option of a shell component
-takes:
+The static HTML of a shell component can only be generated at compile time.
+So a slot body of a shell component is **shell code**, even when it is written
+inside an island: the compiler renders it, once, into a `<template>` for that
+use site. Everything that is only known at runtime becomes a **hole** in the
+template. Braces are the marker: in these slot bodies
 
-| Value | Example | |
-| --- | --- | --- |
-| text and other primitives, runtime values included | `<$Title>{title}</$Title>` | set as text by the shell's JS |
-| plain data and callbacks | `onClose={…}`, `size="lg"` | same JS realm; passed as is |
-| `<Dynamic>` | `<$Contents><Dynamic>…</Dynamic></$Contents>` | **a new island**, mounted into the slot's host element when the shell component opens, unmounted when it closes |
-| React elements | `<$Title><b>{title}</b></$Title>` | error: shell-slot-element — wrap in `<Dynamic>` |
+```
+{content}  ≡  <Dynamic>{content}</Dynamic>
+```
 
-The nested `Dynamic` is a full island, under the same rules as any other: a
-separate React root, its own bundle (loaded when first opened — dialog
-contents cost nothing until then), and only compile-time values as props.
-It shares nothing with the island that opened it; both talk through
-[persistent state](persistent-state.md).
+so `<Dynamic>` only has to be written around JSX elements.
+
+```tsx
+// .rtsx — inside an island
+<Dialog>
+  <$Contents>
+    Are you sure you want to remove user {userToRemove}
+  </$Contents>
+</Dialog>
+```
+
+```html
+<!-- compile time: literal HTML in the page's shell -->
+<template id="Dialog-a1">
+  <dialog>
+    <div data-slot="$Contents">Are you sure you want to remove user <span id="_dynamic_b2"></span></div>
+  </dialog>
+</template>
+```
+
+| In a slot body | Becomes |
+| --- | --- |
+| text, shell-safe JSX | literal HTML in the template |
+| `{expr}` whose value is known at compile time | literal HTML too — the hole is optimised away; same result |
+| `{expr}` of a primitive type | a hole; the bridge sets it as **text** on `open` and on every change. **No React** |
+| `{expr}` of any other type (`{cond ? <b>x</b> : null}`), or an explicit `<Dynamic>` around JSX | a hole that React renders into |
+| a JSX element that is not shell-safe, **outside** `Dynamic` (`<CustomComponent />`) | error — shell-slot-element: wrap it in `<Dynamic>` |
+
+React is needed only when a hole holds JSX. The compiler is type-aware, so it
+tells a primitive hole from a JSX hole by the type of the expression.
+
+The shorthand is for braces only. An *element* is never made dynamic
+implicitly: deciding that from what the component uses would be the
+inference the explicit boundary exists to avoid.
+
+The equivalence holds only here. In page-level shell code there is no island
+to supply a value, so a runtime `{expr}` stays shell-dynamic-value.
+
+Attributes on the shell component itself are not markup: runtime data and
+callbacks (`onClose={…}`) are passed to `open` as they are.
+
+At runtime the island only supplies what goes into the holes:
+
+```tsx
+// island side, roughly — driven from effects by the bridge component
+dialog.open("Dialog-a1", { holes: { _dynamic_b2: userToRemove }, onClose });
+```
 
 - In which form the shell component itself reaches the page: *Delivery* below.
 - In island code a layout component of the design system is rendered by
@@ -229,7 +271,7 @@ A shell component is three artifacts, like the rest of the shell:
 
 | Artifact | Shipped as |
 | --- | --- |
-| HTML | a **`<template>` element in the page's shell**, one per shell component the page's islands import: `<template id="rx-Dialog">…</template>` at the end of `<body>` |
+| HTML | a **`<template>` element in the page's shell**, one per **use site**: the component's own markup with the slot bodies already rendered in — `<template id="Dialog-a1">…</template>` at the end of `<body>` |
 | CSS | part of the per-route CSS |
 | JS (`open` / `update` / `close`) | raw JS in the shared runtime, React-free |
 
@@ -239,8 +281,8 @@ nothing until used (no scripts run, no images load, no styles apply).
 
 ```js
 // dialog.open(slots), roughly
-const node = document.getElementById("rx-Dialog").content.cloneNode(true).firstElementChild;
-fill(node, slots);              // text → textContent of [data-slot]; Dynamic → mount an island there
+const node = document.getElementById("Dialog-a1").content.cloneNode(true).firstElementChild;
+fill(node, holes);              // primitive hole → textContent; JSX hole → React renders there
 document.body.append(node);
 node.showModal();
 ```
@@ -248,8 +290,8 @@ node.showModal();
 - **A fresh clone per `open`**, removed on `close`: no state left over from
   the previous use, and two instances can be open at once (a confirm inside a
   dialog).
-- Slot hosts are marked in the template (`data-slot="Title"`); that is where
-  text is set and where a nested `Dynamic` gets its root.
+- Holes are looked up **inside the clone** (`node.querySelector`), so the
+  same hole id in two open clones does not clash.
 - The HTML stays a compile-time artifact — plain, precise, inspectable in
   view-source — and the compiler knows which templates a page needs from its
   islands' imports (`route-table.md`).
@@ -302,6 +344,32 @@ Considered and not chosen:
 > the API it must implement (`open` / `update` / `close`). Belongs in
 > `slot-contract.md`. Framework-only for now; third-party shell components
 > are not planned.
+
+> OPEN: is a **JSX hole** — a `Dynamic` around JSX in a shell-component slot —
+> a **separate root**, or a **portal** of the island that opened it?
+> (Primitive holes need no React, so the question does not arise for them.)
+>
+> Booting a root is not the concern: React is already on the page, and
+> `createRoot` costs well under a millisecond (a fiber root, plus React's
+> event listeners attached to the container) and a few KB. The costs of a
+> separate root are semantic:
+>
+> - **no runtime values** can cross (dynamic-props), so dialog contents cannot
+>   simply use the state of the island that opened the dialog — unless the
+>   parent drives the child root by calling `root.render` again on every change;
+> - the first render of a new root is **scheduled**, so the dialog opens
+>   empty and fills in a tick later (avoidable only with `flushSync`);
+> - no context from the opener; a separate entry and chunk per `Dynamic`.
+>
+> `createPortal` into the slot's host element has none of these: no new root,
+> same commit as the opener, runtime props and context flow, events bubble
+> through the React tree. It reads as "this is still the island that opened
+> the dialog, rendering into DOM the shell owns".
+>
+> Recommended: a **top-level** `Dynamic` (in shell code) is a separate root —
+> one island, one app. A `Dynamic` **nested** in a shell-component slot is a
+> portal of its opener, and may take runtime values. The wrapper stays in
+> the source either way: it marks where React starts inside shell-owned DOM.
 
 > OPEN: a shell component used directly in **shell code** (a static dialog in
 > a page) — who opens it, with no island around?
