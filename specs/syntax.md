@@ -23,6 +23,27 @@ meaning; exceptions are called out explicitly in the section that makes them.
 | [Iteration](#iteration-each) — `Each` | Draft |
 | Rules of layout — not syntax; see [layout.md](layout.md) | Draft |
 
+## Compilation passes
+
+The desugarings are not one transform but a sequence of small ones. Each pass
+sees the output of the previous one, so features compose without special
+cases — conditional slots exist only because pass 3 runs after pass 2.
+
+| # | Pass | Input → output |
+| --- | --- | --- |
+| 0 | checks on the source | rules of layout, segment files, `Each` keys — reported against what the author wrote |
+| 1 | shorthand props | bare attribute → `name={name}`; resolved first, while the source scopes (params included) are intact |
+| 2 | flow lowering | `Match`, `Switch` → conditional expressions |
+| 3 | slot hoisting | slot elements, and conditional expressions of slot elements → `$X` props (an array for a list slot — the one type-directed step); params → callbacks |
+| 4 | segment roots | `#name` → `id`, import, nested default export |
+
+The `.rtsx` → `.tsx` examples in this document show the final output unless
+they say otherwise.
+
+> ROADMAP: phase 2 (`Each` around slot elements, see [Iteration](#iteration-each))
+> is the same idea once more — lower `Each` to `.map()`, then hoist a `.map()`
+> of slot elements into an array prop.
+
 ## Shorthand props
 
 ### Motivation
@@ -385,6 +406,57 @@ callback wraps what is left. The params are therefore in scope in the
 component's children only — not in its slot elements, and not in its own
 attributes.
 
+### Conditional slots
+
+An optional slot may be filled conditionally. No new rule is needed for it:
+it falls out of compiling in passes (see *Compilation passes*).
+
+```tsx
+// .rtsx
+<Input value onChange>
+  <Match on={invalid}>
+    <$Hint>{renderErrors(errors)}</$Hint>
+  </Match>
+</Input>
+```
+
+```tsx
+// after pass 2 — Match → ternary
+<Input value={value} onChange={onChange}>
+  {invalid ? <$Hint>{renderErrors(errors)}</$Hint> : null}
+</Input>
+```
+
+```tsx
+// after pass 3 — a ternary of slot elements → a ternary prop
+<Input value={value} onChange={onChange}
+  $Hint={invalid ? { children: renderErrors(errors) } : undefined} />
+```
+
+Slot hoisting therefore accepts two things as immediate children: a slot
+element, and a **conditional expression whose branches are slot elements of
+one slot, or `null`**. Where the ternary came from does not matter — a `Match`,
+a `Switch` (a chain of them), or one written by hand.
+
+- Each branch is desugared as a slot element on its own (options, params, body).
+- A `null` branch becomes `undefined`, so `$Hint?: {…}` types and
+  `{ $Hint = fallback }` defaults work unchanged.
+- The slot must be optional. For a required slot TS7 reports that `undefined`
+  is not assignable; reworded as "`$Hint` is required and cannot be conditional".
+- The container can now tell "no hint" (`undefined`) from "empty hint".
+- Narrowing works: the branch is inline in the ternary.
+
+| Not supported | Error |
+| --- | --- |
+| branches that fill **different** slots (`c ? <$IconStart /> : <$IconEnd />`) — it would take two props and evaluate `c` twice | mixed-conditional-slot |
+| a branch that mixes a slot element with other children, or holds several slot elements | mixed-conditional-slot |
+| `{c && <$Hint />}` — `&&` would put `false` or `0` into the slot | orphan-slot |
+| `Match` / `Switch` **with params** around a slot element — they lower to a function call, not a bare ternary | orphan-slot |
+
+Island code only: `Match` and `Switch` are not allowed in shell code
+(see [layout.md](layout.md)), and "an optional slot being empty" is the
+variance that is sanctioned anyway.
+
 ### One slot, many items
 
 A slot is filled **once**. When a container renders many items, the data goes
@@ -429,10 +501,78 @@ function Select({ options, $Option }: SelectProps) {
 Keys, item markup and iteration stay inside the container; the call site has
 no loop. Per-item variation is written inside the body.
 
-**Deferred:** repeatable slots (`$Option: {…}[]`, several `<$Option>` elements,
-`{xs.map(() => <$Option …>)}`). Filling a slot twice is duplicate-slot.
-Phase 2 brings them back through `Each` — see the roadmap note in
-[Iteration](#iteration-each).
+That pattern covers data-driven lists. Items that are **written out** — the
+fields of a form, the cases of a switch — need *List slots*.
+
+### List slots
+
+JSX cannot carry the same attribute twice, so a slot that is filled several
+times must become one array. A slot is a list slot when it is **declared as
+an array**:
+
+```tsx
+interface FormProps {
+  $Field: {
+    name: string;
+    children?: OptionalSlotFn<FieldParams>;
+  }[];  // <- list slot
+}
+```
+
+```tsx
+// .rtsx
+<Form>
+  <$Field name="a" />
+  <$Field name="b" />
+</Form>
+```
+
+```tsx
+// .tsx
+<Form $Field={[{ name: "a" }, { name: "b" }]} />
+```
+
+Same-named slot elements in one parent are collected, in source order, into
+one array attribute, placed where the first of them would be. Each item is
+desugared on its own — own options, own params, own body. Position relative to
+unslotted children is not preserved.
+
+**Array or object is type-directed** — the one place where types change the
+emitted code. The compiler looks `$X` up in the parent's props type, ignoring
+`undefined` / `null`:
+
+| Declared type of `$X` | Emitted |
+| --- | --- |
+| array or tuple | always an array, even for a single `<$X>` → `[{…}]` |
+| anything else | an object; a second `<$X>` is duplicate-slot |
+
+A conditional item (*Conditional slots*) in a list slot is spread:
+
+```tsx
+// .rtsx
+<Form>
+  <$Field name="a" />
+  <Match on={showB}><$Field name="b" /></Match>
+</Form>
+```
+
+```tsx
+// .tsx
+<Form $Field={[{ name: "a" }, ...(showB ? [{ name: "b" }] : [])]} />
+```
+
+- Items that differ in shape are typed with a discriminated union as the
+  element type (`{ type: "number"; children: SlotFn<{ value: number }> } | …`);
+  TS7 picks the member per item from the literal option, so params are typed
+  per item.
+- "Slot required" for a list means `$Field: {…}[]` vs `$Field?: {…}[]`; an
+  empty list cannot be written, only an absent one.
+- `key` is still not an option of a slot (slot-key); the container keys its
+  items from their options (`name`).
+
+**Still deferred:** list items produced by a loop —
+`{xs.map(() => <$Option …>)}` or `Each` around slot elements. See the roadmap
+note in [Iteration](#iteration-each).
 
 ### Grammar
 
@@ -495,9 +635,10 @@ No type annotation inside the pattern; types come from the declaration.
 **The compiler is type-aware.** It embeds the checker (tsgo fork) and, before
 desugaring a container element, resolves the props type of its tag. That query
 depends only on the container's declaration, never on the call site being
-desugared, so there is no cycle. Types never change the emitted code — the
-desugaring stays purely syntactic. They are used for:
+desugared, so there is no cycle. They are used for:
 
+- **Emit** — array vs object for a slot (*List slots*). The only place where
+  types change the output; everything else is purely syntactic.
 - **Diagnostics** — every error below is reported on the `.rtsx` source in
   slot terms, not as an assignability error on emitted code.
 - **Language service** — see *Tooling*.
@@ -523,8 +664,10 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 | params-required | `$X` requires params | body only, `children: SlotFn` | types |
 | no-values | `$X` provides no values | params, `children: ReactNode` | types |
 | content-required | `$X` requires content | `<$X … />`, `children` not optional | types |
-| orphan-slot | Slot must be immediate child of the component | parent is an intrinsic element, fragment, expression or the file root | syntax |
-| duplicate-slot | `$X` is already filled | same slot element twice in one parent, or slot element plus explicit `$X={…}` attribute | syntax |
+| orphan-slot | Slot must be immediate child of the component | after flow lowering, the slot element is neither an immediate child of a component element nor a branch of an immediate-child conditional expression | syntax |
+| mixed-conditional-slot | A conditional slot fills one slot | see *Conditional slots* | syntax |
+| duplicate-slot | `$X` is already filled | second `<$X>` for a slot that is not a list slot | types |
+| duplicate-slot | `$X` is already filled | slot element plus explicit `$X={…}` attribute | syntax |
 | params-on-html | Params are only allowed on components and slot elements | `<div { size }>` | syntax |
 | duplicate-params | A slot takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
@@ -556,7 +699,8 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
   with `{ value: optionValue }`, `<Input value />` no longer sees the param;
   write `<Input value={optionValue} />`.
 - **Not an immediate child** — `{cond && <$X />}`, `.map(...)`, inside a
-  fragment or an intrinsic element → orphan-slot.
+  fragment or an intrinsic element → orphan-slot. A ternary or a `Match` is
+  fine (*Conditional slots*).
 - **Spread on the parent** — the slot attribute is appended last, so it wins
   over a `$X` inside the spread.
 - **Whitespace** — JSX already drops whitespace-only lines, so removing a slot
@@ -626,10 +770,9 @@ import { Switch, Match } from "reactogenic";  // package name is a placeholder
 imported. The package declares `Switch` as a container with a `$Case` slot, so
 completion, hover and orphan-slot work exactly as for any container.
 
-Three things are sanctioned here and nowhere else, because the compiler
-consumes these elements itself:
+`$Case` is a list slot (see [Slots](#list-slots)). Two things are sanctioned
+here and nowhere else, because the compiler consumes these elements itself:
 
-- `$Case` may be filled **many times** (repeatable slots are otherwise deferred).
 - `$Case` accepts `key` (see *State across branches*); on any other slot it is slot-key.
 - Params on `Match` and `Switch` are consumed by the compiler instead of
   becoming a `children` callback: the bodies must stay inline for narrowing,
@@ -842,8 +985,8 @@ undeclared-slot or orphan-slot.
   the first match.
 - **Zero or more** is several `Match` elements side by side; each is its own
   child position, so React state in one is unaffected by the others.
-- **Slot elements inside `Match`** — `<Button><Match …><$IconStart /></Match></Button>`
-  is orphan-slot. Conditions go *inside* the slot body.
+- **Slot elements inside `Match` / `Switch`** — `<Button><Match …><$IconStart /></Match></Button>`
+  fills an optional slot conditionally; see *Conditional slots* in [Slots](#conditional-slots).
 - **Reference subjects are re-read** at each comparison (see static `Switch`).
   A getter with side effects should be assigned to a `const` first.
 - **`default` is a reserved word**, so *Shorthand props* never rewrites it.
@@ -1213,9 +1356,8 @@ All TS7, from `EachProps<T>`:
 >
 > Not designed yet. It depends on:
 >
-> - **repeatable slots** (deferred in [Slots](#one-slot-many-items)): `$Option`
->   declared as an array, and the type-directed array-vs-object emit that was
->   drafted and dropped;
+> - **list slots** ([Slots](#list-slots)) — these exist in phase 1; what is
+>   missing is producing their items from a loop;
 > - an exception to **orphan-slot**: a slot element whose parent is an `Each`
 >   that is itself an immediate child of the container;
 > - `Each` being **compiled** in this position rather than rendered — the

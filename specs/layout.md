@@ -143,7 +143,7 @@ The shell's raw JS comes from the design system's shell components — see
 
 | # | Rule | Why |
 | --- | --- | --- |
-| I1 | **An island takes nothing from the shell at runtime**: no context, and only compile-time values as props (inlined into its entry) | it is a separate React app, bundled separately; the shell has no runtime values to give |
+| I1 | **An island takes nothing from the shell at runtime**: no context, and only compile-time values as props (inlined into its entry). One exception: handlers from `Form` (*Forms*) | it is a separate React app, bundled separately; the shell has no runtime values to give |
 | I2 | **Islands share no React state or context** with each other | each island is a separate React root and tree |
 | I3 | **Shared state has two channels**: the URL (query string and hash are in-page state), and persistent state — `usePersistentState`, `usePersistentContext`, see [persistent-state.md](persistent-state.md) | the URL is what the server and a link can see; persistent state is what the tab keeps across islands and navigations |
 | I4 | **An island cannot change the shell** around it | the shell is static |
@@ -377,6 +377,156 @@ Considered and not chosen:
 > OPEN: mount/unmount as open/close is inferred from the sketch. The
 > alternative is an explicit `open` prop on an always-mounted element.
 
+## Forms
+
+`Form` is compiled: the compiler sees every input and every validation rule,
+links them to the form, and can derive from them everything that needs the
+**closed set of fields** — the shell's validation JS, the typed payload, the
+server-side check. A `Dynamic` inside breaks exactly that: what it renders is
+only known at runtime.
+
+```tsx
+<Form>
+  <Input name="email" required />
+  <Dynamic><Input name="nickname" /></Dynamic>   // error: form-dynamic-field
+</Form>
+```
+
+So there is no hybrid form. There is `Form`, and there is what React already has:
+
+| | `Form` | a React form in an island |
+| --- | --- | --- |
+| what it is | shell component: rendered fully statically, **no React**, native submission | today's React `<form>`, nothing more; island code only |
+| fields | closed set, known at compile time | whatever React renders: conditional sections, repeating groups |
+| inputs and validation | linked by the compiler | the framework does nothing; entirely the author's business |
+| may contain `Dynamic` | yes, as long as the fields stay static (below) | it already *is* dynamic |
+
+There is no `DynamicForm` component to specify: the framework neither links
+nor controls a React form.
+
+The rule is "**the fields of a `Form` are static**", not "no `Dynamic` in a
+`Form`". The compiler rejects the inputs it can see inside a `Dynamic`
+(design-system inputs, recognised by import origin). An input it cannot see —
+rendered deep inside a custom component — still lands in the form's DOM and
+would be submitted; the server drops fields the form did not declare, with a
+warning in development.
+
+### `$Field`: the bridge to every input
+
+A field is a slot of `Form`. Its options declare the field; its params are the
+bridge between the form's store and whatever renders the input.
+
+```tsx
+// .rtsx
+<Form>
+  <$Field name="age" type="number" validation { value, onChange, invalid, errors, nativeType }>
+    <Input type={nativeType} value onChange invalid>
+      <Match on={invalid}>
+        <$Hint>{renderErrors(errors)}</$Hint>
+      </Match>
+    </Input>
+  </$Field>
+</Form>
+```
+
+| Options (in) | |
+| --- | --- |
+| `name` | the field; part of the form's closed set |
+| `type` | the field's value type (`"number"`), not the HTML input type |
+| `validation` | the rules — here *Shorthand props*: a `validation` variable in scope |
+
+| Params (out) | |
+| --- | --- |
+| `value`, `onChange` | the field's value in the form's store, and its setter |
+| `invalid`, `errors` | validity from the store |
+| `nativeType` | the HTML input type the form chose for `type` |
+
+`<Input type={nativeType} value onChange invalid>` is three shorthand props:
+the params line up with the input's prop names on purpose.
+
+- `$Field` is filled once per field, so it is a **list slot**
+  ([syntax.md](syntax.md#list-slots)): `Form` declares `$Field: {…}[]`.
+- Two fields with the same `name` → form-duplicate-field.
+
+- `<Match on={invalid}><$Hint>…` is a conditional slot
+  ([syntax.md](syntax.md#conditional-slots)). It tests `invalid`, not
+  `errors`: an empty array is truthy.
+
+> OPEN (blocking): **where does a `$Field` body run?** `value`, `invalid`
+> and `errors` change at runtime, so the body as written is not static HTML,
+> while `Form` "renders fully statically without React".
+>
+> 1. *In an island* there is nothing to solve: `Form` is a React component
+>    over its store and the params are ordinary runtime slot params (the
+>    pattern of TanStack Form's `form.Field`, react-hook-form's `Controller`).
+> 2. *In shell code*, either
+>    - **restricted bodies** (recommended): params may flow only into props of
+>      design-system inputs — which the compiler knows how to bind to the
+>      store in raw JS — and into a `Dynamic`. `{renderErrors(errors)}` or a
+>      `Match` on a param is an error there; error text is the form's own
+>      business, or
+>    - a **reactive-template compiler**: arbitrary bodies compiled to raw JS
+>      bindings over the store (what Solid and Svelte do). Powerful, and a
+>      second compilation target to build and maintain.
+
+### A dynamic widget for a static field
+
+A date picker, a combobox, a rich-text editor: the **field** (name, rules) is
+known at compile time, only its **UI** needs React. `$Field` (above) declares
+the field statically and hands the island a way to report its value:
+
+```tsx
+// .rtsx
+<Form>
+  <$Field name="birthday" required { onChange }>
+    <Dynamic><DatePicker onChange /></Dynamic>
+  </$Field>
+</Form>
+```
+
+- `$Field` is part of the static form: the compiler sees `name="birthday"` and
+  `required`, so the set of fields stays closed and everything derived from it
+  still holds. In the shell it renders the field's markup, a shell-owned
+  carrier for the value, and the `Dynamic` host.
+- `{ onChange }` are slot params; `<DatePicker onChange />` is
+  *Shorthand props*. No new syntax.
+- `onChange(value)` writes the value into the form's field and runs the
+  shell's validation for it. The island never touches the form.
+
+**`Form` is the exception to dynamic-props.** Normally nothing from the shell's
+runtime may cross into a `Dynamic`. `Form` may pass handlers in, because it
+has **its own state management**: a React-free store in the shell's runtime
+that owns the values, validity and submission of the form. A handler handed
+out by `$Field` is just a reference into that store, and the compiler knows
+which one at compile time — form, field — so it can write it into the
+island's entry:
+
+```tsx
+// generated island entry, roughly
+render(<DatePicker onChange={formStore("Form-a1").field("birthday").set} />);
+```
+
+The exception is `Form`'s alone. No other shell component hands handlers to
+an island; islands reach everything else through
+[persistent state](persistent-state.md) or the URL.
+
+- TS7 checks the fit: `DatePicker`'s `onChange` must accept what `$Field`
+  hands out, `(value: string) => void`.
+- Native constraint validation skips hidden inputs, so the rules of such a
+  field are enforced by the shell's validation JS, not by the browser.
+- Until the island has mounted, the field is empty; a `required` field
+  therefore blocks submission, which is the safe direction.
+
+> OPEN: is `Form`'s store built on the same reactive library as
+> [persistent state](persistent-state.md)? It would let an island *read* form
+> state (`useSyncExternalStore`) with no further machinery.
+
+> OPEN: `id` among the params, so that the shell's `<label for>` reaches a
+> dynamic widget.
+
+> OPEN: the value type. `string` matches what a form submits; multi-value
+> widgets and files need more.
+
 ## Enforcement
 
 Every rule is reported three ways: compiler error, language-service
@@ -392,6 +542,8 @@ diagnostic (as you type), ESLint rule (for CI without a build).
 | shell-nondeterministic | `Date.now()` makes the shell irreproducible | S4 |
 | dynamic-props | `user` is not known at compile time and cannot cross into `Dynamic` | I1, S3 |
 | dynamic-nested | An island cannot start another app | `Dynamic` inside island code, outside a shell component's slot |
+| form-dynamic-field | The fields of a `Form` are static | an input inside a `Dynamic` that is not the body of a `$Field` |
+| form-duplicate-field | `age` is already a field of this form | forms |
 | shell-slot-element | A shell component cannot render React elements; wrap this in `<Dynamic>` | shell components |
 | shell-dynamic-code | `Counter` uses React; wrap it in `<Dynamic>` | S1, reported at the use site in shell code |
 | segment-in-loop | `#about-us` would be mounted more than once | segment roots |
