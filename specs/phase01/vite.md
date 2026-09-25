@@ -63,7 +63,9 @@ export default defineConfig({
 
 List slots are type-directed ([syntax.md](syntax.md#list-slots)): to emit
 `<Form>`'s `$Field` as an array, the transform must know that `FormProps`
-declares `$Field` as one. So the plugin holds a type checker.
+declares `$Field` as one. So the plugin holds a type checker: TS7, in the Go
+transpiler, which the plugin drives as one long-lived process
+([decisions.md](decisions.md#rgp1-001--checker-and-implementation-language)).
 
 - **One program** over the project's `tsconfig.json`, kept for the life of the
   dev server or build. Every `.rtsx` file is in it as its emitted `.tsx`
@@ -79,9 +81,6 @@ declares `$Field` as one. So the plugin holds a type checker.
   declaration changes, the `.rtsx` files that asked are transformed again.
   Without this, editing `FormProps` would leave stale output.
 
-> OPEN: which checker. The TypeScript 5 JS API is available in-process today;
-> TS7 is the target but has no stable API yet. The spec only needs the one
-> query above, so the choice can change without changing the spec.
 
 ## Runtime
 

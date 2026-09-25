@@ -17,8 +17,10 @@ Scope, and nothing else:
    emitted `.tsx` and reports every error on the source, in slot terms.
 
 Out of phase 1: rules of layout, shell / islands / `Dynamic`, shell
-components, `Form`, persistent state, the Go compiler, server, routing,
-language service. Those specs are parked in `specs/later/`; do not pull them
+components, `Form`, persistent state, shell compilation, server, routing,
+language service. The transpiler itself **is** Go from day 1: a tsgo fork
+with TS7's checker in-process, which the Vite plugin drives as a long-lived
+process (`specs/phase01/decisions.md`, RGP1-001). Those specs are parked in `specs/later/`; do not pull them
 into `specs/phase01/`. The architecture below is the long-term target.
 
 ## What Reactogenic is
@@ -95,6 +97,8 @@ same-named binding; the `$` tag namespace) are called out in the spec.
 query in the transform (list slots), the runtime package.
 `specs/phase01/diagnostics.md` — `reactogenic check`, source-map origins,
 rewrites of TS errors into slot terms.
+`specs/phase01/plan.md` — tasks `RGP1-xxx`; `specs/phase01/decisions.md` —
+one section per decided task.
 
 Parked in `specs/later/`: `layout.md` (shell vs island rules, `Dynamic`,
 shell components, `Form` / `$Field`), `persistent-state.md`, `tooling.md`
@@ -124,11 +128,13 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | File | Status |
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
+| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001 done |
 | `later/layout.md`, `later/persistent-state.md`, `later/tooling.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
-Phase 1 open decisions: which checker the plugin embeds (TS5 API now vs TS7);
-how the plugin hands TSX to plugin-react — `phase01/vite.md`.
+Phase 1 open decisions: parser strategy (RGP1-002); how the plugin hands TSX
+to plugin-react — `phase01/vite.md`; Node ↔ Go message encoding —
+`phase01/decisions.md`.
 
 ## Working style
 

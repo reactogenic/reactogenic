@@ -19,7 +19,7 @@ Size: **S** ≤ 2 days, **M** ≤ 1 week, **L** > 1 week (split it before starti
 | M1 | Runtime package | 010–019 | `reactogenic` exports usable from plain `.tsx` |
 | M2 | Parser | 020–029 | every `.rtsx` form parses to an AST with exact spans |
 | M3 | Transpiler | 030–049 | every desugaring in [syntax.md](syntax.md) passes its fixture |
-| M4 | Type service | 050–059 | list slots emit correctly from real props types |
+| M4 | Type service | 050–059 | list slots emit correctly from real props types; the Go process serves the plugin |
 | M5 | Vite plugin | 060–069 | example app runs in `vite dev` and `vite build` |
 | M6 | `reactogenic check` | 070–089 | every *types* error in syntax.md is reported on the `.rtsx` |
 | M7 | Conformance and release | 090–099 | spec ↔ tests complete, packages ready to publish |
@@ -27,31 +27,24 @@ Size: **S** ≤ 2 days, **M** ≤ 1 week, **L** > 1 week (split it before starti
 M1 and M2 can run in parallel. M4 can start once RGP1-030 is done. M5 and M6
 both need M3 and M4, but not each other.
 
-Critical path: 001 → 002 → 020 → 030 → 040 → 050 → 060 → 061 → 090.
+Critical path: 002 → 003 → 020 → 030 → 050 → 052 → 053 → 061 → 090.
 
 ## M0 — Decisions and scaffolding
 
-### RGP1-001 — Decide the checker · S
-The open question in [vite.md](vite.md#types-in-the-transform): which type
-checker phase 1 embeds.
-- Options: the TypeScript 5 JS API, in-process and stable today; or TS7,
-  which is the target but has no stable API yet.
-- Recommendation: TS5. The transform and `check` run in Node next to Vite,
-  and the plugin needs only one type query.
-- The implementation language follows from this choice: TS5 means the
-  transpiler is written in TypeScript. The fixtures (RGP1-004) do not depend
-  on the language, so a later Go port can reuse them.
-- **Done when:** a decision record exists under `specs/phase01/`, and the
-  OPEN in vite.md is resolved.
+### RGP1-001 — Decide the checker · S · done
+TS7, in-process: the transpiler is written in Go as a fork of tsgo from
+day 1. The Vite plugin drives it as one long-lived process over stdio. See
+[decisions.md](decisions.md#rgp1-001--checker-and-implementation-language).
 
 ### RGP1-002 — Decide the parser strategy · S
 `{ size }` and `#name` in attribute position are syntax errors for every
 existing TSX parser, so something has to accept them.
 - Options:
-  - (a) fork the JSX part of the checker's parser;
+  - (a) extend tsgo's JSX parser in the fork;
   - (b) a pre-pass that masks the reserved forms as valid TSX, then parse
-    with the checker's own parser, keeping an offset map;
-  - (c) Babel with a custom plugin.
+    with tsgo's unmodified parser, keeping an offset map;
+  - (c) Babel with a custom plugin. After RGP1-001 this would mean a second
+    parser next to tsgo's, so it is effectively out.
 - Criteria: exact spans for diagnostics (M6); the same AST as the checker,
   so scope analysis in RGP1-032 uses TS's binder; cost of keeping up with
   TS releases.
@@ -59,16 +52,16 @@ existing TSX parser, so something has to accept them.
   Segment roots grammar examples from syntax.md.
 - Depends on: 001.
 
-### RGP1-003 — Repository scaffolding · S
+### RGP1-003 — Repository scaffolding · M
 Needs your approval first: it creates files outside `specs/`.
-- Workspace packages:
-  - `reactogenic`: the runtime (M1);
-  - `@reactogenic/transpiler`: the core (M2–M4);
-  - `reactogenic/vite`: the plugin, as a subpath export;
-  - `reactogenic` bin: `check`.
-- Tooling: package manager and workspaces, a test runner, lint, CI running
-  tests and type-checks on every push.
-- **Done when:** CI is green on an empty test.
+- **Go module** — the transpiler (M2–M4), the `check` command (M6) and the
+  stdio server for the plugin (RGP1-053).
+- **tsgo fork** — pinned to one commit, as a subtree or a vendored module
+  (decide here). tsgo's own test suite runs in CI.
+- **npm workspace** — `reactogenic` (the runtime, M1), `reactogenic/vite`
+  (the plugin, as a subpath export), and a `bin` shim for `check`.
+- CI: Go tests, tsgo's tests, npm tests, lint, on every push.
+- **Done when:** CI is green on an empty test in both Go and npm.
 
 ### RGP1-004 — Fixture harness · M
 The shared format for every conformance test from here on.
@@ -263,7 +256,8 @@ single element with `key`.
 ## M4 — Type service
 
 ### RGP1-050 — Project program with virtual `.tsx` · M
-One compiler host, shared by the plugin and the CLI.
+One tsgo compiler host with an in-memory overlay, shared by the plugin (via
+RGP1-053) and the CLI.
 - It loads `tsconfig.json` and expands its `include` / `exclude` globs to
   `.rtsx` as well, because TS ignores unknown extensions.
 - Each `Foo.rtsx` is served as an in-memory `Foo.tsx`, so TS resolves
@@ -293,10 +287,24 @@ Implements `isListSlot` against the program.
   the files that use `<Form>`.
 - Depends on: 051.
 
+### RGP1-053 — Stdio server · M
+The Go side of the plugin: a long-lived process that serves `open`,
+`transform`, `change` and `close` over stdio
+([decisions.md](decisions.md#rgp1-001--checker-and-implementation-language)).
+- Choose the message encoding (the OPEN in decisions.md) using the RGP1-052
+  benchmark.
+- A crash or a protocol error must reach Vite as an error. It must never
+  hang the dev server.
+- **Done when:** a Node test client can open a project, transform a file and
+  receive invalidations.
+- Depends on: 050, 052.
+
 ## M5 — Vite plugin
 
 ### RGP1-060 — Plugin skeleton and `config` · S
 - `enforce: "pre"`.
+- Spawns the Go process (RGP1-053) once per server or build, and stops it
+  when Vite closes.
 - Add `.rtsx` to `resolve.extensions` and to plugin-react's `include`. This
   resolves the OPEN in vite.md as option (a), or records why not.
 - **Done when:** a hand-written `.rtsx` with no extensions renders in
@@ -307,11 +315,11 @@ Implements `isListSlot` against the program.
 - `.rtsx` goes in; `.tsx` and a v3 source map come out.
 - Transpiler errors are thrown with `loc`, so they appear in Vite's overlay
   in dev and fail `vite build`.
-- The plugin owns one type service for its lifetime (RGP1-050).
+- Each transform is one `transform` request to the Go process.
 - **Done when:** an error in the browser shows `.rtsx` lines in devtools and
   in the stack trace, and a transpiler error shows in the overlay with a code
   frame.
-- Depends on: 060, 051, all of M3.
+- Depends on: 060, 053, all of M3.
 
 ### RGP1-062 — Resolution · S
 - Extensionless imports, including segment imports, go through Vite's
@@ -341,7 +349,8 @@ Needs your approval first: it creates files outside `specs/`.
 ## M6 — `reactogenic check`
 
 ### RGP1-070 — CLI skeleton · S
-- `reactogenic check [-p tsconfig]`, run on the RGP1-050 program.
+- `reactogenic check [-p tsconfig]`: the Go binary, run on the RGP1-050
+  program, and reached from npm through the `bin` shim.
 - Exit code 0 means no errors, 1 means errors.
 - `--pretty` / `--no-pretty`, as in `tsc`.
 - **Done when:** on a clean project it prints nothing and exits 0.
@@ -420,10 +429,20 @@ CI fails if:
 - **Done when:** a new project reaches a rendering `.rtsx` page by following
   only the docs.
 
-### RGP1-092 — Publish · S
+### RGP1-092 — Platform binaries · M
+- Cross-compile the Go binary for each platform.
+- Publish one npm package per platform, as an `optionalDependency` of
+  `reactogenic` (the esbuild model).
+- The shim and the plugin find the binary for the current platform, or fail
+  with a clear message.
+- **Done when:** a clean install on macOS, Linux and Windows runs
+  `reactogenic check` and `vite build` from CI.
+- Depends on: 003, 053.
+
+### RGP1-093 — Publish · S
 Versioning, changelog, and publishing to npm. Publishing is outward-facing,
 so it happens only on your go-ahead.
-- Depends on: 090, 091.
+- Depends on: 090, 091, 092.
 
 ## Not in phase 1
 
