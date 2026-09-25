@@ -430,11 +430,11 @@ bridge between the form's store and whatever renders the input.
 the params line up with the input's prop names on purpose.
 
 - `$Field` is filled once per field, so it is a **list slot**
-  ([syntax.md](syntax.md#list-slots)): `Form` declares `$Field: {…}[]`.
+  ([syntax.md](../phase01/syntax.md#list-slots)): `Form` declares `$Field: {…}[]`.
 - Two fields with the same `name` → form-duplicate-field.
 
 - `<Match on={invalid}><$Hint>…` is a conditional slot
-  ([syntax.md](syntax.md#conditional-slots)). It tests `invalid`, not
+  ([syntax.md](../phase01/syntax.md#conditional-slots)). It tests `invalid`, not
   `errors`: an empty array is truthy.
 
 > OPEN (blocking): **where does a `$Field` body run?** `value`, `invalid`

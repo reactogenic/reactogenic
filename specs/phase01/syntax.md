@@ -2,7 +2,8 @@
 
 `.rtsx` is a superset of `.tsx`. This document lists everything `.rtsx` adds.
 Each extension is shown as a desugaring `.rtsx` → `.tsx`; the emitted `.tsx` is
-what TS7 type-checks.
+what TS7 type-checks and what Vite runs (see [vite.md](vite.md)). Errors on
+the emitted `.tsx` are reported on the `.rtsx` (see [diagnostics.md](diagnostics.md)).
 
 Governing rule: new meaning goes only to forms that are syntax errors in
 today's TSX. A syntax error today is good news: no existing program uses the
@@ -21,7 +22,6 @@ meaning; exceptions are called out explicitly in the section that makes them.
 | [Flow control](#flow-control-switch-and-match) — `Switch`, `Match`, `$Case` | Draft |
 | [Segment roots](#segment-roots) — `<section #about-us />` | Draft |
 | [Iteration](#iteration-each) — `Each` | Draft |
-| Rules of layout — not syntax; see [layout.md](layout.md) | Draft |
 
 ## Compilation passes
 
@@ -31,7 +31,7 @@ cases — conditional slots exist only because pass 3 runs after pass 2.
 
 | # | Pass | Input → output |
 | --- | --- | --- |
-| 0 | checks on the source | rules of layout, segment files, `Each` keys — reported against what the author wrote |
+| 0 | checks on the source | segment files, `Each` keys — reported against what the author wrote |
 | 1 | shorthand props | bare attribute → `name={name}`; resolved first, while the source scopes (params included) are intact |
 | 2 | flow lowering | `Match`, `Switch` → conditional expressions |
 | 3 | slot hoisting | slot elements, and conditional expressions of slot elements → `$X` props (an array for a list slot — the one type-directed step); params → callbacks |
@@ -63,7 +63,7 @@ already parses. Only the desugaring differs.
 
 ### Desugaring
 
-The rule is **scope-directed**, not type-directed: the compiler needs only the
+The rule is **scope-directed**, not type-directed: the transpiler needs only the
 file's binder, never the checker.
 
 **A. Same-named value binding in scope** → pass it.
@@ -139,9 +139,9 @@ None of its own. After desugaring, TS7 checks `value={value}` or `value`
   (`Type 'true' is not assignable to type 'string'`), mapped back to the bare
   attribute.
 
-> OPEN: for that error the language service could append "no `value` in scope"
-> as related information. Cheap, and it explains the most likely cause (typo or
-> deleted variable).
+The mapped error carries "no `value` in scope" as related information — it
+explains the most likely cause, a typo or a deleted variable (see
+[diagnostics.md](diagnostics.md)).
 
 ### Compile errors
 
@@ -164,9 +164,6 @@ None. Every bare attribute desugars to A or B.
 - **Silent flip.** Adding or removing a binding named like a bare boolean
   attribute changes that attribute's meaning with no error when the types
   happen to agree (`const disabled = false; … <Button disabled />`).
-
-> OPEN: mitigate the silent flip with an editor inlay hint (`disabled`⟨`={disabled}`⟩)
-> on every case-A attribute? No effect on the language, only on tooling.
 
 > OPEN: pasting existing TSX into `.rtsx` can hit the silent flip. Should the
 > `.tsx` → `.rtsx` migration path warn on bare attributes that resolve as case A?
@@ -262,7 +259,7 @@ function Button({ children, size, $IconStart, ...props }: ButtonProps) {
 
 ### Declaration matrix
 
-Three independent axes, all plain TS. The compiler reads them from the
+Three independent axes, all plain TS. The transpiler reads them from the
 parent's props type (see *Typing behaviour*).
 
 **1. Is the slot required?**
@@ -362,7 +359,7 @@ For each component element `<P>`:
    | `{...rest}` | `...rest` |
 
 4. The slot body becomes the `children` property. The choice is purely
-   syntactic — the compiler never looks at the declared type:
+   syntactic — the transpiler never looks at the declared type:
 
    | Slot element | Property |
    | --- | --- |
@@ -376,7 +373,7 @@ For each component element `<P>`:
 
 ### Params on a component: `children` is the default slot
 
-The rule is one and the same everywhere: **wherever the compiler sees params,
+The rule is one and the same everywhere: **wherever the transpiler sees params,
 it wraps the body in a callback.** On a slot element the callback is the
 slot's `children`; on a component element it is the component's `children`.
 
@@ -452,10 +449,6 @@ a `Switch` (a chain of them), or one written by hand.
 | a branch that mixes a slot element with other children, or holds several slot elements | mixed-conditional-slot |
 | `{c && <$Hint />}` — `&&` would put `false` or `0` into the slot | orphan-slot |
 | `Match` / `Switch` **with params** around a slot element — they lower to a function call, not a bare ternary | orphan-slot |
-
-Island code only: `Match` and `Switch` are not allowed in shell code
-(see [layout.md](layout.md)), and "an optional slot being empty" is the
-variance that is sanctioned anyway.
 
 ### One slot, many items
 
@@ -538,7 +531,7 @@ desugared on its own — own options, own params, own body. Position relative to
 unslotted children is not preserved.
 
 **Array or object is type-directed** — the one place where types change the
-emitted code. The compiler looks `$X` up in the parent's props type, ignoring
+emitted code. The transpiler looks `$X` up in the parent's props type, ignoring
 `undefined` / `null`:
 
 | Declared type of `$X` | Emitted |
@@ -632,16 +625,16 @@ No type annotation inside the pattern; types come from the declaration.
 
 ### Typing behaviour
 
-**The compiler is type-aware.** It embeds the checker (tsgo fork) and, before
-desugaring a container element, resolves the props type of its tag. That query
-depends only on the container's declaration, never on the call site being
-desugared, so there is no cycle. They are used for:
+**The transpiler is type-aware.** Before desugaring a container element it
+resolves the props type of its tag. That query depends only on the
+container's declaration, never on the call site being desugared, so there is
+no cycle. The types are used for:
 
 - **Emit** — array vs object for a slot (*List slots*). The only place where
-  types change the output; everything else is purely syntactic.
+  types change the output; everything else is purely syntactic. How the Vite
+  plugin gets at the types: [vite.md](vite.md#types-in-the-transform).
 - **Diagnostics** — every error below is reported on the `.rtsx` source in
   slot terms, not as an assignability error on emitted code.
-- **Language service** — see *Tooling*.
 
 The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 
@@ -653,7 +646,7 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
   `renderSlot($IconStart?.children, { size })`.
 
 > OPEN: a helper such as `Slot<Children, Options = {}>` to shorten
-> declarations — belongs in `slot-contract.md`.
+> declarations.
 
 ### Compile errors
 
@@ -718,18 +711,6 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
   as a component: a hook call written directly in it runs inside the
   container's render.
 
-### Tooling
-
-The language service answers from the same props-type query:
-
-- Typing `$` (or `<`) as a child of `<Button>` completes the slots `Button`
-  declares. Slots that are already filled are left out; required ones sort
-  first.
-- Inside a slot tag: completion and checking of the slot's options.
-- Inside the params braces: completion of the names the container hands out.
-- Hover on a slot tag shows the slot's declared type; go-to-definition jumps
-  to the `$X` member of the container's props.
-
 ### Prior art
 
 | | Form | Note |
@@ -753,7 +734,7 @@ form at all. `.rtsx` adds both shapes:
 | `Match` | its body, if the subject is truthy. Every `Match` decides alone | `if` |
 | `Switch` + `$Case` | at most one `$Case` — first match wins | `switch` |
 
-Neither exists at runtime. The compiler replaces them with conditional
+Neither exists at runtime. The transpiler replaces them with conditional
 expressions, so a body that is not chosen is **never evaluated** — no elements
 created, no embedded expressions run.
 
@@ -768,13 +749,14 @@ import { Switch, Match } from "reactogenic";  // package name is a placeholder
 `Switch` and `Match` are recognised by **import origin, not by name**
 (`import { Switch as Choose }` works). `$Case` is a slot tag and is never
 imported. The package declares `Switch` as a container with a `$Case` slot, so
-completion, hover and orphan-slot work exactly as for any container.
+the slot errors (undeclared-slot, orphan-slot) work exactly as for any
+container. Both are lowered away, so the emitted `.tsx` drops their import.
 
 `$Case` is a list slot (see [Slots](#list-slots)). Two things are sanctioned
-here and nowhere else, because the compiler consumes these elements itself:
+here and nowhere else, because the transpiler consumes these elements itself:
 
 - `$Case` accepts `key` (see *State across branches*); on any other slot it is slot-key.
-- Params on `Match` and `Switch` are consumed by the compiler instead of
+- Params on `Match` and `Switch` are consumed by the transpiler instead of
   becoming a `children` callback: the bodies must stay inline for narrowing,
   and `Switch` params must reach the `is` of every `$Case`.
 
@@ -995,11 +977,10 @@ undeclared-slot or orphan-slot.
 - **Inside `.map()`** — the emitted expression has no key; key the element in
   the body, as with any ternary.
 - **Hooks** — nothing special; bodies are inline in the enclosing component.
-- **Where they are allowed** is a layout question — see *Rules of layout*.
 
 ### State across branches
 
-All branches of a `Switch` share one child position, and the compiler adds no
+All branches of a `Switch` share one child position, and the transpiler adds no
 keys. React therefore **re-renders, not remounts**, when two branches render
 the same component type — exactly as the hand-written ternary would:
 
@@ -1086,14 +1067,14 @@ nothing:
 
 ```tsx
 // page.tsx
-import _Section_aboutUs from "./+about-us.jsx";
+import _Section_aboutUs from "./+about-us";
 …
 <section id="about-us" className="band">
   <_Section_aboutUs />
 </section>
 ```
 
-A root may be any element, HTML or component — the compiler only nests:
+A root may be any element, HTML or component — the transpiler only nests:
 
 ```tsx
 // page.rtsx
@@ -1124,15 +1105,10 @@ Rules:
 - The segment is rendered with **no props**: a segment owns its data. Other
   attributes on the root go to the root element.
 
-The `.tsx` above is the logical form, and what TS7 checks. It is the same
-whichever way the page is produced, and the transform runs before either:
-
-| Mode | Root | Segment |
-| --- | --- | --- |
-| pre-rendered + hydrated | emitted into the shell with the segment's HTML inside | hydrated in place |
-| client-side render | emitted into the shell, empty | rendered into it on the client |
-
-Which mode a page uses is not a syntax question — see `route-table.md`.
+A segment root is syntactic sugar and nothing more: the `.tsx` above is its
+whole meaning — what TS7 checks and what Vite runs. The import is
+extensionless; resolving it to `+about-us.rtsx` is the plugin's job
+([vite.md](vite.md#module-resolution)).
 
 **Deferred:** lazily loaded segments.
 
@@ -1164,7 +1140,7 @@ disjoint:
 Other exports of a `+` file are unreachable and therefore pointless; types
 may still be exported and imported with `import type`.
 
-`+` is safe where `#` is not: it needs no quoting in shells, is not a comment
+`+` is safe where `#` is not: it needs no quoting in a shell, is not a comment
 character anywhere, and is literal in URL paths.
 
 ### Typing behaviour
@@ -1187,15 +1163,16 @@ TS7 checks the emitted import and element:
 | segment-duplicate | `#about-us` is already mounted | same name twice in one page | syntax (per file), route table (per page) |
 | segment-root-props | `Card` must accept `id` and `children` to be a segment root | `<Card #about-us />` where `CardProps` lacks either | types |
 | segment-self | | a segment that mounts itself, directly or through other segments | files |
+| segment-in-loop | `#about-us` would be mounted more than once | segment root inside `.map()` or the body of `Each` | syntax |
 | segment-children (warning) | Contents will be overwritten by `+about-us.rtsx` | root element has children | syntax |
 
 ### Edge cases
 
 - **Spread** — `<section {...p} #about-us />` is segment-id: the spread could
-  carry an `id` and the compiler cannot see it.
-- **Loops and conditions** — a root inside `.map()` would repeat the id; inside
-  `Match` / `Switch` it would make the shell vary. Both are ruled out in
-  *Rules of layout*.
+  carry an `id` and the transpiler cannot see it.
+- **Loops** — a root inside `.map()` or `Each` would repeat the id:
+  segment-in-loop. Inside `Match` / `Switch` a root is fine: it is mounted at
+  most once.
 - **Nesting** — a segment may contain segment roots of its own; names resolve
   relative to the file they are written in.
 - **Case** — the name is the file name, so `#AboutUs` and `#about-us` are
@@ -1208,26 +1185,17 @@ TS7 checks the emitted import and element:
 
 - **Component roots** — what the component does with `id` is its own
   business. If it does not put it on a DOM node, `/#about-us` has nothing to
-  scroll to; the compiler does not check.
+  scroll to; the transpiler does not check.
 
 **Rejected:** `#about-us.rtsx` as the file name. `#` is the fragment delimiter
 in URLs (`import "./#about-us.jsx"` would need `%23`), a comment character in
 bash, `.gitignore`, YAML and Makefiles, and Node's subpath-import prefix.
-
-### Tooling
-
-- After `#`: completion of sibling `+` files not yet mounted on the page.
-- Cmd-click (go-to-definition) on `#counter` opens `+counter.rtsx`, or
-  `+counter.tsx`. Renaming either side renames the other.
-- Quick fix for segment-not-found: create the file with an empty default component.
 
 ### Prior art
 
 | | Form | Note |
 | --- | --- | --- |
 | Pug / Slim / Emmet | `section#about-us` | `#` = id, from CSS selectors; the source of the notation |
-| Astro | `<AboutUs client:visible />` | islands by directive on an imported component; no id, no file convention |
-| Qwik | `component$` | boundaries by `$` marker, resumable instead of hydrated |
 | SvelteKit | `+page.svelte`, `+layout.svelte` | `+` prefix marks files the framework owns; the source of the file convention |
 | Next.js | `@modal/` parallel routes | file-system convention that fills a named place in a layout |
 | SSI / Rails partials | `<!--#include file="…" -->`, `render "about_us"` | include by file name |
@@ -1246,7 +1214,7 @@ compile error.
 `Each` needs **no syntax of its own**. It is an ordinary runtime component
 whose `children` is a slot function; params on a component
 (see [Slots](#params-on-a-component-children-is-the-default-slot)) do the rest.
-The only thing the compiler adds is a key check.
+The only thing the transpiler adds is a key check.
 
 `.map()` keeps working — it parses today, so it keeps its meaning.
 
@@ -1321,14 +1289,15 @@ All TS7, from `EachProps<T>`:
 ### Edge cases
 
 - **`key={index}`** is legal and explicit — the author has decided the list is
-  static. The compiler does not second-guess it.
+  static. The transpiler does not second-guess it.
 - **Hooks** are not allowed directly in the body: it is a callback run inside
   `Each`'s render.
 - **Slot elements in the body** — `<Select><Each …><$Option /></Each></Select>`
   is orphan-slot **in phase 1**. A container that renders many items takes the
   data as a prop and one slot as the template (*One slot, many items*).
   Phase 2 lifts this — see *Roadmap*.
-- **Segment roots in the body** would repeat an id — ruled out in *Rules of layout*.
+- **Segment roots in the body** would repeat an id — segment-in-loop (see
+  [Segment roots](#compile-errors-3)).
 - **Nested `Each`** — inner params shadow outer ones; rename to reach both.
 
 **Rejected:** an empty-list branch (`$Empty`, Svelte's `{:else}`, Solid's
@@ -1365,8 +1334,7 @@ All TS7, from `EachProps<T>`:
 >   result is data for a prop, roughly
 >   `$Option={options.map(({ value, label }) => ({ value, children: <>{label}</> }))}`,
 >   not elements, so the key rule does not apply;
-> - mixing static `<$Option>` elements with an `Each` in one container, and
->   the static-shell question a data-driven slot list raises in *Rules of layout*.
+> - mixing static `<$Option>` elements with an `Each` in one container.
 >
 > Phase 1 must not close this door: keep `Each` recognised by import origin,
 > and keep orphan-slot an error (not a silent pass-through to `children`).

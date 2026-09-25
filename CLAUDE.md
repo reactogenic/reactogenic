@@ -7,6 +7,20 @@ implementation code yet — Markdown only. Ask before creating anything outside 
 The specs are the source of truth. When this file and a spec disagree, the
 spec wins; update this file.
 
+## Current phase: phase 1 (`specs/phase01/`)
+
+Scope, and nothing else:
+
+1. **`.rtsx` runnable by Vite** — a plugin transpiles `.rtsx` → `.tsx`; the
+   rest is Vite + plugin-react as usual.
+2. **TS errors mapped back to `.rtsx`** — `reactogenic check` type-checks the
+   emitted `.tsx` and reports every error on the source, in slot terms.
+
+Out of phase 1: rules of layout, shell / islands / `Dynamic`, shell
+components, `Form`, persistent state, the Go compiler, server, routing,
+language service. Those specs are parked in `specs/later/`; do not pull them
+into `specs/phase01/`. The architecture below is the long-term target.
+
 ## What Reactogenic is
 
 A **compiled** framework with four tightly coupled pillars: a compiler, a
@@ -56,9 +70,9 @@ TSX** — that is good news: such a form is safe to reserve. Forms that already
 parse keep their React meaning; the two exceptions (bare attribute with a
 same-named binding; the `$` tag namespace) are called out in the spec.
 
-## What is specified (see `specs/`)
+## What is specified
 
-`specs/syntax.md` — compilation passes, then:
+`specs/phase01/syntax.md` — compilation passes, then:
 
 1. **Shorthand props** — scope-directed: `<Input value />` → `value={value}`
    if a `value` binding is in the module's scope chain, else React's `true`.
@@ -72,13 +86,19 @@ same-named binding; the `$` tag namespace) are called out in the spec.
    `<Switch on={…} [exhaustive] [{ value }]>` with `$Case is=` / `default`
    (first match wins; no match renders nothing; `exhaustive` proven by TS7).
 4. **Segment roots** — `<section #about-us />` mounts sibling `+about-us.rtsx`
-   (default export, no props). Static unless wrapped in `Dynamic`.
-5. **`Each`** — plain runtime component + params; compiler only checks `key`
-   on the body root.
+   (default export, no props). Pure syntactic sugar: an import + a nested
+   element.
+5. **`Each`** — plain runtime component + params; the transpiler only checks
+   `key` on the body root.
 
-`specs/layout.md` — shell vs island rules, `Dynamic`, shell components and
-their `<template>` delivery, `Form` / `$Field`.
-`specs/persistent-state.md` — `usePersistentState` / `usePersistentContext`.
+`specs/phase01/vite.md` — the Vite plugin, module resolution, the one type
+query in the transform (list slots), the runtime package.
+`specs/phase01/diagnostics.md` — `reactogenic check`, source-map origins,
+rewrites of TS errors into slot terms.
+
+Parked in `specs/later/`: `layout.md` (shell vs island rules, `Dynamic`,
+shell components, `Form` / `$Field`), `persistent-state.md`, `tooling.md`
+(language service).
 
 ## Rejected (do not propose again)
 
@@ -103,13 +123,12 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 
 | File | Status |
 | --- | --- |
-| `syntax.md`, `layout.md`, `persistent-state.md` | drafted; `> OPEN:` notes inside |
-| `slot-contract.md` — how a component declares slots and their types; shell-component API (`open`/`update`/`close`) | todo |
-| `route-table.md` — pathname → shell + islands + chunks; segment modes | todo |
-| `resource.md` — `useQuery`: the status discriminant, keys, reloading, caching across islands | todo |
+| `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
+| `later/layout.md`, `later/persistent-state.md`, `later/tooling.md` | parked |
+| `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
-Biggest open decision: where a `$Field` body runs when `Form` is in shell code
-(restricted bodies vs a reactive-template compiler) — `layout.md`, *Forms*.
+Phase 1 open decisions: which checker the plugin embeds (TS5 API now vs TS7);
+how the plugin hands TSX to plugin-react — `phase01/vite.md`.
 
 ## Working style
 
