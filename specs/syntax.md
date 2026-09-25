@@ -1331,9 +1331,10 @@ All TS7, from `EachProps<T>`:
 - **Segment roots in the body** would repeat an id — ruled out in *Rules of layout*.
 - **Nested `Each`** — inner params shadow outer ones; rename to reach both.
 
-> OPEN: empty list. `Each` is a real container now, so an optional
-> `$Empty: { children: ReactNode }` slot costs nothing in syntax. Svelte has
-> `{:else}`, Solid has `fallback`.
+**Rejected:** an empty-list branch (`$Empty`, Svelte's `{:else}`, Solid's
+`fallback`). "Empty" is opinionated — `[]`, but also `""`, `{ items: [] }`,
+"only archived" — so the syntax does not define it. Write
+`<Match on={items.length === 0}>` next to the `Each`.
 
 > OPEN: iterables (`Set`, `Map`, generators) — a library decision only:
 > `items: Iterable<T>` and `Array.from` inside `Each`.

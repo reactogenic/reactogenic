@@ -92,20 +92,17 @@ createRoot(document.getElementById("counter")!).render(<Counter start={5} />);
 - A segment root **outside** any `Dynamic` is static: the compiler executes
   the `+file`, which must be shell-safe, and inlines its HTML into the shell.
 - `Dynamic` inside island code is an error — an island cannot start another
-  app — with one exception: inside a slot of a shell component (*Shell components*).
+  app — with one exception: inside a slot of a shell component, where it is a
+  **portal** of the island, not a new app (*Shell components*).
 
 > OPEN: the host element. `Dynamic` has to emit one (the app needs a DOM node
 > to mount into), which is the one place the HTML is not the author's own.
 > Which tag (`div`? an `as` prop?), and how the inline form gets its id.
 
-> OPEN: a file-level directive next to the wrapper (`"use dynamic"`). The
-> wrapper says *where an app starts*; a directive would say *what kind of code
-> a file holds*, making "may this file use hooks?" a per-file check (works in
-> ESLint, no transitive analysis) — a file without it is shell-safe and may
-> not render a component from a file that has it, except through `Dynamic`.
-> Without the directive the same check is done by following imports from
-> shell code. Not the literal `"use client"`: React and bundlers already give
-> it a meaning (RSC) that Reactogenic does not have.
+**Rejected:** a file-level directive (`"use dynamic"` / `"use client"`). The
+wrapper is the only marker. Whether a file may use hooks follows from who
+renders it: the compiler follows imports from shell code and reports
+shell-react at the use site (shell-dynamic-code). No per-file annotation.
 
 ## Shell rules
 
@@ -345,31 +342,19 @@ Considered and not chosen:
 > `slot-contract.md`. Framework-only for now; third-party shell components
 > are not planned.
 
-> OPEN: is a **JSX hole** — a `Dynamic` around JSX in a shell-component slot —
-> a **separate root**, or a **portal** of the island that opened it?
-> (Primitive holes need no React, so the question does not arise for them.)
->
-> Booting a root is not the concern: React is already on the page, and
-> `createRoot` costs well under a millisecond (a fiber root, plus React's
-> event listeners attached to the container) and a few KB. The costs of a
-> separate root are semantic:
->
-> - **no runtime values** can cross (dynamic-props), so dialog contents cannot
->   simply use the state of the island that opened the dialog — unless the
->   parent drives the child root by calling `root.render` again on every change;
-> - the first render of a new root is **scheduled**, so the dialog opens
->   empty and fills in a tick later (avoidable only with `flushSync`);
-> - no context from the opener; a separate entry and chunk per `Dynamic`.
->
-> `createPortal` into the slot's host element has none of these: no new root,
-> same commit as the opener, runtime props and context flow, events bubble
-> through the React tree. It reads as "this is still the island that opened
-> the dialog, rendering into DOM the shell owns".
->
-> Recommended: a **top-level** `Dynamic` (in shell code) is a separate root —
-> one island, one app. A `Dynamic` **nested** in a shell-component slot is a
-> portal of its opener, and may take runtime values. The wrapper stays in
-> the source either way: it marks where React starts inside shell-owned DOM.
+**JSX holes are portals or roots depending on where the shell component is
+used.** A `Dynamic` around JSX in a shell-component slot is:
+
+| The shell component is used from… | The JSX hole is… |
+| --- | --- |
+| an island (`Dialog` opened by island code) | a **portal** of that island: `createPortal` into the hole's element. No new root, same commit as the opener, runtime props and context flow, events bubble through the React tree. It is still the island that opened the dialog, rendering into DOM the shell owns |
+| the base layout (shell code) | a **root** — there is no React app around it to portal from. One island, one app, as for any top-level `Dynamic` |
+
+The wrapper is written the same way in both cases: it marks where React
+starts inside shell-owned DOM. Primitive holes need no React either way.
+
+A portal hole may therefore take **runtime values** from its opener — the
+dynamic-props rule applies to roots, not portals.
 
 > OPEN: a shell component used directly in **shell code** (a static dialog in
 > a page) — who opens it, with no island around?
@@ -541,12 +526,12 @@ diagnostic (as you type), ESLint rule (for CI without a build).
 | shell-dynamic-value | `user` is not known at compile time | S3 |
 | shell-nondeterministic | `Date.now()` makes the shell irreproducible | S4 |
 | dynamic-props | `user` is not known at compile time and cannot cross into `Dynamic` | I1, S3 |
-| dynamic-nested | An island cannot start another app | `Dynamic` inside island code, outside a shell component's slot |
+| dynamic-nested | An island cannot start another app | `Dynamic` inside island code, outside a shell component's slot (where it is a portal) |
 | form-dynamic-field | The fields of a `Form` are static | an input inside a `Dynamic` that is not the body of a `$Field` |
 | form-duplicate-field | `age` is already a field of this form | forms |
 | shell-slot-element | A shell component cannot render React elements; wrap this in `<Dynamic>` | shell components |
 | shell-dynamic-code | `Counter` uses React; wrap it in `<Dynamic>` | S1, reported at the use site in shell code |
 | segment-in-loop | `#about-us` would be mounted more than once | segment roots |
 
-The language service also shows, inside a segment file, whether it is mounted
-as an island or compiled into the shell.
+The language service shows, inside a segment file, whether it is mounted as
+an island or compiled into the shell — there is no directive to say so.
