@@ -1,6 +1,7 @@
 package transpiler
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -203,6 +204,9 @@ func (c *passContext) bodyOf(children []*rtsx.Node, all []emit.Piece, origin emi
 			return []emit.Piece{c.copy(ch)}
 		case ch.Kind == rtsx.KindJsxExpression && ch.AsJsxExpression().DotDotDotToken == nil:
 			return c.operand(ch.Expression(), rtsx.PrecedenceComma)
+		case ch.Kind == rtsx.KindJsxText && !strings.Contains(rtsx.NodeText(ch), "&"):
+			// Text alone is a string, as React renders it: `"Text"`.
+			return []emit.Piece{emit.Synth(jsString(cleanJSXText(rtsx.NodeText(ch))), c.span(ch))}
 		}
 	}
 	return append(append([]emit.Piece{emit.Synth("<>", origin)}, all...), emit.Synth("</>", origin))
@@ -294,4 +298,33 @@ func (c *passContext) openingSpan(el *rtsx.Node) emit.Span {
 		return c.span(el.AsJsxElement().OpeningElement)
 	}
 	return c.span(el)
+}
+
+// cleanJSXText applies React's whitespace rule to JSX text: lines are
+// trimmed (except the start of the first and the end of the last), empty
+// lines dropped, the rest joined with one space.
+func cleanJSXText(text string) string {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	var kept []string
+	for i, line := range lines {
+		if i > 0 {
+			line = strings.TrimLeft(line, " \t")
+		}
+		if i < len(lines)-1 {
+			line = strings.TrimRight(line, " \t")
+		}
+		if line != "" {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+// jsString is s as a JavaScript string literal.
+func jsString(s string) string {
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.Encode(s)
+	return strings.TrimSuffix(b.String(), "\n")
 }

@@ -1,0 +1,10 @@
+export const a = (
+  <Card>
+    <$Title>
+      Sign
+      up
+    </$Title>
+    <$Note>Fish &amp; Chips</$Note>
+    <$Quote>Привет "hi"</$Quote>
+  </Card>
+);

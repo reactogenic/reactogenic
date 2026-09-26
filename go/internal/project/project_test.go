@@ -96,7 +96,7 @@ func TestListSlotFromChecker(t *testing.T) {
 	dir := write(t, map[string]string{
 		"tsconfig.json": tsconfig,
 		"src/jsx.d.ts":  jsxTypes,
-		"src/form.tsx":  "export function Form(p: { $Field: { name: string }[]; $Title?: { children: JSX.Element } }) {\n  return <form />;\n}\n",
+		"src/form.tsx":  "export function Form(p: { $Field: { name: string }[]; $Title?: { children: string } }) {\n  return <form />;\n}\n",
 		"src/page.rtsx": "import { Form } from \"./form\";\nexport const a = (\n  <Form>\n    <$Title>Sign up</$Title>\n    <$Field name=\"email\" />\n  </Form>\n);\n",
 	})
 	p := Open(dir + "/tsconfig.json")
@@ -104,7 +104,7 @@ func TestListSlotFromChecker(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", messages(diags))
 	}
 	out, _ := p.Output(dir + "/src/page.rtsx")
-	if !strings.Contains(out.TSX, `$Field={[{ name: "email" }]}`) || !strings.Contains(out.TSX, `$Title={{ children: <>Sign up</> }}`) {
+	if !strings.Contains(out.TSX, `$Field={[{ name: "email" }]}`) || !strings.Contains(out.TSX, `$Title={{ children: "Sign up" }}`) {
 		t.Errorf("page output: %s", out.TSX)
 	}
 }

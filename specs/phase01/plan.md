@@ -286,8 +286,9 @@ error on the `.rtsx` line (tested through `reactogenic check`).
   virtual `.tsx`; a list slot answered by the checker gives a clean program.
 - The conformance harness keeps its `list-slots.txt` stub: fixtures have no
   tsconfig.
-- Found: a text-only slot body is an element (`<>text</>`), so a slot typed
-  `children: string` cannot take text — OPEN in syntax.md.
+- Found: a text-only slot body was an element (`<>text</>`) and could not
+  fill `children: string`. Resolved: text alone is a string literal (body
+  rule, syntax.md); this test now fills `children: string` with text.
 
 ### RGP1-052 — Incremental updates · M
 - A changed file updates the program without a full rebuild.

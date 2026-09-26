@@ -1,1 +1,1 @@
-export const a = <Card footer={more ? <>More</> : null} />;
+export const a = <Card footer={more ? "More" : null} />;

@@ -32,6 +32,7 @@ fixtures/slots/params-on-components
 fixtures/slots/render
 fixtures/slots/render-errors
 fixtures/slots/switch-chain
+fixtures/slots/text-bodies
 syntax.md#conditional-slots/1
 syntax.md#conditional-slots/2
 syntax.md#desugaring-1/1
@@ -57,3 +58,4 @@ syntax.md#rendering-a-slot-slotx/1
 syntax.md#state-across-branches/1
 syntax.md#usage-and-desugaring/1
 syntax.md#usage-and-desugaring/2
+syntax.md#usage-and-desugaring/3

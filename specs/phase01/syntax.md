@@ -394,6 +394,25 @@ Fallback content for an optional slot is the container's business:
 Note `<Icon size />`: the params put `size` in scope, so *Shorthand props*
 case A applies.
 
+A text body is a string:
+
+```tsx
+// .rtsx
+<Button>
+  <$Label a="b">Text</$Label>
+</Button>
+```
+
+```tsx
+// .tsx
+<Button
+  $Label={{
+    a: "b",
+    children: "Text",
+  }}
+/>
+```
+
 Params are optional. Without them the body is passed as plain content:
 
 ```tsx
@@ -441,13 +460,16 @@ For each component element `<P>`:
    | body only | `children: body` |
    | no body (`<$X … />`) | no `children` property |
 
-   `body` is the single child expression, or `<>…</>` when there are several
-   children or text.
+   `body` — the **body rule**, shared with `Match` and `Switch`:
 
-> OPEN: a body that is only text becomes `<>text</>`, an element, so a slot
-> typed `children: string` cannot be filled with text (`<$Title>Sign
-> up</$Title>` is a type error there). Emit a string literal for a text-only
-> body? Found by the project tests (RGP1-051).
+   | Body | Emitted |
+   | --- | --- |
+   | one element | the element |
+   | one `{expr}` | `expr` |
+   | text alone | a string literal, as React renders it: whitespace collapsed by JSX's rules (`"Save"`); text with an HTML entity stays `<>…</>` |
+   | several children | `<>…</>` |
+
+   A text body is a string, so it fills a slot typed `children: string`.
 5. Whatever is left in `<P>` stays as `children`.
 
 ### Params on a component: `children` is the default slot
@@ -888,8 +910,8 @@ here and nowhere else, because the transpiler consumes these elements itself:
 ```tsx
 // .tsx
 <p>
-  {a % 3 === 0 ? <>Fizz</> : null}
-  {a % 5 === 0 ? <>Buzz</> : null}
+  {a % 3 === 0 ? "Fizz" : null}
+  {a % 5 === 0 ? "Buzz" : null}
 </p>
 ```
 
@@ -980,8 +1002,8 @@ inside each body:
 import { noMatch as _noMatch } from "@reactogenic/core";
 
 {((_on) =>
-  _on === "loading" ? <>…</>
-  : _on === "error" ? <>…</>
+  _on === "loading" ? "…"
+  : _on === "error" ? "…"
   : _noMatch(_on)                  // noMatch(value: never): never — throws
 )(getStatus())}
 ```
@@ -1007,9 +1029,9 @@ With params, `is` is a condition over the handed-out value.
 ```tsx
 // .tsx
 {(({ value: n }) =>
-  n % 15 === 0 ? <>FizzBuzz</>
-  : n % 5 === 0 ? <>Buzz</>
-  : n % 3 === 0 ? <>Fizz</>
+  n % 15 === 0 ? "FizzBuzz"
+  : n % 5 === 0 ? "Buzz"
+  : n % 3 === 0 ? "Fizz"
   : n
 )({ value: getNumber() })}
 ```
@@ -1019,9 +1041,9 @@ renaming works. Its scope is the whole element: every `is` and every body.
 
 A dynamic `Switch` cannot be `exhaustive`: arbitrary conditions cannot be proven.
 
-Bodies follow the slot-body rule: a single child element as it is, the
-expression of a single `{…}` child, or `<>…</>` for several children or text.
-No body → `null`.
+Bodies follow the body rule of *Slots → Usage and desugaring*: one
+element as it is, the expression of one `{…}` child, text alone as a string
+literal, `<>…</>` for several children. No body → `null`.
 
 ### Position
 
