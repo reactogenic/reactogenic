@@ -7,7 +7,7 @@ task (`RGP1-xxx`). Specs come first: settle a task's spec, then implement.
 Repo layout (see `specs/phase01/decisions.md`, RGP1-003): `go/` — our Go
 module (`go/internal/`, `go/cmd/reactogenic/`), vendored tsgo in
 `go/third_party/tsgo` (never edit without adding a patch to `go/patches/`);
-`packages/` — pnpm workspace; `go.work` and `package.json` at the root tie
+`packages/` — pnpm workspace, every package scoped `@reactogenic/*`; `go.work` and `package.json` at the root tie
 them together. Run Go commands on `github.com/reactogenic/reactogenic/go/...`,
 not `./go/...`. tsgo is reached only through its `rtsx` bridge package.
 
@@ -77,8 +77,8 @@ them, so each screen ships exactly the HTML, CSS and JS it needs."
 New meaning may only be given to forms that are **syntax errors in today's
 TSX** — that is good news: such a form is safe to reserve. Forms that already
 parse keep their React meaning; the two exceptions (bare attribute with a
-same-named binding; component tags must start with `A`–`Z`, which frees `$`
-for slots) are called out in the spec.
+same-named binding; a tag starting with `$` is a slot, never a component)
+are called out in the spec.
 "Syntax error" means rejected by the compilers that build TSX (esbuild,
 Babel): TypeScript's own parser accepts `#name` as an attribute named
 `"#about-us"` — see *Segment roots* in `specs/phase01/syntax.md`.

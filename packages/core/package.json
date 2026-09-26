@@ -1,11 +1,10 @@
 {
-  "name": "reactogenic",
+  "name": "@reactogenic/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./vite": "./src/vite.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "test": "vitest run",

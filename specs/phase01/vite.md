@@ -9,7 +9,7 @@ run them in dev and in `vite build`, with nothing else changing.
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import reactogenic from "reactogenic/vite";
+import reactogenic from "@reactogenic/vite";
 
 export default defineConfig({
   plugins: [reactogenic(), react()],
@@ -84,7 +84,18 @@ transpiler, which the plugin drives as one long-lived process
 
 ## Runtime
 
-Phase 1 ships a small `reactogenic` package:
+All packages are scoped to the `@reactogenic` npm org. Phase 1 ships:
+
+| Package | Contents |
+| --- | --- |
+| `@reactogenic/core` | the runtime, below |
+| `@reactogenic/vite` | the plugin |
+| `@reactogenic/cli` | the `reactogenic` command (a shim that finds the binary) |
+| `@reactogenic/cli-<os>-<arch>` | the Go binary per platform, `optionalDependencies` of `@reactogenic/cli` |
+
+`@reactogenic/vite` depends on `@reactogenic/cli` for the binary it drives.
+
+`@reactogenic/core` exports:
 
 | Export | Kind | Note |
 | --- | --- | --- |

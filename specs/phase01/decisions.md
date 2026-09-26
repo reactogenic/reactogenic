@@ -48,7 +48,8 @@ prototype to be rewritten later.
 | `close` | Node → Go | — |
 
 - The binary is shipped the way esbuild ships its own: one npm package per
-  platform, installed as an `optionalDependency` of `reactogenic`.
+  platform, installed as an `optionalDependency` of `@reactogenic/cli`
+  (see RGP1-005 for the package names).
 
 **Rejected.**
 
@@ -140,7 +141,8 @@ together.
 │   ├── patches/            our changes to tsgo, as patches
 │   └── scripts/            sync-tsgo.sh
 ├── packages/
-│   └── reactogenic/        runtime, `reactogenic/vite`
+│   ├── core/               @reactogenic/core — the runtime
+│   └── vite/               @reactogenic/vite — the plugin
 └── specs/
 ```
 
@@ -188,3 +190,14 @@ transpiler needs: type aliases and one-line wrappers.
 
 **Toolchain.** tsgo requires Go 1.27. `go.mod` says so, and Go 1.21+
 downloads that toolchain on demand (`GOTOOLCHAIN=auto`, the default).
+
+## RGP1-005 — Phase 1 open questions
+
+| Question | Decision | Recorded in |
+| --- | --- | --- |
+| Which tags are components | React's rule, unchanged; only tags starting with `$` are taken (slots). No invented naming constraint | syntax.md, *Slots → Grammar* |
+| Warning on the silent flip when migrating | deferred to editor tooling | syntax.md, *Shorthand props* |
+| `Slot<Children, Options>` helper | deferred | syntax.md, *Slots → Typing behaviour* |
+| Iterables in `Each` | rejected: arrays only, so `index` is always a `number` position | syntax.md, *Iteration* |
+| Scope for shorthand props | tsgo's binder, no resolver of our own; a same-named binding of the wrong type is an ordinary TS error | syntax.md, *Shorthand props*; RGP1-032 |
+| Package names | all scoped to the `@reactogenic` npm org: `core`, `vite`, `cli`, `cli-<os>-<arch>` | vite.md, *Runtime* |

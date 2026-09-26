@@ -102,5 +102,5 @@ Shorthand props case B on a non-boolean prop is **not** rewritten — TS's
 "Type `true` is not assignable to type `string`" is accurate — but it gets
 related information: "no `value` in scope".
 
-> OPEN: the exact TS codes per rule, fixed by a test per row once the checker
-> (see [vite.md](vite.md#types-in-the-transform)) is chosen.
+The exact TS7 code behind each rule is fixed by that rule's test in
+RGP1-073 (TS7 is the checker: [decisions.md](decisions.md#rgp1-001--checker-and-implementation-language)).

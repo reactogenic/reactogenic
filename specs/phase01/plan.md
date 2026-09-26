@@ -16,7 +16,7 @@ Size: **S** ≤ 2 days, **M** ≤ 1 week, **L** > 1 week (split it before starti
 | # | Milestone | Tasks | Ends with |
 | --- | --- | --- | --- |
 | M0 | Decisions and scaffolding | 001–009 | repo builds, fixture harness runs, both decisions recorded |
-| M1 | Runtime package | 010–019 | `reactogenic` exports usable from plain `.tsx` |
+| M1 | Runtime package | 010–019 | `@reactogenic/core` exports usable from plain `.tsx` |
 | M2 | Parser | 020–029 | every `.rtsx` form parses to an AST with exact spans |
 | M3 | Transpiler | 030–049 | every desugaring in [syntax.md](syntax.md) passes its fixture |
 | M4 | Type service | 050–059 | list slots emit correctly from real props types; the Go process serves the plugin |
@@ -70,12 +70,8 @@ The shared format for every conformance test from here on.
   runs (red is expected until M3).
 - Depends on: 003.
 
-### RGP1-005 — Close the phase 1 OPENs in syntax.md · S
-Decide or defer each one, so implementation does not stall on them:
-- the migration warning for the silent flip;
-- the `Slot<Children, Options>` helper;
-- iterables in `Each`.
-- **Done when:** each OPEN is decided or marked ROADMAP.
+### RGP1-005 — Close the phase 1 OPENs in syntax.md · S · done
+See [decisions.md](decisions.md#rgp1-005--phase-1-open-questions).
 
 ## M1 — Runtime package
 
@@ -153,6 +149,10 @@ from, including aliases (`import { Switch as Choose }`).
 - **Done when:** the alias and flow-as-value fixtures pass.
 
 ### RGP1-032 — Pass 1: shorthand props · M
+- Scope comes from tsgo's binder, not a resolver of our own (RGP1-005).
+  Slot params must be bound over their body: either patch the binder for
+  `JsxSlotParams`, or resolve shorthands after slot hoisting, when params are
+  ordinary arrow parameters. Decide in this task.
 - Lookup follows the ES module's scope chain: imports and top-level
   declarations, enclosing functions and blocks, and slot params.
 - Excluded: globals, ambient declarations, type-only bindings.
@@ -190,9 +190,8 @@ rule, and the `Switch` / `Match` import is dropped.
 - `children` is chosen syntactically: params + body, body only, or none.
 - Body: the single child expression, or `<>…</>`.
 - Errors: orphan-slot; duplicate-slot (slot element plus an explicit
-  attribute); slot-key; slot-children-conflict; component-name (tags that
-  start with neither `a`–`z`, `A`–`Z` nor `$`, and `$` tags shadowing a
-  binding).
+  attribute); slot-key; slot-children-conflict; component-name (a `$` tag
+  shadowing a binding).
 - **Done when:** the *Slots* fixtures pass, apart from list and conditional
   slots.
 - Depends on: 030, 032.
@@ -345,8 +344,8 @@ Needs your approval first: it creates files outside `specs/`.
 
 ### RGP1-070 — CLI skeleton · S
 - `reactogenic check [-p tsconfig]`: the Go binary, run on the RGP1-050
-  program, and reached from npm through a `bin` shim added to the
-  `reactogenic` package here.
+  program, and reached from npm through the `@reactogenic/cli` package and
+  its `reactogenic` bin shim, added here.
 - Exit code 0 means no errors, 1 means errors.
 - `--pretty` / `--no-pretty`, as in `tsc`.
 - **Done when:** on a clean project it prints nothing and exits 0.
@@ -428,7 +427,7 @@ CI fails if:
 ### RGP1-092 — Platform binaries · M
 - Cross-compile the Go binary for each platform.
 - Publish one npm package per platform, as an `optionalDependency` of
-  `reactogenic` (the esbuild model).
+  `@reactogenic/cli` (the esbuild model).
 - The shim and the plugin find the binary for the current platform, or fail
   with a clear message.
 - **Done when:** a clean install on macOS, Linux and Windows runs

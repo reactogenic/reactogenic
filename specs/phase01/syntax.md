@@ -125,9 +125,9 @@ consulted.
 
 So `<Input name />` is always case B unless the module itself declares `name`.
 
-Resolution is ordinary lexical lookup — the nearest binding wins. Since the
-emitted identifier is resolved by TS the same way, shadowing needs no special
-handling.
+Resolution is ordinary lexical lookup — the nearest binding wins — and it is
+**tsgo's binder**, not a resolver of our own. Since the emitted identifier is
+resolved by TS the same way, shadowing needs no special handling.
 
 ### Typing behaviour
 
@@ -135,6 +135,16 @@ None of its own. After desugaring, TS7 checks `value={value}` or `value`
 (= `true`) against the prop type as usual.
 
 - `boolean | X` props need no special rule: scope alone picks A or B.
+- A same-named binding of another type is an ordinary TS error, not a
+  transpiler rule:
+
+  ```tsx
+  const disabled = 42;
+  <Button disabled />   // TS: Type 'number' is not assignable to type 'boolean'
+  ```
+
+  > ROADMAP: a friendlier hint on that error, "Did you mean
+  > `disabled={true}`?"
 - Case B on a non-boolean prop is an ordinary TS error
   (`Type 'true' is not assignable to type 'string'`), mapped back to the bare
   attribute.
@@ -165,8 +175,9 @@ None. Every bare attribute desugars to A or B.
   attribute changes that attribute's meaning with no error when the types
   happen to agree (`const disabled = false; … <Button disabled />`).
 
-> OPEN: pasting existing TSX into `.rtsx` can hit the silent flip. Should the
-> `.tsx` → `.rtsx` migration path warn on bare attributes that resolve as case A?
+> ROADMAP: a warning in the `.tsx` → `.rtsx` migration path on bare
+> attributes that resolve as case A (the silent flip). Belongs with editor
+> tooling ([../later/tooling.md](../later/tooling.md)).
 
 ### Prior art
 
@@ -572,28 +583,27 @@ note in [Iteration](#iteration-each).
 Two parts.
 
 **Slot elements — no grammar change.** `<$IconStart>` parses today as a
-component reference. `.rtsx` reserves it by fixing what the first character
-of a plain-identifier tag means:
+component reference. `.rtsx` keeps React's rule for every plain-identifier
+tag and takes only the ones starting with `$`:
 
 | Tag | TSX today | `.rtsx` |
 | --- | --- | --- |
-| `div`, `my-element` — starts with `a`–`z` | intrinsic element | unchanged |
-| `Button` — starts with `A`–`Z` | component | unchanged |
-| `$IconStart` | component | slot element |
-| `_Button`, `Ärger`, anything else | component | error: component-name |
+| `div`, `my-element` — starts with a lowercase letter, or contains `-` | intrinsic element | unchanged |
+| `Button`, `_Button`, `Ärger` — anything else | component | unchanged |
+| `$IconStart` — starts with `$` | component | slot element |
 
 A `$` tag is never resolved as an identifier, so nothing needs importing and
 two containers can both have a `$Title` without colliding. No escape is
-needed: in `.rtsx` no component tag can start with `$`.
+needed: in `.rtsx` no component tag starts with `$`.
 
 Member-expression tags (`<motion.div>`, `<Icons.Plus>`, `<M.$Modal>`) are
-references whatever their case, as today. The rule applies to plain
-identifiers only.
+references, as today. The rule applies to plain identifiers only.
 
-> **Exception to the governing rule.** A tag starting with `$`, `_` or a
-> non-ASCII letter parses today as a component. In `.rtsx` it is a slot
-> element or a compile error — loud, never silent. Existing code renames at
-> the import: `import { $Modal as Modal }`, then `<Modal>`.
+> **Exception to the governing rule.** A tag starting with `$` parses today
+> as a component. In `.rtsx` it is a slot element. Never silent: a TSX
+> program that renders `<$Modal>` has a `$Modal` binding in scope, and that
+> is component-name. Rename at the import: `import { $Modal as Modal }`,
+> then `<Modal>`.
 
 **Slot params — the first real grammar change.**
 
@@ -661,8 +671,8 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 - Optional slot: `$IconStart?: {…}`. The container then writes
   `renderSlot($IconStart?.children, { size })`.
 
-> OPEN: a helper such as `Slot<Children, Options = {}>` to shorten
-> declarations.
+> ROADMAP: a helper such as `Slot<Children, Options = {}>` to shorten
+> declarations. Phase 1 writes slot types out in full.
 
 ### Compile errors
 
@@ -681,7 +691,6 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 | duplicate-params | A slot takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
 | slot-key | Slots are not elements | `key` on a slot element | syntax |
-| component-name | Component names start with `A`–`Z`; rename `_Button` where it is imported | a plain-identifier tag that starts with neither `a`–`z`, `A`–`Z` nor `$` | syntax |
 | component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name (`$Modal`) is in scope — reported instead of the slot errors | syntax |
 
 ```tsx
@@ -761,7 +770,7 @@ created, no embedded expressions run.
 No new grammar: elements, slot elements and slot params are already defined.
 
 ```tsx
-import { Switch, Match } from "reactogenic";  // package name is a placeholder
+import { Switch, Match } from "@reactogenic/core";
 ```
 
 `Switch` and `Match` are recognised by **import origin, not by name**
@@ -1330,8 +1339,9 @@ All TS7, from `EachProps<T>`:
 "only archived" — so the syntax does not define it. Write
 `<Match on={items.length === 0}>` next to the `Each`.
 
-> OPEN: iterables (`Set`, `Map`, generators) — a library decision only:
-> `items: Iterable<T>` and `Array.from` inside `Each`.
+**Rejected:** iterables (`Set`, `Map`, generators) as `items`. `Each` takes
+arrays only, so that `index` has one stable meaning and type, `number`: the
+position in `items`. Convert at the call site: `items={[...set]}`.
 
 ### Roadmap
 
