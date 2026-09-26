@@ -73,27 +73,19 @@ See [decisions.md](decisions.md#rgp1-005--phase-1-open-questions).
 
 ## M1 — Runtime package
 
-### RGP1-010 — Slot types and `renderSlot` · S
-`SlotFn`, `OptionalSlotFn` and `renderSlot`, exactly as in
-[syntax.md](syntax.md#declaration-plain-tsx-no-extension).
-- **Done when:** a container written in plain `.tsx` against these types
-  type-checks, and so does the whole *Declaration matrix*. Each "error" cell
-  in the matrix is a type-level test.
-
-### RGP1-011 — `Each` · S
-The component from [syntax.md](syntax.md#the-component). No fragment, no
-wrapper.
-- **Done when:** unit tests render it with React, and generic inference gives
-  `item: T`.
-
-### RGP1-012 — `Switch`, `Match`, `$Case`, `noMatch` declarations · S
-- Declarations only: `Switch` is a container with a `$Case` list slot, so the
-  slot errors work on it.
-- If they are ever rendered at runtime (the transform was bypassed), they
-  throw a clear error.
-- `noMatch(value: never): never` throws, with the value in the message.
-- **Done when:** the declarations drive undeclared-slot and orphan-slot in
-  the RGP1-043 fixtures.
+### RGP1-010 — Slot types and `renderSlot` · S · done
+### RGP1-011 — `Each` · S · done
+### RGP1-012 — `Switch`, `Match`, `$Case`, `noMatch` declarations · S · done
+`packages/core/src`: `slots.ts` (`SlotFn`, `OptionalSlotFn`, `renderSlot`),
+`each.ts`, `flow.ts`. React 19 is a peer dependency.
+- `Switch` / `Match` are declarations with their slots (`$Case` a list
+  slot) that throw a clear error if rendered — i.e. if the transform did
+  not run. `noMatch` throws with the value.
+- Tests: `runtime.test.tsx` (vitest: `renderSlot`, `Each` with no wrapper
+  and with no items, the throws); `types.check.tsx` (checked by `tsc`: the
+  *Declaration matrix* — required slot, unknown option, unknown param,
+  params on a `ReactNode` body, a `SlotFn` without params, optional body —
+  and `Each`'s item inference).
 
 ## M2 — Parser
 
