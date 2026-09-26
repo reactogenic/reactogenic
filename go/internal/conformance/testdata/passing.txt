@@ -1,0 +1,1 @@
+# Conformance cases that pass. Maintained by `go test -run TestConformance -update`.

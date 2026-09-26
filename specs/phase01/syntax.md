@@ -1026,12 +1026,17 @@ which wraps the body in a keyed fragment:
 
 ```tsx
 // .rtsx
-<$Case is="login" key="login"><Input name="email" /></$Case>
+<Switch on={mode}>
+  <$Case is="login" key="login"><Input name="email" /></$Case>
+  <$Case is="signup" key="signup"><Input name="email" /></$Case>
+</Switch>
 ```
 
 ```tsx
 // .tsx
-mode === "login" ? <Fragment key="login"><Input name="email" /></Fragment>
+{mode === "login" ? <Fragment key="login"><Input name="email" /></Fragment>
+  : mode === "signup" ? <Fragment key="signup"><Input name="email" /></Fragment>
+  : null}
 ```
 
 None of this is new: a hand-written ternary behaves identically, including the
@@ -1102,7 +1107,7 @@ nothing:
 ```tsx
 // page.tsx
 import _Section_aboutUs from "./+about-us";
-…
+
 <section id="about-us" className="band">
   <_Section_aboutUs />
 </section>

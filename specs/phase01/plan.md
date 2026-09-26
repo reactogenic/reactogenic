@@ -53,22 +53,20 @@ exists (RGP1-003).
 - Found on the way: TypeScript's parser does not reject `#name`. The spec is
   corrected, and RGP1-021 needs no scanner change.
 
-### RGP1-004 — Fixture harness · M
-The shared format for every conformance test from here on.
-- A fixture is `name.rtsx` plus some of these:
-  - `name.tsx`, the expected output;
-  - `name.errors`, expected transpiler errors (code and `.rtsx` span);
-  - `name.check`, expected `reactogenic check` output.
-- Multi-file fixtures are a directory: segments, containers declared in other
-  files.
-- An extractor turns every `// .rtsx` / `// .tsx` code-block pair in
-  syntax.md into a fixture. The spec's examples then *are* the tests, and a
-  spec edit that breaks one fails CI.
-- Output is compared after normalising the formatting, so tests assert
-  meaning rather than whitespace.
-- **Done when:** the extractor finds every pair in syntax.md, and each one
-  runs (red is expected until M3).
-- Depends on: 003.
+### RGP1-004 — Fixture harness · M · done
+`go/internal/conformance`, with the formats in
+[fixtures/README.md](../../fixtures/README.md).
+- Spec examples are extracted from syntax.md at test time: 24 cases, one of
+  them an intermediate stage (`after pass 2`). They check output only; the
+  diagnostics are checked by fixtures.
+- Output is compared as a normalised TSX tree, not as text.
+- A ratchet file (`testdata/passing.txt`) makes CI fail on regressions and
+  on passes nobody recorded. Unimplemented cases are only counted, so CI
+  stays green while M2–M3 are built.
+- `TestSpecOutputsParse` checks that every expected `.tsx` in the spec
+  parses. It found two broken examples on its first run; both are fixed.
+- Deferred to RGP1-051: spec examples that need types. The *List slots*
+  example needs `Form` declared, not only `FormProps`.
 
 ### RGP1-005 — Close the phase 1 OPENs in syntax.md · S · done
 See [decisions.md](decisions.md#rgp1-005--phase-1-open-questions).

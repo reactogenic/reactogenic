@@ -19,7 +19,12 @@ every change we make to it.
    git diff --relative=go/third_party/tsgo -- go/third_party/tsgo > go/patches/000N-short-name.patch
    ```
 
-   For a new file, `git add -N` it first so that `git diff` sees it.
+   For a patch that adds one whole file, such as the bridge, regenerate it
+   from the file instead:
+
+   ```sh
+   go/scripts/file-patch.sh rtsx/rtsx.go 0001-rtsx-bridge.patch
+   ```
 3. Check that the patches still reproduce the committed tree:
 
    ```sh

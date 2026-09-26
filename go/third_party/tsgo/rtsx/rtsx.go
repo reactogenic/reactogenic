@@ -9,6 +9,7 @@ package rtsx
 import (
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/core"
+	"github.com/microsoft/TypeScript/tsc/internal/locale"
 	"github.com/microsoft/TypeScript/tsc/internal/parser"
 	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
@@ -16,6 +17,16 @@ import (
 type (
 	SourceFile = ast.SourceFile
 	Diagnostic = ast.Diagnostic
+	Node       = ast.Node
+	Kind       = ast.Kind
+)
+
+const (
+	KindBlock                   = ast.KindBlock
+	KindEndOfFile               = ast.KindEndOfFile
+	KindExpressionStatement     = ast.KindExpressionStatement
+	KindJsxText                 = ast.KindJsxText
+	KindParenthesizedExpression = ast.KindParenthesizedExpression
 )
 
 // ParseTSX parses text as a .tsx file.
@@ -25,4 +36,24 @@ func ParseTSX(fileName string, text string) *SourceFile {
 		Path:     tspath.Path(fileName),
 	}
 	return parser.ParseSourceFile(opts, text, core.ScriptKindTSX)
+}
+
+// NodeText returns the text of an identifier, literal or JSX text node, and
+// "" for any other node.
+func NodeText(n *Node) string {
+	switch n.Kind {
+	case ast.KindJsxText:
+		return n.AsJsxText().Text
+	case ast.KindIdentifier, ast.KindPrivateIdentifier, ast.KindStringLiteral,
+		ast.KindNumericLiteral, ast.KindBigIntLiteral, ast.KindRegularExpressionLiteral,
+		ast.KindNoSubstitutionTemplateLiteral, ast.KindTemplateHead,
+		ast.KindTemplateMiddle, ast.KindTemplateTail, ast.KindJsxNamespacedName:
+		return n.Text()
+	}
+	return ""
+}
+
+// Message returns a diagnostic's message text, in English.
+func Message(d *Diagnostic) string {
+	return d.Localize(locale.Default)
 }

@@ -10,6 +10,8 @@ module (`go/internal/`, `go/cmd/reactogenic/`), vendored tsgo in
 `packages/` — pnpm workspace, every package scoped `@reactogenic/*`; `go.work` and `package.json` at the root tie
 them together. Run Go commands on `github.com/reactogenic/reactogenic/go/...`,
 not `./go/...`. tsgo is reached only through its `rtsx` bridge package.
+Conformance: `go/internal/conformance` runs the syntax.md examples plus
+`fixtures/`, with a ratchet in `testdata/passing.txt` (`fixtures/README.md`).
 
 The specs are the source of truth. When this file and a spec disagree, the
 spec wins; update this file.
@@ -139,7 +141,7 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | File | Status |
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
-| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–003 done |
+| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
 | `later/layout.md`, `later/persistent-state.md`, `later/tooling.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
