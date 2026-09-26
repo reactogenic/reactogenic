@@ -1,0 +1,7 @@
+import { Switch, Match } from "@reactogenic/core";
+import { createElement } from "react";
+
+const Choose = Switch;
+export const a = <Box as={Match} />;
+export const b = createElement(Switch, {});
+export { Match };

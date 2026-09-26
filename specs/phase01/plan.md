@@ -145,18 +145,27 @@ bad attribute does not hide the others.
   identity map; transpiler errors are reported with source line and column.
   6 of 29 conformance cases now pass, the RGP1-022 fixtures among them.
 
-### RGP1-031 — Import-origin recognition · S
-`Switch`, `Match` and `Each` are recognised by the module they are imported
-from, including aliases (`import { Switch as Choose }`).
-- flow-as-value: `const S = Switch`, `as={Match}`, `createElement(Switch, …)`,
-  a re-export.
-- **Done when:** the alias and flow-as-value fixtures pass.
+### RGP1-031 — Import-origin recognition · S · done
+`syntax.FrameworkExport` resolves a tag through tsgo's binder to its import
+specifier: a named value import from `@reactogenic/core`, however aliased.
+A local or parameter named `Switch`, another package's `Switch`, and
+`import type` are not the framework's.
+- `syntax.CheckFlowAsValue` (pass 0): any value reference to `Switch` or
+  `Match` other than a tag — `const S = Switch`, `as={Match}`,
+  `createElement(Switch, …)`, `export { Match }`, re-exports from the
+  package (including `export *`), and `R.Switch` through a namespace
+  import. Property and member names are not references.
+- Fixtures `fixtures/flow/as-value`, `fixtures/flow/re-export`. The alias
+  case is unit-tested here and joins the conformance suite with the
+  `Switch` lowering (RGP1-034).
 
 ### RGP1-032 — Pass 1: shorthand props · M
-- Scope comes from tsgo's binder, not a resolver of our own (RGP1-005).
-  Slot params must be bound over their body: either patch the binder for
-  `JsxSlotParams`, or resolve shorthands after slot hoisting, when params are
-  ordinary arrow parameters. Decide in this task.
+- Scope comes from tsgo's binder, not a resolver of our own (RGP1-005):
+  `syntax.Binding` asks the binder's `NameResolver`, with globals excluded
+  and ambient and type-only declarations filtered out. Slot params are the
+  one scope the binder cannot know; `Binding` finds them by walking up to
+  the elements whose body holds the attribute, and the nearer of the two
+  wins. No binder patch, no reordering of passes (done with RGP1-031).
 - Lookup follows the ES module's scope chain: imports and top-level
   declarations, enclosing functions and blocks, and slot params.
 - Excluded: globals, ambient declarations, type-only bindings.

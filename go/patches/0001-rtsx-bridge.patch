@@ -1,9 +1,9 @@
 diff --git a/rtsx/rtsx.go b/rtsx/rtsx.go
 new file mode 100644
-index 0000000..2789729
+index 0000000..da15542
 --- /dev/null
 +++ b/rtsx/rtsx.go
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,135 @@
 +// Package rtsx is Reactogenic's bridge into tsgo's internal packages.
 +//
 +// Go allows internal/ to be imported only from inside this module, so
@@ -14,6 +14,7 @@ index 0000000..2789729
 +
 +import (
 +	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/binder"
 +	"github.com/microsoft/TypeScript/tsc/internal/core"
 +	"github.com/microsoft/TypeScript/tsc/internal/locale"
 +	"github.com/microsoft/TypeScript/tsc/internal/parser"
@@ -26,23 +27,33 @@ index 0000000..2789729
 +	Diagnostic = ast.Diagnostic
 +	Node       = ast.Node
 +	Kind       = ast.Kind
++	Symbol     = ast.Symbol
 +)
 +
 +const (
-+	KindBindingElement          = ast.KindBindingElement
-+	KindBlock                   = ast.KindBlock
-+	KindEndOfFile               = ast.KindEndOfFile
-+	KindExpressionStatement     = ast.KindExpressionStatement
-+	KindIdentifier              = ast.KindIdentifier
-+	KindJsxAttribute            = ast.KindJsxAttribute
-+	KindJsxAttributes           = ast.KindJsxAttributes
-+	KindJsxNamespacedName       = ast.KindJsxNamespacedName
-+	KindJsxOpeningElement       = ast.KindJsxOpeningElement
-+	KindJsxSelfClosingElement   = ast.KindJsxSelfClosingElement
-+	KindJsxSpreadAttribute      = ast.KindJsxSpreadAttribute
-+	KindJsxText                 = ast.KindJsxText
-+	KindObjectBindingPattern    = ast.KindObjectBindingPattern
-+	KindParenthesizedExpression = ast.KindParenthesizedExpression
++	KindBindingElement           = ast.KindBindingElement
++	KindBlock                    = ast.KindBlock
++	KindEndOfFile                = ast.KindEndOfFile
++	KindExportDeclaration        = ast.KindExportDeclaration
++	KindExportSpecifier          = ast.KindExportSpecifier
++	KindExpressionStatement      = ast.KindExpressionStatement
++	KindIdentifier               = ast.KindIdentifier
++	KindImportDeclaration        = ast.KindImportDeclaration
++	KindImportSpecifier          = ast.KindImportSpecifier
++	KindJsxClosingElement        = ast.KindJsxClosingElement
++	KindJsxElement               = ast.KindJsxElement
++	KindJsxAttribute             = ast.KindJsxAttribute
++	KindJsxAttributes            = ast.KindJsxAttributes
++	KindJsxNamespacedName        = ast.KindJsxNamespacedName
++	KindJsxOpeningElement        = ast.KindJsxOpeningElement
++	KindJsxSelfClosingElement    = ast.KindJsxSelfClosingElement
++	KindJsxSpreadAttribute       = ast.KindJsxSpreadAttribute
++	KindJsxText                  = ast.KindJsxText
++	KindNamedExports             = ast.KindNamedExports
++	KindNamespaceImport          = ast.KindNamespaceImport
++	KindObjectBindingPattern     = ast.KindObjectBindingPattern
++	KindPropertyAccessExpression = ast.KindPropertyAccessExpression
++	KindParenthesizedExpression  = ast.KindParenthesizedExpression
 +)
 +
 +// ParseTSX parses text as a .tsx file.
@@ -66,10 +77,40 @@ index 0000000..2789729
 +	return scanner.GetTokenPosOfNode(n, file, false)
 +}
 +
++// Bind runs tsgo's binder over file, once; ResolveValue needs it.
++func Bind(file *SourceFile) {
++	binder.BindSourceFile(file)
++}
++
++// ResolveValue resolves name as a value (or an import alias) at location,
++// through the binder's scopes up to the module scope. Globals are excluded.
++// It returns nil when nothing in the module declares name.
++func ResolveValue(location *Node, name string) *Symbol {
++	r := &binder.NameResolver{}
++	return r.Resolve(location, name, ast.SymbolFlagsValue|ast.SymbolFlagsAlias, nil, false, true)
++}
++
++// IsAmbient reports whether a declaration is ambient (`declare const x`).
++func IsAmbient(decl *Node) bool {
++	return decl.Flags&ast.NodeFlagsAmbient != 0
++}
++
++// IsTypeOnlyImport reports whether an import declaration or specifier is
++// type-only (`import type { X }`, `import { type X }`).
++func IsTypeOnlyImport(decl *Node) bool {
++	return ast.IsPartOfTypeOnlyImportOrExportDeclaration(decl)
++}
++
 +// SkipTrivia returns the first position at or after pos that is not
 +// whitespace or a comment.
 +func SkipTrivia(text string, pos int) int {
 +	return scanner.SkipTrivia(text, pos)
++}
++
++// IsValueReference reports whether an identifier is read as a value where it
++// stands: an expression, not a declaration, property or member name.
++func IsValueReference(ident *Node) bool {
++	return ast.IsExpressionNode(ident) && !ast.IsIdentifierName(ident)
 +}
 +
 +// IsIntrinsicTag reports whether a JSX tag name is an intrinsic element

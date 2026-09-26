@@ -1,4 +1,6 @@
 # Conformance cases that pass. Maintained by `go test -run TestConformance -update`.
+fixtures/flow/as-value
+fixtures/flow/re-export
 fixtures/parse/duplicate-params
 fixtures/parse/params-on-html
 fixtures/parse/segment-second-id

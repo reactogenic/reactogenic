@@ -102,6 +102,7 @@ func Transpile(in Input) (Output, error) {
 		if p.run == nil {
 			continue
 		}
+		rtsx.Bind(file)
 		c := &passContext{file: file, text: text, report: func(s emit.Span, sev Severity, code, msg string) {
 			out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
 		}}
@@ -126,7 +127,7 @@ func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg stri
 
 // checks is pass 0: errors reported against what the author wrote.
 func checks(c *passContext) []emit.Edit {
-	for _, e := range syntax.Check(c.file) {
+	for _, e := range append(syntax.Check(c.file), syntax.CheckFlowAsValue(c.file)...) {
 		c.report(emit.Span{Pos: e.Pos, End: e.End}, Error, e.Code, e.Message)
 	}
 	return nil
