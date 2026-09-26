@@ -403,10 +403,12 @@ One subtask and one fixture per row of the rewrites table in
 - **073i** segment-props
 - **073j** segment-root-props
 - **073k** shorthand case B: adds related information, "no `value` in scope"
+- **073l** slot-args-missing: a function slot rendered without its args
+- **073m** slot-no-args: args to a slot whose body is not a function
 
 Rules match on origin and TS error code, never on message text. This also
 resolves the OPEN on exact TS codes.
-- **Done when:** all eleven fixtures pass, and an error that matches no rule
+- **Done when:** all thirteen fixtures pass, and an error that matches no rule
   falls back to TS's own message at the origin.
 - Depends on: 071, 072.
 

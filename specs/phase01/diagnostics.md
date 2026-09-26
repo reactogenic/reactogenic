@@ -94,6 +94,8 @@ they never wrote:
 | segment-not-component | the module has no default export, or it is not a component | `#name` |
 | segment-props | required props missing on `<_Section_x />` | `#name` |
 | segment-root-props | the root does not accept `id` or `children` | `#name` |
+| slot-args-missing | a property of `renderSlot`'s args is missing (a function slot rendered without its args) | the rendering element: "`$IconEnd` needs `size`" |
+| slot-no-args | a property of `renderSlot`'s args is not assignable to `never` (args to a slot whose body is not a function) | that arg attribute: "`$Label` takes no args: its body is not a function" |
 
 Rewrites are matched by the error's origin and its TS code, never by message
 text. An error that matches no rule keeps TS's message, at the origin.

@@ -7,8 +7,8 @@ describe("renderSlot", () => {
     expect(renderSlot(({ size }: { size: string }) => `icon ${size}`, { size: "lg" })).toBe("icon lg");
   });
   test("returns a plain body as it is", () => {
-    expect(renderSlot<{ size: string }>("plain", { size: "lg" })).toBe("plain");
-    expect(renderSlot<{ size: string }>(undefined, { size: "lg" })).toBeUndefined();
+    expect(renderSlot("plain", {})).toBe("plain");
+    expect(renderSlot(undefined, {})).toBeUndefined();
   });
 });
 

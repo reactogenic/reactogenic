@@ -8,14 +8,28 @@ export type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;
 
 /**
  * A slot: the props of the element the container renders for it (its
- * options), and its body. Rendered with `<El slot={$X} … />` in .rtsx.
+ * options), and its body. Without `Children`, the body is the props' own
+ * `children` — `Slot<{ children?: ReactNode }>` has an optional body. With
+ * it, `Children` replaces them and the body is required:
+ * `Slot<ComponentProps<"div">, SlotFn<{ size: Size }>>`.
+ * Rendered with `<El slot={$X} … />` in .rtsx.
  */
-export type Slot<Props, Children = ReactNode> = Omit<Props, "children"> & { children: Children };
+export type Slot<Props, Children = never> = [Children] extends [never]
+  ? Props
+  : Omit<Props, "children"> & { children: Children };
+
+/** No args: what a body that is not a function takes. */
+export type NoArgs = { readonly [arg: string]: never };
 
 /**
  * Renders a slot body: calls it with `args` when it is a function, returns
- * it as it is otherwise. Containers call it for every `OptionalSlotFn`.
+ * it as it is otherwise. The args are the function's parameter; a body that
+ * cannot be a function takes none — as calling a function of no parameters
+ * with one is an error.
  */
-export function renderSlot<Params>(children: OptionalSlotFn<Params>, args: Params): ReactNode {
-  return typeof children === "function" ? children(args) : children;
+export function renderSlot<Children>(
+  children: Children,
+  args: Children extends (params: infer Params) => ReactNode ? Params : NoArgs,
+): ReactNode {
+  return typeof children === "function" ? children(args) : (children as ReactNode);
 }

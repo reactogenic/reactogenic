@@ -95,8 +95,9 @@ var coreStub = map[string]string{
 	"node_modules/@reactogenic/core/index.d.ts": `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol }; // as React: a function is not a node
 export type SlotFn<Params> = (params: Params) => ReactNode;
 export type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;
-export type Slot<Props, Children = ReactNode> = Omit<Props, "children"> & { children: Children };
-export declare function renderSlot<Params>(children: OptionalSlotFn<Params>, args: Params): ReactNode;`,
+export type Slot<Props, Children = never> = [Children] extends [never] ? Props : Omit<Props, "children"> & { children: Children };
+export type NoArgs = { readonly [arg: string]: never };
+export declare function renderSlot<Children>(children: Children, args: Children extends (params: infer Params) => ReactNode ? Params : NoArgs): ReactNode;`,
 }
 
 // syntax.md, *Rendering a slot*: a function slot rendered without the args
@@ -130,6 +131,41 @@ export function Button({ size, $IconEnd }: ButtonProps) {
 	}
 	// Line 9 lacks `size`; line 10 passes it (shorthand) and is fine.
 	if len(got) != 1 || !strings.HasPrefix(got[0], "src/button.rtsx:9 TS2741") || !strings.Contains(got[0], "size") {
+		t.Errorf("got %q", got)
+	}
+}
+
+// A slot whose body is not a function takes no args: an arg is an error on
+// that attribute, as calling a function of no parameters with one.
+func TestPlainSlotTakesNoArgs(t *testing.T) {
+	files := map[string]string{
+		"tsconfig.json": tsconfig,
+		"src/jsx.d.ts":  jsxTypes,
+		"src/label.rtsx": `import type { Slot } from "@reactogenic/core";
+interface LabelProps {
+  $Label?: Slot<{ title?: string; children?: string }>;
+}
+export function Label({ $Label }: LabelProps) {
+  const tone = "muted";
+  return (
+    <p>
+      <span slot={$Label} />
+      <span slot={$Label} tone />
+    </p>
+  );
+}
+`,
+	}
+	for k, v := range coreStub {
+		files[k] = v
+	}
+	dir := writeProject(t, files)
+	var got []string
+	for _, r := range Run(dir + "/tsconfig.json") {
+		got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+":"+strconv.Itoa(r.Col)+" "+r.Code)
+	}
+	// Line 10, the `tone` attribute; line 9 passes nothing and is fine.
+	if len(got) != 1 || got[0] != "src/label.rtsx:10:27 TS2322" {
 		t.Errorf("got %q", got)
 	}
 }

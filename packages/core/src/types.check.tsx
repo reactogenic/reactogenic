@@ -46,7 +46,26 @@ type LabelSlot = Slot<ComponentProps<"span">>;
 export const k: LabelSlot = { title: "t", children: "Save" };
 // @ts-expect-error `colour` is not a prop of <span>
 export const l: LabelSlot = { colour: "red", children: "Save" };
-// @ts-expect-error the body is required
+// <span>'s own children are optional, so this slot's body is too.
 export const m: LabelSlot = { title: "t" };
 type IconSlot = Slot<ComponentProps<"div">, SlotFn<{ size: "md" | "lg" }>>;
 export const n: IconSlot = { className: "i", children: ({ size }) => size };
+
+// Slot without Children: the props' own children decide.
+type OptionalBody = Slot<{ title?: string; children?: ReactNode }>;
+export const o: OptionalBody = { title: "t" };
+type RequiredBody = Slot<{ children: ReactNode }>;
+// @ts-expect-error the body is required
+export const q: RequiredBody = {};
+
+// renderSlot: args map to the body's parameter.
+declare const plain: ReactNode;
+declare const fn: SlotFn<{ size: "md" | "lg" }>;
+declare const either: OptionalSlotFn<{ size: "md" | "lg" }>;
+export const r1 = renderSlot(plain, {});
+// @ts-expect-error a body that is not a function takes no args
+export const r2 = renderSlot(plain, { size: "lg" });
+export const r3 = renderSlot(fn, { size: "lg" });
+// @ts-expect-error a function body needs its args
+export const r4 = renderSlot(fn, {});
+export const r5 = renderSlot(either, { size: "lg" });

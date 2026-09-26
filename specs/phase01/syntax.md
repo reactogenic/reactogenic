@@ -243,10 +243,20 @@ and what the body may be. The framework package provides:
 type SlotFn<Params> = (params: Params) => ReactNode;          // params required
 type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;     // params optional
 
-// A slot: the props of the element it renders, and its body.
-type Slot<Props, Children = ReactNode> = Omit<Props, "children"> & { children: Children };
+// A slot: the props of the element it renders, and its body. Without
+// Children the body is the props' own `children`, optional or not; with it,
+// Children replaces them and the body is required.
+type Slot<Props, Children = never> = [Children] extends [never]
+  ? Props
+  : Omit<Props, "children"> & { children: Children };
 
-function renderSlot<Params>(children: OptionalSlotFn<Params>, args: Params): ReactNode {
+// Args are the body's parameter; a body that cannot be a function takes none.
+type NoArgs = { readonly [arg: string]: never };
+
+function renderSlot<Children>(
+  children: Children,
+  args: Children extends (params: infer Params) => ReactNode ? Params : NoArgs,
+): ReactNode {
   return typeof children === "function" ? children(args) : children;
 }
 ```
@@ -262,6 +272,13 @@ interface ButtonProps {
 
 At the use site nothing changes: `<$Label tone="muted">Save</$Label>` has its
 options checked against `TextProps`, because they are `TextProps`.
+
+| Declaration | Body |
+| --- | --- |
+| `Slot<{ children?: ReactNode }>` | optional |
+| `Slot<{ children: ReactNode }>`, `Slot<TextProps>` with required `children` | required |
+| `Slot<ComponentProps<"div">>` | optional — `<div>`'s own `children` are |
+| `Slot<P, SlotFn<A>>`, `Slot<P, OptionalSlotFn<A>>` | required, of that type |
 
 `Slot<Props, Children>` is only a type: it expands to the object form of
 *Usage and desugaring* (`{ ...options, children }`). A container may still
@@ -305,9 +322,17 @@ function Button({ children, size, $Label, $IconEnd }: ButtonProps) {
   nothing else: `<div slot={$IconEnd} size>` hands out `{ size }` (here
   through *Shorthand props*). The container cannot add or override props of
   the element; they are the user's options.
-- **A function slot must get its args.** The body always goes through
-  `renderSlot`, so a `SlotFn` slot rendered without the args it declares is
-  an ordinary TS error — no types are needed to emit.
+- **Args are to a slot what arguments are to a function.** The body always
+  goes through `renderSlot`, whose args are the body's parameter: a function
+  slot rendered without its args, and a slot whose body cannot be a function
+  rendered with any, are ordinary TS errors — as `f()` for `f(x)`, and
+  `f({ x: 1 })` for `f()`. No types are needed to emit.
+
+  | Slot | `<div slot={$X} />` | `<div slot={$X} size />` |
+  | --- | --- | --- |
+  | body `ReactNode` | ✓ | error: `$X` takes no args |
+  | body `SlotFn<{ size }>` | error: `size` is missing | ✓ |
+  | body `OptionalSlotFn<{ size }>` | error: `size` is missing | ✓ |
 - The body is the slot's; the element takes no children of its own
   (slot-render-children). `key` stays a React key on the element.
 - `slot={$X}` exists only in `.rtsx`: a container that renders slots this way
@@ -321,15 +346,6 @@ expression position.
 > claims the form only when the value is a `$` reference — an identifier
 > starting with `$`, or a property-access chain ending in one
 > (`props.$Label`). `slot="header"` and any other value keep their meaning.
-
-> OPEN: a slot whose body is optional. `Slot<Props, Children>` requires a
-> body (`children: Children`); declaring an optional one is either a third
-> type parameter or `Omit<…> & { children?: … }` by hand.
-
-> OPEN: args on a slot whose body is not a function (`<Text slot={$Label}
-> tone />` with `$Label: Slot<TextProps>`) are silently unused: `renderSlot`
-> accepts any args for a `ReactNode` body. Catching it needs the slot's type
-> (a type-directed error), or a stricter `renderSlot` signature.
 
 ### Declaration matrix
 
@@ -354,12 +370,13 @@ parent's props type (see *Typing behaviour*).
 A user who needs none of the values of a `SlotFn` slot writes empty
 params: `<$Row {}>…</$Row>` → `children: () => …`.
 
-**3. Is the body required?**
+**3. Is the body required?** The props' own `children` decide (see the
+table in *Declaration*).
 
 | Declaration | `<$IconStart spacing="tight" />` |
 | --- | --- |
-| `children: …` | error: `$IconStart` requires content |
-| `children?: …` | fine; `renderSlot(undefined, args)` renders nothing |
+| `children: …` — `Slot<P, C>`, or `Slot<P>` with required `children` | error: `$IconStart` requires content |
+| `children?: …` — e.g. `Slot<{ children?: ReactNode }>` | fine; `renderSlot(undefined, {})` renders nothing |
 
 The emitted value is **always an object**, even for a slot with no options:
 the simplest slot is `$Title: { children: ReactNode }`, never `$Title: ReactNode`.
