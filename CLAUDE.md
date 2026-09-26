@@ -77,7 +77,8 @@ them, so each screen ships exactly the HTML, CSS and JS it needs."
 New meaning may only be given to forms that are **syntax errors in today's
 TSX** — that is good news: such a form is safe to reserve. Forms that already
 parse keep their React meaning; the two exceptions (bare attribute with a
-same-named binding; the `$` tag namespace) are called out in the spec.
+same-named binding; component tags must start with `A`–`Z`, which frees `$`
+for slots) are called out in the spec.
 "Syntax error" means rejected by the compilers that build TSX (esbuild,
 Babel): TypeScript's own parser accepts `#name` as an attribute named
 `"#about-us"` — see *Segment roots* in `specs/phase01/syntax.md`.

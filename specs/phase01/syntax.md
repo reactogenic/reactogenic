@@ -572,12 +572,28 @@ note in [Iteration](#iteration-each).
 Two parts.
 
 **Slot elements — no grammar change.** `<$IconStart>` parses today as a
-component reference. `.rtsx` reserves it: a `$`-tag is never resolved as an
-identifier, so nothing needs importing and two containers can both have a
-`$Title` without colliding.
+component reference. `.rtsx` reserves it by fixing what the first character
+of a plain-identifier tag means:
 
-> **Exception to the governing rule.** A `$`-tag parses today with React
-> meaning. `.rtsx` claims the whole `$` tag namespace.
+| Tag | TSX today | `.rtsx` |
+| --- | --- | --- |
+| `div`, `my-element` — starts with `a`–`z` | intrinsic element | unchanged |
+| `Button` — starts with `A`–`Z` | component | unchanged |
+| `$IconStart` | component | slot element |
+| `_Button`, `Ärger`, anything else | component | error: component-name |
+
+A `$` tag is never resolved as an identifier, so nothing needs importing and
+two containers can both have a `$Title` without colliding. No escape is
+needed: in `.rtsx` no component tag can start with `$`.
+
+Member-expression tags (`<motion.div>`, `<Icons.Plus>`, `<M.$Modal>`) are
+references whatever their case, as today. The rule applies to plain
+identifiers only.
+
+> **Exception to the governing rule.** A tag starting with `$`, `_` or a
+> non-ASCII letter parses today as a component. In `.rtsx` it is a slot
+> element or a compile error — loud, never silent. Existing code renames at
+> the import: `import { $Modal as Modal }`, then `<Modal>`.
 
 **Slot params — the first real grammar change.**
 
@@ -665,6 +681,8 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 | duplicate-params | A slot takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
 | slot-key | Slots are not elements | `key` on a slot element | syntax |
+| component-name | Component names start with `A`–`Z`; rename `_Button` where it is imported | a plain-identifier tag that starts with neither `a`–`z`, `A`–`Z` nor `$` | syntax |
+| component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name (`$Modal`) is in scope — reported instead of the slot errors | syntax |
 
 ```tsx
 <Button>

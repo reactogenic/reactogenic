@@ -190,7 +190,9 @@ rule, and the `Switch` / `Match` import is dropped.
 - `children` is chosen syntactically: params + body, body only, or none.
 - Body: the single child expression, or `<>…</>`.
 - Errors: orphan-slot; duplicate-slot (slot element plus an explicit
-  attribute); slot-key; slot-children-conflict.
+  attribute); slot-key; slot-children-conflict; component-name (tags that
+  start with neither `a`–`z`, `A`–`Z` nor `$`, and `$` tags shadowing a
+  binding).
 - **Done when:** the *Slots* fixtures pass, apart from list and conditional
   slots.
 - Depends on: 030, 032.
