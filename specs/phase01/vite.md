@@ -53,8 +53,10 @@ export default defineConfig({
 | resolve to `…/page.rtsx?lang.tsx` (Vue's pattern) | works | fails: when a Fast Refresh filter matches a file whose real extension is not a script type, Vite forces `lang: "js"`, and the TSX does not parse |
 | the plugin compiles `.rtsx` → TSX → JS itself, with Vite's exported `transformWithOxc(…, { lang: "tsx", jsx })` | expected to work | expected to work; Fast Refresh needs plugin-react to include `.rtsx` — its refresh wrapper filters by its own `include` option, which another plugin cannot extend |
 
-> OPEN (blocking RGP1-060): the plugin compiles `.rtsx` itself (the last
-> row). How does Fast Refresh reach `.rtsx`?
+**Decided** (phase 1): the plugin compiles `.rtsx` itself (the last row),
+and there is **no Fast Refresh for `.rtsx`**: edits reload the page. Fast
+Refresh belongs with Reactogenic's own dev server in the next phase. The
+options considered for later:
 >
 > - (a) documented setup: `plugins: [reactogenic(), react({ include:
 >   /\.(rtsx|[jt]sx?)$/ })]` — explicit, one more thing to get right;

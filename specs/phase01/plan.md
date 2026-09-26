@@ -258,6 +258,15 @@ implementation.
 - **M3 complete: 55 of 55 conformance cases pass** — every example of
   syntax.md, and every fixture.
 
+### RGP1-042 — Rendering a slot: `Slot<Props, Children>`, `slot={$X}` · S · done
+Added after the slot design was completed (syntax.md, *Declaration* and
+*Rendering a slot*). `transpiler/slotrender.go`, first in pass 3: `<El
+slot={$X} args… />` → `{$X ? <El {...$X}>{_renderSlot($X.children, {
+args })}</El> : null}`; `key` stays on the element; `slot="…"` and non-`$`
+values keep their HTML meaning; slot-render-children. `Slot` is in
+`@reactogenic/core`. A function slot rendered without its args is a TS
+error on the `.rtsx` line (tested through `reactogenic check`).
+
 ## M4 — Type service
 
 ### RGP1-050 — Project program with virtual `.tsx` · M · done
@@ -305,15 +314,15 @@ The Go side of the plugin: a long-lived process that serves `open`,
 ## M5 — Vite plugin
 
 ### RGP1-060 — Plugin skeleton and `config` · S
-- **Blocked on a decision** — the OPEN in vite.md: how Fast Refresh reaches
-  `.rtsx` under Vite 8 (findings there).
+- Unblocked: the plugin compiles `.rtsx` itself with Vite's
+  `transformWithOxc`; no Fast Refresh for `.rtsx` in phase 1 (vite.md).
 - `enforce: "pre"`.
 - Spawns the Go process (RGP1-053) once per server or build, and stops it
   when Vite closes.
 - Add `.rtsx` to `resolve.extensions` and to plugin-react's `include`. This
   resolves the OPEN in vite.md as option (a), or records why not.
 - **Done when:** a hand-written `.rtsx` with no extensions renders in
-  `vite dev`, with Fast Refresh working.
+  `vite dev`; an edit reloads the page (no Fast Refresh in phase 1).
 - Depends on: 003, 030.
 
 ### RGP1-061 — `transform` · M

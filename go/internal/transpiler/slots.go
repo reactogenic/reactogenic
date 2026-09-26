@@ -10,13 +10,17 @@ import (
 	"github.com/reactogenic/reactogenic/go/internal/syntax"
 )
 
-// slots is pass 3 (syntax.md, *Slots*): slot elements become `$X` props of
-// their container, and params become a `children` callback.
+// slots is pass 3 (syntax.md, *Slots*): `slot={$X}` renders a slot, slot
+// elements become `$X` props of their container, and params become a
+// `children` callback.
 //
 // Like pass 2 it repeats, inside out: a container is rewritten only once no
 // container below it is left. Orphaned slot elements are reported and removed
 // first, so every run makes progress.
 func slots(c *passContext) []emit.Edit {
+	if edits := c.renderSlots(); len(edits) > 0 {
+		return edits
+	}
 	if edits := c.removeOrphans(); len(edits) > 0 {
 		return edits
 	}
@@ -359,36 +363,21 @@ func (c *passContext) conditionalValue(expr *rtsx.Node, list bool, origin emit.S
 
 var identifierName = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
 
-// slotObject: `<$X a="1" {...r} { p }>body</$X>` →
-// `{ a: "1", ...r, children: (p) => body }` (syntax.md, *Usage and
-// desugaring*).
-func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
-	origin := c.openingSpan(el)
-	opening := el
-	if el.Kind == rtsx.KindJsxElement {
-		opening = el.AsJsxElement().OpeningElement
-	}
-	children := jsxChildren(el)
+func attrName(c *passContext, attr *rtsx.Node) string {
+	return strings.TrimSpace(c.text[c.span(attr.Name()).Pos:attr.Name().End()])
+}
+
+// attributeProps turns JSX attributes into object properties, in order:
+// `a="1"` → `a: "1"`, `a={x}` → `a: x`, bare `a` → `a: true`, `{}` →
+// `undefined`, `aria-label` quoted, `{...r}` → `...r`.
+func (c *passContext) attributeProps(attrs []*rtsx.Node) [][]emit.Piece {
 	var props [][]emit.Piece
-	var params *rtsx.Node
-	for _, attr := range opening.Attributes().Properties() {
-		if pattern, ok := syntax.SlotParams(attr); ok {
-			params = pattern
-			continue
-		}
+	for _, attr := range attrs {
 		if attr.Kind == rtsx.KindJsxSpreadAttribute {
 			props = append(props, []emit.Piece{emit.Synth("...", c.span(attr)), c.copy(attr.Expression())})
 			continue
 		}
-		name := strings.TrimSpace(c.text[c.span(attr.Name()).Pos:attr.Name().End()])
-		switch {
-		case name == "key":
-			c.errorAt(attr, "slot-key", "Slots are not elements: `key` is not allowed")
-			continue
-		case name == "children" && len(children) > 0:
-			c.errorAt(attr, "slot-children-conflict", "`children` is given twice: as an attribute and as the body")
-			continue
-		}
+		name := attrName(c, attr)
 		key := name
 		if !identifierName.MatchString(name) {
 			key = `"` + name + `"`
@@ -406,14 +395,11 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		}
 		props = append(props, prop)
 	}
-	if len(children) > 0 {
-		body := c.bodyOf(children, []emit.Piece{emit.Copy(c.text, c.childrenSpan(el))}, origin)
-		prop := []emit.Piece{emit.Synth("children: ", origin)}
-		if params != nil {
-			prop = append(prop, emit.Synth("(", origin), c.copy(params), emit.Synth(") => ", origin))
-		}
-		props = append(props, append(prop, body...))
-	}
+	return props
+}
+
+// objectLiteral joins properties into `{ a, b }`, or `{}`.
+func objectLiteral(props [][]emit.Piece, origin emit.Span) []emit.Piece {
 	if len(props) == 0 {
 		return []emit.Piece{emit.Synth("{}", origin)}
 	}
@@ -425,4 +411,45 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		out = append(out, p...)
 	}
 	return append(out, emit.Synth(" }", origin))
+}
+
+// slotObject: `<$X a="1" {...r} { p }>body</$X>` →
+// `{ a: "1", ...r, children: (p) => body }` (syntax.md, *Usage and
+// desugaring*).
+func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
+	origin := c.openingSpan(el)
+	opening := el
+	if el.Kind == rtsx.KindJsxElement {
+		opening = el.AsJsxElement().OpeningElement
+	}
+	children := jsxChildren(el)
+	var params *rtsx.Node
+	var attrs []*rtsx.Node
+	for _, attr := range opening.Attributes().Properties() {
+		if pattern, ok := syntax.SlotParams(attr); ok {
+			params = pattern
+			continue
+		}
+		if attr.Kind == rtsx.KindJsxAttribute {
+			switch name := attrName(c, attr); {
+			case name == "key":
+				c.errorAt(attr, "slot-key", "Slots are not elements: `key` is not allowed")
+				continue
+			case name == "children" && len(children) > 0:
+				c.errorAt(attr, "slot-children-conflict", "`children` is given twice: as an attribute and as the body")
+				continue
+			}
+		}
+		attrs = append(attrs, attr)
+	}
+	props := c.attributeProps(attrs)
+	if len(children) > 0 {
+		body := c.bodyOf(children, []emit.Piece{emit.Copy(c.text, c.childrenSpan(el))}, origin)
+		prop := []emit.Piece{emit.Synth("children: ", origin)}
+		if params != nil {
+			prop = append(prop, emit.Synth("(", origin), c.copy(params), emit.Synth(") => ", origin))
+		}
+		props = append(props, append(prop, body...))
+	}
+	return objectLiteral(props, origin)
 }

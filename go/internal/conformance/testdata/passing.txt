@@ -29,6 +29,8 @@ fixtures/slots/errors
 fixtures/slots/list-single-and-conditional
 fixtures/slots/nested
 fixtures/slots/params-on-components
+fixtures/slots/render
+fixtures/slots/render-errors
 fixtures/slots/switch-chain
 syntax.md#conditional-slots/1
 syntax.md#conditional-slots/2
@@ -51,6 +53,7 @@ syntax.md#list-slots/1
 syntax.md#list-slots/2
 syntax.md#one-slot-many-items/1
 syntax.md#params-on-a-component-children-is-the-default-slot/1
+syntax.md#rendering-a-slot-slotx/1
 syntax.md#state-across-branches/1
 syntax.md#usage-and-desugaring/1
 syntax.md#usage-and-desugaring/2

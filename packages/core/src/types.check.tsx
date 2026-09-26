@@ -38,3 +38,15 @@ export const h = <Button $IconStart={{ spacing: "tight", children: "+" }} $IconE
 export const i = <Each items={[1, 2]}>{({ item }) => <b key={item}>{item.toFixed(1)}</b>}</Each>;
 // @ts-expect-error item is a number
 export const j = <Each items={[1, 2]}>{({ item }) => item.toUpperCase()}</Each>;
+
+// Slot<Props, Children>: the options are the rendered element's props.
+import type { ComponentProps } from "react";
+import type { Slot } from "./index.ts";
+type LabelSlot = Slot<ComponentProps<"span">>;
+export const k: LabelSlot = { title: "t", children: "Save" };
+// @ts-expect-error `colour` is not a prop of <span>
+export const l: LabelSlot = { colour: "red", children: "Save" };
+// @ts-expect-error the body is required
+export const m: LabelSlot = { title: "t" };
+type IconSlot = Slot<ComponentProps<"div">, SlotFn<{ size: "md" | "lg" }>>;
+export const n: IconSlot = { className: "i", children: ({ size }) => size };

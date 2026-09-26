@@ -88,3 +88,48 @@ func TestClean(t *testing.T) {
 		t.Errorf("got %+v", reports)
 	}
 }
+
+// A stand-in for the installed @reactogenic/core, for temporary projects.
+var coreStub = map[string]string{
+	"node_modules/@reactogenic/core/package.json": `{ "name": "@reactogenic/core", "types": "index.d.ts" }`,
+	"node_modules/@reactogenic/core/index.d.ts": `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol }; // as React: a function is not a node
+export type SlotFn<Params> = (params: Params) => ReactNode;
+export type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;
+export type Slot<Props, Children = ReactNode> = Omit<Props, "children"> & { children: Children };
+export declare function renderSlot<Params>(children: OptionalSlotFn<Params>, args: Params): ReactNode;`,
+}
+
+// syntax.md, *Rendering a slot*: a function slot rendered without the args
+// it declares is a TS error, reported on the element in the .rtsx.
+func TestFunctionSlotNeedsArgs(t *testing.T) {
+	files := map[string]string{
+		"tsconfig.json": tsconfig,
+		"src/jsx.d.ts":  jsxTypes,
+		"src/button.rtsx": `import type { Slot, SlotFn } from "@reactogenic/core";
+interface ButtonProps {
+  size: string;
+  $IconEnd?: Slot<{ className?: string }, SlotFn<{ size: string }>>;
+}
+export function Button({ size, $IconEnd }: ButtonProps) {
+  return (
+    <button>
+      <div slot={$IconEnd} />
+      <i slot={$IconEnd} size />
+    </button>
+  );
+}
+`,
+	}
+	for k, v := range coreStub {
+		files[k] = v
+	}
+	dir := writeProject(t, files)
+	var got []string
+	for _, r := range Run(dir + "/tsconfig.json") {
+		got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+" "+r.Code+" "+r.Message)
+	}
+	// Line 9 lacks `size`; line 10 passes it (shorthand) and is fine.
+	if len(got) != 1 || !strings.HasPrefix(got[0], "src/button.rtsx:9 TS2741") || !strings.Contains(got[0], "size") {
+		t.Errorf("got %q", got)
+	}
+}

@@ -233,14 +233,18 @@ side declares **params** — same split as any JS function. "Binding" is kept
 for two-way binding; "slot props" is avoided because in React it would read as
 the options.
 
-### Declaration (plain TSX, no extension)
+### Declaration: `Slot<Props, Children>`
 
-A slot is a `$`-named prop whose type is an object: the slot's own options,
-plus `children`. The framework package provides:
+A slot is a `$`-named prop. Its type says two things: which element the
+container renders for it — the slot's **options are that element's props** —
+and what the body may be. The framework package provides:
 
 ```tsx
 type SlotFn<Params> = (params: Params) => ReactNode;          // params required
-type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;  // params optional
+type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;     // params optional
+
+// A slot: the props of the element it renders, and its body.
+type Slot<Props, Children = ReactNode> = Omit<Props, "children"> & { children: Children };
 
 function renderSlot<Params>(children: OptionalSlotFn<Params>, args: Params): ReactNode {
   return typeof children === "function" ? children(args) : children;
@@ -251,24 +255,81 @@ function renderSlot<Params>(children: OptionalSlotFn<Params>, args: Params): Rea
 interface ButtonProps {
   children: ReactNode;
   size: ButtonSize;
-  $IconStart: {
-    spacing: IconSpacing;
-    children: OptionalSlotFn<{ size: ButtonSize }>;
-  };
+  $Label: Slot<TextProps>;
+  $IconEnd?: Slot<ComponentProps<"div">, SlotFn<{ size: ButtonSize }>>;
 }
+```
 
-function Button({ children, size, $IconStart, ...props }: ButtonProps) {
-  const iconClassName = getIconClassName($IconStart, size);
+At the use site nothing changes: `<$Label tone="muted">Save</$Label>` has its
+options checked against `TextProps`, because they are `TextProps`.
+
+`Slot<Props, Children>` is only a type: it expands to the object form of
+*Usage and desugaring* (`{ ...options, children }`). A container may still
+declare that object by hand and call `renderSlot` itself — plain TSX.
+
+### Rendering a slot: `slot={$X}`
+
+A container renders a slot by naming it on the element it stands for:
+
+```tsx
+// Button.rtsx
+function Button({ children, size, $Label, $IconEnd }: ButtonProps) {
   return (
-    <button {...props}>
-      <span className={iconClassName}>
-        {renderSlot($IconStart.children, { size })}
-      </span>
+    <button>
+      <Text slot={$Label} />
       {children}
+      <div slot={$IconEnd} size />
     </button>
   );
 }
 ```
+
+```tsx
+// Button.tsx
+import { renderSlot as _renderSlot } from "@reactogenic/core";
+
+function Button({ children, size, $Label, $IconEnd }: ButtonProps) {
+  return (
+    <button>
+      {$Label ? <Text {...$Label}>{_renderSlot($Label.children, {})}</Text> : null}
+      {children}
+      {$IconEnd ? <div {...$IconEnd}>{_renderSlot($IconEnd.children, { size: size })}</div> : null}
+    </button>
+  );
+}
+```
+
+- **The options become the element's props**: `{...$X}`.
+- **An unfilled slot renders nothing** — not an empty element.
+- **The element's own attributes are the args** of a function slot, and
+  nothing else: `<div slot={$IconEnd} size>` hands out `{ size }` (here
+  through *Shorthand props*). The container cannot add or override props of
+  the element; they are the user's options.
+- **A function slot must get its args.** The body always goes through
+  `renderSlot`, so a `SlotFn` slot rendered without the args it declares is
+  an ordinary TS error — no types are needed to emit.
+- The body is the slot's; the element takes no children of its own
+  (slot-render-children). `key` stays a React key on the element.
+- `slot={$X}` exists only in `.rtsx`: a container that renders slots this way
+  is an `.rtsx` file.
+
+Position follows *Flow control → Position*: `{…}` as a JSX child, `(…)` in
+expression position.
+
+> **Exception to the governing rule.** `slot` is an HTML attribute (Web
+> Components), and `<div slot={x}>` parses today with that meaning. `.rtsx`
+> claims the form only when the value is a `$` reference — an identifier
+> starting with `$`, or a property-access chain ending in one
+> (`props.$Label`). `slot="header"` and any other value keep their meaning.
+
+> OPEN: a slot whose body is optional. `Slot<Props, Children>` requires a
+> body (`children: Children`); declaring an optional one is either a third
+> type parameter or `Omit<…> & { children?: … }` by hand.
+
+> OPEN: args on a slot whose body is not a function (`<Text slot={$Label}
+> tone />` with `$Label: Slot<TextProps>`) are silently unused: `renderSlot`
+> accepts any args for a `ReactNode` body. Catching it needs the slot's type
+> (a type-directed error), or a stricter `renderSlot` signature.
 
 ### Declaration matrix
 
@@ -704,6 +765,7 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 | duplicate-params | An element takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
 | slot-key | Slots are not elements | `key` on a slot element | syntax |
+| slot-render-children | The slot's body is its content; `Text` takes no children here | children on an element with `slot={$X}` | syntax |
 | component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name (`$Modal`) is in scope — reported instead of the slot errors | syntax |
 
 ```tsx

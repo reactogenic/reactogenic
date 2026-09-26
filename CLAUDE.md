@@ -78,9 +78,9 @@ them, so each screen ships exactly the HTML, CSS and JS it needs."
 
 New meaning may only be given to forms that are **syntax errors in today's
 TSX** — that is good news: such a form is safe to reserve. Forms that already
-parse keep their React meaning; the two exceptions (bare attribute with a
-same-named binding; a tag starting with `$` is a slot, never a component)
-are called out in the spec.
+parse keep their React meaning; the three exceptions (bare attribute with a
+same-named binding; a tag starting with `$` is a slot, never a component;
+`slot={$X}` renders a slot) are called out in the spec.
 "Syntax error" means rejected by the compilers that build TSX (esbuild,
 Babel): TypeScript's own parser accepts `#name` as an attribute named
 `"#about-us"` — see *Segment roots* in `specs/phase01/syntax.md`.
@@ -93,8 +93,10 @@ Babel): TypeScript's own parser accepts `#name` as an attribute named
    if a `value` binding is in the module's scope chain, else React's `true`.
 2. **Slots** — `<$IconStart spacing="tight" { size }>…</$IconStart>` →
    `$IconStart={{ spacing: "tight", children: ({ size }) => … }}`. Terms:
-   options (in), params (out), body. Types `SlotFn` / `OptionalSlotFn` /
-   `renderSlot`. Params on a component make its `children` a callback. List
+   options (in), params (out), body. Declared `$X: Slot<Props, Children>`:
+   options are the props of the element the container renders with
+   `<El slot={$X} args… />` (unfilled → nothing; attributes = args of a
+   function slot only). Types `SlotFn` / `OptionalSlotFn` / `renderSlot`. Params on a component make its `children` a callback. List
    slots (`$X: {…}[]`, type-directed array emit). Conditional slots
    (`Match` around a slot element → ternary prop).
 3. **Flow control** — `<Match on={…}>` (if; params optional) and

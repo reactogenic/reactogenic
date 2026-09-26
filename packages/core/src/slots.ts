@@ -7,6 +7,12 @@ export type SlotFn<Params> = (params: Params) => ReactNode;
 export type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;
 
 /**
+ * A slot: the props of the element the container renders for it (its
+ * options), and its body. Rendered with `<El slot={$X} … />` in .rtsx.
+ */
+export type Slot<Props, Children = ReactNode> = Omit<Props, "children"> & { children: Children };
+
+/**
  * Renders a slot body: calls it with `args` when it is a function, returns
  * it as it is otherwise. Containers call it for every `OptionalSlotFn`.
  */
