@@ -305,6 +305,8 @@ The Go side of the plugin: a long-lived process that serves `open`,
 ## M5 — Vite plugin
 
 ### RGP1-060 — Plugin skeleton and `config` · S
+- **Blocked on a decision** — the OPEN in vite.md: how Fast Refresh reaches
+  `.rtsx` under Vite 8 (findings there).
 - `enforce: "pre"`.
 - Spawns the Go process (RGP1-053) once per server or build, and stops it
   when Vite closes.

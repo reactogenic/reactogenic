@@ -43,11 +43,24 @@ export default defineConfig({
   failed `vite build`. Errors marked *types* are TS errors in slot terms and
   are reported by `reactogenic check`, like every other type error.
 
-> OPEN: how the output is presented as TSX to downstream plugins, which pick
-> files by extension. (a) extend their `include` to `.rtsx` from the `config`
-> hook, or (b) return the module under a virtual id ending in `.tsx`.
-> Recommended: (a) — ids stay the real file names, which HMR and the overlay
-> rely on.
+**Findings** (Vite 8.3 — Rolldown and Oxc — with plugin-react 6.1, probed
+2026-09-26 on a scratch project):
+
+| Approach | `vite build` | dev server |
+| --- | --- | --- |
+| transform returns TSX with `moduleType: "tsx"` | works: Rolldown compiles it | fails: Vite's Oxc plugin picks files by extension and never sees `.rtsx`; the module is served as raw TSX, with `?import` appended because `.rtsx` is not a script extension |
+| add `.rtsx` to `oxc.include` | — | fails: `transformWithOxc` takes the language from the extension, and `rtsx` is not one |
+| resolve to `…/page.rtsx?lang.tsx` (Vue's pattern) | works | fails: when a Fast Refresh filter matches a file whose real extension is not a script type, Vite forces `lang: "js"`, and the TSX does not parse |
+| the plugin compiles `.rtsx` → TSX → JS itself, with Vite's exported `transformWithOxc(…, { lang: "tsx", jsx })` | expected to work | expected to work; Fast Refresh needs plugin-react to include `.rtsx` — its refresh wrapper filters by its own `include` option, which another plugin cannot extend |
+
+> OPEN (blocking RGP1-060): the plugin compiles `.rtsx` itself (the last
+> row). How does Fast Refresh reach `.rtsx`?
+>
+> - (a) documented setup: `plugins: [reactogenic(), react({ include:
+>   /\.(rtsx|[jt]sx?)$/ })]` — explicit, one more thing to get right;
+> - (b) `reactogenic()` returns plugin-react configured for `.rtsx`, so the
+>   setup is `plugins: [reactogenic()]` — changes the *Setup* section above;
+> - (c) no Fast Refresh for `.rtsx` in phase 1: edits reload the page.
 
 ## Module resolution
 
