@@ -687,8 +687,8 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 | mixed-conditional-slot | A conditional slot fills one slot | see *Conditional slots* | syntax |
 | duplicate-slot | `$X` is already filled | second `<$X>` for a slot that is not a list slot | types |
 | duplicate-slot | `$X` is already filled | slot element plus explicit `$X={…}` attribute | syntax |
-| params-on-html | Params are only allowed on components and slot elements | `<div { size }>` | syntax |
-| duplicate-params | A slot takes one params pattern | `<$X { a } { b }>` | syntax |
+| params-on-html | Params are only allowed on components and slot elements | `<div { size }>` — an intrinsic element by React's rule (lowercase, `-`, or `a:b`) | syntax |
+| duplicate-params | An element takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
 | slot-key | Slots are not elements | `key` on a slot element | syntax |
 | component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name (`$Modal`) is in scope — reported instead of the slot errors | syntax |
@@ -1087,7 +1087,9 @@ JsxAttributes   ::= … | JsxSegmentRoot
 JsxSegmentRoot  ::= '#' JsxIdentifier          // JsxIdentifier allows hyphens: about-us
 ```
 
-No whitespace between `#` and the name. At most one per element. Unrelated to
+No whitespace between `#` and the name (tsgo's scanner already rejects a
+lone `#`). At most one per element (segment-id), and no value or namespace:
+`#about-us="x"` and `#about:us` are segment-syntax. Unrelated to
 class private names (`#x`), which never occur in attribute position.
 
 Only `#name` mounts a segment. A plain `id` keeps its React meaning and mounts
@@ -1198,7 +1200,8 @@ TS7 checks the emitted import and element:
 | segment-not-component | `+about-us.rtsx` has no default component | | types |
 | segment-import | Segments are mounted with `#about-us`, not imported | value import of a `+` file | syntax |
 | segment-props | A segment takes no props | required props on the default export | types |
-| segment-id | | explicit `id` attribute (or a spread) together with `#name` | syntax |
+| segment-id | An element has one id: `#about` is already on it | explicit `id` attribute (or a spread), or a second `#name`, together with `#name` | syntax |
+| segment-syntax | `#about-us` is a segment root: it takes no value and no namespace | `#about-us="x"`, `#about:us` | syntax |
 | segment-duplicate | `#about-us` is already mounted | same name twice in one page | syntax (per file), route table (per page) |
 | segment-root-props | `Card` must accept `id` and `children` to be a segment root | `<Card #about-us />` where `CardProps` lacks either | types |
 | segment-self | | a segment that mounts itself, directly or through other segments | files |

@@ -30,6 +30,9 @@ const (
 	KindIdentifier              = ast.KindIdentifier
 	KindJsxAttribute            = ast.KindJsxAttribute
 	KindJsxAttributes           = ast.KindJsxAttributes
+	KindJsxNamespacedName       = ast.KindJsxNamespacedName
+	KindJsxOpeningElement       = ast.KindJsxOpeningElement
+	KindJsxSelfClosingElement   = ast.KindJsxSelfClosingElement
 	KindJsxSpreadAttribute      = ast.KindJsxSpreadAttribute
 	KindJsxText                 = ast.KindJsxText
 	KindObjectBindingPattern    = ast.KindObjectBindingPattern
@@ -55,6 +58,13 @@ func ParseRTSX(fileName string, text string) *SourceFile {
 // TokenStart returns where n's first token starts, after leading trivia.
 func TokenStart(file *SourceFile, n *Node) int {
 	return scanner.GetTokenPosOfNode(n, file, false)
+}
+
+// IsIntrinsicTag reports whether a JSX tag name is an intrinsic element
+// (`div`, `my-element`, `svg:rect`) rather than a component, by the
+// checker's own rule.
+func IsIntrinsicTag(tagName *Node) bool {
+	return ast.IsIdentifier(tagName) && scanner.IsIntrinsicJsxName(tagName.Text()) || ast.IsJsxNamespacedName(tagName)
 }
 
 // NodeText returns the text of an identifier, literal or JSX text node, and

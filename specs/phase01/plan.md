@@ -107,22 +107,24 @@ stored in a `JsxSpreadAttribute` — no new node kind
   spans and bound names; `.tsx` still rejects the form; params next to
   other attributes on a component; malformed params are parse errors.
 
-### RGP1-021 — Segment roots `#name` · S
-`JsxSegmentRoot ::= '#' JsxIdentifier`.
-- tsgo already parses `#about-us` as a `JsxAttribute` named `"#about-us"`.
-  In `.rtsx`, the parser turns it into a `JsxSegmentRoot`; the scanner is
-  untouched ([decisions.md](decisions.md#rgp1-002--parser-strategy)).
-- No whitespace after `#`, hyphens allowed, at most one per element.
-- **Done when:** parser tests pass, including `#name` next to spreads and
-  other attributes.
-- Depends on: 003.
+### RGP1-021 — Segment roots `#name` · S · done
+No parser patch: tsgo already reads `#about-us` as a `JsxAttribute` named
+`"#about-us"`, and its scanner rejects `# about`.
+`go/internal/syntax.SegmentRoot` recognises it.
+- Tests: names with hyphens and capitals, open/close and self-closing
+  elements, next to spreads, slot params and other attributes, exact spans;
+  `id="…"`, bare `about-us`, `#x="…"` and `#a:b` are not segment roots.
 
-### RGP1-022 — Parse-level errors · S
-- params-on-html, duplicate-params, and a second `#name` on one element.
-- Error recovery: one bad attribute must not hide the errors in the rest of
-  the file.
-- **Done when:** each error has a fixture with its span.
-- Depends on: 020, 021.
+### RGP1-022 — Parse-level errors · S · done
+`go/internal/syntax.Check`: params-on-html (by the checker's own
+intrinsic-tag rule), duplicate-params, segment-id (a second `#name`), and the
+new segment-syntax (`#name="x"`, `#name:x`). Each element is checked, so one
+bad attribute does not hide the others.
+- Tests with exact spans in `go/internal/syntax`; fixtures in
+  `fixtures/parse/`, which join the ratchet once the transpiler reports them
+  (RGP1-030).
+- Spec gaps closed: segment-id now covers a second `#name`, and
+  segment-syntax is new.
 
 ## M3 — Transpiler
 

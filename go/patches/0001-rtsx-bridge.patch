@@ -1,9 +1,9 @@
 diff --git a/rtsx/rtsx.go b/rtsx/rtsx.go
 new file mode 100644
-index 0000000..3a97d0a
+index 0000000..a12cc76
 --- /dev/null
 +++ b/rtsx/rtsx.go
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,88 @@
 +// Package rtsx is Reactogenic's bridge into tsgo's internal packages.
 +//
 +// Go allows internal/ to be imported only from inside this module, so
@@ -36,6 +36,9 @@ index 0000000..3a97d0a
 +	KindIdentifier              = ast.KindIdentifier
 +	KindJsxAttribute            = ast.KindJsxAttribute
 +	KindJsxAttributes           = ast.KindJsxAttributes
++	KindJsxNamespacedName       = ast.KindJsxNamespacedName
++	KindJsxOpeningElement       = ast.KindJsxOpeningElement
++	KindJsxSelfClosingElement   = ast.KindJsxSelfClosingElement
 +	KindJsxSpreadAttribute      = ast.KindJsxSpreadAttribute
 +	KindJsxText                 = ast.KindJsxText
 +	KindObjectBindingPattern    = ast.KindObjectBindingPattern
@@ -61,6 +64,13 @@ index 0000000..3a97d0a
 +// TokenStart returns where n's first token starts, after leading trivia.
 +func TokenStart(file *SourceFile, n *Node) int {
 +	return scanner.GetTokenPosOfNode(n, file, false)
++}
++
++// IsIntrinsicTag reports whether a JSX tag name is an intrinsic element
++// (`div`, `my-element`, `svg:rect`) rather than a component, by the
++// checker's own rule.
++func IsIntrinsicTag(tagName *Node) bool {
++	return ast.IsIdentifier(tagName) && scanner.IsIntrinsicJsxName(tagName.Text()) || ast.IsJsxNamespacedName(tagName)
 +}
 +
 +// NodeText returns the text of an identifier, literal or JSX text node, and

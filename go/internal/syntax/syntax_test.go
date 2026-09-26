@@ -131,3 +131,57 @@ func TestSlotParamsErrors(t *testing.T) {
 		}
 	}
 }
+
+// Segment roots: syntax.md, *Segment roots → Grammar*. tsgo needs no patch:
+// it already reads `#about-us` as a JsxAttribute named "#about-us".
+func TestSegmentRoot(t *testing.T) {
+	cases := []struct {
+		text string
+		want []string // per attribute: the segment name, or "" when not a segment root
+	}{
+		{`<section #about-us />`, []string{"about-us"}},
+		{`<section #AboutUs />`, []string{"AboutUs"}},
+		{`<section #about-us></section>`, []string{"about-us"}},
+		{`<section {...p} #about-us className="band" />`, []string{"", "about-us", ""}},
+		{`<Section #about-us { size } />`, []string{"about-us", ""}},
+		{`<Card #counter />`, []string{"counter"}},
+		// Not segment roots:
+		{`<section id="about-us" />`, []string{""}},
+		{`<section about-us />`, []string{""}},
+		{`<section #about-us="x" />`, []string{""}},
+		{`<section #about:us />`, []string{""}},
+	}
+	for _, c := range cases {
+		t.Run(c.text, func(t *testing.T) {
+			text := "const x = " + c.text + ";"
+			file, attrs := attributes(t, text)
+			noErrors(t, file)
+			if len(attrs) != len(c.want) {
+				t.Fatalf("want %d attributes, got %d", len(c.want), len(attrs))
+			}
+			for i, attr := range attrs {
+				name, ok := SegmentRoot(attr)
+				if ok != (c.want[i] != "") || name != c.want[i] {
+					t.Errorf("attribute %d: SegmentRoot = %q, %v; want %q", i, name, ok, c.want[i])
+				}
+				if ok {
+					start := strings.Index(text, "#"+name)
+					if got := rtsx.TokenStart(file, attr); got != start || attr.End() != start+1+len(name) {
+						t.Errorf("span = [%d,%d), want [%d,%d)", got, attr.End(), start, start+1+len(name))
+					}
+				}
+			}
+		})
+	}
+}
+
+// No whitespace between `#` and the name: tsgo's scanner rejects a lone `#`.
+func TestSegmentRootWhitespace(t *testing.T) {
+	file := rtsx.ParseRTSX("/test.rtsx", `const x = <section # about />;`)
+	if len(file.Diagnostics()) == 0 {
+		t.Fatal("want a parse error for `# about`")
+	}
+	if msg := rtsx.Message(file.Diagnostics()[0]); msg != "Invalid character." {
+		t.Errorf("message = %q", msg)
+	}
+}
