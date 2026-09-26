@@ -31,7 +31,7 @@ prototype to be rewritten later.
 | `reactogenic check` (M6) | The Go binary itself, installed through an npm `bin` shim |
 | Vite plugin (M5) | The plugin runs in Node, so it drives a Go process (*Node ↔ Go* below) |
 | Semantics | The project is type-checked with TS7 semantics, including its `.ts` / `.tsx` files. Differences from the user's `tsc` 5.x are TS7's differences, not ours |
-| Fork upkeep | tsgo is pinned to one commit and rebased on a regular schedule. Our changes live in their own files where possible, and tsgo's own test suite stays green in our CI |
+| Fork upkeep | tsgo is pinned to one commit and rebased on a regular schedule. Our changes live in their own files where possible (see RGP1-003 for the mechanics) |
 | License | tsgo is Apache-2.0: keep its LICENSE and NOTICE, and mark files we modify |
 
 **Node ↔ Go.**
@@ -74,8 +74,14 @@ script kind: the extensions are parsed **only** in `.rtsx` files, so
 | --- | --- |
 | script kinds | `.rtsx` → a new script kind: TSX plus the extensions |
 | AST | two node kinds: `JsxSlotParams` (wraps an `ObjectBindingPattern`) and `JsxSegmentRoot` (`#` + `JsxIdentifier`), both allowed in `JsxAttributes` |
-| scanner | `#` in JSX attribute position, with no whitespace before the name |
-| parser | in attribute position, `{` not followed by `...` → `JsxSlotParams`; `#` → `JsxSegmentRoot`; the parse-level errors of RGP1-022 |
+| parser | in attribute position, `{` not followed by `...` → `JsxSlotParams`; an attribute name starting with `#` → `JsxSegmentRoot`; the parse-level errors of RGP1-022 |
+
+No scanner change is needed. Found while scaffolding (RGP1-003): tsgo's
+scanner already reads `#about-us` in attribute position as one JSX
+identifier, and its parser builds a `JsxAttribute` named `"#about-us"` with
+no diagnostic, as TypeScript 5.x does. In `.rtsx` that attribute becomes a
+`JsxSegmentRoot`; in `.tsx` nothing changes. `{ size }` is a parse error in
+both, as expected.
 
 **The checker never sees the new nodes.** The passes lower them away, and
 the checker type-checks the emitted `.tsx`, which is parsed again as plain
@@ -110,3 +116,75 @@ or the emitter.
   the mask, not at what the author wrote.
 - **(c) Babel:** a second parser next to tsgo's, with its own AST and its
   own spans.
+
+## RGP1-003 — Repository layout and vendoring
+
+**Upstream has moved.** `microsoft/typescript-go` is archived; the Go port now
+lives in [microsoft/TypeScript](https://github.com/microsoft/TypeScript) as
+the `tsc/` module, `github.com/microsoft/TypeScript/tsc`. "tsgo" in these
+specs means that module.
+
+**Layout.** Go and TypeScript are split at the root; the root only ties them
+together.
+
+```
+/
+├── go.work                 use ./go ./go/third_party/tsgo
+├── package.json            private; scripts run both sides
+├── pnpm-workspace.yaml     packages/*
+├── go/
+│   ├── go.mod              github.com/reactogenic/reactogenic/go
+│   ├── cmd/reactogenic/    `check` and the stdio server
+│   ├── internal/           the transpiler
+│   ├── third_party/tsgo/   vendored tsc/ module, patched
+│   ├── patches/            our changes to tsgo, as patches
+│   └── scripts/            sync-tsgo.sh
+├── packages/
+│   └── reactogenic/        runtime, `reactogenic/vite`
+└── specs/
+```
+
+- The closest model is microsoft/TypeScript itself: `go.work` at the root,
+  the Go module in `tsc/`, npm packages in `packages/`. The Rust + pnpm
+  projects we looked at (Biome, Turborepo, oxc, Rolldown) keep both
+  manifests at the root instead.
+- A root `go.work` lets `go` and gopls work from the repo root.
+  `go/go.mod` also `replace`s tsgo with `./third_party/tsgo`, so `go/` builds
+  on its own too.
+- Go commands name our module explicitly
+  (`go test github.com/reactogenic/reactogenic/go/...`): `./go/...` would
+  include the vendored module.
+
+**Vendoring.**
+
+- `go/scripts/sync-tsgo.sh <commit>` copies `tsc/` at that commit into
+  `go/third_party/tsgo`, records it in `UPSTREAM`, and applies
+  `go/patches/*.patch` in order. The patched tree is committed.
+- Not vendored: `*_test.go`, `testdata/`, and the test-only packages
+  (`fourslash`, `testrunner`, `testutil`, `execute/tsctests`). That brings
+  the tree from 393 MB to 23 MB. Upstream's CI runs upstream's tests; our
+  changes are covered by our own.
+- CI re-vendors and fails if the committed tree differs from upstream plus
+  patches, so no change to tsgo bypasses `go/patches/`.
+- LICENSE and NOTICE are kept (Apache-2.0).
+
+**Reaching `internal/`.** Go allows tsgo's `internal/` packages to be
+imported only from inside tsgo's module. Patch `0001-rtsx-bridge.patch` adds
+a public package `rtsx` inside the vendored module that re-exports what the
+transpiler needs: type aliases and one-line wrappers.
+
+**Rejected.**
+
+- **Git submodule** (tsgolint, rslint): a clone step before every build, and
+  patches that exist only in a working tree.
+- **Generated shim modules under Microsoft's module path plus
+  `//go:linkname`** (tsgolint, rslint): a code generator to maintain, and
+  linkname breaks silently across rebases. We patch tsgo anyway, so a
+  hand-written bridge in the patch set costs nothing extra.
+- **Rewriting tsgo's import paths into our module:** every upstream sync
+  would touch every file.
+- **`go/` + `ts/`:** no project we looked at splits the JS side that way;
+  `packages/` is the convention.
+
+**Toolchain.** tsgo requires Go 1.27. `go.mod` says so, and Go 1.21+
+downloads that toolchain on demand (`GOTOOLCHAIN=auto`, the default).

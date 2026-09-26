@@ -42,16 +42,16 @@ Extend tsgo's JSX parser in the fork, behind a `.rtsx` script kind. See
 originally included is RGP1-020 and RGP1-021 themselves, once the fork
 exists (RGP1-003).
 
-### RGP1-003 — Repository scaffolding · M
-Needs your approval first: it creates files outside `specs/`.
-- **Go module** — the transpiler (M2–M4), the `check` command (M6) and the
-  stdio server for the plugin (RGP1-053).
-- **tsgo fork** — pinned to one commit, as a subtree or a vendored module
-  (decide here). tsgo's own test suite runs in CI.
-- **npm workspace** — `reactogenic` (the runtime, M1), `reactogenic/vite`
-  (the plugin, as a subpath export), and a `bin` shim for `check`.
-- CI: Go tests, tsgo's tests, npm tests, lint, on every push.
-- **Done when:** CI is green on an empty test in both Go and npm.
+### RGP1-003 — Repository scaffolding · M · done
+- Go and TypeScript are split at the root: `go/` and `packages/`. tsgo is
+  vendored from microsoft/TypeScript's `tsc/` into `go/third_party/tsgo`,
+  with our changes kept in `go/patches/`. See
+  [decisions.md](decisions.md#rgp1-003--repository-layout-and-vendoring).
+- CI runs the Go build, vet, tests and gofmt; a vendor check; and the pnpm
+  typecheck and tests.
+- The `bin` shim for `check` moves to RGP1-070.
+- Found on the way: TypeScript's parser does not reject `#name`. The spec is
+  corrected, and RGP1-021 needs no scanner change.
 
 ### RGP1-004 — Fixture harness · M
 The shared format for every conformance test from here on.
@@ -113,6 +113,9 @@ wrapper.
 
 ### RGP1-021 — Segment roots `#name` · S
 `JsxSegmentRoot ::= '#' JsxIdentifier`.
+- tsgo already parses `#about-us` as a `JsxAttribute` named `"#about-us"`.
+  In `.rtsx`, the parser turns it into a `JsxSegmentRoot`; the scanner is
+  untouched ([decisions.md](decisions.md#rgp1-002--parser-strategy)).
 - No whitespace after `#`, hyphens allowed, at most one per element.
 - **Done when:** parser tests pass, including `#name` next to spreads and
   other attributes.
@@ -340,7 +343,8 @@ Needs your approval first: it creates files outside `specs/`.
 
 ### RGP1-070 — CLI skeleton · S
 - `reactogenic check [-p tsconfig]`: the Go binary, run on the RGP1-050
-  program, and reached from npm through the `bin` shim.
+  program, and reached from npm through a `bin` shim added to the
+  `reactogenic` package here.
 - Exit code 0 means no errors, 1 means errors.
 - `--pretty` / `--no-pretty`, as in `tsc`.
 - **Done when:** on a clean project it prints nothing and exits 0.

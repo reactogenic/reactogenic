@@ -1,0 +1,8 @@
+# rsync exclude patterns for vendoring microsoft/TypeScript tsc/.
+# Tests and their support packages are upstream's; see go/patches/README.md.
+*_test.go
+testdata/
+/internal/fourslash/
+/internal/testrunner/
+/internal/testutil/
+/internal/execute/tsctests/

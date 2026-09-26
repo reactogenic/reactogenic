@@ -1,0 +1,15 @@
+{
+  "name": "reactogenic-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "pnpm run test:go && pnpm run test:js",
+    "test:go": "go test github.com/reactogenic/reactogenic/go/...",
+    "test:js": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "vendor:check": "go/scripts/sync-tsgo.sh && test -z \"$(git status --porcelain -- go/third_party/tsgo)\""
+  }
+}

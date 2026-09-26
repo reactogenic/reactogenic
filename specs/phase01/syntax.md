@@ -13,7 +13,7 @@ meaning; exceptions are called out explicitly in the section that makes them.
 | Reserved form (syntax error today) | Used by |
 | --- | --- |
 | `{ a, b }` / `{}` in attribute position | slot params |
-| `#name` in attribute position | segment roots |
+| `#name` in attribute position | segment roots — a syntax error for esbuild and Babel; TypeScript's parser accepts it (see *Segment roots*) |
 
 | Extension | Status |
 | --- | --- |
@@ -1040,8 +1040,15 @@ No import, no wrapper component, and `/#about-us` scrolls to it for free.
 
 ### Grammar
 
-Real grammar change. `#` cannot start an attribute in today's TSX, so the form
-is a syntax error there.
+Real grammar change. In today's TSX the form is a syntax error for the
+compilers that build it: esbuild (and so Vite) and Babel reject `#` in
+attribute position. No program that builds today contains it, so it is safe
+to reserve.
+
+TypeScript's own parser (5.x and tsgo) is lenient here: it reads `#about-us`
+as an ordinary attribute *named* `"#about-us"` and reports nothing; at most
+the checker later finds no such prop. `.rtsx` gives the form its meaning in
+`.rtsx` files only; in `.tsx` TypeScript's reading is unchanged.
 
 ```
 JsxAttributes   ::= … | JsxSegmentRoot

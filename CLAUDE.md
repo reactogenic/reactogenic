@@ -1,8 +1,15 @@
 # Reactogenic — context for working in this repo
 
 You are working in `reactogenic/reactogenic`, a monorepo for a React-based UI
-framework. Current task: write the specifications in `specs/`. No
-implementation code yet — Markdown only. Ask before creating anything outside `specs/`.
+framework. Current task: phase 1, following `specs/phase01/plan.md` task by
+task (`RGP1-xxx`). Specs come first: settle a task's spec, then implement.
+
+Repo layout (see `specs/phase01/decisions.md`, RGP1-003): `go/` — our Go
+module (`go/internal/`, `go/cmd/reactogenic/`), vendored tsgo in
+`go/third_party/tsgo` (never edit without adding a patch to `go/patches/`);
+`packages/` — pnpm workspace; `go.work` and `package.json` at the root tie
+them together. Run Go commands on `github.com/reactogenic/reactogenic/go/...`,
+not `./go/...`. tsgo is reached only through its `rtsx` bridge package.
 
 The specs are the source of truth. When this file and a spec disagree, the
 spec wins; update this file.
@@ -71,6 +78,9 @@ New meaning may only be given to forms that are **syntax errors in today's
 TSX** — that is good news: such a form is safe to reserve. Forms that already
 parse keep their React meaning; the two exceptions (bare attribute with a
 same-named binding; the `$` tag namespace) are called out in the spec.
+"Syntax error" means rejected by the compilers that build TSX (esbuild,
+Babel): TypeScript's own parser accepts `#name` as an attribute named
+`"#about-us"` — see *Segment roots* in `specs/phase01/syntax.md`.
 
 ## What is specified
 
@@ -128,7 +138,7 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | File | Status |
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
-| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001, RGP1-002 done |
+| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–003 done |
 | `later/layout.md`, `later/persistent-state.md`, `later/tooling.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
@@ -141,5 +151,5 @@ to plugin-react — `phase01/vite.md`; Node ↔ Go message encoding —
 One extension at a time, so the author can follow. Compact, precise, examples
 over prose. Every desugaring as before/after `.rtsx` → `.tsx`. Open questions
 inline as `> OPEN:`; rejected ideas as **Rejected:** with the reason. Do not
-invent extensions beyond the lists above. Do not write parser code. Commit and
+invent extensions beyond the lists above. Commit and
 push only when asked.

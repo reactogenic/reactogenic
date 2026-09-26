@@ -1,0 +1,4 @@
+repository: https://github.com/microsoft/TypeScript
+path: tsc
+commit: 4f5ddae224b9529a69b571f631fe3a2cb283162f
+date: 2026-09-25

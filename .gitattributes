@@ -1,0 +1,3 @@
+# Vendored tsgo: excluded from GitHub language stats and collapsed in PR diffs.
+# Our changes to it are reviewed as go/patches/*.patch.
+go/third_party/** linguist-vendored linguist-generated

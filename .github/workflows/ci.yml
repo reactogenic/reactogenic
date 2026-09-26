@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - name: Build vendored tsgo
+        run: go build github.com/microsoft/TypeScript/tsc/...
+      - name: Vet
+        run: go vet github.com/reactogenic/reactogenic/go/...
+      - name: Test
+        run: go test github.com/reactogenic/reactogenic/go/...
+      - name: gofmt
+        run: test -z "$(gofmt -l go/cmd go/internal)"
+
+  vendor:
+    # The committed tsgo tree must equal upstream at UPSTREAM's commit + go/patches.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Re-vendor and compare
+        run: |
+          go/scripts/sync-tsgo.sh
+          git status --porcelain -- go/third_party/tsgo | tee /dev/stderr | (! grep .)
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test:js
