@@ -351,7 +351,7 @@ Needs your approval first: it creates files outside `specs/`.
 
 ## M6 — `reactogenic check`
 
-### RGP1-070 — CLI skeleton · S
+### RGP1-070 — CLI skeleton · S · done (npm `bin` shim with RGP1-092)
 - `reactogenic check [-p tsconfig]`: the Go binary, run on the RGP1-050
   program, and reached from npm through the `@reactogenic/cli` package and
   its `reactogenic` bin shim, added here.
@@ -360,7 +360,7 @@ Needs your approval first: it creates files outside `specs/`.
 - **Done when:** on a clean project it prints nothing and exits 0.
 - Depends on: 050.
 
-### RGP1-071 — Position mapping · M
+### RGP1-071 — Position mapping · M · done
 - Copied span → the exact `.rtsx` span. Synthesized span → its origin, per
   the table in [diagnostics.md](diagnostics.md#mapping).
 - Related information and message chains are mapped as well.
@@ -398,14 +398,14 @@ resolves the OPEN on exact TS codes.
   falls back to TS's own message at the origin.
 - Depends on: 071, 072.
 
-### RGP1-074 — Output format · S
+### RGP1-074 — Output format · S · done
 - `tsc`-style lines. Transpiler errors use their name as the code
   (`error missing-slot:`).
 - Pretty mode prints a code frame of the `.rtsx` source.
 - **Done when:** snapshot tests of both formats pass.
 - Depends on: 071.
 
-### RGP1-075 — Transpiler errors in `check` · S
+### RGP1-075 — Transpiler errors in `check` · S · done
 `check` reports the same transpiler errors the Vite transform throws, with
 one code path and no duplicates.
 - **Done when:** a file with both a transpiler error and a TS error reports
@@ -416,6 +416,17 @@ one code path and no duplicates.
 Re-check on change, using the incremental program (RGP1-052).
 - **Done when:** an edit re-reports within the budget set in RGP1-052.
 - Depends on: 052, 074.
+
+**M6 so far** (`go/internal/check`, `go/cmd/reactogenic`): `reactogenic check
+[-p tsconfig|dir] [--pretty=false]` opens the project (RGP1-050), reports
+the transpiler's errors once per file, and maps every TS diagnostic in a
+virtual `.tsx` back through the transpiler's map — related information
+too; diagnostics in real files pass through. Output in `tsc`'s two formats,
+with a code frame when pretty; exit status 1 on errors. Tested on temporary
+projects: a TS error on a shorthand-rewritten attribute lands on the
+attribute the author wrote, and one on a list-slot item's option lands on
+that option. Left: generated-name replacement (072), rewrites into slot
+terms (073), `--watch` (076).
 
 ## M7 — Conformance and release
 

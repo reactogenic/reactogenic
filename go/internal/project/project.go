@@ -139,6 +139,19 @@ func (p *Project) Output(rtsxPath string) (transpiler.Output, bool) {
 	return out, ok
 }
 
+// Source returns the text of an .rtsx file of the project, as transpiled.
+func (p *Project) Source(rtsxPath string) (string, bool) {
+	text, ok := p.sources[rtsxPath]
+	return text, ok
+}
+
+// SourceOf returns the .rtsx file behind a virtual .tsx of the program.
+func (p *Project) SourceOf(tsxPath string) (string, bool) {
+	src := strings.TrimSuffix(tsxPath, ".tsx") + ".rtsx"
+	_, ok := p.outputs[src]
+	return src, ok && strings.HasSuffix(tsxPath, ".tsx")
+}
+
 // Outputs lists the .rtsx files the program read.
 func (p *Project) Outputs() map[string]transpiler.Output {
 	return p.outputs

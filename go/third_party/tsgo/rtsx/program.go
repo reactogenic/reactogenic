@@ -10,6 +10,7 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/bundled"
 	"github.com/microsoft/TypeScript/tsc/internal/checker"
 	"github.com/microsoft/TypeScript/tsc/internal/compiler"
+	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
 	"github.com/microsoft/TypeScript/tsc/internal/tsoptions"
 	"github.com/microsoft/TypeScript/tsc/internal/vfs"
 	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
@@ -80,4 +81,10 @@ func IsListSlot(c *Checker, tagName *Node, slot string) bool {
 		}
 	}
 	return false
+}
+
+// IsError reports whether a diagnostic is an error, not a warning or a
+// suggestion.
+func IsError(d *Diagnostic) bool {
+	return d.Category() == diagnostics.CategoryError
 }

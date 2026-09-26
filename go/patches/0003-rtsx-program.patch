@@ -1,9 +1,9 @@
 diff --git a/rtsx/program.go b/rtsx/program.go
 new file mode 100644
-index 0000000..7de3b1e
+index 0000000..73ea6fe
 --- /dev/null
 +++ b/rtsx/program.go
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,90 @@
 +// Reactogenic's bridge to tsgo's program, file system and checker.
 +// Not part of upstream: added by go/patches/0003-rtsx-program.patch.
 +// Keep it thin — aliases and short wrappers only.
@@ -16,6 +16,7 @@ index 0000000..7de3b1e
 +	"github.com/microsoft/TypeScript/tsc/internal/bundled"
 +	"github.com/microsoft/TypeScript/tsc/internal/checker"
 +	"github.com/microsoft/TypeScript/tsc/internal/compiler"
++	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
 +	"github.com/microsoft/TypeScript/tsc/internal/tsoptions"
 +	"github.com/microsoft/TypeScript/tsc/internal/vfs"
 +	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
@@ -86,4 +87,10 @@ index 0000000..7de3b1e
 +		}
 +	}
 +	return false
++}
++
++// IsError reports whether a diagnostic is an error, not a warning or a
++// suggestion.
++func IsError(d *Diagnostic) bool {
++	return d.Category() == diagnostics.CategoryError
 +}
