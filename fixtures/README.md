@@ -24,6 +24,7 @@ fixtures/<area>/<name>/
 ├── input.rtsx      the entry file
 ├── output.tsx      expected output (optional)
 ├── errors.txt      expected diagnostics (optional; absent = none)
+├── output.passN.tsx  expected output after pass N (optional; output only)
 ├── check.txt       expected `reactogenic check` output (from RGP1-070)
 └── *.rtsx, *.tsx   any other files: segments (`+name.rtsx`), containers
 ```

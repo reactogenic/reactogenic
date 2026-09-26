@@ -24,21 +24,30 @@ func LoadFixtures(root string) ([]Case, error) {
 		if _, err := fs.Stat(fsys, path.Join(p, "input.rtsx")); err != nil {
 			return nil
 		}
-		c, err := loadFixture(fsys, p)
+		cs, err := loadFixture(fsys, p)
 		if err != nil {
 			return fmt.Errorf("fixtures/%s: %w", p, err)
 		}
-		cases = append(cases, c)
+		cases = append(cases, cs...)
 		return fs.SkipDir
 	})
 	return cases, err
 }
 
-func loadFixture(fsys fs.FS, dir string) (Case, error) {
+// stageRe names the expected output after one pass: output.pass1.tsx.
+var stageRe = regexp.MustCompile(`^output\.pass(\d)\.tsx$`)
+
+// loadFixture returns the fixture's case, plus one case per stage output
+// (`output.passN.tsx`), which checks output only.
+func loadFixture(fsys fs.FS, dir string) ([]Case, error) {
 	c := Case{ID: "fixtures/" + dir, Entry: "input.rtsx", Files: map[string]string{}}
+	var (
+		stages    []Case
+		hasErrors bool
+	)
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
-		return c, err
+		return nil, err
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -46,14 +55,20 @@ func loadFixture(fsys fs.FS, dir string) (Case, error) {
 		}
 		data, err := fs.ReadFile(fsys, path.Join(dir, e.Name()))
 		if err != nil {
-			return c, err
+			return nil, err
+		}
+		if m := stageRe.FindStringSubmatch(e.Name()); m != nil {
+			pass, _ := strconv.Atoi(m[1])
+			stages = append(stages, Case{ID: fmt.Sprintf("%s@pass%d", c.ID, pass), Entry: c.Entry, UntilPass: pass, WantTSX: string(data), IgnoreDiagnostics: true})
+			continue
 		}
 		switch e.Name() {
 		case "output.tsx":
 			c.WantTSX = string(data)
 		case "errors.txt":
+			hasErrors = true
 			if c.WantErrors, err = parseErrors(string(data)); err != nil {
-				return c, err
+				return nil, err
 			}
 		case "check.txt", "README.md":
 			// check.txt: `reactogenic check` output, asserted from RGP1-070.
@@ -61,7 +76,13 @@ func loadFixture(fsys fs.FS, dir string) (Case, error) {
 			c.Files[e.Name()] = string(data)
 		}
 	}
-	return c, nil
+	for i := range stages {
+		stages[i].Files = c.Files
+	}
+	if c.WantTSX == "" && !hasErrors && len(stages) > 0 {
+		return stages, nil // only stages: no final case that checks nothing
+	}
+	return append([]Case{c}, stages...), nil
 }
 
 // LINE[:COL] error|warning [CODE] ["message substring"]

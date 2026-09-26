@@ -159,7 +159,7 @@ A local or parameter named `Switch`, another package's `Switch`, and
   case is unit-tested here and joins the conformance suite with the
   `Switch` lowering (RGP1-034).
 
-### RGP1-032 — Pass 1: shorthand props · M
+### RGP1-032 — Pass 1: shorthand props · M · done
 - Scope comes from tsgo's binder, not a resolver of our own (RGP1-005):
   `syntax.Binding` asks the binder's `NameResolver`, with globals excluded
   and ambient and type-only declarations filtered out. Slot params are the
@@ -174,6 +174,14 @@ A local or parameter named `Switch`, another package's `Switch`, and
   preserved.
 - **Done when:** every example and edge case in *Shorthand props* is a
   passing fixture, including TDZ and shadowing.
+- Done: `transpiler/shorthand.go` inserts `={name}` after the name; the name
+  inside the braces is copied, so TS errors on it map exactly. All three
+  spec examples pass, plus fixtures for case A, names that can never be
+  bindings, globals / `import type` / `declare`, intrinsic elements and
+  spreads, TDZ, and slot params (as a pass-1 stage).
+- Found: a file with no `import`/`export` is a script to TypeScript, and
+  its top-level declarations become globals. `.rtsx` is now always parsed as
+  a module, as under Vite; syntax.md says so.
 - Depends on: 030.
 
 ### RGP1-033 — Pass 2: `Match` · S

@@ -5,5 +5,13 @@ fixtures/parse/duplicate-params
 fixtures/parse/params-on-html
 fixtures/parse/segment-second-id
 fixtures/parse/segment-syntax
+fixtures/shorthand/case-a
+fixtures/shorthand/globals-and-types
+fixtures/shorthand/intrinsic-spread-explicit
+fixtures/shorthand/never-bindings
 fixtures/shorthand/no-binding
+fixtures/shorthand/slot-params@pass1
+fixtures/shorthand/tdz
+syntax.md#desugaring/1
 syntax.md#desugaring/2
+syntax.md#desugaring/3

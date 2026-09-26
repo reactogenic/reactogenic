@@ -111,3 +111,12 @@ func TestParamShadowsOuter(t *testing.T) {
 		t.Errorf("the body should see the param")
 	}
 }
+
+// An .rtsx file is a module even with no import or export: its top-level
+// declarations are in scope, not globals.
+func TestScriptFileIsModule(t *testing.T) {
+	_, attrs := bareAttributes(t, "const value = 1;\n<Input value />;\n")
+	if Binding(attrs["value@1"], "value") == nil {
+		t.Error("top-level const not found")
+	}
+}

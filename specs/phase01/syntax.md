@@ -124,6 +124,8 @@ consulted.
 | slot params (see [Slots](#slots)) | |
 
 So `<Input name />` is always case B unless the module itself declares `name`.
+An `.rtsx` file is always a module, as under Vite: its top-level declarations
+count even when it has no `import` or `export`.
 
 Resolution is ordinary lexical lookup — the nearest binding wins — and it is
 **tsgo's binder**, not a resolver of our own. Since the emitted identifier is

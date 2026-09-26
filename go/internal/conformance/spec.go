@@ -68,6 +68,8 @@ func ExtractSpec(name, markdown string) []Case {
 				Entry:     entry,
 				UntilPass: pass,
 				WantTSX:   out.body,
+				// Spec examples check output only; see the doc comment.
+				IgnoreDiagnostics: true,
 			})
 		}
 	}

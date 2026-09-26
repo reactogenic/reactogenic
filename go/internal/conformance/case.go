@@ -20,6 +20,8 @@ type Case struct {
 	// WantTSX is the expected output; empty when only errors are checked.
 	WantTSX    string
 	WantErrors []Expectation
+	// IgnoreDiagnostics checks output only (spec examples, stages).
+	IgnoreDiagnostics bool
 }
 
 // Expectation matches one diagnostic. Zero fields match anything, except
@@ -62,6 +64,9 @@ func Run(c Case, transpile func(transpiler.Input) (transpiler.Output, error)) st
 		return err.Error()
 	}
 	var problems []string
+	if c.IgnoreDiagnostics {
+		out.Diagnostics = nil
+	}
 
 	unmatched := append([]transpiler.Diagnostic(nil), out.Diagnostics...)
 	for _, want := range c.WantErrors {
@@ -83,8 +88,10 @@ func Run(c Case, transpile func(transpiler.Input) (transpiler.Output, error)) st
 	}
 
 	if c.WantTSX != "" {
-		want, _ := Canonical(c.WantTSX)
-		got, errs := Canonical(out.TSX)
+		// A stage may still hold .rtsx forms; final output must be plain TSX.
+		rtsx := c.UntilPass > 0
+		want, _ := canonical(c.WantTSX, rtsx)
+		got, errs := canonical(out.TSX, rtsx)
 		switch {
 		case len(errs) > 0:
 			problems = append(problems, "output does not parse as TSX: "+strings.Join(errs, "; ")+"\n"+out.TSX)

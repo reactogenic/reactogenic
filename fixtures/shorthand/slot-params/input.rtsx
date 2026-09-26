@@ -1,0 +1,8 @@
+const size = "outer";
+export const a = (
+  <Button>
+    <$IconStart size { size }>
+      <Icon size />
+    </$IconStart>
+  </Button>
+);

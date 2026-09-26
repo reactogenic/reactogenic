@@ -20,7 +20,16 @@ import (
 // It returns the parse errors of tsx as well; a canonical form of code that
 // does not parse is not meaningful.
 func Canonical(tsx string) (string, []string) {
+	return canonical(tsx, false)
+}
+
+// canonical parses as .rtsx when asked, for intermediate stages that still
+// hold slot params.
+func canonical(tsx string, asRTSX bool) (string, []string) {
 	file := rtsx.ParseTSX("/canonical.tsx", tsx)
+	if asRTSX {
+		file = rtsx.ParseRTSX("/canonical.rtsx", tsx)
+	}
 	var errs []string
 	for _, d := range file.Diagnostics() {
 		line, col := lineCol(tsx, d.Pos())

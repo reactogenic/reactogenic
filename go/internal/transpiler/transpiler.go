@@ -61,7 +61,7 @@ type pass struct {
 
 var passes = []pass{
 	{0, "checks", checks},
-	{1, "shorthand props", nil},
+	{1, "shorthand props", shorthand},
 	{2, "flow lowering", nil},
 	{3, "slot hoisting", nil},
 	{4, "segment roots", nil},
