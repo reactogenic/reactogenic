@@ -5058,6 +5058,9 @@ func (p *Parser) parseJsxAttributes() *ast.Node {
 
 func (p *Parser) parseJsxAttribute() *ast.Node {
 	if p.token == ast.KindOpenBraceToken {
+		if p.isRTSX() && !p.lookAhead((*Parser).nextTokenIsDotDotDot) {
+			return p.parseJsxSlotParams() // Reactogenic: rtsx.go
+		}
 		return p.parseJsxSpreadAttribute()
 	}
 	pos := p.nodePos()

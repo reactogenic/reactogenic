@@ -97,13 +97,15 @@ wrapper.
 
 ## M2 — Parser
 
-### RGP1-020 — Slot params · M
-`JsxSlotParams ::= ObjectBindingPattern`, for `{` not followed by `...`.
-- Every row of the grammar table must parse: renaming, defaults, nesting,
-  rest, `{}`. `{ ...rest }` on its own stays a spread attribute.
-- **Done when:** the grammar table in syntax.md passes as parser tests with
-  exact spans.
-- Depends on: 003.
+### RGP1-020 — Slot params · M · done
+Patch `0002-rtsx-parser.patch`. In `.rtsx`, a `{` in attribute position
+that is not followed by `...` is parsed as an `ObjectBindingPattern` and
+stored in a `JsxSpreadAttribute` — no new node kind
+([decisions.md](decisions.md#rgp1-020--no-new-node-kinds-no-new-script-kind)).
+`go/internal/syntax.SlotParams` reads it.
+- Tests (`go/internal/syntax`): every row of the grammar table, with exact
+  spans and bound names; `.tsx` still rejects the form; params next to
+  other attributes on a component; malformed params are parse errors.
 
 ### RGP1-021 — Segment roots `#name` · S
 `JsxSegmentRoot ::= '#' JsxIdentifier`.

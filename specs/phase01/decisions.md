@@ -201,3 +201,32 @@ downloads that toolchain on demand (`GOTOOLCHAIN=auto`, the default).
 | Iterables in `Each` | rejected: arrays only, so `index` is always a `number` position | syntax.md, *Iteration* |
 | Scope for shorthand props | tsgo's binder, no resolver of our own; a same-named binding of the wrong type is an ordinary TS error | syntax.md, *Shorthand props*; RGP1-032 |
 | Package names | all scoped to the `@reactogenic` npm org: `core`, `vite`, `cli`, `cli-<os>-<arch>` | vite.md, *Runtime* |
+
+## RGP1-020 — No new node kinds, no new script kind
+
+Supersedes two rows of RGP1-002: *script kinds* and *AST*.
+
+**Decision.** The `.rtsx` forms are stored in node kinds tsgo already has,
+and `.rtsx` is recognised by its file extension:
+
+| Form | Stored as | Why it cannot be confused with TSX |
+| --- | --- | --- |
+| slot params `{ size }` | `JsxSpreadAttribute` whose expression is an `ObjectBindingPattern` | the TSX grammar only ever puts an expression there |
+| segment root `#about-us` | `JsxAttribute` named `"#about-us"`, no value — what TypeScript's parser already builds | only `.rtsx` gives it a meaning |
+| `.rtsx` | TSX script kind; the parser enables slot params when the file name ends in `.rtsx` | TypeScript itself derives script kinds from extensions |
+
+`go/internal/syntax` is the one place that reads these shapes
+(`SlotParams`, `SegmentRoot`).
+
+**Why.**
+
+- New kinds mean editing tsgo's generated files (`kind_generated.go`, its
+  stringer, `ast_generated.go`). Their generator is not vendored, and the
+  files change with most upstream commits, so every rebase would conflict.
+- A new script kind means changing `core.ScriptKind` and every switch over
+  it.
+- The checker never sees `.rtsx` trees, so reusing kinds cannot confuse it.
+  The transpiler lowers every form before TS7 type-checks the output.
+
+**Result.** Patch `0002-rtsx-parser.patch`: one new file,
+`internal/parser/rtsx.go`, and three lines in `parseJsxAttribute`.

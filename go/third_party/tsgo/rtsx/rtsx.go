@@ -11,6 +11,7 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/locale"
 	"github.com/microsoft/TypeScript/tsc/internal/parser"
+	"github.com/microsoft/TypeScript/tsc/internal/scanner"
 	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
@@ -22,10 +23,16 @@ type (
 )
 
 const (
+	KindBindingElement          = ast.KindBindingElement
 	KindBlock                   = ast.KindBlock
 	KindEndOfFile               = ast.KindEndOfFile
 	KindExpressionStatement     = ast.KindExpressionStatement
+	KindIdentifier              = ast.KindIdentifier
+	KindJsxAttribute            = ast.KindJsxAttribute
+	KindJsxAttributes           = ast.KindJsxAttributes
+	KindJsxSpreadAttribute      = ast.KindJsxSpreadAttribute
 	KindJsxText                 = ast.KindJsxText
+	KindObjectBindingPattern    = ast.KindObjectBindingPattern
 	KindParenthesizedExpression = ast.KindParenthesizedExpression
 )
 
@@ -36,6 +43,18 @@ func ParseTSX(fileName string, text string) *SourceFile {
 		Path:     tspath.Path(fileName),
 	}
 	return parser.ParseSourceFile(opts, text, core.ScriptKindTSX)
+}
+
+// ParseRTSX parses text as an .rtsx file: TSX plus the attribute forms of
+// go/patches/0002-rtsx-parser.patch. fileName must end in .rtsx; the parser
+// enables the extensions by extension.
+func ParseRTSX(fileName string, text string) *SourceFile {
+	return ParseTSX(fileName, text)
+}
+
+// TokenStart returns where n's first token starts, after leading trivia.
+func TokenStart(file *SourceFile, n *Node) int {
+	return scanner.GetTokenPosOfNode(n, file, false)
 }
 
 // NodeText returns the text of an identifier, literal or JSX text node, and
