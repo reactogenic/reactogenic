@@ -61,3 +61,52 @@ prototype to be rewritten later.
 
 > OPEN: the message encoding — JSON (simple, easy to debug) or a binary
 > format (faster for large source maps). Measure in RGP1-052 before choosing.
+
+## RGP1-002 — Parser strategy
+
+**Decision.** Extend tsgo's own JSX parser in the fork. `.rtsx` gets its own
+script kind: the extensions are parsed **only** in `.rtsx` files, so
+`{ size }` and `#name` stay syntax errors in `.tsx`.
+
+**What changes in the fork.**
+
+| Package | Change |
+| --- | --- |
+| script kinds | `.rtsx` → a new script kind: TSX plus the extensions |
+| AST | two node kinds: `JsxSlotParams` (wraps an `ObjectBindingPattern`) and `JsxSegmentRoot` (`#` + `JsxIdentifier`), both allowed in `JsxAttributes` |
+| scanner | `#` in JSX attribute position, with no whitespace before the name |
+| parser | in attribute position, `{` not followed by `...` → `JsxSlotParams`; `#` → `JsxSegmentRoot`; the parse-level errors of RGP1-022 |
+
+**The checker never sees the new nodes.** The passes lower them away, and
+the checker type-checks the emitted `.tsx`, which is parsed again as plain
+TSX (RGP1-050). So the fork changes the parser and the AST, not the checker
+or the emitter.
+
+**Why.**
+
+- One parser. The spans the passes and the diagnostics use come straight
+  from it, with no offset map in between.
+- The AST is tsgo's own, so the passes work on the same nodes the checker
+  uses.
+- A small surface: two node kinds and two branches in attribute parsing, all
+  in the JSX part of the parser.
+
+**Consequences.**
+
+- Rebasing on tsgo means keeping these parser changes applied. The changes
+  live in separate files, called from as few places in tsgo's code as
+  possible.
+- The parser tests for RGP1-020–022 are tsgo-style tests in the fork, next to
+  tsgo's own.
+- Scope analysis for shorthand props (RGP1-032) needs slot params declared
+  as bindings over their body. That is either a binder change in the fork or
+  a resolver of our own over the `.rtsx` AST; RGP1-032 decides which.
+
+**Rejected.**
+
+- **(b) Mask the reserved forms, then parse with tsgo unmodified:** it adds an
+  offset map in front of the source map. Every masked form has to stay valid
+  and unambiguous in every context, and tsgo's parse errors would point at
+  the mask, not at what the author wrote.
+- **(c) Babel:** a second parser next to tsgo's, with its own AST and its
+  own spans.

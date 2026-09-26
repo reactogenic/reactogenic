@@ -128,11 +128,11 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | File | Status |
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
-| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001 done |
+| `phase01/plan.md`, `phase01/decisions.md` | RGP1-001, RGP1-002 done |
 | `later/layout.md`, `later/persistent-state.md`, `later/tooling.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
-Phase 1 open decisions: parser strategy (RGP1-002); how the plugin hands TSX
+Phase 1 open decisions: how the plugin hands TSX
 to plugin-react — `phase01/vite.md`; Node ↔ Go message encoding —
 `phase01/decisions.md`.
 

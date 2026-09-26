@@ -27,7 +27,7 @@ Size: **S** ≤ 2 days, **M** ≤ 1 week, **L** > 1 week (split it before starti
 M1 and M2 can run in parallel. M4 can start once RGP1-030 is done. M5 and M6
 both need M3 and M4, but not each other.
 
-Critical path: 002 → 003 → 020 → 030 → 050 → 052 → 053 → 061 → 090.
+Critical path: 003 → 020 → 030 → 050 → 052 → 053 → 061 → 090.
 
 ## M0 — Decisions and scaffolding
 
@@ -36,21 +36,11 @@ TS7, in-process: the transpiler is written in Go as a fork of tsgo from
 day 1. The Vite plugin drives it as one long-lived process over stdio. See
 [decisions.md](decisions.md#rgp1-001--checker-and-implementation-language).
 
-### RGP1-002 — Decide the parser strategy · S
-`{ size }` and `#name` in attribute position are syntax errors for every
-existing TSX parser, so something has to accept them.
-- Options:
-  - (a) extend tsgo's JSX parser in the fork;
-  - (b) a pre-pass that masks the reserved forms as valid TSX, then parse
-    with tsgo's unmodified parser, keeping an offset map;
-  - (c) Babel with a custom plugin. After RGP1-001 this would mean a second
-    parser next to tsgo's, so it is effectively out.
-- Criteria: exact spans for diagnostics (M6); the same AST as the checker,
-  so scope analysis in RGP1-032 uses TS's binder; cost of keeping up with
-  TS releases.
-- **Done when:** a decision record exists, and a spike parses the Slots and
-  Segment roots grammar examples from syntax.md.
-- Depends on: 001.
+### RGP1-002 — Decide the parser strategy · S · done
+Extend tsgo's JSX parser in the fork, behind a `.rtsx` script kind. See
+[decisions.md](decisions.md#rgp1-002--parser-strategy). The spike this task
+originally included is RGP1-020 and RGP1-021 themselves, once the fork
+exists (RGP1-003).
 
 ### RGP1-003 — Repository scaffolding · M
 Needs your approval first: it creates files outside `specs/`.
@@ -119,14 +109,14 @@ wrapper.
   rest, `{}`. `{ ...rest }` on its own stays a spread attribute.
 - **Done when:** the grammar table in syntax.md passes as parser tests with
   exact spans.
-- Depends on: 002.
+- Depends on: 003.
 
 ### RGP1-021 — Segment roots `#name` · S
 `JsxSegmentRoot ::= '#' JsxIdentifier`.
 - No whitespace after `#`, hyphens allowed, at most one per element.
 - **Done when:** parser tests pass, including `#name` next to spreads and
   other attributes.
-- Depends on: 002.
+- Depends on: 003.
 
 ### RGP1-022 — Parse-level errors · S
 - params-on-html, duplicate-params, and a second `#name` on one element.
