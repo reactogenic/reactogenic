@@ -1,1 +1,7 @@
 # Conformance cases that pass. Maintained by `go test -run TestConformance -update`.
+fixtures/parse/duplicate-params
+fixtures/parse/params-on-html
+fixtures/parse/segment-second-id
+fixtures/parse/segment-syntax
+fixtures/shorthand/no-binding
+syntax.md#desugaring/2

@@ -128,20 +128,22 @@ bad attribute does not hide the others.
 
 ## M3 — Transpiler
 
-### RGP1-030 — Pipeline, emitter and origin-tracking source map · L
-The base everything else builds on. Split it into these subtasks:
-- **030a — pass pipeline.** Passes 0–4 as separate transforms over one AST,
-  each seeing the previous one's output
-  ([syntax.md](syntax.md#compilation-passes)).
-- **030b — emitter.** Edits the source text rather than reprinting it, so
-  copied code keeps its exact bytes and spans.
-- **030c — source map with origins.** Every emitted span is either *copied*
-  (it has a source span) or *synthesized* (it has an origin construct), as in
-  [diagnostics.md](diagnostics.md#mapping). This is a standard v3 map, which
-  Vite needs, plus an origin side table, which M6 needs.
-- **Done when:** a file with no `.rtsx` extensions passes through byte for
-  byte with an identity map.
-- Depends on: 020, 021.
+### RGP1-030 — Pipeline, emitter and origin-tracking source map · L · done
+- **030a — pass pipeline** (`go/internal/transpiler`). Text to text: each
+  pass parses its input, returns edits, and the edits make the next pass's
+  input — the same shape as the spec's "after pass N" examples. Pass 0 runs
+  `syntax.Check`; passes 1–4 are empty until their tasks. A syntax error
+  stops the pipeline and is reported as `TS<code>`.
+- **030b — emitter** (`go/internal/emit`). Output is the input plus edits;
+  every run of output is either *copied* (exact input span) or
+  *synthesized* (with an origin span). Untouched code keeps its bytes.
+- **030c — source map with origins.** `emit.Map` maps output spans to the
+  source: copied text exactly, synthesized text to its origin. Per-pass maps
+  compose (`Then`), so diagnostics from any pass land on the `.rtsx` the
+  author wrote. `SourceMapV3` encodes the map for Vite, with UTF-16 columns.
+- Done: a file with no extensions passes through byte for byte with an
+  identity map; transpiler errors are reported with source line and column.
+  6 of 29 conformance cases now pass, the RGP1-022 fixtures among them.
 
 ### RGP1-031 — Import-origin recognition · S
 `Switch`, `Match` and `Each` are recognised by the module they are imported

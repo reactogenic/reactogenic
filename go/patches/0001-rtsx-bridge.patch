@@ -1,9 +1,9 @@
 diff --git a/rtsx/rtsx.go b/rtsx/rtsx.go
 new file mode 100644
-index 0000000..a12cc76
+index 0000000..2789729
 --- /dev/null
 +++ b/rtsx/rtsx.go
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,94 @@
 +// Package rtsx is Reactogenic's bridge into tsgo's internal packages.
 +//
 +// Go allows internal/ to be imported only from inside this module, so
@@ -64,6 +64,12 @@ index 0000000..a12cc76
 +// TokenStart returns where n's first token starts, after leading trivia.
 +func TokenStart(file *SourceFile, n *Node) int {
 +	return scanner.GetTokenPosOfNode(n, file, false)
++}
++
++// SkipTrivia returns the first position at or after pos that is not
++// whitespace or a comment.
++func SkipTrivia(text string, pos int) int {
++	return scanner.SkipTrivia(text, pos)
 +}
 +
 +// IsIntrinsicTag reports whether a JSX tag name is an intrinsic element

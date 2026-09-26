@@ -15,9 +15,12 @@ commit="${1:-$(sed -n 's/^commit: //p' "$dest/UPSTREAM" 2>/dev/null || true)}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-git clone -q --filter=blob:none --no-checkout https://github.com/microsoft/TypeScript.git "$tmp/ts"
+# Fetch only the pinned commit, only tsc/: no history, no other blobs.
+git init -q "$tmp/ts"
+git -C "$tmp/ts" remote add origin https://github.com/microsoft/TypeScript.git
 git -C "$tmp/ts" sparse-checkout set tsc
-git -C "$tmp/ts" checkout -q "$commit"
+git -C "$tmp/ts" fetch -q --depth 1 --filter=blob:none origin "$commit"
+git -C "$tmp/ts" checkout -q FETCH_HEAD
 
 rm -rf "$dest"
 mkdir -p "$dest"

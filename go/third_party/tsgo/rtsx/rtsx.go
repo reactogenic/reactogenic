@@ -60,6 +60,12 @@ func TokenStart(file *SourceFile, n *Node) int {
 	return scanner.GetTokenPosOfNode(n, file, false)
 }
 
+// SkipTrivia returns the first position at or after pos that is not
+// whitespace or a comment.
+func SkipTrivia(text string, pos int) int {
+	return scanner.SkipTrivia(text, pos)
+}
+
 // IsIntrinsicTag reports whether a JSX tag name is an intrinsic element
 // (`div`, `my-element`, `svg:rect`) rather than a component, by the
 // checker's own rule.
