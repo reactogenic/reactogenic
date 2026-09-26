@@ -1,0 +1,8 @@
+5:27 error segment-id "#one"
+6:27 error segment-id "spread"
+7:39 error segment-duplicate
+8:40 error segment-in-loop
+9:27 warning segment-children
+1:1 error segment-import
+4:1 error segment-import
+10:27 error segment-not-found

@@ -62,8 +62,7 @@ var compileTimeOnly = map[string]bool{"Switch": true, "Match": true}
 func CheckFlowAsValue(file *rtsx.SourceFile) []Error {
 	var errs []Error
 	report := func(n *rtsx.Node, name string) {
-		errs = append(errs, Error{rtsx.TokenStart(file, n), n.End(), "flow-as-value",
-			fmt.Sprintf("`%s` exists only as an element", name)})
+		errs = append(errs, Error{Pos: rtsx.TokenStart(file, n), End: n.End(), Code: "flow-as-value", Message: fmt.Sprintf("`%s` exists only as an element", name)})
 	}
 	var visit func(n *rtsx.Node) bool
 	visit = func(n *rtsx.Node) bool {

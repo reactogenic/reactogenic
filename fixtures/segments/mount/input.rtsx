@@ -1,0 +1,5 @@
+import { Card } from "./card";
+const _Section_intro = 1;
+export const a = <section #intro />;
+export const b = <Card #pricing className="band" />;
+export const c = <Ui.Panel #faq-list></Ui.Panel>;

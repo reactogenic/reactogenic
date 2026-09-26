@@ -1,9 +1,9 @@
 diff --git a/rtsx/rtsx.go b/rtsx/rtsx.go
 new file mode 100644
-index 0000000..e95591e
+index 0000000..4305d10
 --- /dev/null
 +++ b/rtsx/rtsx.go
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,162 @@
 +// Package rtsx is Reactogenic's bridge into tsgo's internal packages.
 +//
 +// Go allows internal/ to be imported only from inside this module, so
@@ -35,6 +35,7 @@ index 0000000..e95591e
 +	KindBinaryExpression         = ast.KindBinaryExpression
 +	KindBindingElement           = ast.KindBindingElement
 +	KindBlock                    = ast.KindBlock
++	KindCallExpression           = ast.KindCallExpression
 +	KindConditionalExpression    = ast.KindConditionalExpression
 +	KindEndOfFile                = ast.KindEndOfFile
 +	KindExportDeclaration        = ast.KindExportDeclaration

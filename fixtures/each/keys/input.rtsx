@@ -1,0 +1,8 @@
+import { Each } from "@reactogenic/core";
+export const a = <Each items={xs} { item }><li key={item}>{item}</li></Each>;
+export const b = <Each items={xs} { item }><li>{item}</li></Each>;
+export const c = <Each items={xs} { item }>{item}</Each>;
+export const d = <Each items={xs} { item }><li key={item} /><li key={item} /></Each>;
+export const e = <Each items={xs} { item }><Fragment key={item}>{item}</Fragment></Each>;
+export const f = <Each items={xs} { item }><section #inloop /></Each>;
+export const g = <Each items={xs}>{(x) => <li>{x}</li>}</Each>;

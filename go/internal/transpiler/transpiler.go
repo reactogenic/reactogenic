@@ -21,6 +21,20 @@ type Input struct {
 	// of the component written `container` declared as an array (syntax.md,
 	// *List slots*)? nil answers no. The checker provides it (RGP1-051).
 	ListSlot func(container, slot string) bool
+	// ReadFile reads a file that is not in Files — segments next to the
+	// entry. nil: only Files exist.
+	ReadFile func(path string) (string, bool)
+}
+
+// readFile looks in Files, then ReadFile.
+func (in Input) readFile(p string) (string, bool) {
+	if text, ok := in.Files[p]; ok {
+		return text, true
+	}
+	if in.ReadFile != nil {
+		return in.ReadFile(p)
+	}
+	return "", false
 }
 
 type Severity int
@@ -70,7 +84,7 @@ var passes = []pass{
 	{1, "shorthand props", shorthand, false},
 	{2, "flow lowering", flow, true},
 	{3, "slot hoisting", slots, true},
-	{4, "segment roots", nil, false},
+	{4, "segment roots", segments, false},
 }
 
 // maxRuns bounds a repeating pass; a pass that keeps editing is a bug.
@@ -112,7 +126,7 @@ func Transpile(in Input) (Output, error) {
 			continue
 		}
 		rtsx.Bind(file)
-		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, listSlot: in.ListSlot,
+		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, listSlot: in.ListSlot, entry: in.Entry, readFile: in.readFile,
 			report: func(s emit.Span, sev Severity, code, msg string) {
 				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
 			}}
@@ -143,9 +157,19 @@ func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg stri
 
 // checks is pass 0: errors reported against what the author wrote.
 func checks(c *passContext) []emit.Edit {
-	errs := append(syntax.Check(c.file), syntax.CheckFlowAsValue(c.file)...)
-	for _, e := range append(errs, syntax.CheckSlotTags(c.file)...) {
-		c.report(emit.Span{Pos: e.Pos, End: e.End}, Error, e.Code, e.Message)
+	var errs []syntax.Error
+	for _, check := range []func(*rtsx.SourceFile) []syntax.Error{
+		syntax.Check, syntax.CheckFlowAsValue, syntax.CheckSlotTags, syntax.CheckSegments, syntax.CheckEachKeys,
+	} {
+		errs = append(errs, check(c.file)...)
 	}
+	for _, e := range errs {
+		sev := Error
+		if e.Warning {
+			sev = Warning
+		}
+		c.report(emit.Span{Pos: e.Pos, End: e.End}, sev, e.Code, e.Message)
+	}
+	c.checkSegmentFiles()
 	return nil
 }

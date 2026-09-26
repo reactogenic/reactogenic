@@ -1140,6 +1140,8 @@ A root may be any element, HTML or component — the transpiler only nests:
 
 ```tsx
 // page.tsx
+import _Section_aboutUs from "./+about-us";
+
 <Section id="about-us">
   <_Section_aboutUs />
 </Section>
@@ -1178,6 +1180,8 @@ Children of a segment root are overwritten, with a warning:
 
 ```tsx
 // .tsx
+import _Section_aboutUs from "./+about-us";
+
 <section id="about-us">
   <_Section_aboutUs />
 </section>
@@ -1321,7 +1325,9 @@ The `key` is written where React wants it: on the root element of the body.
 It may use the params.
 
 **The key is enforced at compile time.** `Each` is recognised by import origin
-for this check only: the body must be a single element that carries `key`. A
+for this check only: the body must be a single element that carries `key`.
+The check applies to the params form; a render prop written by hand
+(`<Each items={xs}>{(x) => …}</Each>`) is plain React and left alone. A
 body of several children or text has nowhere to put one — wrap it in an
 element, or in `<Fragment key={…}>`.
 

@@ -21,6 +21,9 @@ type passContext struct {
 	imports map[string]bool
 	// listSlot answers the one type question (Input.ListSlot).
 	listSlot func(container, slot string) bool
+	// entry and readFile reach the other files: segments (Input).
+	entry    string
+	readFile func(path string) (string, bool)
 }
 
 // span is n's source range from its first token (without leading trivia).

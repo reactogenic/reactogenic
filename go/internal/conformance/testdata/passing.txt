@@ -1,4 +1,5 @@
 # Conformance cases that pass. Maintained by `go test -run TestConformance -update`.
+fixtures/each/keys
 fixtures/flow/alias
 fixtures/flow/as-value
 fixtures/flow/attribute-position
@@ -14,6 +15,8 @@ fixtures/parse/duplicate-params
 fixtures/parse/params-on-html
 fixtures/parse/segment-second-id
 fixtures/parse/segment-syntax
+fixtures/segments/errors
+fixtures/segments/mount
 fixtures/shorthand/case-a
 fixtures/shorthand/globals-and-types
 fixtures/shorthand/intrinsic-spread-explicit
@@ -29,6 +32,9 @@ fixtures/slots/params-on-components
 fixtures/slots/switch-chain
 syntax.md#conditional-slots/1
 syntax.md#conditional-slots/2
+syntax.md#desugaring-1/1
+syntax.md#desugaring-1/2
+syntax.md#desugaring-1/3
 syntax.md#desugaring-2/1
 syntax.md#desugaring-dynamic-mode/1
 syntax.md#desugaring-exhaustive/1

@@ -13,6 +13,7 @@ type Error struct {
 	Pos, End int
 	Code     string
 	Message  string
+	Warning  bool
 }
 
 // Check reports the errors of the .rtsx attribute forms that the parser
@@ -45,7 +46,7 @@ func checkElement(file *rtsx.SourceFile, element *rtsx.Node) []Error {
 		segments []string
 	)
 	report := func(n *rtsx.Node, code, format string, args ...any) {
-		errs = append(errs, Error{rtsx.TokenStart(file, n), n.End(), code, fmt.Sprintf(format, args...)})
+		errs = append(errs, Error{Pos: rtsx.TokenStart(file, n), End: n.End(), Code: code, Message: fmt.Sprintf(format, args...)})
 	}
 	tag := element.TagName()
 	for _, attr := range element.Attributes().Properties() {
@@ -100,8 +101,7 @@ func CheckSlotTags(file *rtsx.SourceFile) []Error {
 		if n.Kind == rtsx.KindJsxOpeningElement || n.Kind == rtsx.KindJsxSelfClosingElement {
 			if tag := n.TagName(); tag.Kind == rtsx.KindIdentifier {
 				if name := rtsx.NodeText(tag); strings.HasPrefix(name, "$") && Binding(tag, name) != nil {
-					errs = append(errs, Error{rtsx.TokenStart(file, tag), tag.End(), "component-name",
-						fmt.Sprintf("`%s` is a slot tag; rename the component where it is imported", name)})
+					errs = append(errs, Error{Pos: rtsx.TokenStart(file, tag), End: tag.End(), Code: "component-name", Message: fmt.Sprintf("`%s` is a slot tag; rename the component where it is imported", name)})
 				}
 			}
 		}

@@ -69,3 +69,38 @@ func TestMissingEntry(t *testing.T) {
 		t.Error("want an error")
 	}
 }
+
+// segment-self: a segment that mounts itself through another segment. Only
+// `+` files can be segments, so the entry here is one.
+func TestSegmentSelf(t *testing.T) {
+	files := map[string]string{
+		"+page.rtsx":   "export default function Page() {\n  return <main #header />;\n}\n",
+		"+header.rtsx": "export default function Header() {\n  return <nav #page />;\n}\n",
+	}
+	out, err := Transpile(Input{Files: files, Entry: "+page.rtsx"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Diagnostics) != 1 || out.Diagnostics[0].Code != "segment-self" || out.Diagnostics[0].Line != 2 || out.Diagnostics[0].Col != 16 {
+		t.Errorf("got %+v", out.Diagnostics)
+	}
+	// Direct: a segment that mounts itself.
+	out, _ = Transpile(Input{Files: map[string]string{"+a.rtsx": "export default () => <div #a />;\n"}, Entry: "+a.rtsx"})
+	if len(out.Diagnostics) != 1 || out.Diagnostics[0].Code != "segment-self" {
+		t.Errorf("direct: got %+v", out.Diagnostics)
+	}
+}
+
+// Segments found through Input.ReadFile, not only Files.
+func TestReadFile(t *testing.T) {
+	read := func(p string) (string, bool) {
+		if p == "+intro.rtsx" {
+			return "export default () => null;\n", true
+		}
+		return "", false
+	}
+	out, err := Transpile(Input{Files: map[string]string{"input.rtsx": "export const a = <section #intro />;\n"}, Entry: "input.rtsx", ReadFile: read})
+	if err != nil || len(out.Diagnostics) != 0 {
+		t.Errorf("got %v %+v", err, out.Diagnostics)
+	}
+}

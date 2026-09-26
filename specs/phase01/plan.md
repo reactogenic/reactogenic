@@ -246,29 +246,25 @@ implementation.
   binding now declare it. 49 of 52 conformance cases pass; the three left
   are segment roots (RGP1-039).
 
-### RGP1-039 — Pass 4: segment roots · M
-- `#name` becomes `id="name"` in place, plus an extensionless import of the
-  segment, plus its default export nested inside the root.
-- Generated identifier: `_<Tag>_<camelName>`.
-- Errors on the source: segment-id, segment-children (warning),
-  segment-duplicate (per file), segment-in-loop, segment-import.
-- **Done when:** the *Segment roots* fixtures pass.
-- Depends on: 030.
-
-### RGP1-040 — Checks needing the file system · S
-- segment-not-found (a sibling `+name.rtsx` or `+name.tsx`);
-- segment-self (a cycle through segments);
-- `Foo.tsx` and `Foo.rtsx` side by side ([vite.md](vite.md#module-resolution)).
-- This goes behind a file-system interface, so the Vite plugin and the CLI
-  supply their own.
-- **Done when:** the multi-file fixtures pass.
-- Depends on: 039.
-
-### RGP1-041 — `Each` key check · S
-each-no-key: the body of an `Each` (recognised by import origin) must be a
-single element with `key`.
-- **Done when:** the *Iteration* fixtures pass.
-- Depends on: 031, 036.
+### RGP1-039 — Pass 4: segment roots · M · done
+### RGP1-040 — Checks needing the file system · S · done
+### RGP1-041 — `Each` key check · S · done
+`transpiler/segments.go`, `syntax/segments.go`.
+- Pass 4: `#name` → `id="name"` in place; the segment's default export,
+  imported as `_<Tag>_<camelName>` (fresh against the source), nested as the
+  only child. A root inside another root's children is overwritten with
+  them; a second `#name` on one element is segment-id and not mounted.
+- Pass 0 on the source: segment-id (explicit `id`, a spread), segment-
+  duplicate, segment-in-loop (`.map()` / `.flatMap()` callbacks, `Each`
+  bodies), segment-children (warning), segment-import (value imports of a
+  `+` file; `import type` and all-`type` named imports are fine),
+  each-no-key (the params form of `Each` only).
+- Files: segment-not-found and segment-self (followed through other
+  segments), via `Input.Files` and `Input.ReadFile`.
+- Spec: the component-root and overwritten-children examples now show the
+  generated import.
+- **M3 complete: 55 of 55 conformance cases pass** — every example of
+  syntax.md, and every fixture.
 
 ## M4 — Type service
 

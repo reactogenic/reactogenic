@@ -29,6 +29,7 @@ const (
 	KindBinaryExpression         = ast.KindBinaryExpression
 	KindBindingElement           = ast.KindBindingElement
 	KindBlock                    = ast.KindBlock
+	KindCallExpression           = ast.KindCallExpression
 	KindConditionalExpression    = ast.KindConditionalExpression
 	KindEndOfFile                = ast.KindEndOfFile
 	KindExportDeclaration        = ast.KindExportDeclaration
