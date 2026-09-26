@@ -1,0 +1,13 @@
+import { Match } from "@reactogenic/core";
+import { $Legacy } from "./legacy";
+export const a = <div><$Title>t</$Title></div>;
+export const b = <$Title>top</$Title>;
+export const c = <Card>{open && <$Hint>h</$Hint>}</Card>;
+export const d = <Card><Match on={x} { value }><$Hint>{value}</$Hint></Match></Card>;
+export const e = <Card>{ok ? <$Icon /> : <$Title />}</Card>;
+export const f = <Card>{ok ? <><$Hint>h</$Hint>text</> : null}</Card>;
+export const g = <Card><$Title>1</$Title><$Title>2</$Title></Card>;
+export const h = <Card $Title={{ children: "x" }}><$Title>y</$Title></Card>;
+export const i = <Card><$Title key="k">t</$Title></Card>;
+export const j = <Card><$Title children="a">b</$Title></Card>;
+export const k = <Card><$Legacy /></Card>;

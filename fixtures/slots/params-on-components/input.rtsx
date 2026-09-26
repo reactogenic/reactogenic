@@ -1,0 +1,4 @@
+export const a = <List { item } />;
+export const b = <List { item }>text</List>;
+export const c = <List { item }><Row item /><Row item /></List>;
+export const d = <List { item }>{item.name}</List>;

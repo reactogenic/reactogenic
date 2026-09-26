@@ -70,6 +70,10 @@ func loadFixture(fsys fs.FS, dir string) ([]Case, error) {
 			if c.WantErrors, err = parseErrors(string(data)); err != nil {
 				return nil, err
 			}
+		case "list-slots.txt":
+			for _, line := range strings.Fields(string(data)) {
+				c.ListSlots = append(c.ListSlots, line)
+			}
 		case "check.txt", "README.md":
 			// check.txt: `reactogenic check` output, asserted from RGP1-070.
 		default:
@@ -78,6 +82,7 @@ func loadFixture(fsys fs.FS, dir string) ([]Case, error) {
 	}
 	for i := range stages {
 		stages[i].Files = c.Files
+		stages[i].ListSlots = c.ListSlots
 	}
 	if c.WantTSX == "" && !hasErrors && len(stages) > 0 {
 		return stages, nil // only stages: no final case that checks nothing

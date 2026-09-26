@@ -25,8 +25,11 @@ type (
 )
 
 const (
+	KindAmpersandAmpersandToken  = ast.KindAmpersandAmpersandToken
+	KindBinaryExpression         = ast.KindBinaryExpression
 	KindBindingElement           = ast.KindBindingElement
 	KindBlock                    = ast.KindBlock
+	KindConditionalExpression    = ast.KindConditionalExpression
 	KindEndOfFile                = ast.KindEndOfFile
 	KindExportDeclaration        = ast.KindExportDeclaration
 	KindExportSpecifier          = ast.KindExportSpecifier
@@ -47,6 +50,7 @@ const (
 	KindJsxText                  = ast.KindJsxText
 	KindNamedExports             = ast.KindNamedExports
 	KindNamespaceImport          = ast.KindNamespaceImport
+	KindNullKeyword              = ast.KindNullKeyword
 	KindObjectBindingPattern     = ast.KindObjectBindingPattern
 	KindPropertyAccessExpression = ast.KindPropertyAccessExpression
 	KindParenthesizedExpression  = ast.KindParenthesizedExpression

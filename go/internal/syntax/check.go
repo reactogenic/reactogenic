@@ -89,3 +89,25 @@ func malformedSegmentRoot(attr *rtsx.Node) (string, bool) {
 	}
 	return text[1:], true
 }
+
+// CheckSlotTags reports component-name: a `$` tag while a value binding of
+// that name is in scope — the author means a component, but `$` tags are
+// slots (syntax.md, *Slots → Grammar*). The file must be bound.
+func CheckSlotTags(file *rtsx.SourceFile) []Error {
+	var errs []Error
+	var visit func(n *rtsx.Node) bool
+	visit = func(n *rtsx.Node) bool {
+		if n.Kind == rtsx.KindJsxOpeningElement || n.Kind == rtsx.KindJsxSelfClosingElement {
+			if tag := n.TagName(); tag.Kind == rtsx.KindIdentifier {
+				if name := rtsx.NodeText(tag); strings.HasPrefix(name, "$") && Binding(tag, name) != nil {
+					errs = append(errs, Error{rtsx.TokenStart(file, tag), tag.End(), "component-name",
+						fmt.Sprintf("`%s` is a slot tag; rename the component where it is imported", name)})
+				}
+			}
+		}
+		n.ForEachChild(visit)
+		return false
+	}
+	file.AsNode().ForEachChild(visit)
+	return errs
+}

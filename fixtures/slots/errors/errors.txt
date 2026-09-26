@@ -1,0 +1,11 @@
+3:23 error orphan-slot
+4:18 error orphan-slot
+5:33 error orphan-slot
+6:48 error orphan-slot
+7:42 error mixed-conditional-slot "$Icon"
+8:30 error mixed-conditional-slot
+9:42 error duplicate-slot
+10:51 error duplicate-slot
+11:32 error slot-key
+12:32 error slot-children-conflict
+13:25 error component-name

@@ -392,6 +392,7 @@ slot's `children`; on a component element it is the component's `children`.
 
 ```tsx
 // .rtsx
+const items = getItems();
 <Each items { item, index }>
   <p key={item}>{item} is {index + 1}</p>
 </Each>
@@ -399,6 +400,7 @@ slot's `children`; on a component element it is the component's `children`.
 
 ```tsx
 // .tsx
+const items = getItems();
 <Each items={items}>
   {({ item, index }) => (
     <p key={item}>{item} is {index + 1}</p>
@@ -488,6 +490,7 @@ function Select({ options, $Option }: SelectProps) {
 
 ```tsx
 // .rtsx
+const options = getOptions();
 <Select options>
   <$Option { label, value }>
     <Flag code={value} />
@@ -498,6 +501,7 @@ function Select({ options, $Option }: SelectProps) {
 
 ```tsx
 // .tsx
+const options = getOptions();
 <Select options={options}
   $Option={{
     children: ({ label, value }) => <><Flag code={value} />{label}</>,
@@ -631,6 +635,7 @@ is the way out of a name collision with the outer scope:
 
 ```tsx
 // .rtsx
+const options = getOptions();
 const label = "Country";
 <Select options>
   <$Option { label: optionLabel, value: optionValue }>
@@ -641,6 +646,7 @@ const label = "Country";
 
 ```tsx
 // .tsx
+const options = getOptions();
 const label = "Country";
 <Select options={options}
   $Option={{
@@ -937,7 +943,7 @@ With params, `is` is a condition over the handed-out value.
   n % 15 === 0 ? <>FizzBuzz</>
   : n % 5 === 0 ? <>Buzz</>
   : n % 3 === 0 ? <>Fizz</>
-  : <>{n}</>
+  : n
 )({ value: getNumber() })}
 ```
 
@@ -946,8 +952,9 @@ renaming works. Its scope is the whole element: every `is` and every body.
 
 A dynamic `Switch` cannot be `exhaustive`: arbitrary conditions cannot be proven.
 
-Bodies follow the slot-body rule: the single child expression, or `<>…</>` for
-several children or text. No body → `null`.
+Bodies follow the slot-body rule: a single child element as it is, the
+expression of a single `{…}` child, or `<>…</>` for several children or text.
+No body → `null`.
 
 ### Position
 
@@ -1289,6 +1296,7 @@ No fragment, no wrapper: `Each` returns the array of whatever the body returns.
 
 ```tsx
 // .rtsx
+const items = getItems();
 <Each items { item, index }>
   <p key={item.id}>{item.name} is {index + 1}</p>
 </Each>
@@ -1296,6 +1304,7 @@ No fragment, no wrapper: `Each` returns the array of whatever the body returns.
 
 ```tsx
 // .tsx
+const items = getItems();
 <Each items={items}>
   {({ item, index }) => (
     <p key={item.id}>{item.name} is {index + 1}</p>

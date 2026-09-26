@@ -1,0 +1,9 @@
+import { Switch } from "@reactogenic/core";
+export const a = (
+  <Input>
+    <Switch on={state.kind}>
+      <$Case is="error"><$Hint tone="bad">e</$Hint></$Case>
+      <$Case is="warn"><$Hint tone="warn">w</$Hint></$Case>
+    </Switch>
+  </Input>
+);

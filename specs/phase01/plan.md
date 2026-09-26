@@ -215,45 +215,36 @@ A local or parameter named `Switch`, another package's `Switch`, and
   match-nested-pattern, precedence, errors, exhaustive-binding.
   34 of 46 conformance cases pass.
 
-### RGP1-035 — Pass 3: slot hoisting (object form) · M
-- Remove slot elements from `children` and append them as attributes, in
-  order.
-- Property mapping follows the table in *Usage and desugaring*.
-- `children` is chosen syntactically: params + body, body only, or none.
-- Body: the single child expression, or `<>…</>`.
-- Errors: orphan-slot; duplicate-slot (slot element plus an explicit
-  attribute); slot-key; slot-children-conflict; component-name (a `$` tag
-  shadowing a binding).
-- **Done when:** the *Slots* fixtures pass, apart from list and conditional
-  slots.
-- Depends on: 030, 032.
-
-### RGP1-036 — Params on a component · S
-When a component element has params, what is left of its children becomes
-its `children` callback. This happens after slot hoisting, and the params
-are not in scope in the slot elements.
-- **Done when:** the `Each` desugaring fixture passes through the general
-  rule, with nothing specific to `Each`.
-- Depends on: 035.
-
-### RGP1-037 — Conditional slots · S
-- A ternary whose branches are slot elements of one slot, or `null`, becomes
-  a ternary prop; `null` becomes `undefined`.
-- Errors: mixed-conditional-slot, orphan-slot (for `&&`, and for
-  `Match` / `Switch` with params).
-- **Done when:** the three-stage example in *Conditional slots* passes at
-  each stage.
-- Depends on: 034, 035.
-
-### RGP1-038 — List slots (emit) · M
-- Collect same-named slot elements in source order into one array attribute,
-  at the position of the first.
-- A conditional item is spread in: `...(c ? [{…}] : [])`.
-- Errors: duplicate-slot (types case).
-- The type query is an injected interface, `isListSlot(container, name)`, so
-  this task is tested with a stub before M4 exists.
-- **Done when:** the *List slots* fixtures pass with the stub.
-- Depends on: 035, 037.
+### RGP1-035 — Pass 3: slot hoisting (object form) · M · done
+### RGP1-036 — Params on a component · S · done
+### RGP1-037 — Conditional slots · S · done
+### RGP1-038 — List slots (emit) · M · done (type answer stubbed until RGP1-051)
+`transpiler/slots.go`. One pass rewrites a container in one edit — its
+attributes, its slot props and its children — so the four tasks share one
+implementation.
+- Repeats inside out, like pass 2. Orphaned slot elements are reported
+  (orphan-slot) and removed first, so every run makes progress.
+- Slot element → object: attributes in order (`"aria-label"` quoted, bare →
+  `true`, spreads, `{}` → `undefined`), `children` by the body rule, params →
+  `children: (params) => body`. A container left without children becomes
+  self-closing.
+- Params on a component: its remaining children become
+  `{(params) => body}`.
+- Conditional slots: a `{…}` child whose conditional chain ends in slot
+  elements of one slot or `null` → a conditional prop (`null` →
+  `undefined`); `&&`, and `Match` / `Switch` with params, stay orphans; a
+  reference `Switch` gives a chain and works.
+- List slots: same-named elements → one array; a conditional item is
+  spread (`...(c ? [{…}] : [])`). The type answer is `Input.ListSlot`;
+  fixtures declare it in `list-slots.txt`, spec examples declare
+  `Form.$Field`. RGP1-051 replaces the stub with the checker.
+- Errors: orphan-slot, mixed-conditional-slot, duplicate-slot (both kinds),
+  slot-key, slot-children-conflict; component-name in pass 0.
+- Body rule aligned with its own text: a single `{expr}` child is `expr`
+  (the dynamic-`Switch` example showed `<>{n}</>`; fixed).
+- Spec examples that used `<Each items>` / `<Select options>` without a
+  binding now declare it. 49 of 52 conformance cases pass; the three left
+  are segment roots (RGP1-039).
 
 ### RGP1-039 — Pass 4: segment roots · M
 - `#name` becomes `id="name"` in place, plus an extensionless import of the

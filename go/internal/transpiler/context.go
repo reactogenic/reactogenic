@@ -19,6 +19,8 @@ type passContext struct {
 	names map[string]bool
 	// imports added by this run of the pass, to add each once.
 	imports map[string]bool
+	// listSlot answers the one type question (Input.ListSlot).
+	listSlot func(container, slot string) bool
 }
 
 // span is n's source range from its first token (without leading trivia).
@@ -179,17 +181,28 @@ func (c *passContext) childrenSpan(el *rtsx.Node) emit.Span {
 }
 
 // body is the slot-body rule (syntax.md, *Usage and desugaring*): a single
-// child element as it is; anything else — text, an expression, several
-// children — in `<>…</>`; no children: null.
+// child element as it is, the expression of a single `{…}` child, and
+// anything else — text, several children — in `<>…</>`; no children: null.
 func (c *passContext) body(el *rtsx.Node, origin emit.Span) []emit.Piece {
 	children := jsxChildren(el)
-	switch {
-	case len(children) == 0:
+	if len(children) == 0 {
 		return []emit.Piece{emit.Synth("null", origin)}
-	case len(children) == 1 && isJSXElement(children[0]):
-		return []emit.Piece{c.copy(children[0])}
 	}
-	return []emit.Piece{emit.Synth("<>", origin), emit.Copy(c.text, c.childrenSpan(el)), emit.Synth("</>", origin)}
+	return c.bodyOf(children, []emit.Piece{emit.Copy(c.text, c.childrenSpan(el))}, origin)
+}
+
+// bodyOf applies the slot-body rule to children; all is the copied source
+// of every child, used when they go in a fragment.
+func (c *passContext) bodyOf(children []*rtsx.Node, all []emit.Piece, origin emit.Span) []emit.Piece {
+	if len(children) == 1 {
+		switch ch := children[0]; {
+		case isJSXElement(ch):
+			return []emit.Piece{c.copy(ch)}
+		case ch.Kind == rtsx.KindJsxExpression && ch.AsJsxExpression().DotDotDotToken == nil:
+			return c.operand(ch.Expression(), rtsx.PrecedenceComma)
+		}
+	}
+	return append(append([]emit.Piece{emit.Synth("<>", origin)}, all...), emit.Synth("</>", origin))
 }
 
 func isJSXElement(n *rtsx.Node) bool {

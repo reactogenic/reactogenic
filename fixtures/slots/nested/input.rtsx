@@ -1,0 +1,10 @@
+export const a = (
+  <Page>
+    <$Header>
+      <Toolbar>
+        <$Start><Logo /></$Start>
+      </Toolbar>
+    </$Header>
+    body
+  </Page>
+);

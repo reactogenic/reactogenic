@@ -1,0 +1,8 @@
+import { Match } from "@reactogenic/core";
+export const a = <Form><$Field name="a" /></Form>;
+export const b = (
+  <Form>
+    <Match on={b}><$Field name="b" /></Match>
+    <$Field name="c" />
+  </Form>
+);

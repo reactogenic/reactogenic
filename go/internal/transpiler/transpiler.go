@@ -17,6 +17,10 @@ type Input struct {
 	// UntilPass stops after the given pass of syntax.md, *Compilation
 	// passes*; 0 runs them all.
 	UntilPass int
+	// ListSlot answers the transpiler's one type question: is slot `slot`
+	// of the component written `container` declared as an array (syntax.md,
+	// *List slots*)? nil answers no. The checker provides it (RGP1-051).
+	ListSlot func(container, slot string) bool
 }
 
 type Severity int
@@ -65,7 +69,7 @@ var passes = []pass{
 	{0, "checks", checks, false},
 	{1, "shorthand props", shorthand, false},
 	{2, "flow lowering", flow, true},
-	{3, "slot hoisting", nil, false},
+	{3, "slot hoisting", slots, true},
 	{4, "segment roots", nil, false},
 }
 
@@ -108,7 +112,7 @@ func Transpile(in Input) (Output, error) {
 			continue
 		}
 		rtsx.Bind(file)
-		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{},
+		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, listSlot: in.ListSlot,
 			report: func(s emit.Span, sev Severity, code, msg string) {
 				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
 			}}
@@ -139,7 +143,8 @@ func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg stri
 
 // checks is pass 0: errors reported against what the author wrote.
 func checks(c *passContext) []emit.Edit {
-	for _, e := range append(syntax.Check(c.file), syntax.CheckFlowAsValue(c.file)...) {
+	errs := append(syntax.Check(c.file), syntax.CheckFlowAsValue(c.file)...)
+	for _, e := range append(errs, syntax.CheckSlotTags(c.file)...) {
 		c.report(emit.Span{Pos: e.Pos, End: e.End}, Error, e.Code, e.Message)
 	}
 	return nil
