@@ -260,27 +260,25 @@ implementation.
 
 ## M4 — Type service
 
-### RGP1-050 — Project program with virtual `.tsx` · M
-One tsgo compiler host with an in-memory overlay, shared by the plugin (via
-RGP1-053) and the CLI.
-- It loads `tsconfig.json` and expands its `include` / `exclude` globs to
-  `.rtsx` as well, because TS ignores unknown extensions.
-- Each `Foo.rtsx` is served as an in-memory `Foo.tsx`, so TS resolves
-  extensionless imports and segment imports on its own.
-- **Done when:** a project that mixes `.tsx` and `.rtsx` type-checks, with
-  imports going both ways.
-- Depends on: 001, 030.
-
-### RGP1-051 — The list-slot query · S
-Implements `isListSlot` against the program.
-- It resolves the container tag's props type, looks up `$X`, removes
-  `undefined` / `null`, and checks for an array or a tuple.
-- It records each query as a dependency: this file asked about container `P`,
-  which is declared in file `F`.
-- **Done when:** the RGP1-038 fixtures pass with the real query.
-  Containers declared in `.tsx`, in `.rtsx`, and imported from a package are
-  all covered.
-- Depends on: 038, 050.
+### RGP1-050 — Project program with virtual `.tsx` · M · done
+### RGP1-051 — The list-slot query · S · done
+`go/internal/project`, over the bridge `rtsx/program.go` (patch 0003).
+- An overlay file system (tsgo's `wrapvfs`) serves `Foo.tsx` for every
+  `Foo.rtsx` and lists it in directory entries, so tsconfig's own `include`
+  globs and extensionless module resolution find it — no glob expansion of
+  our own. `.rtsx` is transpiled lazily, on first read.
+- List slots: the program is built once with no answers; its checker is
+  asked (`rtsx.IsListSlot`: the tag's call signatures → props type →
+  property, minus `undefined` / `null` → array or tuple); files whose output
+  changes are re-transpiled and the program rebuilt once. The answer depends
+  only on declarations, so one round settles it.
+- Tests on real temporary projects: `.tsx` ↔ `.rtsx` imports both ways
+  with no diagnostics; a type error inside `.rtsx` is reported on its
+  virtual `.tsx`; a list slot answered by the checker gives a clean program.
+- The conformance harness keeps its `list-slots.txt` stub: fixtures have no
+  tsconfig.
+- Found: a text-only slot body is an element (`<>text</>`), so a slot typed
+  `children: string` cannot take text — OPEN in syntax.md.
 
 ### RGP1-052 — Incremental updates · M
 - A changed file updates the program without a full rebuild.

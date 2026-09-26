@@ -382,6 +382,11 @@ For each component element `<P>`:
 
    `body` is the single child expression, or `<>…</>` when there are several
    children or text.
+
+> OPEN: a body that is only text becomes `<>text</>`, an element, so a slot
+> typed `children: string` cannot be filled with text (`<$Title>Sign
+> up</$Title>` is a type error there). Emit a string literal for a text-only
+> body? Found by the project tests (RGP1-051).
 5. Whatever is left in `<P>` stays as `children`.
 
 ### Params on a component: `children` is the default slot

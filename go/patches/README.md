@@ -10,6 +10,7 @@ every change we make to it.
 | --- | --- |
 | `0001-rtsx-bridge.patch` | adds `rtsx/`, the public bridge our module imports tsgo's `internal/` packages through (decisions.md, RGP1-003) |
 | `0002-rtsx-parser.patch` | slot params `{ size }` in JSX attribute position, `.rtsx` files only (decisions.md, RGP1-020) |
+| `0003-rtsx-program.patch` | adds `rtsx/program.go`: the program, file-system overlay and checker bridge (RGP1-050/051) |
 
 ## Changing tsgo
 
