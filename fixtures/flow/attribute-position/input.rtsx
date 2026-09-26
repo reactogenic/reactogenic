@@ -1,0 +1,2 @@
+import { Match } from "@reactogenic/core";
+export const a = <Card footer=<Match on={more}>More</Match> />;

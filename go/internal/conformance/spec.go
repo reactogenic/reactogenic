@@ -19,6 +19,14 @@ var (
 	annotationRe = regexp.MustCompile(`(^\s*|\s{2,})//.*$`)
 )
 
+// Spec examples leave out their imports. Elements are recognised by import
+// origin, so every example without an import from the package gets this one;
+// after pass 2 only `Each` is left of it.
+const (
+	specPrelude      = "import { Switch, Match, Each } from \"@reactogenic/core\";\n"
+	specPreludeAfter = "import { Each } from \"@reactogenic/core\";\n"
+)
+
 type codeBlock struct {
 	anchor string // slug of the nearest heading
 	header string // first line, when it is a `//` comment
@@ -48,7 +56,11 @@ func ExtractSpec(name, markdown string) []Case {
 		if m[1] != "" {
 			entry = m[1] + ".rtsx"
 		}
-		files := map[string]string{entry: in.body}
+		body, prelude := in.body, false
+		if !strings.Contains(body, `from "@reactogenic/core"`) {
+			body, prelude = specPrelude+body, true
+		}
+		files := map[string]string{entry: body}
 		for _, seg := range segmentRe.FindAllStringSubmatch(in.body, -1) {
 			files["+"+seg[1]+".rtsx"] = "export default function Segment() {\n  return null;\n}\n"
 		}
@@ -62,12 +74,18 @@ func ExtractSpec(name, markdown string) []Case {
 			}
 			i++
 			counts[in.anchor]++
+			want := out.body
+			if prelude && (pass == 0 || pass >= 2) {
+				want = specPreludeAfter + want // pass 2 dropped Switch and Match
+			} else if prelude {
+				want = specPrelude + want
+			}
 			cases = append(cases, Case{
 				ID:        fmt.Sprintf("%s#%s/%d", name, in.anchor, counts[in.anchor]),
 				Files:     files,
 				Entry:     entry,
 				UntilPass: pass,
-				WantTSX:   out.body,
+				WantTSX:   want,
 				// Spec examples check output only; see the doc comment.
 				IgnoreDiagnostics: true,
 			})

@@ -184,25 +184,36 @@ A local or parameter named `Switch`, another package's `Switch`, and
   a module, as under Vite; syntax.md says so.
 - Depends on: 030.
 
-### RGP1-033 — Pass 2: `Match` · S
-- Lower to a ternary, never `&&`.
-- Params form: an immediately-invoked arrow, as in the spec.
-- Position: `{…}` as a JSX child, `(…)` in expression position.
-- **Done when:** the fixtures in *Desugaring: `Match`* and *Position* pass.
-- Depends on: 030, 031.
-
-### RGP1-034 — Pass 2: `Switch` · M
-Four shapes:
-- static;
-- a reference subject, repeated with no wrapper so TS can narrow it;
-- `exhaustive`, ending in `noMatch` under a generated name;
-- dynamic (params).
-
-Plus: `$Case key` becomes a keyed `Fragment`, bodies follow the slot-body
-rule, and the `Switch` / `Match` import is dropped.
-- **Done when:** every desugaring fixture in *Flow control* passes, and every
-  *syntax* error in its *Compile errors* table has a fixture.
-- Depends on: 033.
+### RGP1-033 — Pass 2: `Match` · S · done
+### RGP1-034 — Pass 2: `Switch` · M · done
+`transpiler/flow.go`, `transpiler/switch.go`, with shared helpers in
+`transpiler/context.go`.
+- Pass 2 **repeats** until it makes no edits: each run lowers the `Match` /
+  `Switch` elements that hold no other one, so nesting lowers inside out
+  and edits never overlap. The maps compose across runs.
+- `Match`: ternary; with params, an immediately-invoked arrow that tests the
+  name `value` is bound to (narrowing works). When `value` is destructured
+  further (`{ value: { name } }`), the whole value is tested and then
+  destructured for the body.
+- `Switch`: static, reference (the subject repeated, no wrapper), dynamic,
+  `exhaustive` (`_noMatch`, imported), `$Case key` (`_Fragment`, imported
+  from React). Parentheses only where an operand needs them (tsgo's
+  precedence).
+- Generated names avoid every identifier of the source (`_on1`, …). When no
+  `Switch` / `Match` is left, their import is dropped; a declaration left
+  empty goes with its line.
+- Errors, each at its source position: flow-no-subject, flow-attribute
+  (including `key`, spreads, and `exhaustive={…}` after shorthand),
+  switch-children, case-no-test, case-both, case-default-value,
+  case-default-not-last, case-params, switch-dynamic-exhaustive,
+  switch-exhaustive-default. An element with errors becomes `null`.
+- Spec: every *Flow control* example passes. Two examples now show the
+  generated import (`_noMatch`, `_Fragment`); the *Conditional slots* input
+  no longer relies on bindings from another section. Spec examples get an
+  implicit `import { Switch, Match, Each }` (fixtures/README.md).
+- Fixtures: alias, nested, fresh-names, imports-kept, attribute-position,
+  match-nested-pattern, precedence, errors, exhaustive-binding.
+  34 of 46 conformance cases pass.
 
 ### RGP1-035 — Pass 3: slot hoisting (object form) · M
 - Remove slot elements from `children` and append them as attributes, in

@@ -1,5 +1,14 @@
 # Conformance cases that pass. Maintained by `go test -run TestConformance -update`.
+fixtures/flow/alias
 fixtures/flow/as-value
+fixtures/flow/attribute-position
+fixtures/flow/errors
+fixtures/flow/exhaustive-binding
+fixtures/flow/fresh-names
+fixtures/flow/imports-kept
+fixtures/flow/match-nested-pattern
+fixtures/flow/nested
+fixtures/flow/precedence
 fixtures/flow/re-export
 fixtures/parse/duplicate-params
 fixtures/parse/params-on-html
@@ -12,6 +21,15 @@ fixtures/shorthand/never-bindings
 fixtures/shorthand/no-binding
 fixtures/shorthand/slot-params@pass1
 fixtures/shorthand/tdz
+syntax.md#conditional-slots/1
+syntax.md#desugaring-dynamic-mode/1
+syntax.md#desugaring-exhaustive/1
+syntax.md#desugaring-match/1
+syntax.md#desugaring-match/2
+syntax.md#desugaring-match/3
+syntax.md#desugaring-static-switch/1
+syntax.md#desugaring-static-switch/2
 syntax.md#desugaring/1
 syntax.md#desugaring/2
 syntax.md#desugaring/3
+syntax.md#state-across-branches/1

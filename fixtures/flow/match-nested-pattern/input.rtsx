@@ -1,0 +1,2 @@
+import { Match } from "@reactogenic/core";
+export const a = <Match on={getUser()} { value: { name } }><p>{name}</p></Match>;

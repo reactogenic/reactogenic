@@ -49,14 +49,14 @@ func TestExtractSpec(t *testing.T) {
 	if len(cases) != 2 {
 		t.Fatalf("want 2 cases, got %d", len(cases))
 	}
-	if c := cases[0]; c.ID != "t.md#sec/1" || c.UntilPass != 2 || c.WantTSX != "stage;\n" {
+	if c := cases[0]; c.ID != "t.md#sec/1" || c.UntilPass != 2 || c.WantTSX != specPreludeAfter+"stage;\n" {
 		t.Errorf("stage case: %+v", c)
 	}
-	if c := cases[1]; c.ID != "t.md#sec/2" || c.UntilPass != 0 || c.WantTSX != "final;\n" {
+	if c := cases[1]; c.ID != "t.md#sec/2" || c.UntilPass != 0 || c.WantTSX != specPreludeAfter+"final;\n" {
 		t.Errorf("final case: %+v", c)
 	}
 	c := cases[0]
-	if got := c.Files["input.rtsx"]; strings.Contains(got, "Warning") || !strings.Contains(got, "<a #intro />") {
+	if got := c.Files["input.rtsx"]; strings.Contains(got, "Warning") || got != specPrelude+"<a #intro />\n" {
 		t.Errorf("annotation not stripped: %q", got)
 	}
 	if _, ok := c.Files["+intro.rtsx"]; !ok {

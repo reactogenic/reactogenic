@@ -1,0 +1,3 @@
+import { Match, Switch } from "@reactogenic/core";
+export const a = <Match on={a ? b : c}>x</Match>;
+export const b = <Switch on={k}><$Case is={p || q}>y</$Case></Switch>;

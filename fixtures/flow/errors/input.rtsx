@@ -1,0 +1,14 @@
+import { Switch, Match } from "@reactogenic/core";
+export const a = <Match>no subject</Match>;
+export const b = <Match on={x} key="k" {...rest}>x</Match>;
+export const c = <Switch on={x} exhaustive>
+  <p>not a case</p>
+  <$Case>no test</$Case>
+  <$Case is={1} default>both</$Case>
+  <$Case default={2}>value</$Case>
+  <$Case default>d</$Case>
+  <$Case is={3}>after default</$Case>
+  <$Case is={4} { v }>params</$Case>
+</Switch>;
+export const d = <Switch on={x} { value } exhaustive><$Case is={value}>v</$Case></Switch>;
+export const e = <Switch on={x} exhaustive><$Case is={1}>1</$Case><$Case default>d</$Case></Switch>;

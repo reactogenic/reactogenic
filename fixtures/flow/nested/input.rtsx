@@ -1,0 +1,10 @@
+import { Switch, Match } from "@reactogenic/core";
+export const a = (
+  <div>
+    <Match on={open}>
+      <Switch on={getMode()}>
+        <$Case is="a"><Match on={ok}><b /></Match></$Case>
+      </Switch>
+    </Match>
+  </div>
+);

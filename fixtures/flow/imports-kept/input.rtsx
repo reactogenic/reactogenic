@@ -1,0 +1,5 @@
+import { Switch, Each, type SlotFn } from "@reactogenic/core";
+import { Match } from "@reactogenic/core";
+export const a = <Switch on={k}><$Case is={1}><Each items={[]}>{() => null}</Each></$Case></Switch>;
+export const b = <Match on={k}>x</Match>;
+export type F = SlotFn<{}>;

@@ -53,25 +53,24 @@ type Output struct {
 
 // A pass reads its input — the source, or the previous pass's output — and
 // returns edits to it (syntax.md, *Compilation passes*).
+// A repeating pass runs again on its own output until it returns no edits.
 type pass struct {
-	n    int
-	name string
-	run  func(c *passContext) []emit.Edit
+	n      int
+	name   string
+	run    func(c *passContext) []emit.Edit
+	repeat bool
 }
 
 var passes = []pass{
-	{0, "checks", checks},
-	{1, "shorthand props", shorthand},
-	{2, "flow lowering", nil},
-	{3, "slot hoisting", nil},
-	{4, "segment roots", nil},
+	{0, "checks", checks, false},
+	{1, "shorthand props", shorthand, false},
+	{2, "flow lowering", flow, true},
+	{3, "slot hoisting", nil, false},
+	{4, "segment roots", nil, false},
 }
 
-type passContext struct {
-	file   *rtsx.SourceFile
-	text   string
-	report func(s emit.Span, severity Severity, code, message string)
-}
+// maxRuns bounds a repeating pass; a pass that keeps editing is a bug.
+const maxRuns = 1000
 
 // Transpile turns Input.Entry from .rtsx into .tsx. Errors in the source are
 // Diagnostics; the error result is for failures of the transpiler itself.
@@ -84,8 +83,11 @@ func Transpile(in Input) (Output, error) {
 		out      Output
 		text     = src
 		toSource = emit.Identity(len(src))
+		names    map[string]bool
+		runs     int
 	)
-	for _, p := range passes {
+	for i := 0; i < len(passes); i++ {
+		p := passes[i]
 		if in.UntilPass > 0 && p.n > in.UntilPass {
 			break
 		}
@@ -99,13 +101,17 @@ func Transpile(in Input) (Output, error) {
 			}
 			return out, nil
 		}
+		if names == nil {
+			names = identifiers(file)
+		}
 		if p.run == nil {
 			continue
 		}
 		rtsx.Bind(file)
-		c := &passContext{file: file, text: text, report: func(s emit.Span, sev Severity, code, msg string) {
-			out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
-		}}
+		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{},
+			report: func(s emit.Span, sev Severity, code, msg string) {
+				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
+			}}
 		edits := p.run(c)
 		if len(edits) == 0 {
 			continue
@@ -115,6 +121,12 @@ func Transpile(in Input) (Output, error) {
 			return Output{}, fmt.Errorf("transpiler: pass %d (%s): %w", p.n, p.name, err)
 		}
 		text, toSource = next, m.Then(toSource)
+		if p.repeat {
+			if runs++; runs > maxRuns {
+				return Output{}, fmt.Errorf("transpiler: pass %d (%s) does not settle", p.n, p.name)
+			}
+			i-- // run it again on its own output
+		}
 	}
 	out.TSX, out.Map = text, toSource
 	return out, nil

@@ -1,0 +1,11 @@
+2:18 error flow-no-subject
+3:32 error flow-attribute "key"
+3:40 error flow-attribute
+5:3 error switch-children
+6:3 error case-no-test
+7:3 error case-both
+8:10 error case-default-value
+10:3 error case-default-not-last
+11:17 error case-params
+13:43 error switch-dynamic-exhaustive
+14:67 error switch-exhaustive-default

@@ -58,6 +58,10 @@ not formatting:
 - `// page.rtsx` makes the entry `page.rtsx`; otherwise it is `input.rtsx`.
 - Every `#name` in the input gets a stub `+name.rtsx`, so segment roots
   resolve.
+- Spec examples leave out imports. An example that does not import from
+  `@reactogenic/core` gets `import { Switch, Match, Each } from
+  "@reactogenic/core";` prepended, and its expected output gets what pass 2
+  leaves of it: `import { Each } from "@reactogenic/core";`.
 - A trailing `// …` after two or more spaces, and a whole-line `// …`, are
   annotations for the reader and are removed before parsing.
 - Every expected `.tsx` must parse; `TestSpecOutputsParse` fails on a broken

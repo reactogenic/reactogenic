@@ -1,0 +1,7 @@
+import { Switch as Choose } from "@reactogenic/core";
+export const a = (x: number) => (
+  <Choose on={x}>
+    <$Case is={1}>one</$Case>
+    <$Case default>many</$Case>
+  </Choose>
+);

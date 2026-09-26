@@ -36,6 +36,8 @@ const (
 	KindImportSpecifier          = ast.KindImportSpecifier
 	KindJsxClosingElement        = ast.KindJsxClosingElement
 	KindJsxElement               = ast.KindJsxElement
+	KindJsxExpression            = ast.KindJsxExpression
+	KindJsxFragment              = ast.KindJsxFragment
 	KindJsxAttribute             = ast.KindJsxAttribute
 	KindJsxAttributes            = ast.KindJsxAttributes
 	KindJsxNamespacedName        = ast.KindJsxNamespacedName
@@ -48,6 +50,8 @@ const (
 	KindObjectBindingPattern     = ast.KindObjectBindingPattern
 	KindPropertyAccessExpression = ast.KindPropertyAccessExpression
 	KindParenthesizedExpression  = ast.KindParenthesizedExpression
+	KindStringLiteral            = ast.KindStringLiteral
+	KindThisKeyword              = ast.KindThisKeyword
 )
 
 // ParseTSX parses text as a .tsx file.
@@ -111,6 +115,18 @@ func SkipTrivia(text string, pos int) int {
 // stands: an expression, not a declaration, property or member name.
 func IsValueReference(ident *Node) bool {
 	return ast.IsExpressionNode(ident) && !ast.IsIdentifierName(ident)
+}
+
+// Operator precedences, for deciding when an operand needs parentheses.
+const (
+	PrecedenceComma       = int(ast.OperatorPrecedenceComma)
+	PrecedenceConditional = int(ast.OperatorPrecedenceConditional)
+	PrecedenceEquality    = int(ast.OperatorPrecedenceEquality)
+)
+
+// Precedence returns the precedence of an expression as an operand.
+func Precedence(expr *Node) int {
+	return int(ast.GetExpressionPrecedence(expr))
 }
 
 // IsIntrinsicTag reports whether a JSX tag name is an intrinsic element

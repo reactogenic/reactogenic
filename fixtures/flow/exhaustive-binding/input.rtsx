@@ -1,0 +1,3 @@
+import { Switch } from "@reactogenic/core";
+const exhaustive = true;
+export const a = <Switch on={x} exhaustive><$Case is={1}>1</$Case></Switch>;

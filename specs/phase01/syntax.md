@@ -423,7 +423,7 @@ it falls out of compiling in passes (see *Compilation passes*).
 
 ```tsx
 // .rtsx
-<Input value onChange>
+<Input value={value} onChange={onChange}>
   <Match on={invalid}>
     <$Hint>{renderErrors(errors)}</$Hint>
   </Match>
@@ -904,10 +904,12 @@ inside each body:
 
 ```tsx
 // .tsx
+import { noMatch as _noMatch } from "@reactogenic/core";
+
 {((_on) =>
   _on === "loading" ? <>…</>
   : _on === "error" ? <>…</>
-  : noMatch(_on)                   // noMatch(value: never): never — throws
+  : _noMatch(_on)                  // noMatch(value: never): never — throws
 )(getStatus())}
 ```
 
@@ -1036,10 +1038,15 @@ which wraps the body in a keyed fragment:
 
 ```tsx
 // .tsx
-{mode === "login" ? <Fragment key="login"><Input name="email" /></Fragment>
-  : mode === "signup" ? <Fragment key="signup"><Input name="email" /></Fragment>
+import { Fragment as _Fragment } from "react";
+
+{mode === "login" ? <_Fragment key="login"><Input name="email" /></_Fragment>
+  : mode === "signup" ? <_Fragment key="signup"><Input name="email" /></_Fragment>
   : null}
 ```
+
+Generated names (`_on`, `_noMatch`, `_Fragment`) never collide with the
+author's: a name used anywhere in the source gets a number (`_on1`).
 
 None of this is new: a hand-written ternary behaves identically, including the
 single-element vs `<>…</>` distinction, which the author of the ternary would
