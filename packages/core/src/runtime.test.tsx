@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { Each, Match, noMatch, renderSlot, Switch } from "./index.ts";
+import { Each, isAssigned, Match, NOT_ASSIGNED, noMatch, renderSlot, slotProps, Switch } from "./index.ts";
 
 describe("renderSlot", () => {
   test("calls a function body with the args", () => {
@@ -12,6 +12,17 @@ describe("renderSlot", () => {
   test("renders the fallback when there is no body", () => {
     expect(renderSlot({ title: "t" }, {}, "fallback")).toBe("fallback");
     expect(renderSlot({}, {})).toBeUndefined();
+  });
+});
+
+describe("NOT_ASSIGNED", () => {
+  test("isAssigned treats it as no slot", () => {
+    expect(isAssigned(NOT_ASSIGNED)).toBe(false);
+    expect(isAssigned(undefined)).toBe(false);
+    expect(isAssigned({})).toBe(true);
+  });
+  test("slotProps skips the entries that were not assigned", () => {
+    expect(slotProps({ variant: "solid", $IconStart: NOT_ASSIGNED, children: "x" })).toEqual({ variant: "solid", children: "x" });
   });
 });
 

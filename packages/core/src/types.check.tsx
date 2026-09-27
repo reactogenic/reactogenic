@@ -1,7 +1,7 @@
 // Type-level tests: `tsc --noEmit` (pnpm typecheck) fails if an expectation
 // breaks. syntax.md, *Slots*.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, renderSlot, type FnSlot, type Slot } from "./index.ts";
+import { Each, isAssigned, NOT_ASSIGNED, renderSlot, type FnSlot, type Slot } from "./index.ts";
 
 // Slot<P> is the complete contract: a body only if `children` is in it.
 type Box = Slot<{ color: string }>;
@@ -10,6 +10,7 @@ export const a: Box = { color: "red" };
 export const b: Box = { color: "red", children: "Hi" };
 type Title = Slot<{ children?: ReactNode }>;
 export const c: Title = {};
+export const c2: Title = NOT_ASSIGNED; // a conditional that did not assign
 type Label = Slot<{ children: ReactNode }>;
 // @ts-expect-error the body is required
 export const d: Label = {};
@@ -25,9 +26,11 @@ export const h: Icon = { className: "i" }; // no body: the attachment's fallback
 // @ts-expect-error `colour` is not an arg
 export const i: Icon = { children: ({ colour }) => colour };
 
-// renderSlot: args follow function-call rules.
-declare const icon: Icon;
-declare const span: Span;
+// renderSlot: args follow function-call rules, on a slot that is there.
+declare const iconOrNot: Icon;
+declare const spanOrNot: Span;
+const icon = isAssigned(iconOrNot) ? iconOrNot : { className: "i" };
+const span = isAssigned(spanOrNot) ? spanOrNot : {};
 export const r1 = renderSlot(icon, { size: "lg" });
 // @ts-expect-error a function slot needs its args
 export const r2 = renderSlot(icon, {});

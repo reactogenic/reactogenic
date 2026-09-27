@@ -277,6 +277,9 @@ program build, the `Each` key check, slot-render-children. Core: `Slot<P>`,
 `FnSlot<P, A>`, `renderSlot(slot, args, fallback?)` with function-call
 typing and arrays rejected. Found on the way: JSX text children were copied
 without their leading whitespace (`{a} (` lost its space) — fixed.
+- `NOT_ASSIGNED` (#7): conditional slots end in the sentinel, not
+  `undefined`; attachments use `isAssigned` / `slotProps`; the helpers a run
+  needs are imported in one declaration.
 
 ## M4 — Type service
 

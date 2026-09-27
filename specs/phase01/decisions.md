@@ -265,3 +265,11 @@ are args and which are props.
   open (syntax.md, OPEN #4).
 - Open: last-wins with conditional assignments (OPEN #7, implemented
   provisionally in source order); reachability of attachments (tech debt).
+
+**`NOT_ASSIGNED`** (#7). The false branch of a conditional `<$X>` with no
+earlier assignment is the sentinel `NOT_ASSIGNED`, never `undefined`: with
+per-prop replacement an `undefined` replaces a default, the sentinel never
+does. Attachments test `isAssigned($X)` and spread `slotProps($X)`, which
+drops sentinel entries (a nested slot that was not assigned keeps the
+attachment's default). `Slot` / `FnSlot` include `NotAssigned`; open whether a
+required slot should exclude it (syntax.md).

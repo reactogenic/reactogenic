@@ -278,14 +278,14 @@ function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
 
 ```tsx
 // Button.tsx
-import { renderSlot as _renderSlot } from "@reactogenic/core";
+import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotProps as _slotProps } from "@reactogenic/core";
 
 function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
   return (
     <button>
-      {$IconStart ? <span className="icon" {...$IconStart}>{_renderSlot($IconStart, {})}</span> : null}
+      {_isAssigned($IconStart) ? <span className="icon" {..._slotProps($IconStart)}>{_renderSlot($IconStart, {})}</span> : null}
       {children}
-      {$Badge ? <span {...$Badge}>{_renderSlot($Badge, { size: size }, "new")}</span> : <span>new</span>}
+      {_isAssigned($Badge) ? <span {..._slotProps($Badge)}>{_renderSlot($Badge, { size: size }, "new")}</span> : <span>new</span>}
     </button>
   );
 }
@@ -296,8 +296,9 @@ function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
   `<$IconStart className="override" />` renders `className="override"`, not
   both; with `<$IconStart id="x" />` it keeps `className="icon"` and adds
   `id="x"`.
-- **A missing slot renders nothing** — no empty element — unless the
-  attachment has children: then they are the **fallback**, rendered in place
+- **A missing slot renders nothing** — no empty element; `NOT_ASSIGNED` is
+  missing too — unless the attachment has children: then they are the
+  **fallback**, rendered in place
   of the slot's body whenever there is none (no slot, or a slot without a
   body). Other attachment props do not establish a fallback.
 - **`key`** on an attachment is React's key on the element, never a slot prop
@@ -543,9 +544,12 @@ an object literal does:
 A slot element also replaces an explicit `$X={…}` attribute on the same
 element: slot elements come after written attributes.
 
-> OPEN (#7, provisional): last-wins together with conditional assignments.
-> Implemented as assignments in source order:
-> `<$X a /><Match on={c}><$X b /></Match>` → `$X={c ? { b } : { a }}`.
+Conditional assignments follow the same rule: an assignment that does not
+happen changes nothing. `<$X a /><Match on={c}><$X b /></Match>` →
+`$X={c ? { b } : { a }}`; with no earlier assignment, the false branch is
+`NOT_ASSIGNED` (*Conditional slots*).
+
+> OPEN (#7):
 > `Each` around slot elements, and `Match` / `Switch` with params around them,
 > are allowed by *Placement* but have no semantics yet: orphan-slot until
 > decided.
@@ -573,14 +577,24 @@ A slot may be filled conditionally. It falls out of compiling in passes (see
 
 ```tsx
 // after pass 3 — a ternary of slot elements → a ternary prop
+import { NOT_ASSIGNED as _NOT_ASSIGNED } from "@reactogenic/core";
+
 <Input value={value} onChange={onChange}
-  $Hint={invalid ? { children: renderErrors(errors) } : undefined} />
+  $Hint={invalid ? { children: renderErrors(errors) } : _NOT_ASSIGNED} />
 ```
 
-- Each branch is desugared as a slot element on its own; a `null` branch is
-  the value before it (`undefined` when there is none).
-- A required slot filled only conditionally: TS7 reports that `undefined` is
-  not assignable; reworded as "`$Hint` is required and cannot be conditional".
+- Each branch is desugared as a slot element on its own. A `null` branch is
+  an assignment that did not happen: it keeps the value before it, or is
+  **`NOT_ASSIGNED`** when there is none — never `undefined`. With per-prop
+  replacement an `undefined` would *replace* a default (a nested
+  `$IconStart: undefined` spread onto `Button` overrides the attachment's own
+  `$IconStart`); `NOT_ASSIGNED` never does: an attachment treats it as no slot
+  (`isAssigned`), and a spread of slot props skips it (`slotProps`).
+- `Slot<P>` and `FnSlot<P, A>` include `NotAssigned`, so an optional slot
+  takes it.
+  > OPEN: a *required* slot filled only conditionally is therefore no longer
+  > a type error (it was: `undefined` is not assignable). Keep the sentinel
+  > out of required slots — a separate type for optional ones — or accept?
 - Narrowing works: the branch is inline in the ternary.
 
 | Not supported | Error |

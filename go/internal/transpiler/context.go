@@ -3,6 +3,7 @@ package transpiler
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx"
@@ -20,6 +21,10 @@ type passContext struct {
 	names map[string]bool
 	// imports added by this run of the pass, to add each once.
 	imports map[string]bool
+	// coreNames are the helpers of @reactogenic/core this run named through
+	// core(), export → local; coreImport() imports them in one declaration.
+	coreNames  map[string]string
+	coreOrigin emit.Span
 	// entry and readFile reach the other files: segments (Input).
 	entry    string
 	readFile func(path string) (string, bool)
@@ -68,6 +73,59 @@ func identifiers(file *rtsx.SourceFile) map[string]bool {
 	}
 	file.AsNode().ForEachChild(visit)
 	return names
+}
+
+// core names a helper of @reactogenic/core in the emitted code, under a
+// fresh name; coreImport() imports it.
+func (c *passContext) core(export string, origin emit.Span) string {
+	if c.coreNames == nil {
+		c.coreNames = map[string]string{}
+		c.coreOrigin = origin
+	}
+	local := c.fresh("_" + export)
+	c.coreNames[export] = local
+	return local
+}
+
+// coreImport imports, in one declaration after the last import, the helpers
+// named through core() that the file does not import yet.
+func (c *passContext) coreImport() []emit.Edit {
+	var specs []string
+	for export, local := range c.coreNames {
+		if !c.imports["@reactogenic/core|"+export+"|"+local] && !c.hasImport("@reactogenic/core", export, local) {
+			specs = append(specs, export+" as "+local)
+		}
+	}
+	if len(specs) == 0 {
+		return nil
+	}
+	sort.Strings(specs)
+	text := fmt.Sprintf("import { %s } from %q;", strings.Join(specs, ", "), "@reactogenic/core")
+	var last *rtsx.Node
+	for _, stmt := range c.file.Statements.Nodes {
+		if stmt.Kind == rtsx.KindImportDeclaration {
+			last = stmt
+		}
+	}
+	if last != nil {
+		return []emit.Edit{{Span: emit.Span{Pos: last.End(), End: last.End()}, Pieces: []emit.Piece{emit.Synth("\n"+text, c.coreOrigin)}}}
+	}
+	return []emit.Edit{{Span: emit.Span{}, Pieces: []emit.Piece{emit.Synth(text+"\n", c.coreOrigin)}}}
+}
+
+// hasImport: the file imports `exported as local` from module.
+func (c *passContext) hasImport(module, exported, local string) bool {
+	for _, stmt := range c.file.Statements.Nodes {
+		if stmt.Kind != rtsx.KindImportDeclaration || rtsx.NodeText(stmt.AsImportDeclaration().ModuleSpecifier) != module {
+			continue
+		}
+		for _, spec := range namedImports(stmt) {
+			if importedAs(spec) == exported && rtsx.NodeText(spec.Name()) == local {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ensureImport returns an edit that adds `import { exported as local } from

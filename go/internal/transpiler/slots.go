@@ -19,7 +19,7 @@ import (
 // first, so every run makes progress.
 func slots(c *passContext) []emit.Edit {
 	if edits := c.renderSlots(); len(edits) > 0 {
-		return edits
+		return append(edits, c.coreImport()...)
 	}
 	if edits := c.removeOrphans(); len(edits) > 0 {
 		return edits
@@ -34,7 +34,10 @@ func slots(c *passContext) []emit.Edit {
 		return n.ForEachChild(visit)
 	}
 	c.file.AsNode().ForEachChild(visit)
-	return edits
+	if len(edits) == 0 {
+		return nil
+	}
+	return append(edits, c.coreImport()...)
 }
 
 // tagOf is the tag name of an element (opening, self-closing or whole).
@@ -325,8 +328,9 @@ func isNullish(n *rtsx.Node) bool {
 }
 
 // conditionalValue rebuilds a conditional of slot elements as a conditional
-// of slot values: a null branch keeps the previous value (undefined when
-// there is none).
+// of slot values. A null branch is an assignment that did not happen: it
+// keeps the previous value, or is NOT_ASSIGNED when there is none — never
+// undefined, which would replace a default (syntax.md, *Repeated slots*).
 func (c *passContext) conditionalValue(expr *rtsx.Node, previous []emit.Piece, origin emit.Span) []emit.Piece {
 	expr = unwrapParens(expr)
 	switch {
@@ -339,7 +343,7 @@ func (c *passContext) conditionalValue(expr *rtsx.Node, previous []emit.Piece, o
 	case isNullish(expr) && previous != nil:
 		return append(append([]emit.Piece{emit.Synth("(", c.span(expr))}, previous...), emit.Synth(")", c.span(expr)))
 	case isNullish(expr):
-		return []emit.Piece{emit.Synth("undefined", c.span(expr))}
+		return []emit.Piece{emit.Synth(c.core("NOT_ASSIGNED", origin), c.span(expr))}
 	}
 	return c.slotObject(expr)
 }

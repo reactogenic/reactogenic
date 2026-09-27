@@ -93,8 +93,12 @@ func TestClean(t *testing.T) {
 var coreStub = map[string]string{
 	"node_modules/@reactogenic/core/package.json": `{ "name": "@reactogenic/core", "types": "index.d.ts" }`,
 	"node_modules/@reactogenic/core/index.d.ts": `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol }; // as React: a function is not a node
-export type Slot<Props> = Props;
-export type FnSlot<Props, Args> = Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
+export declare const NOT_ASSIGNED: unique symbol;
+export type NotAssigned = typeof NOT_ASSIGNED;
+export type Slot<Props> = Props | NotAssigned;
+export type FnSlot<Props, Args> = (Omit<Props, "children"> & { children?: (args: Args) => ReactNode }) | NotAssigned;
+export declare function isAssigned<S>(slot: S): slot is Exclude<S, NotAssigned | undefined | null>;
+export declare function slotProps<S extends object>(slot: S): S;
 export type NoArgs = { readonly [arg: string]: never };
 export type ArgsOf<S> = S extends { children?: infer Body } ? NonNullable<Body> extends (args: infer Args) => ReactNode ? Args : NoArgs : NoArgs;
 export declare function renderSlot<S extends object>(slot: S, args: S extends readonly unknown[] ? never : ArgsOf<S>, fallback?: ReactNode): ReactNode;`,
