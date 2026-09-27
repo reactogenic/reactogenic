@@ -26,6 +26,7 @@ type (
 
 const (
 	KindAmpersandAmpersandToken  = ast.KindAmpersandAmpersandToken
+	KindArrowFunction            = ast.KindArrowFunction
 	KindBinaryExpression         = ast.KindBinaryExpression
 	KindBindingElement           = ast.KindBindingElement
 	KindBlock                    = ast.KindBlock
@@ -35,6 +36,7 @@ const (
 	KindExportDeclaration        = ast.KindExportDeclaration
 	KindExportSpecifier          = ast.KindExportSpecifier
 	KindExpressionStatement      = ast.KindExpressionStatement
+	KindFunctionExpression       = ast.KindFunctionExpression
 	KindIdentifier               = ast.KindIdentifier
 	KindImportDeclaration        = ast.KindImportDeclaration
 	KindImportSpecifier          = ast.KindImportSpecifier

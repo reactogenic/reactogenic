@@ -75,11 +75,12 @@ type Output struct {
 // Note marks a source span: what was synthesized for it.
 type Note struct {
 	Span   emit.Span // in the source
-	Kind   string    // slot-prop, slot-body, slot-params, slot-args, slot-arg, slot-conditional, attachment, no-match, segment, shorthand-true
+	Kind   string    // slot-prop, slot-body, slot-params, slot-args, slot-arg, slot-conditional, slot-key, slot-entry-key, attachment, no-match, segment, shorthand-true
 	Name   string    // the slot (`$Title`), segment (`about-us`) or attribute
 	Detail string    // the container tag, the arg name, …
 	// Tag is, for slot-conditional, the owner's tag name in the source: the
-	// component whose slot may be left NOT_ASSIGNED.
+	// component whose slot may be left NOT_ASSIGNED; for slot-entry-key, the
+	// slot element.
 	Tag emit.Span
 }
 

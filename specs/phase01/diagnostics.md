@@ -98,6 +98,8 @@ they never wrote:
 | slot-args-missing | a property of `renderSlot`'s args is missing (a function slot attached without its args) | the attachment: "`$Icon` needs `&size`" |
 | slot-no-args | a property of `renderSlot`'s args is not assignable to `never` (args to a slot whose body is not a function) | that arg: "`$Label` takes no args: its body is not a function" |
 | slot-list | `renderSlot`'s args are `never` (a slot typed as an array) | the attachment: "`$List` is a list; a slot is one value" |
+| slot-key-no-args | the `[SLOT_KEY]` property is excess (TS2353): a key function on a slot without args | the `key` attribute |
+| slot-key-inline | a computed entry key is not a string or number (TS2464): a key function passed by reference | the `key` value; TS's other errors inside that slot element are dropped |
 
 Rewrites are matched by the error's origin and its TS code, never by message
 text. An error that matches no rule keeps TS's message, at the origin.

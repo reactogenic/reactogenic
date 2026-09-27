@@ -291,3 +291,13 @@ fallback cannot be conditional" (slot-conditional) — unless the component
 attaches it with a fallback. `reactogenic check` joins the caller's
 conditional (a transpiler note with the component's tag) with the component's
 attachments (notes with or without fallback) through the checker.
+
+**Key functions.** A singular `Slot<P, A>` attached per item is keyed by the
+caller: `<$Option key={({ value }) => value} />`, a function of the args. It
+is told from an entry key by syntax — an inline arrow or function expression;
+`key={getKey}` is an entry key and is reported as slot-key-inline. Requiring
+the inline form is intended: a reference would be ambiguous. The slot's key
+replaces the attachment's `key`, as slot props replace attachment props. The
+function is held under `SLOT_KEY`, since `P` already has React's `key`. An
+attachment with args binds them once through `slotArgs`, which types them as
+`renderSlot` does, so arg errors still point at the arg.

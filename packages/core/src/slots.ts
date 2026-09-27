@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { Key, ReactNode } from "react";
 
 /** A function of params that renders: `Each`'s body, a function slot's body. */
 export type SlotFn<Params> = (params: Params) => ReactNode;
@@ -11,10 +11,22 @@ export type SlotFn<Params> = (params: Params) => ReactNode;
 export const NOT_ASSIGNED: unique symbol = Symbol.for("reactogenic.notAssigned");
 export type NotAssigned = typeof NOT_ASSIGNED;
 
-/** A slot's value: its props, with a body that takes `Args` when given. */
+/**
+ * Holds a slot's key function: `<$Option key={({ value }) => value} />`. A
+ * symbol, so it never clashes with the contract's own `key`.
+ */
+export const SLOT_KEY: unique symbol = Symbol.for("reactogenic.slotKey");
+
+/**
+ * A slot's value: its props, with a body that takes `Args` when given — and
+ * then a key function of the same args, for an attachment that runs per item.
+ */
 export type SlotValue<Props, Args = never> = [Args] extends [never]
   ? Props
-  : Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
+  : Omit<Props, "children"> & {
+      children?: (args: Args) => ReactNode;
+      readonly [SLOT_KEY]?: (args: Args) => Key;
+    };
 
 /**
  * A slot: the complete prop contract of the element the container attaches
@@ -53,6 +65,27 @@ export function slotEntry<S>(slot: S, key: string | number): SlotEntry<S> {
     return (slot as unknown as Record<string, unknown>)[key] as SlotEntry<S>;
   }
   return slot as SlotEntry<S>;
+}
+
+/**
+ * The args of an attachment, typed for its slot as `renderSlot` types them:
+ * the compiled attachment builds them once, here, for the key and the body.
+ */
+export type SlotArgs<S> = S extends readonly unknown[]
+  ? never
+  : ArgsOf<Exclude<SlotEntry<S>, NotAssigned | undefined | null>>;
+
+export function slotArgs<S>(_slot: S, args: SlotArgs<S>): SlotArgs<S> {
+  return args;
+}
+
+/**
+ * The React key of an attachment with args: the slot's key function applied
+ * to them, or else the attachment's own `key`.
+ */
+export function slotKey(slot: unknown, args: object, fallback?: Key | null): Key | null | undefined {
+  const keyOf = typeof slot === "object" && slot !== null ? (slot as { [SLOT_KEY]?: (args: object) => Key })[SLOT_KEY] : undefined;
+  return keyOf ? keyOf(args) : fallback;
 }
 
 /** Is the slot there: neither missing nor NOT_ASSIGNED? */

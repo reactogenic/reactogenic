@@ -112,6 +112,9 @@ function Button({ $Label, $Icon, size }: ButtonProps) {
 - Many values of one kind — table columns, form fields — are a `KeyedSlot`:
   the caller writes `<$Column key="email" …/>` per entry, and the component's
   `<th key={col.name} slot={$Column} />` renders the entry of each key.
+- A function slot the component attaches once per item is keyed by you when
+  only you know the items' identity: `<$Row key={({ row }) => row.id} { row }>`
+  — an inline function of the args.
 
 **Flow control.**
 

@@ -96,7 +96,12 @@ var coreStub = map[string]string{
 	"node_modules/@reactogenic/core/index.d.ts": `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol }; // as React: a function is not a node
 export declare const NOT_ASSIGNED: unique symbol;
 export type NotAssigned = typeof NOT_ASSIGNED;
-export type SlotValue<Props, Args = never> = [Args] extends [never] ? Props : Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
+type Key = string | number | bigint;
+export declare const SLOT_KEY: unique symbol;
+export type SlotValue<Props, Args = never> = [Args] extends [never] ? Props : Omit<Props, "children"> & { children?: (args: Args) => ReactNode; readonly [SLOT_KEY]?: (args: Args) => Key };
+export type SlotArgs<S> = S extends readonly unknown[] ? never : ArgsOf<Exclude<SlotEntry<S>, NotAssigned | undefined | null>>;
+export declare function slotArgs<S>(slot: S, args: SlotArgs<S>): SlotArgs<S>;
+export declare function slotKey(slot: unknown, args: object, fallback?: Key | null): Key | null | undefined;
 export type Slot<Props, Args = never> = SlotValue<Props, Args> | NotAssigned;
 export declare const KEYED: unique symbol;
 export type KeyedSlot<Props, Args = never> = { readonly [KEYED]: true } & { readonly [key: string]: SlotValue<Props, Args> };
@@ -311,6 +316,49 @@ export const later = (
 `,
 	})
 	want := []string{"src/page.rtsx:6:5 slot-conditional"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
+// syntax.md, *Key functions*: `key={(args) => …}` keys each execution of an
+// attachment by the slot's args; any other `key` is an entry key.
+func TestKeyFunctions(t *testing.T) {
+	got := checkProject(t, map[string]string{"src/select.rtsx": `import type { Slot } from "@reactogenic/core";
+interface SelectProps {
+  options: { value: string; label: string }[];
+  $Option?: Slot<{ value?: string; children?: string }, { value: string; label: string }>;
+  $Hint?: Slot<{ children?: string }>;
+}
+export function Select({ options, $Option, $Hint }: SelectProps) {
+  return (
+    <select>
+      {options.map((option, i) => <option key={i} slot={$Option} &&value={option.value} &label={option.label} />)}
+      <small slot={$Hint} />
+    </select>
+  );
+}
+declare function getKey(args: { value: string }): string;
+export const ok = (
+  <Select options={[]}>
+    <$Option key={({ value }) => value} { label }>{label}</$Option>
+  </Select>
+);
+export const noArgs = (
+  <Select options={[]}>
+    <$Hint key={() => "h"}>Hint</$Hint>
+  </Select>
+);
+export const reference = (
+  <Select options={[]}>
+    <$Option key={getKey} { label }>{label}</$Option>
+  </Select>
+);
+`})
+	want := []string{
+		"src/select.rtsx:23:12 slot-key-no-args",
+		"src/select.rtsx:28:14 slot-key-inline",
+	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}

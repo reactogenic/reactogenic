@@ -55,6 +55,10 @@ func rewrite(d *rtsx.Diagnostic, out transpiler.Output, src string, at emit.Span
 		return "slot-args-missing", fmt.Sprintf("`%s` needs `&%s`", note.Name, arg(0)), nil, true
 	case note.Kind == "slot-args" && d.Code() == 2345:
 		return "slot-list", fmt.Sprintf("`%s` is a list; a slot is one value", note.Name), nil, true
+	case note.Kind == "slot-key" && d.Code() == 2353:
+		return "slot-key-no-args", fmt.Sprintf("`%s` has no args to key by: its body is not a function", note.Name), nil, true
+	case note.Kind == "slot-entry-key" && d.Code() == 2464:
+		return "slot-key-inline", fmt.Sprintf("A key of `%s` is a string or a number; a key function is written inline: `key={(args) => …}`", note.Name), nil, true
 	case note.Kind == "slot-arg" && d.Code() == 2322:
 		return "slot-no-args", fmt.Sprintf("`%s` takes no args: its body is not a function", note.Name), nil, true
 	case note.Kind == "shorthand-true" && d.Code() == 2322:

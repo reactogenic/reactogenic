@@ -280,14 +280,14 @@ function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
 
 ```tsx
 // Button.tsx
-import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotProps as _slotProps } from "@reactogenic/core";
+import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotArgs as _slotArgs, slotKey as _slotKey, slotProps as _slotProps } from "@reactogenic/core";
 
 function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
   return (
     <button>
       {_isAssigned($IconStart) ? <span className="icon" {..._slotProps($IconStart)}>{_renderSlot($IconStart, {})}</span> : null}
       {children}
-      {_isAssigned($Badge) ? <span {..._slotProps($Badge)}>{_renderSlot($Badge, { size: size }, "new")}</span> : <span>new</span>}
+      {((_args) => _isAssigned($Badge) ? <span key={_slotKey($Badge, _args)} {..._slotProps($Badge)}>{_renderSlot($Badge, _args, "new")}</span> : <span>new</span>)(_slotArgs($Badge, { size: size }))}
     </button>
   );
 }
@@ -304,7 +304,10 @@ function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
   of the slot's body whenever there is none (no slot, or a slot without a
   body). Other attachment props do not establish a fallback.
 - **`key`** on an attachment is React's key on the element, never a slot prop
-  or an arg.
+  or an arg. A slot's key function replaces it (*Key functions*).
+- **Args are built once.** An attachment with args binds them —
+  `_slotArgs($X, { … })`, typed as `renderSlot` types them, so an error points
+  at the arg — for the body and for the slot's key function.
 - **Args.** Attributes with `&` are args for a function slot's body; with `&&`
   they are args *and* props of the element:
 
@@ -594,7 +597,54 @@ function Table({ columns, $Column }: TableProps) {
   is an excess-property error, as for any slot.
 
 This also answers where keys come from when an attachment runs per item: from
-the attachment's `key`, the one React needs there anyway.
+the attachment's `key`, the one React needs there anyway — or, when only the
+caller knows the items' identity, from a key function.
+
+### Key functions
+
+A singular function slot attached per item is keyed by the **caller**, from
+the args: the container iterates, but only the caller knows what identifies
+an item (`$Row` of a table whose rows the caller supplies).
+
+```tsx
+// .rtsx
+<Select options>
+  <$Option key={({ value }) => value} { label }>{label}</$Option>
+</Select>
+```
+
+```tsx
+// .tsx
+import { SLOT_KEY as _SLOT_KEY } from "@reactogenic/core";
+
+<Select options $Option={{ [_SLOT_KEY]: ({ value }) => value, children: ({ label }) => label }} />
+```
+
+The attachment (*One slot, many executions*) keys its element by it:
+
+```tsx
+<option key={_slotKey(_entry, _args, option.value)} … {..._slotProps(_entry)}>{_renderSlot(_entry, _args, option.label)}</option>
+```
+
+- **A key function is written inline**: `key={(args) => …}` or
+  `key={function (args) { … }}`, in parens or not. Any other `key` is an entry
+  key (*Keyed slots*) — the transpiler is syntactic, and `key={getKey}` is an
+  expression like any other. It is then reported as slot-key-inline, not
+  silently misread: write `key={(args) => getKey(args)}`.
+- It takes the args of the slot's body — the same `A` of `Slot<P, A>` — not
+  the params: params are not in scope in the slot element's own attributes,
+  so `key={value}` cannot work, and the function says where `value` comes
+  from.
+- **The slot's key replaces the attachment's `key`**, as slot props replace
+  attachment props. `slotKey(slot, args, key?)` returns the key function's
+  result, or else the attachment's `key`; without args (and so without a key
+  function) the attachment's `key` is used as it is.
+- Only a function slot has one: on a `Slot<P>` it is slot-key-no-args.
+- Not on a keyed slot, whose entries are identified by their keys: mixing
+  `key={fn}` with entry keys on one slot is keyed-slot-mixed.
+- The function is held under the `SLOT_KEY` symbol, never as `key`: the
+  contract (`ComponentProps<"option">`) has its own `key?: Key | null`.
+  `slotProps` drops it.
 
 ### Repeated slots: last assignment wins
 
@@ -830,7 +880,9 @@ to emit. TS7 checks the emitted `.tsx`, and that is what types slots:
 | params-on-html | Params are only allowed on components and slot elements | `<div { size }>` — an intrinsic element by React's rule (lowercase, `-`, or `a:b`) | syntax |
 | duplicate-params | An element takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
-| keyed-slot-mixed | `$Column` is keyed: every `<$Column>` needs a `key`, or none | slot elements of one slot, some with `key` and some without | syntax |
+| keyed-slot-mixed | `$Column` is keyed: every `<$Column>` needs a `key`, or none | slot elements of one slot, some with an entry `key` and some without (a key function is not an entry key) | syntax |
+| slot-key-no-args | `$Hint` has no args to key by: its body is not a function | a key function on a slot declared `Slot<P>` | types |
+| slot-key-inline | A key of `$Option` is a string or a number; a key function is written inline: `key={(args) => …}` | `key={getKey}`, read as an entry key, is not a string or number — replaces TS's follow-on errors on that slot element | types |
 | arg-without-slot | `&size` is an arg of a slot attachment | `&` / `&&` on an element without `slot={$X}` | syntax |
 | component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name is in scope — reported instead of the slot errors | syntax |
 

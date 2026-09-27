@@ -5,13 +5,20 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createElement, type ComponentType } from "react";
+import { createElement, type ComponentType, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { build } from "vite";
 import { beforeAll, expect, test } from "vitest";
 import reactogenic from "../src/index.ts";
 
-let app: { WithSlots: ComponentType<{ mode: "loading" | "ready" }>; WithoutSlots: ComponentType; Columns: ComponentType };
+let app: {
+  WithSlots: ComponentType<{ mode: "loading" | "ready" }>;
+  WithoutSlots: ComponentType;
+  Columns: ComponentType;
+  Rows: (props: object) => ReactElement<{ children: ReactElement<{ children: (params: object) => ReactElement }> }>;
+  KeyedRows: () => ReactElement<object>;
+  users: { id: string; name: string }[];
+};
 
 beforeAll(async () => {
   const outDir = mkdtempSync(join(tmpdir(), "reactogenic-render-"));
@@ -49,4 +56,13 @@ test("a keyed slot renders each column's entry, or its fallback", () => {
   // email: an entry with props and body; name: no entry, the fallback; age:
   // an entry without a body, so the attachment's children are its body.
   expect(html).toBe('<tr><th class="wide">Mail</th><th>Name</th><th>Age</th></tr>');
+});
+
+test("a key function keys each execution of an attachment by its args", () => {
+  // The element tree, not the markup: keys never reach the HTML.
+  const rowOf = (props: object) => app.Rows(props).props.children.props.children({ item: app.users[1], index: 1 });
+  expect(rowOf(app.KeyedRows().props).key).toBe("u2");
+  // Without a key function, the attachment's own key — here none.
+  expect(rowOf({ rows: app.users }).key).toBeNull();
+  expect(renderToStaticMarkup(createElement(app.KeyedRows))).toBe("<tbody><tr>ADA</tr><tr>LINUS</tr></tbody>");
 });

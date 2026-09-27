@@ -360,8 +360,30 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 	return names, values, replaced, rest, first
 }
 
-// keyAttribute is a slot element's `key` attribute, if any.
+// keyAttribute is a slot element's entry key — its `key` attribute, unless
+// that is a key function (keyFunction).
 func keyAttribute(el *rtsx.Node) *rtsx.Node {
+	if attr := keyAttr(el); attr != nil && keyFunction(attr) == nil {
+		return attr
+	}
+	return nil
+}
+
+// keyFunction is the function of `key={(args) => …}` — an arrow or function
+// expression written inline; any other value is an entry key (syntax.md,
+// *Key functions*).
+func keyFunction(attr *rtsx.Node) *rtsx.Node {
+	v := value(attr)
+	if v == nil {
+		return nil
+	}
+	if v = unwrapParens(v); v.Kind == rtsx.KindArrowFunction || v.Kind == rtsx.KindFunctionExpression {
+		return v
+	}
+	return nil
+}
+
+func keyAttr(el *rtsx.Node) *rtsx.Node {
 	opening := el
 	if el.Kind == rtsx.KindJsxElement {
 		opening = el.AsJsxElement().OpeningElement
@@ -397,6 +419,7 @@ func (c *passContext) keyedEntry(el *rtsx.Node) []emit.Piece {
 	if attr == nil { // keyed-slot-mixed was reported
 		return append([]emit.Piece{emit.Synth("[undefined]: ", c.openingSpan(el))}, c.slotObject(el)...)
 	}
+	c.noteTag(c.span(attr), c.span(el), "slot-entry-key", c.tagText(el))
 	var key []emit.Piece
 	switch v := value(attr); {
 	case v == nil:
@@ -558,12 +581,17 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 	body := meaningfulChildren(rest)
 	slotName := c.tagText(el)
 	var attrs []*rtsx.Node
+	var keyFn []emit.Piece
 	for _, attr := range opening.Attributes().Properties() {
 		if _, ok := syntax.SlotParams(attr); ok || replaced[attr] {
 			continue
 		}
 		if attr.Kind == rtsx.KindJsxAttribute {
 			switch name := attrName(c, attr); {
+			case name == "key" && keyFunction(attr) != nil:
+				c.note(c.span(attr), "slot-key", slotName, "")
+				keyFn = []emit.Piece{emit.Synth("["+c.core("SLOT_KEY", c.span(attr))+"]: ", c.span(attr)), c.copy(keyFunction(attr))}
+				continue
 			case name == "key": // the entry's key in a keyed slot (keyedEntry)
 				continue
 			case name == "children" && len(body) > 0:
@@ -574,6 +602,9 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		attrs = append(attrs, attr)
 	}
 	props := c.attributeProps(attrs)
+	if keyFn != nil {
+		props = append(props, keyFn)
+	}
 	for _, name := range names {
 		c.note(first[name], "slot-prop", name, slotName)
 		props = append(props, append([]emit.Piece{emit.Synth(name+": ", first[name])}, values[name]...))

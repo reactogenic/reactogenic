@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { Each, isAssigned, KEYED, Match, NOT_ASSIGNED, noMatch, renderSlot, slotEntry, slotProps, Switch } from "./index.ts";
+import { Each, isAssigned, KEYED, Match, NOT_ASSIGNED, noMatch, renderSlot, SLOT_KEY, slotEntry, slotKey, slotProps, Switch } from "./index.ts";
 
 describe("renderSlot", () => {
   test("calls a function body with the args", () => {
@@ -33,6 +33,16 @@ describe("keyed slots", () => {
     expect(slotEntry(columns, "name")).toBeUndefined();
     const option = { value: "a" };
     expect(slotEntry(option, "x")).toBe(option);
+  });
+});
+
+describe("key functions", () => {
+  test("slotKey applies the slot's key function, or falls back to the attachment's key", () => {
+    const option = { [SLOT_KEY]: ({ value }: { value: string }) => value };
+    expect(slotKey(option, { value: "a" }, "i0")).toBe("a");
+    expect(slotKey({}, { value: "a" }, "i0")).toBe("i0");
+    expect(slotKey(NOT_ASSIGNED, { value: "a" })).toBeUndefined();
+    expect(Object.getOwnPropertySymbols(slotProps(option))).toEqual([]);
   });
 });
 

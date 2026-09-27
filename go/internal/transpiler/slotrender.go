@@ -119,12 +119,27 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 		entry = c.fresh("_entry")
 		slot = func() emit.Piece { return emit.Synth(entry, c.span(ref)) }
 	}
+	// With args, the slot may carry a key function of them (syntax.md, *Key
+	// functions*): the args are built once, for the key and for the body.
+	argsValue := func() []emit.Piece { return objectLiteral(args, origin) }
+	var argsName string
+	if len(args) > 0 {
+		argsName = c.fresh("_args")
+		argsValue = func() []emit.Piece { return []emit.Piece{emit.Synth(argsName, origin)} }
+	}
 
 	tag := emit.Span{Pos: c.span(opening.TagName()).Pos, End: opening.Attributes().Pos()}
 	tag.End = tag.Pos + len(strings.TrimRight(c.text[tag.Pos:tag.End], " \t\r\n"))
 	element := func(withSlot bool) []emit.Piece {
 		out := []emit.Piece{emit.Synth("<", origin), emit.Copy(c.text, tag)}
-		if key != nil {
+		switch {
+		case withSlot && argsName != "":
+			out = append(out, emit.Synth(" key={"+c.core("slotKey", origin)+"(", origin), slot(), emit.Synth(", "+argsName, origin))
+			if key != nil && value(key) != nil {
+				out = append(append(out, emit.Synth(", ", origin)), c.operand(value(key), rtsx.PrecedenceComma)...)
+			}
+			out = append(out, emit.Synth(")}", origin))
+		case key != nil:
 			out = append(out, emit.Synth(" ", origin), c.copy(key))
 		}
 		for _, p := range props {
@@ -132,7 +147,7 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 		}
 		if withSlot {
 			out = append(out, emit.Synth(" {..."+spread+"(", origin), slot(), emit.Synth(")}>{"+render+"(", origin), slot(), emit.Synth(", ", origin))
-			out = append(out, objectLiteral(args, origin)...)
+			out = append(out, argsValue()...)
 			if len(fallback) > 0 {
 				var all []emit.Piece
 				for _, ch := range childrenOf(el) {
@@ -153,12 +168,30 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 	} else {
 		expr = append(expr, emit.Synth("null", origin))
 	}
+	// The entry and the args are bound once, by an inline function.
+	var params []string
+	var values [][]emit.Piece
 	if entry != "" {
-		lookup := c.core("slotEntry", origin)
-		wrapped := append([]emit.Piece{emit.Synth("(("+entry+") => ", origin)}, expr...)
-		wrapped = append(wrapped, emit.Synth(")("+lookup+"(", origin), c.copy(ref), emit.Synth(", ", origin))
-		wrapped = append(wrapped, c.operand(value(key), rtsx.PrecedenceComma)...)
-		expr = append(wrapped, emit.Synth("))", origin))
+		lookup := append([]emit.Piece{emit.Synth(c.core("slotEntry", origin)+"(", origin), c.copy(ref), emit.Synth(", ", origin)}, c.operand(value(key), rtsx.PrecedenceComma)...)
+		params, values = append(params, entry), append(values, append(lookup, emit.Synth(")", origin)))
+	}
+	if argsName != "" {
+		// slotArgs types the args as renderSlot does, at the object literal,
+		// so an error points at the arg.
+		typed := []emit.Piece{emit.Synth(c.core("slotArgs", origin)+"(", origin), c.copy(ref), emit.Synth(", ", origin)}
+		typed = append(append(typed, objectLiteral(args, origin)...), emit.Synth(")", origin))
+		params, values = append(params, argsName), append(values, typed)
+	}
+	if len(params) > 0 {
+		wrapped := append([]emit.Piece{emit.Synth("(("+strings.Join(params, ", ")+") => ", origin)}, expr...)
+		wrapped = append(wrapped, emit.Synth(")(", origin))
+		for i, v := range values {
+			if i > 0 {
+				wrapped = append(wrapped, emit.Synth(", ", origin))
+			}
+			wrapped = append(wrapped, v...)
+		}
+		expr = append(wrapped, emit.Synth(")", origin))
 	}
 	return c.replace(el, origin, expr)
 }

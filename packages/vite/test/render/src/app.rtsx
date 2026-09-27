@@ -83,3 +83,33 @@ export function Columns() {
     </Table>
   );
 }
+
+// A function slot attached per row, keyed by the caller: only it knows what
+// identifies a row. The container has no key of its own to give.
+interface RowsProps {
+  rows: { id: string; name: string }[];
+  $Row?: Slot<{ className?: string }, { row: { id: string; name: string } }>;
+}
+
+export function Rows({ rows, $Row }: RowsProps) {
+  return (
+    <tbody>
+      <Each items={rows} { item: row }>
+        <tr slot={$Row} &row>{row.name}</tr>
+      </Each>
+    </tbody>
+  );
+}
+
+export const users = [
+  { id: "u1", name: "Ada" },
+  { id: "u2", name: "Linus" },
+];
+
+export function KeyedRows() {
+  return (
+    <Rows rows={users}>
+      <$Row key={({ row }) => row.id} { row }>{row.name.toUpperCase()}</$Row>
+    </Rows>
+  );
+}

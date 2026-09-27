@@ -97,7 +97,9 @@ Babel): TypeScript's own parser accepts `#name` as an attribute named
    `Slot<P>` / `Slot<P, A>` (P is the complete contract, A the args of a
    function body) — one value, repeated → last wins — or `KeyedSlot<P>` /
    `KeyedSlot<P, A>`: entries by React `key` (`<$Column key="email" />`),
-   selected at the attachment by its `key`. The container attaches with
+   selected at the attachment by its `key`. A function slot run per item is
+   keyed by the caller: `<$Option key={({ value }) => value} />` (inline
+   arrow only; replaces the attachment's `key`). The container attaches with
    `<span slot={$X} className="default" &arg &&both={x}>fallback</span>`:
    slot props replace attachment props per prop; children are the fallback;
    `&` = arg only, `&&` = arg + prop. Recursive slots; placement: direct child

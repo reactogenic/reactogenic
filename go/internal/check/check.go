@@ -24,6 +24,9 @@ type Report struct {
 	Code      string // "TS2322", or a transpiler code such as "orphan-slot"
 	Message   string
 	Related   []Report
+
+	span      emit.Span // in File, for TS diagnostics of an .rtsx file
+	supersede emit.Span // slot-key-inline: TS errors in this span follow from it
 }
 
 // Run type-checks the project of the tsconfig at configPath (absolute).
@@ -36,9 +39,11 @@ func Run(configPath string) []Report {
 			reports = append(reports, Report{File: file, Line: d.Line, Col: d.Col, Error: d.Severity == transpiler.Error, Code: d.Code, Message: d.Message})
 		}
 	}
+	var ts []Report
 	for _, d := range p.Diagnostics() {
-		reports = append(reports, fromTS(p, d))
+		ts = append(ts, fromTS(p, d))
 	}
+	reports = append(reports, superseded(ts)...)
 	reports = append(reports, slotConditionals(p)...)
 	for _, file := range p.Ambiguous() {
 		tsx := strings.TrimSuffix(file, ".rtsx") + ".tsx"
@@ -71,8 +76,12 @@ func fromTS(p *project.Project, d *rtsx.Diagnostic) Report {
 	if src, ok := p.SourceOf(d.File().FileName()); ok {
 		out, _ := p.Output(src)
 		text, _ := p.Source(src)
-		if code, message, related, ok := rewrite(d, out, text, out.Map.Source(span)); ok {
+		r.span = out.Map.Source(span)
+		if code, message, related, ok := rewrite(d, out, text, r.span); ok {
 			r.Code, r.Message, r.Related = code, message, related
+			if code == "slot-key-inline" {
+				r.supersede = innermostNote(out.Notes, r.span).Tag
+			}
 		}
 		r.Message = renameGenerated(r.Message, out.Generated)
 	}
@@ -84,6 +93,26 @@ func fromTS(p *project.Project, d *rtsx.Diagnostic) Report {
 		r.Related = append(r.Related, rr)
 	}
 	return r
+}
+
+// superseded drops the TS errors that follow from another one: a key
+// function passed by reference is read as an entry key, and everything TS
+// then says about that slot element restates the misreading.
+func superseded(reports []Report) []Report {
+	var kept []Report
+	for _, r := range reports {
+		drop := false
+		for _, s := range reports {
+			if s.supersede.Len() > 0 && s.File == r.File && s.Code != r.Code &&
+				s.supersede.Pos <= r.span.Pos && r.span.End <= s.supersede.End {
+				drop = true
+			}
+		}
+		if !drop {
+			kept = append(kept, r)
+		}
+	}
+	return kept
 }
 
 // position returns where span of file is in the author's source.

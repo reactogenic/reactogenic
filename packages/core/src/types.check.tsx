@@ -1,7 +1,7 @@
 // Type-level tests: `tsc --noEmit` (pnpm typecheck) fails if an expectation
 // breaks. syntax.md, *Slots*.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, slotEntry, type KeyedSlot, type Slot } from "./index.ts";
+import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, SLOT_KEY, slotEntry, type KeyedSlot, type Slot } from "./index.ts";
 
 // Slot<P> is the complete contract: a body only if `children` is in it.
 type Box = Slot<{ color: string }>;
@@ -59,3 +59,11 @@ declare const columns: Column;
 export const e1: { width?: number; children?: ReactNode } | undefined = slotEntry(columns, "email");
 declare const option: Slot<{ value?: string }>;
 export const e2: Slot<{ value?: string }> = slotEntry(option, "a");
+
+// A key function takes the args of a function slot; a slot without args has none.
+type Option = Slot<{ value?: string; children?: ReactNode }, { value: string; label: string }>;
+export const k1: Option = { [SLOT_KEY]: ({ value }) => value, children: ({ label }) => label };
+// @ts-expect-error `id` is not an arg of `$Option`
+export const k2: Option = { [SLOT_KEY]: ({ id }) => id };
+// @ts-expect-error a slot without args takes no key function
+export const k3: Slot<{ value?: string }> = { [SLOT_KEY]: () => "a" };
