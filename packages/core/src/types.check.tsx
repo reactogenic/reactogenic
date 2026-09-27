@@ -1,71 +1,44 @@
 // Type-level tests: `tsc --noEmit` (pnpm typecheck) fails if an expectation
-// breaks. The *Declaration matrix* of syntax.md, written as plain TSX.
-import type { ReactNode } from "react";
-import { Each, renderSlot, type OptionalSlotFn, type SlotFn } from "./index.ts";
+// breaks. syntax.md, *Slots*.
+import type { ComponentProps, ReactNode } from "react";
+import { Each, renderSlot, type FnSlot, type Slot } from "./index.ts";
 
-interface ButtonProps {
-  children: ReactNode;
-  $IconStart: { spacing: "tight" | "loose"; children: OptionalSlotFn<{ size: "md" | "lg" }> };
-  $IconEnd?: { children?: ReactNode };
-  $Row?: { children: SlotFn<{ id: number }> };
-}
-function Button({ children, $IconStart }: ButtonProps) {
-  return <button>{renderSlot($IconStart.children, { size: "lg" })}{children}</button>;
-}
+// Slot<P> is the complete contract: a body only if `children` is in it.
+type Box = Slot<{ color: string }>;
+export const a: Box = { color: "red" };
+// @ts-expect-error `children` is not in the contract
+export const b: Box = { color: "red", children: "Hi" };
+type Title = Slot<{ children?: ReactNode }>;
+export const c: Title = {};
+type Label = Slot<{ children: ReactNode }>;
+// @ts-expect-error the body is required
+export const d: Label = {};
+type Span = Slot<ComponentProps<"span">>;
+export const e: Span = { className: "x", children: "Save" };
+// @ts-expect-error `colour` is not a prop of <span>
+export const f: Span = { colour: "red" };
 
-// OptionalSlotFn: body only, or params + body.
-export const a = <Button $IconStart={{ spacing: "tight", children: "+" }}>Add</Button>;
-export const b = <Button $IconStart={{ spacing: "tight", children: ({ size }) => size }}>Add</Button>;
-// Required slot missing.
-// @ts-expect-error $IconStart is required
-export const c = <Button>Add</Button>;
-// Unknown option.
-// @ts-expect-error colour is not an option
-export const d = <Button $IconStart={{ spacing: "tight", colour: "red", children: "+" }}>Add</Button>;
-// Param that the container does not hand out.
-// @ts-expect-error colour is not a param
-export const e = <Button $IconStart={{ spacing: "tight", children: ({ colour }) => colour }}>Add</Button>;
-// ReactNode body: no params allowed.
-// @ts-expect-error $IconEnd provides no values
-export const f = <Button $IconStart={{ spacing: "tight", children: "+" }} $IconEnd={{ children: () => "x" }}>Add</Button>;
-// SlotFn: params required.
-// @ts-expect-error $Row requires params
-export const g = <Button $IconStart={{ spacing: "tight", children: "+" }} $Row={{ children: "x" }}>Add</Button>;
-// Optional body.
-export const h = <Button $IconStart={{ spacing: "tight", children: "+" }} $IconEnd={{}}>Add</Button>;
+// FnSlot<P, A>: the body takes the args.
+type Icon = FnSlot<ComponentProps<"span">, { size: "md" | "lg" }>;
+export const g: Icon = { className: "i", children: ({ size }) => size };
+export const h: Icon = { className: "i" }; // no body: the attachment's fallback
+// @ts-expect-error `colour` is not an arg
+export const i: Icon = { children: ({ colour }) => colour };
+
+// renderSlot: args follow function-call rules.
+declare const icon: Icon;
+declare const span: Span;
+export const r1 = renderSlot(icon, { size: "lg" });
+// @ts-expect-error a function slot needs its args
+export const r2 = renderSlot(icon, {});
+export const r3 = renderSlot(span, {});
+// @ts-expect-error a slot whose body is not a function takes no args
+export const r4 = renderSlot(span, { size: "lg" });
+declare const list: Span[];
+// @ts-expect-error a slot is singular: an array is rejected at its attachment
+export const r5 = renderSlot(list, {});
 
 // Each infers the item type.
-export const i = <Each items={[1, 2]}>{({ item }) => <b key={item}>{item.toFixed(1)}</b>}</Each>;
+export const k = <Each items={[1, 2]}>{({ item }) => <b key={item}>{item.toFixed(1)}</b>}</Each>;
 // @ts-expect-error item is a number
-export const j = <Each items={[1, 2]}>{({ item }) => item.toUpperCase()}</Each>;
-
-// Slot<Props, Children>: the options are the rendered element's props.
-import type { ComponentProps } from "react";
-import type { Slot } from "./index.ts";
-type LabelSlot = Slot<ComponentProps<"span">>;
-export const k: LabelSlot = { title: "t", children: "Save" };
-// @ts-expect-error `colour` is not a prop of <span>
-export const l: LabelSlot = { colour: "red", children: "Save" };
-// <span>'s own children are optional, so this slot's body is too.
-export const m: LabelSlot = { title: "t" };
-type IconSlot = Slot<ComponentProps<"div">, SlotFn<{ size: "md" | "lg" }>>;
-export const n: IconSlot = { className: "i", children: ({ size }) => size };
-
-// Slot without Children: the props' own children decide.
-type OptionalBody = Slot<{ title?: string; children?: ReactNode }>;
-export const o: OptionalBody = { title: "t" };
-type RequiredBody = Slot<{ children: ReactNode }>;
-// @ts-expect-error the body is required
-export const q: RequiredBody = {};
-
-// renderSlot: args map to the body's parameter.
-declare const plain: ReactNode;
-declare const fn: SlotFn<{ size: "md" | "lg" }>;
-declare const either: OptionalSlotFn<{ size: "md" | "lg" }>;
-export const r1 = renderSlot(plain, {});
-// @ts-expect-error a body that is not a function takes no args
-export const r2 = renderSlot(plain, { size: "lg" });
-export const r3 = renderSlot(fn, { size: "lg" });
-// @ts-expect-error a function body needs its args
-export const r4 = renderSlot(fn, {});
-export const r5 = renderSlot(either, { size: "lg" });
+export const l = <Each items={[1, 2]}>{({ item }) => item.toUpperCase()}</Each>;

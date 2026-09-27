@@ -27,9 +27,6 @@ const (
 	specPreludeAfter = "import { Each } from \"@reactogenic/core\";\n"
 )
 
-// specListSlots are the list slots the spec's examples declare.
-var specListSlots = []string{"Form.$Field"}
-
 type codeBlock struct {
 	anchor string // slug of the nearest heading
 	header string // first line, when it is a `//` comment
@@ -91,7 +88,6 @@ func ExtractSpec(name, markdown string) []Case {
 				WantTSX:   want,
 				// Spec examples check output only; see the doc comment.
 				IgnoreDiagnostics: true,
-				ListSlots:         specListSlots,
 			})
 		}
 	}

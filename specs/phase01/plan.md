@@ -19,7 +19,7 @@ Size: **S** ≤ 2 days, **M** ≤ 1 week, **L** > 1 week (split it before starti
 | M1 | Runtime package | 010–019 | `@reactogenic/core` exports usable from plain `.tsx` |
 | M2 | Parser | 020–029 | every `.rtsx` form parses to an AST with exact spans |
 | M3 | Transpiler | 030–049 | every desugaring in [syntax.md](syntax.md) passes its fixture |
-| M4 | Type service | 050–059 | list slots emit correctly from real props types; the Go process serves the plugin |
+| M4 | Type service | 050–059 | `reactogenic check` has its program; the Go process serves the plugin |
 | M5 | Vite plugin | 060–069 | example app runs in `vite dev` and `vite build` |
 | M6 | `reactogenic check` | 070–089 | every *types* error in syntax.md is reported on the `.rtsx` |
 | M7 | Conformance and release | 090–099 | spec ↔ tests complete, packages ready to publish |
@@ -210,7 +210,7 @@ A local or parameter named `Switch`, another package's `Switch`, and
 ### RGP1-035 — Pass 3: slot hoisting (object form) · M · done
 ### RGP1-036 — Params on a component · S · done
 ### RGP1-037 — Conditional slots · S · done
-### RGP1-038 — List slots (emit) · M · done (type answer stubbed until RGP1-051)
+### RGP1-038 — List slots (emit) · M · superseded by RGP1-043 (slots are singular)
 `transpiler/slots.go`. One pass rewrites a container in one edit — its
 attributes, its slot props and its children — so the four tasks share one
 implementation.
@@ -267,10 +267,21 @@ values keep their HTML meaning; slot-render-children. `Slot` is in
 `@reactogenic/core`. A function slot rendered without its args is a TS
 error on the `.rtsx` line (tested through `reactogenic check`).
 
+### RGP1-043 — The slot model · L · done
+syntax.md, *Slots*, rewritten (decisions.md, RGP1-043). Parser patch 0002:
+`&name` / `&&name`. Pass 3: attachments (`slot={$X}` with defaults, `&` /
+`&&` args, fallback children, `key` kept), recursive slots, last-wins (with an
+explicit `$X={…}` and conditionals, provisionally), placement through slot
+elements. Removed: list slots, `Input.ListSlot`, `IsListSlot`, the two-round
+program build, the `Each` key check, slot-render-children. Core: `Slot<P>`,
+`FnSlot<P, A>`, `renderSlot(slot, args, fallback?)` with function-call
+typing and arrays rejected. Found on the way: JSX text children were copied
+without their leading whitespace (`{a} (` lost its space) — fixed.
+
 ## M4 — Type service
 
 ### RGP1-050 — Project program with virtual `.tsx` · M · done
-### RGP1-051 — The list-slot query · S · done
+### RGP1-051 — The list-slot query · S · removed by RGP1-043 (the transpiler needs no types)
 `go/internal/project`, over the bridge `rtsx/program.go` (patch 0003).
 - An overlay file system (tsgo's `wrapvfs`) serves `Foo.tsx` for every
   `Foo.rtsx` and lists it in directory entries, so tsconfig's own `include`

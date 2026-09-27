@@ -141,13 +141,13 @@ func slotConditional(ch *rtsx.Node) *rtsx.Node {
 	return nil
 }
 
-// claimed reports whether a slot element has a container: it is a direct
-// child of one, or a branch (possibly inside a fragment) of a conditional
-// that is.
+// claimed reports whether a slot element has an owner: it is a direct child
+// of a component or of a slot element, or a branch (possibly inside a
+// fragment) of a conditional that is (syntax.md, *Slots → Placement*).
 func claimed(slot *rtsx.Node) bool {
 	n := slot.Parent
 	if n.Kind == rtsx.KindJsxElement {
-		return isContainer(n)
+		return isOwner(n)
 	}
 	if n.Kind == rtsx.KindJsxFragment { // a fragment branch: reported as mixed-conditional-slot
 		n = n.Parent
@@ -155,7 +155,13 @@ func claimed(slot *rtsx.Node) bool {
 	for n.Kind == rtsx.KindParenthesizedExpression || n.Kind == rtsx.KindConditionalExpression {
 		n = n.Parent
 	}
-	return n.Kind == rtsx.KindJsxExpression && n.Parent.Kind == rtsx.KindJsxElement && isContainer(n.Parent) && slotConditional(n) != nil
+	return n.Kind == rtsx.KindJsxExpression && n.Parent.Kind == rtsx.KindJsxElement && isOwner(n.Parent) && slotConditional(n) != nil
+}
+
+// isOwner: an element whose slots its slot children fill — a component, or
+// a slot element (*Recursive slots*).
+func isOwner(n *rtsx.Node) bool {
+	return isContainer(n) || isSlotElement(n)
 }
 
 // removeOrphans reports every slot element without a container
@@ -175,14 +181,6 @@ func (c *passContext) removeOrphans() []emit.Edit {
 	return edits
 }
 
-// slotItem is one filling of a slot: an element, or a conditional of them.
-type slotItem struct {
-	name string
-	el   *rtsx.Node // a slot element, or
-	cond *rtsx.Node // a conditional of slot elements
-	at   *rtsx.Node // where to report errors
-}
-
 // hoist rewrites one container: `<P a>…<$X o>body</$X>…</P>` →
 // `<P a $X={{ o, children: body }}>…</P>`.
 func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
@@ -192,98 +190,28 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 		opening = p.AsJsxElement().OpeningElement
 	}
 	a := readAttributes(p)
-	tagText := c.tagText(p)
+	names, values, replaced, remaining := c.assignSlots(p, a)
 
-	// Sort the children: slot items, and what stays.
-	var items []slotItem
-	var remaining []*rtsx.Node
-	if p.Kind == rtsx.KindJsxElement {
-		for _, ch := range p.Children().Nodes {
-			switch {
-			case isSlotElement(ch):
-				items = append(items, slotItem{name: rtsx.NodeText(tagOf(ch)), el: ch, at: ch})
-			case slotConditional(ch) != nil:
-				name, ok := c.conditionalSlotName(slotConditional(ch))
-				if ok {
-					items = append(items, slotItem{name: name, cond: slotConditional(ch), at: ch})
-				}
-			default:
-				remaining = append(remaining, ch)
-			}
-		}
-	}
-
-	// Group by slot, in order of first appearance.
-	var names []string
-	groups := map[string][]slotItem{}
-	for _, it := range items {
-		if _, seen := groups[it.name]; !seen {
-			names = append(names, it.name)
-		}
-		groups[it.name] = append(groups[it.name], it)
-	}
-
-	var slotAttrs [][]emit.Piece
-	for _, name := range names {
-		group := groups[name]
-		if a.named[name] != nil {
-			c.errorAt(group[0].at, "duplicate-slot", "`%s` is already filled", name)
-			continue
-		}
-		list := c.listSlot != nil && c.listSlot(tagText, name)
-		if !list && len(group) > 1 {
-			for _, it := range group[1:] {
-				c.errorAt(it.at, "duplicate-slot", "`%s` is already filled", name)
-			}
-			group = group[:1]
-		}
-		val := []emit.Piece{emit.Synth(name+"={", origin)}
-		if list {
-			val = append(val, emit.Synth("[", origin))
-			for i, it := range group {
-				if i > 0 {
-					val = append(val, emit.Synth(", ", origin))
-				}
-				if it.cond != nil {
-					val = append(val, emit.Synth("...(", origin))
-					val = append(val, c.conditionalValue(it.cond, true, origin)...)
-					val = append(val, emit.Synth(")", origin))
-				} else {
-					val = append(val, c.slotObject(it.el)...)
-				}
-			}
-			val = append(val, emit.Synth("]", origin))
-		} else if it := group[0]; it.cond != nil {
-			val = append(val, c.conditionalValue(it.cond, false, origin)...)
-		} else {
-			val = append(val, c.slotObject(it.el)...)
-		}
-		slotAttrs = append(slotAttrs, append(val, emit.Synth("}", origin)))
-	}
-
-	// The new element.
+	// The new element: written attributes (minus params and replaced `$X=`),
+	// then the slot props.
 	tag := emit.Span{Pos: c.span(opening.TagName()).Pos, End: opening.Attributes().Pos()}
 	tag.End = tag.Pos + len(strings.TrimRight(c.text[tag.Pos:tag.End], " \t\r\n"))
 	out := []emit.Piece{emit.Synth("<", origin), emit.Copy(c.text, tag)}
 	for _, attr := range opening.Attributes().Properties() {
-		if _, isParams := syntax.SlotParams(attr); isParams {
+		if _, isParams := syntax.SlotParams(attr); isParams || replaced[attr] {
 			continue
 		}
 		out = append(out, emit.Synth(" ", origin), c.copy(attr))
 	}
-	for _, attr := range slotAttrs {
-		out = append(append(out, emit.Synth(" ", origin)), attr...)
+	for _, name := range names {
+		out = append(out, emit.Synth(" "+name+"={", origin))
+		out = append(append(out, values[name]...), emit.Synth("}", origin))
 	}
 
-	var meaningful []*rtsx.Node
-	for _, ch := range remaining {
-		if !(ch.Kind == rtsx.KindJsxText && ch.AsJsxText().ContainsOnlyTriviaWhiteSpaces) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
-			meaningful = append(meaningful, ch)
-		}
-	}
+	meaningful := meaningfulChildren(remaining)
 	var children []emit.Piece
 	for _, ch := range remaining {
-		children = append(children, c.copy(ch))
+		children = append(children, c.copyChild(ch))
 	}
 	open := len(meaningful) > 0
 	if a.params != nil {
@@ -304,6 +232,62 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 		out = append(out, emit.Synth("</", origin), c.copy(opening.TagName()), emit.Synth(">", origin))
 	}
 	return []emit.Edit{{Span: c.span(p), Pieces: out}}
+}
+
+func meaningfulChildren(children []*rtsx.Node) []*rtsx.Node {
+	var out []*rtsx.Node
+	for _, ch := range children {
+		if !(ch.Kind == rtsx.KindJsxText && ch.AsJsxText().ContainsOnlyTriviaWhiteSpaces) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
+			out = append(out, ch)
+		}
+	}
+	return out
+}
+
+// assignSlots folds the slot children of an owner (a component or a slot
+// element) into one value per slot, in source order: a slot element assigns
+// its value; a conditional assigns in its branches and keeps the previous
+// value in its null branches — the last assignment wins (syntax.md, *Slots →
+// Repeated slots*). An explicit `$X={…}` attribute of the owner is the first
+// assignment; when a slot element follows, the attribute is replaced.
+//
+// It returns the slots in order of first appearance, their values, the
+// replaced attributes, and the children that are not slots.
+func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map[string][]emit.Piece, map[*rtsx.Node]bool, []*rtsx.Node) {
+	var names []string
+	values := map[string][]emit.Piece{}
+	replaced := map[*rtsx.Node]bool{}
+	var rest []*rtsx.Node
+	previous := func(name string) []emit.Piece {
+		if v, ok := values[name]; ok {
+			return v
+		}
+		names = append(names, name)
+		if attr := a.named[name]; attr != nil && value(attr) != nil {
+			replaced[attr] = true
+			return c.operand(value(attr), rtsx.PrecedenceComma)
+		}
+		return nil
+	}
+	if owner.Kind != rtsx.KindJsxElement {
+		return nil, values, replaced, nil
+	}
+	for _, ch := range owner.Children().Nodes {
+		switch {
+		case isSlotElement(ch):
+			name := rtsx.NodeText(tagOf(ch))
+			previous(name)
+			values[name] = c.slotObject(ch)
+		case slotConditional(ch) != nil:
+			cond := slotConditional(ch)
+			if name, ok := c.conditionalSlotName(cond); ok {
+				values[name] = c.conditionalValue(cond, previous(name), c.openingSpan(owner))
+			}
+		default:
+			rest = append(rest, ch)
+		}
+	}
+	return names, values, replaced, rest
 }
 
 // conditionalSlotName checks a conditional's branches: each must be one slot
@@ -341,22 +325,21 @@ func isNullish(n *rtsx.Node) bool {
 }
 
 // conditionalValue rebuilds a conditional of slot elements as a conditional
-// of slot objects: null → undefined; in a list slot, `[obj]` and `[]`.
-func (c *passContext) conditionalValue(expr *rtsx.Node, list bool, origin emit.Span) []emit.Piece {
+// of slot values: a null branch keeps the previous value (undefined when
+// there is none).
+func (c *passContext) conditionalValue(expr *rtsx.Node, previous []emit.Piece, origin emit.Span) []emit.Piece {
 	expr = unwrapParens(expr)
 	switch {
 	case expr.Kind == rtsx.KindConditionalExpression:
 		ce := expr.AsConditionalExpression()
 		out := append(c.operand(ce.Condition, rtsx.PrecedenceConditional), emit.Synth(" ? ", origin))
-		out = append(out, c.conditionalValue(ce.WhenTrue, list, origin)...)
+		out = append(out, c.conditionalValue(ce.WhenTrue, previous, origin)...)
 		out = append(out, emit.Synth(" : ", origin))
-		return append(out, c.conditionalValue(ce.WhenFalse, list, origin)...)
-	case isNullish(expr) && list:
-		return []emit.Piece{emit.Synth("[]", c.span(expr))}
+		return append(out, c.conditionalValue(ce.WhenFalse, previous, origin)...)
+	case isNullish(expr) && previous != nil:
+		return append(append([]emit.Piece{emit.Synth("(", c.span(expr))}, previous...), emit.Synth(")", c.span(expr)))
 	case isNullish(expr):
 		return []emit.Piece{emit.Synth("undefined", c.span(expr))}
-	case list:
-		return append(append([]emit.Piece{emit.Synth("[", origin)}, c.slotObject(expr)...), emit.Synth("]", origin))
 	}
 	return c.slotObject(expr)
 }
@@ -413,21 +396,21 @@ func objectLiteral(props [][]emit.Piece, origin emit.Span) []emit.Piece {
 	return append(out, emit.Synth(" }", origin))
 }
 
-// slotObject: `<$X a="1" {...r} { p }>body</$X>` →
-// `{ a: "1", ...r, children: (p) => body }` (syntax.md, *Usage and
-// desugaring*).
+// slotObject: `<$X a="1" {...r} { p }><$Y />body</$X>` →
+// `{ a: "1", ...r, $Y: {}, children: (p) => body }` (syntax.md, *Usage and
+// desugaring*, *Recursive slots*).
 func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 	origin := c.openingSpan(el)
 	opening := el
 	if el.Kind == rtsx.KindJsxElement {
 		opening = el.AsJsxElement().OpeningElement
 	}
-	children := jsxChildren(el)
-	var params *rtsx.Node
+	a := readAttributes(el)
+	names, values, replaced, rest := c.assignSlots(el, a)
+	body := meaningfulChildren(rest)
 	var attrs []*rtsx.Node
 	for _, attr := range opening.Attributes().Properties() {
-		if pattern, ok := syntax.SlotParams(attr); ok {
-			params = pattern
+		if _, ok := syntax.SlotParams(attr); ok || replaced[attr] {
 			continue
 		}
 		if attr.Kind == rtsx.KindJsxAttribute {
@@ -435,7 +418,7 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 			case name == "key":
 				c.errorAt(attr, "slot-key", "Slots are not elements: `key` is not allowed")
 				continue
-			case name == "children" && len(children) > 0:
+			case name == "children" && len(body) > 0:
 				c.errorAt(attr, "slot-children-conflict", "`children` is given twice: as an attribute and as the body")
 				continue
 			}
@@ -443,13 +426,19 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		attrs = append(attrs, attr)
 	}
 	props := c.attributeProps(attrs)
-	if len(children) > 0 {
-		body := c.bodyOf(children, []emit.Piece{emit.Copy(c.text, c.childrenSpan(el))}, origin)
-		prop := []emit.Piece{emit.Synth("children: ", origin)}
-		if params != nil {
-			prop = append(prop, emit.Synth("(", origin), c.copy(params), emit.Synth(") => ", origin))
+	for _, name := range names {
+		props = append(props, append([]emit.Piece{emit.Synth(name+": ", origin)}, values[name]...))
+	}
+	if len(body) > 0 {
+		var all []emit.Piece
+		for _, ch := range rest {
+			all = append(all, c.copyChild(ch))
 		}
-		props = append(props, append(prop, body...))
+		prop := []emit.Piece{emit.Synth("children: ", origin)}
+		if a.params != nil {
+			prop = append(prop, emit.Synth("(", origin), c.copy(a.params), emit.Synth(") => ", origin))
+		}
+		props = append(props, append(prop, c.bodyOf(body, all, origin)...))
 	}
 	return objectLiteral(props, origin)
 }

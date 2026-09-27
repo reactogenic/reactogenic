@@ -22,7 +22,8 @@ type Error struct {
 //   - params-on-html: params on an intrinsic element (`<div { size }>`);
 //   - duplicate-params: a second params pattern on one element;
 //   - segment-syntax: a `#name` with a value or a namespace;
-//   - segment-id: a second `#name` on one element.
+//   - segment-id: a second `#name` on one element;
+//   - arg-without-slot: `&name` / `&&name` on an element without `slot={$X}`.
 //
 // Every element is checked, so one bad attribute does not hide the others.
 func Check(file *rtsx.SourceFile) []Error {
@@ -49,7 +50,14 @@ func checkElement(file *rtsx.SourceFile, element *rtsx.Node) []Error {
 		errs = append(errs, Error{Pos: rtsx.TokenStart(file, n), End: n.End(), Code: code, Message: fmt.Sprintf(format, args...)})
 	}
 	tag := element.TagName()
+	ref, _ := SlotAttachment(element)
 	for _, attr := range element.Attributes().Properties() {
+		if _, kind := SlotArg(attr); kind != NotArg {
+			if ref == nil {
+				report(attr, "arg-without-slot", "`%s` is an arg of a slot attachment; this element has no `slot={$X}`", rtsx.NodeText(attr.Name()))
+			}
+			continue
+		}
 		if _, ok := SlotParams(attr); ok {
 			params++
 			switch {

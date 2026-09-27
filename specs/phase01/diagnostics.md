@@ -8,7 +8,7 @@ emitted code, never a generated name.
 
 | Source | Examples | Reported by |
 | --- | --- | --- |
-| transpiler | orphan-slot, each-no-key, segment-not-found, duplicate-slot | the Vite transform and `reactogenic check` |
+| transpiler | orphan-slot, arg-without-slot, segment-not-found, segment-in-loop | the Vite transform and `reactogenic check` |
 | TS on the emitted `.tsx`, rewritten into slot terms | undeclared-slot, missing-slot, switch-missing-case | `reactogenic check` |
 | TS on the emitted `.tsx`, as is | any other `TSxxxx` | `reactogenic check` |
 
@@ -86,7 +86,8 @@ they never wrote:
 | --- | --- | --- |
 | undeclared-slot | property `$X` does not exist on the props type | slot tag |
 | missing-slot | property `$X` is missing | container tag |
-| params-required | a body is not assignable to `SlotFn<…>` | slot tag |
+| params-required | a body is not assignable to a function slot's `(args) => …` | slot tag |
+| content-not-allowed | property `children` does not exist in the slot's contract | slot tag: "`$X` takes no body" |
 | no-values | a function is not assignable to `ReactNode` | params pattern |
 | content-required | property `children` is missing in the slot object | slot tag |
 | — (required slot filled conditionally) | `undefined` is not assignable to the slot's type | `Match` tag: "`$Hint` is required and cannot be conditional" |
@@ -94,8 +95,9 @@ they never wrote:
 | segment-not-component | the module has no default export, or it is not a component | `#name` |
 | segment-props | required props missing on `<_Section_x />` | `#name` |
 | segment-root-props | the root does not accept `id` or `children` | `#name` |
-| slot-args-missing | a property of `renderSlot`'s args is missing (a function slot rendered without its args) | the rendering element: "`$IconEnd` needs `size`" |
-| slot-no-args | a property of `renderSlot`'s args is not assignable to `never` (args to a slot whose body is not a function) | that arg attribute: "`$Label` takes no args: its body is not a function" |
+| slot-args-missing | a property of `renderSlot`'s args is missing (a function slot attached without its args) | the attachment: "`$Icon` needs `&size`" |
+| slot-no-args | a property of `renderSlot`'s args is not assignable to `never` (args to a slot whose body is not a function) | that arg: "`$Label` takes no args: its body is not a function" |
+| slot-list | `renderSlot`'s args are `never` (a slot typed as an array) | the attachment: "`$List` is a list; a slot is one value" |
 
 Rewrites are matched by the error's origin and its TS code, never by message
 text. An error that matches no rule keeps TS's message, at the origin.

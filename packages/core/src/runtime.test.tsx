@@ -4,11 +4,14 @@ import { Each, Match, noMatch, renderSlot, Switch } from "./index.ts";
 
 describe("renderSlot", () => {
   test("calls a function body with the args", () => {
-    expect(renderSlot(({ size }: { size: string }) => `icon ${size}`, { size: "lg" })).toBe("icon lg");
+    expect(renderSlot({ children: ({ size }: { size: string }) => `icon ${size}` }, { size: "lg" })).toBe("icon lg");
   });
   test("returns a plain body as it is", () => {
-    expect(renderSlot("plain", {})).toBe("plain");
-    expect(renderSlot(undefined, {})).toBeUndefined();
+    expect(renderSlot({ children: "plain" }, {})).toBe("plain");
+  });
+  test("renders the fallback when there is no body", () => {
+    expect(renderSlot({ title: "t" }, {}, "fallback")).toBe("fallback");
+    expect(renderSlot({}, {})).toBeUndefined();
   });
 });
 

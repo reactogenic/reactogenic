@@ -230,3 +230,38 @@ and `.rtsx` is recognised by its file extension:
 
 **Result.** Patch `0002-rtsx-parser.patch`: one new file,
 `internal/parser/rtsx.go`, and three lines in `parseJsxAttribute`.
+
+## RGP1-043 — The slot model: singular slots, attachments, args
+
+Supersedes the slot parts of RGP1-005 and RGP1-042 (syntax.md, *Slots*).
+
+**Decision.** A slot is one prop value, `Slot<P>` (P is the complete prop
+contract) or `FnSlot<P, A>`. `<$X>` constructs it; repeating it replaces it
+(last assignment wins). The container attaches it with `<El slot={$X} …>`:
+the attachment's props are defaults the slot's props replace, per prop; its
+children are the fallback; `&name` is an arg of a function slot's body,
+`&&name` an arg and a prop. Slots nest (a slot element inside a slot element
+fills that slot's slots). An attachment may run many times — inside an `Each`
+— while the slot stays one value.
+
+**Why.** Lists of slots (`Slot<P>[]`) could not say how static items and
+data-driven ones mix, nor which props come from the container and which from
+the caller. A singular slot attached inside the container's own loop answers
+both: repetition belongs to the attachment, and `&` / `&&` say which values
+are args and which are props.
+
+**Consequences.**
+
+- **The transpiler is purely syntactic.** List slots were its only
+  type-directed step. Gone with them: `Input.ListSlot`, the checker's
+  `IsListSlot`, the two-round program build (RGP1-051), `list-slots.txt`.
+  The Vite transform needs no checker (vite.md).
+- **Args are typed by `renderSlot`**, not by the transpiler: a function slot
+  rendered without its args, a plain slot rendered with any, and a slot typed
+  as an array are TS errors at the attachment.
+- The parser patch (0002) adds `&name` / `&&name`, stored as a `JsxAttribute`
+  named `"&name"` — no new node kind, as for `#name`.
+- `Each` no longer checks keys; where a missing key is reported for slots is
+  open (syntax.md, OPEN #4).
+- Open: last-wins with conditional assignments (OPEN #7, implemented
+  provisionally in source order); reachability of attachments (tech debt).

@@ -62,27 +62,6 @@ func GetChecker(p *Program) (*Checker, func()) {
 	return p.GetTypeChecker(context.Background())
 }
 
-// IsListSlot answers syntax.md, *List slots*: is the prop `slot` of the
-// component a JSX tag refers to declared as an array or a tuple, ignoring
-// undefined and null? It reads the props type from the component's call
-// signatures.
-func IsListSlot(c *Checker, tagName *Node, slot string) bool {
-	for _, sig := range c.GetSignaturesOfType(c.GetTypeAtLocation(tagName), checker.SignatureKindCall) {
-		if len(sig.Parameters()) == 0 {
-			continue
-		}
-		prop := c.GetPropertyOfType(c.GetTypeAtPosition(sig, 0), slot)
-		if prop == nil {
-			continue
-		}
-		t := c.GetNonNullableType(c.GetTypeOfSymbol(prop))
-		if c.IsArrayType(t) || checker.IsTupleType(t) {
-			return true
-		}
-	}
-	return false
-}
-
 // IsError reports whether a diagnostic is an error, not a warning or a
 // suggestion.
 func IsError(d *Diagnostic) bool {

@@ -30,6 +30,10 @@ func TestCheck(t *testing.T) {
 		// segment-syntax
 		{`<section #about-us="x" />`, []string{"segment-syntax@#about-us=\"x\""}},
 		{`<section #about:us />`, []string{"segment-syntax@#about:us"}},
+		// Args need an attachment.
+		{`<option slot={$Option} &size &&value={v} />`, nil},
+		{`<option &size />`, []string{"arg-without-slot@&size"}},
+		{`<option slot="header" &&value={v} />`, []string{"arg-without-slot@&&value={v}"}},
 		// One bad attribute does not hide the rest, on this element or others.
 		{`<div { a } #x #y><section #p="1" /></div>`, []string{"params-on-html@{ a }", "segment-id@#y", "segment-syntax@#p=\"1\""}},
 	}

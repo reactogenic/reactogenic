@@ -1,5 +1,5 @@
 import type { Key, ReactNode } from "react";
-import type { OptionalSlotFn } from "./slots.ts";
+import type { SlotFn } from "./slots.ts";
 
 // `Switch` and `Match` exist only as elements: the transpiler lowers them to
 // conditional expressions and drops their import (syntax.md, *Flow
@@ -8,7 +8,7 @@ import type { OptionalSlotFn } from "./slots.ts";
 
 export interface MatchProps<T> {
   on: T;
-  children?: OptionalSlotFn<{ value: NonNullable<T> }>;
+  children?: ReactNode | SlotFn<{ value: NonNullable<T> }>;
 }
 
 export interface SwitchCase {
@@ -22,7 +22,7 @@ export interface SwitchProps<T> {
   on: T;
   exhaustive?: true;
   $Case: SwitchCase[];
-  children?: OptionalSlotFn<{ value: T }>;
+  children?: ReactNode | SlotFn<{ value: T }>;
 }
 
 function compileTimeOnly(name: string): never {

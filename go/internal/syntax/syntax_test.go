@@ -185,3 +185,51 @@ func TestSegmentRootWhitespace(t *testing.T) {
 		t.Errorf("message = %q", msg)
 	}
 }
+
+// Slot args on an attachment (syntax.md, *Slots → Grammar*).
+func TestSlotArgs(t *testing.T) {
+	text := `const x = <option slot={$Option} &size &label={o.label} &&value={o.value} &&selected>t</option>;`
+	file, attrs := attributes(t, text)
+	noErrors(t, file)
+	if ref, _ := SlotAttachment(attrs[0].Parent.Parent); ref == nil || rtsx.NodeText(ref) != "$Option" {
+		t.Fatalf("attachment not found")
+	}
+	want := []struct {
+		src  string
+		name string
+		kind ArgKind
+	}{
+		{`slot={$Option}`, "", NotArg},
+		{`&size`, "size", Arg},
+		{`&label={o.label}`, "label", Arg},
+		{`&&value={o.value}`, "value", ArgProp},
+		{`&&selected`, "selected", ArgProp},
+	}
+	if len(attrs) != len(want) {
+		t.Fatalf("want %d attributes, got %d", len(want), len(attrs))
+	}
+	for i, w := range want {
+		name, kind := SlotArg(attrs[i])
+		if name != w.name || kind != w.kind {
+			t.Errorf("%s: got %q %v", w.src, name, kind)
+		}
+		start := strings.Index(text, w.src)
+		if got := text[rtsx.TokenStart(file, attrs[i]):attrs[i].End()]; got != w.src || rtsx.TokenStart(file, attrs[i]) != start {
+			t.Errorf("span: got %q, want %q", got, w.src)
+		}
+	}
+}
+
+func TestSlotArgErrors(t *testing.T) {
+	for _, text := range []string{
+		`const x = <option slot={$Option} & size />;`, // whitespace after &
+		`const x = <option slot={$Option} &{x} />;`,
+	} {
+		if file := rtsx.ParseRTSX("/test.rtsx", text); len(file.Diagnostics()) == 0 {
+			t.Errorf("want a parse error: %s", text)
+		}
+	}
+	if file := rtsx.ParseTSX("/test.tsx", `const x = <option slot={$Option} &size />;`); len(file.Diagnostics()) == 0 {
+		t.Error("want a syntax error in .tsx")
+	}
+}

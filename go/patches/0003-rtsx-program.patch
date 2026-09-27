@@ -1,9 +1,9 @@
 diff --git a/rtsx/program.go b/rtsx/program.go
 new file mode 100644
-index 0000000..73ea6fe
+index 0000000..7d2ed77
 --- /dev/null
 +++ b/rtsx/program.go
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,69 @@
 +// Reactogenic's bridge to tsgo's program, file system and checker.
 +// Not part of upstream: added by go/patches/0003-rtsx-program.patch.
 +// Keep it thin — aliases and short wrappers only.
@@ -66,27 +66,6 @@ index 0000000..73ea6fe
 +// GetChecker returns p's checker and the func that releases it.
 +func GetChecker(p *Program) (*Checker, func()) {
 +	return p.GetTypeChecker(context.Background())
-+}
-+
-+// IsListSlot answers syntax.md, *List slots*: is the prop `slot` of the
-+// component a JSX tag refers to declared as an array or a tuple, ignoring
-+// undefined and null? It reads the props type from the component's call
-+// signatures.
-+func IsListSlot(c *Checker, tagName *Node, slot string) bool {
-+	for _, sig := range c.GetSignaturesOfType(c.GetTypeAtLocation(tagName), checker.SignatureKindCall) {
-+		if len(sig.Parameters()) == 0 {
-+			continue
-+		}
-+		prop := c.GetPropertyOfType(c.GetTypeAtPosition(sig, 0), slot)
-+		if prop == nil {
-+			continue
-+		}
-+		t := c.GetNonNullableType(c.GetTypeOfSymbol(prop))
-+		if c.IsArrayType(t) || checker.IsTupleType(t) {
-+			return true
-+		}
-+	}
-+	return false
 +}
 +
 +// IsError reports whether a diagnostic is an error, not a warning or a

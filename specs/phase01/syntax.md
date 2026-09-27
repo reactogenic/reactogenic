@@ -14,6 +14,7 @@ meaning; exceptions are called out explicitly in the section that makes them.
 | --- | --- |
 | `{ a, b }` / `{}` in attribute position | slot params |
 | `#name` in attribute position | segment roots — a syntax error for esbuild and Babel; TypeScript's parser accepts it (see *Segment roots*) |
+| `&name`, `&&name` in attribute position | slot args (see *Slots → Attachment*) |
 
 | Extension | Status |
 | --- | --- |
@@ -34,7 +35,7 @@ cases — conditional slots exist only because pass 3 runs after pass 2.
 | 0 | checks on the source | segment files, `Each` keys — reported against what the author wrote |
 | 1 | shorthand props | bare attribute → `name={name}`; resolved first, while the source scopes (params included) are intact |
 | 2 | flow lowering | `Match`, `Switch` → conditional expressions |
-| 3 | slot hoisting | slot elements, and conditional expressions of slot elements → `$X` props (an array for a list slot — the one type-directed step); params → callbacks |
+| 3 | slots | attachments (`slot={$X}`) → conditional elements; slot elements, and conditional expressions of slot elements → `$X` props; params → callbacks |
 | 4 | segment roots | `#name` → `id`, import, nested default export |
 
 The `.rtsx` → `.tsx` examples in this document show the final output unless
@@ -205,97 +206,71 @@ in; braces = give me your value out.
 
 ### Motivation
 
-A container has named places (icon, title, cell). In plain React each place is
-a prop; once a place needs options *and* values from the container, the call
+A container has named places (icon, title, option). In plain React each place
+is a prop; once a place needs props *and* values from the container, the call
 site turns inside-out:
 
 ```tsx
-<Button size="lg" $IconStart={{ spacing: "tight", children: ({ size }) => <Icon name="plus" size={size} /> }}>
+<Button size="lg" $IconStart={{ className: "icon", children: ({ size }) => <Icon name="plus" size={size} /> }}>
 ```
 
-A slot element writes the same thing top-down, as markup. There is no slot
-component: a slot is **data plus a render function**, and the container owns
-all markup around it.
+A slot element writes the same thing top-down, as markup. A slot is **a prop
+value** — props for one element the container renders, plus its body — and
+the container decides where that element goes.
 
 `$` is reserved for slots ("$ stands for $lot, not $ystem"). Rule of thumb:
 **bare name = pass my value in; braces = give me your value out.**
 
-Terms, for `<$IconStart spacing="tight" { size }>…</$IconStart>`:
+| Term | Where | Part | Direction |
+| --- | --- | --- | --- |
+| slot **props** | caller | `className="icon"` in `<$IconStart className="icon">` | caller → element |
+| slot **body** | caller | the children of `<$IconStart>` | caller → element |
+| slot **params** | caller | `{ size }` in `<$IconStart { size }>` | container → caller |
+| **attachment** | container | `<span slot={$IconStart} />` | where the slot renders |
+| **args** | container | `&size` on the attachment | what the params receive |
 
-| Term | Part | Direction |
-| --- | --- | --- |
-| slot **options** | `spacing="tight"` | user → container |
-| slot **params** | `{ size }` | container → user |
-| slot **body** | `…` | |
+### Declaration: `Slot<P>` and `FnSlot<P, A>`
 
-The container side passes **args** (`renderSlot(children, { size })`); the user
-side declares **params** — same split as any JS function. "Binding" is kept
-for two-way binding; "slot props" is avoided because in React it would read as
-the options.
-
-### Declaration: `Slot<Props, Children>`
-
-A slot is a `$`-named prop. Its type says two things: which element the
-container renders for it — the slot's **options are that element's props** —
-and what the body may be. The framework package provides:
+A slot is a `$`-named prop. Its type is the **complete prop contract** of the
+element it stands for:
 
 ```tsx
-type SlotFn<Params> = (params: Params) => ReactNode;          // params required
-type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;     // params optional
+type Slot<Props> = Props;
 
-// A slot: the props of the element it renders, and its body. Without
-// Children the body is the props' own `children`, optional or not; with it,
-// Children replaces them and the body is required.
-type Slot<Props, Children = never> = [Children] extends [never]
-  ? Props
-  : Omit<Props, "children"> & { children: Children };
-
-// Args are the body's parameter; a body that cannot be a function takes none.
-type NoArgs = { readonly [arg: string]: never };
-
-function renderSlot<Children>(
-  children: Children,
-  args: Children extends (params: infer Params) => ReactNode ? Params : NoArgs,
-): ReactNode {
-  return typeof children === "function" ? children(args) : children;
-}
+// A function slot: its body receives the attachment's args.
+type FnSlot<Props, Args> = Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
 ```
 
 ```tsx
 interface ButtonProps {
+  $IconStart: Slot<ComponentProps<"span">>;   // required
+  $IconEnd?: Slot<ComponentProps<"span">>;    // optional
+  $Badge?: FnSlot<ComponentProps<"span">, { size: ButtonSize }>;
+  size?: ButtonSize;
   children: ReactNode;
-  size: ButtonSize;
-  $Label: Slot<TextProps>;
-  $IconEnd?: Slot<ComponentProps<"div">, SlotFn<{ size: ButtonSize }>>;
 }
 ```
 
-At the use site nothing changes: `<$Label tone="muted">Save</$Label>` has its
-options checked against `TextProps`, because they are `TextProps`.
+- **Required or optional** is ordinary TypeScript optionality of the prop.
+- **The contract is complete.** `$Box: Slot<{ color: string }>` takes no
+  body: `<$Box color="red" />` is fine, `<$Box color="red">Hi</$Box>` is an
+  error — unless `children` is in the contract, and then its optionality
+  decides whether a body is required.
+- **Slots are singular.** A slot is one prop value, never a list; a slot typed
+  as an array (`Slot<P>[]`) is an error at its attachment (below).
 
-| Declaration | Body |
-| --- | --- |
-| `Slot<{ children?: ReactNode }>` | optional |
-| `Slot<{ children: ReactNode }>`, `Slot<TextProps>` with required `children` | required |
-| `Slot<ComponentProps<"div">>` | optional — `<div>`'s own `children` are |
-| `Slot<P, SlotFn<A>>`, `Slot<P, OptionalSlotFn<A>>` | required, of that type |
+### Attachment: `slot={$X}`
 
-`Slot<Props, Children>` is only a type: it expands to the object form of
-*Usage and desugaring* (`{ ...options, children }`). A container may still
-declare that object by hand and call `renderSlot` itself — plain TSX.
-
-### Rendering a slot: `slot={$X}`
-
-A container renders a slot by naming it on the element it stands for:
+A container attaches a slot to the element it stands for:
 
 ```tsx
 // Button.rtsx
-function Button({ children, size, $Label, $IconEnd }: ButtonProps) {
+function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
   return (
     <button>
-      <Text slot={$Label} />
+      <span slot={$IconStart} className="icon" />
       {children}
-      <div slot={$IconEnd} size />
+      <span slot={$Badge} &size>new</span>
     </button>
   );
 }
@@ -305,41 +280,48 @@ function Button({ children, size, $Label, $IconEnd }: ButtonProps) {
 // Button.tsx
 import { renderSlot as _renderSlot } from "@reactogenic/core";
 
-function Button({ children, size, $Label, $IconEnd }: ButtonProps) {
+function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
   return (
     <button>
-      {$Label ? <Text {...$Label}>{_renderSlot($Label.children, {})}</Text> : null}
+      {$IconStart ? <span className="icon" {...$IconStart}>{_renderSlot($IconStart, {})}</span> : null}
       {children}
-      {$IconEnd ? <div {...$IconEnd}>{_renderSlot($IconEnd.children, { size: size })}</div> : null}
+      {$Badge ? <span {...$Badge}>{_renderSlot($Badge, { size: size }, "new")}</span> : <span>new</span>}
     </button>
   );
 }
 ```
 
-- **The options become the element's props**: `{...$X}`.
-- **An unfilled slot renders nothing** — not an empty element.
-- **The element's own attributes are the args** of a function slot, and
-  nothing else: `<div slot={$IconEnd} size>` hands out `{ size }` (here
-  through *Shorthand props*). The container cannot add or override props of
-  the element; they are the user's options.
-- **Args are to a slot what arguments are to a function.** The body always
-  goes through `renderSlot`, whose args are the body's parameter: a function
-  slot rendered without its args, and a slot whose body cannot be a function
-  rendered with any, are ordinary TS errors — as `f()` for `f(x)`, and
-  `f({ x: 1 })` for `f()`. No types are needed to emit.
+- **Slot props replace the attachment's props, per prop.** The attachment's
+  props are defaults: `<span slot={$IconStart} className="icon" />` with
+  `<$IconStart className="override" />` renders `className="override"`, not
+  both; with `<$IconStart id="x" />` it keeps `className="icon"` and adds
+  `id="x"`.
+- **A missing slot renders nothing** — no empty element — unless the
+  attachment has children: then they are the **fallback**, rendered in place
+  of the slot's body whenever there is none (no slot, or a slot without a
+  body). Other attachment props do not establish a fallback.
+- **`key`** on an attachment is React's key on the element, never a slot prop
+  or an arg.
+- **Args.** Attributes with `&` are args for a function slot's body; with `&&`
+  they are args *and* props of the element:
 
-  | Slot | `<div slot={$X} />` | `<div slot={$X} size />` |
+  | Attribute | Element prop | Arg |
   | --- | --- | --- |
-  | body `ReactNode` | ✓ | error: `$X` takes no args |
-  | body `SlotFn<{ size }>` | error: `size` is missing | ✓ |
-  | body `OptionalSlotFn<{ size }>` | error: `size` is missing | ✓ |
-- The body is the slot's; the element takes no children of its own
-  (slot-render-children). `key` stays a React key on the element.
-- `slot={$X}` exists only in `.rtsx`: a container that renders slots this way
-  is an `.rtsx` file.
+  | `value={x}` | ✓ | |
+  | `&value={x}` | | ✓ |
+  | `&&value={x}` | ✓ | ✓ |
+  | `&value`, `&&value` | — | shorthand for `={value}`: always the binding, never `true` — an arg is a function argument, not a prop; an unbound name is TS's own error |
 
-Position follows *Flow control → Position*: `{…}` as a JSX child, `(…)` in
-expression position.
+  `&&` props are attachment props like any other: the slot's props replace
+  them, and the args still carry the attachment's value.
+  `<$Option { value } value="42" />` is valid — it replaces the rendered
+  `value`; `<$Option { value } value={value + "!"} />` is not — params are not
+  in scope in the slot element's own attributes (a reference error).
+- **Args follow function-call rules.** They go through `renderSlot`, typed by
+  the slot: a function slot rendered without one of its args, and a plain slot
+  rendered with any, are ordinary TS errors — as `f()` for `f(x)`, and
+  `f({ x: 1 })` for `f()`. A slot typed as an array is rejected there too.
+- `slot={$X}` exists only in `.rtsx`: a container is an `.rtsx` file.
 
 > **Exception to the governing rule.** `slot` is an HTML attribute (Web
 > Components), and `<div slot={x}>` parses today with that meaning. `.rtsx`
@@ -347,50 +329,53 @@ expression position.
 > starting with `$`, or a property-access chain ending in one
 > (`props.$Label`). `slot="header"` and any other value keep their meaning.
 
-### Declaration matrix
+**One slot, many executions.** A singular slot may be attached where it runs
+many times; slot cardinality and attachment cardinality are different things:
 
-Three independent axes, all plain TS. The transpiler reads them from the
-parent's props type (see *Typing behaviour*).
+```tsx
+// Select.rtsx
+function Select({ options, $Option }: SelectProps) {
+  const [selected, setSelected] = useState<string>();
+  return (
+    <select>
+      <Each items={options} { item: option }>
+        <option key={option.value} slot={$Option}
+          &&value={option.value} &label={option.label} &&selected={selected === option.value}>
+          {option.label}
+        </option>
+      </Each>
+    </select>
+  );
+}
+```
 
-**1. Is the slot required?**
+```tsx
+// .rtsx
+<Select options>
+  <$Option { label, selected }>
+    <Text>{label}</Text>
+    <Match on={selected}><Icon name="check" /></Match>
+  </$Option>
+</Select>
+```
 
-| Declaration | `<Button>` without `<$IconStart>` |
-| --- | --- |
-| `$IconStart: {…}` | error: `Button` requires `$IconStart` |
-| `$IconStart?: {…}` | fine; container reads `$IconStart?.…` |
+There is one `$Option` value; its attachment runs once per option.
 
-**2. What may the body be?**
-
-| `children` type | body only | params + body |
-| --- | --- | --- |
-| `ReactNode` — container hands nothing out | ✓ | error: `$IconStart` provides no values |
-| `OptionalSlotFn<Params>` | ✓ | ✓ |
-| `SlotFn<Params>` — container needs a function (lazy or per-item calls) | error: `$IconStart` requires params | ✓ |
-
-A user who needs none of the values of a `SlotFn` slot writes empty
-params: `<$Row {}>…</$Row>` → `children: () => …`.
-
-**3. Is the body required?** The props' own `children` decide (see the
-table in *Declaration*).
-
-| Declaration | `<$IconStart spacing="tight" />` |
-| --- | --- |
-| `children: …` — `Slot<P, C>`, or `Slot<P>` with required `children` | error: `$IconStart` requires content |
-| `children?: …` — e.g. `Slot<{ children?: ReactNode }>` | fine; `renderSlot(undefined, {})` renders nothing |
-
-The emitted value is **always an object**, even for a slot with no options:
-the simplest slot is `$Title: { children: ReactNode }`, never `$Title: ReactNode`.
-Otherwise the shape would depend on whether the user happened to pass options.
-
-Fallback content for an optional slot is the container's business:
-`renderSlot($IconStart?.children, { size }) ?? <DefaultIcon />`.
+> OPEN (#4): keys when an attachment runs per item. The report of a missing
+> key belongs on the slot call (`<$Option { label }>`), not on the
+> attachment or on `Each`. How a per-item key reaches the rendered element is
+> not decided: `key` among the args, or params in scope in the slot
+> element's own attributes (`<$Option { value } key={value}>`). Until then
+> `key` on a slot element stays slot-key.
 
 ### Usage and desugaring
+
+`<$X>` constructs the value of the prop `$X`:
 
 ```tsx
 // .rtsx
 <Button size="lg">
-  <$IconStart spacing="tight" { size }>
+  <$IconStart className="icon" { size }>
     <Icon name="plus" size />
   </$IconStart>
   Add
@@ -401,7 +386,7 @@ Fallback content for an optional slot is the container's business:
 // .tsx
 <Button size="lg"
   $IconStart={{
-    spacing: "tight",
+    className: "icon",
     children: ({ size }) => <Icon name="plus" size={size} />,
   }}>
   Add
@@ -435,7 +420,7 @@ Params are optional. Without them the body is passed as plain content:
 ```tsx
 // .rtsx
 <Button size="md">
-  <$IconStart spacing="tight">
+  <$IconStart className="icon">
     <Icon name="plus" />
   </$IconStart>
   Add
@@ -446,7 +431,7 @@ Params are optional. Without them the body is passed as plain content:
 // .tsx
 <Button size="md"
   $IconStart={{
-    spacing: "tight",
+    className: "icon",
     children: <Icon name="plus" />,
   }}>
   Add
@@ -455,21 +440,22 @@ Params are optional. Without them the body is passed as plain content:
 
 For each component element `<P>`:
 
-1. Every **immediate child** element whose tag starts with `$` is a slot element.
-2. It is removed from the children and appended to `<P>` as the attribute
-   `$Name={{ … }}`, after all written attributes, in source order.
-3. Slot attributes become object properties, order preserved:
+1. Every slot element placed as below (*Placement*) is taken out of the
+   children and becomes the attribute `$Name={…}`, appended after all written
+   attributes, in order of first appearance.
+2. Slot attributes become object properties, order preserved:
 
    | Slot attribute | Property |
    | --- | --- |
-   | `spacing="tight"` | `spacing: "tight"` |
-   | `spacing={x}` | `spacing: x` |
-   | `spacing` | `spacing: spacing` or `spacing: true` (*Shorthand props*) |
+   | `className="icon"` | `className: "icon"` |
+   | `gap={2}` | `gap: 2` |
+   | `wide` | `wide: wide` or `wide: true` (*Shorthand props*) |
    | `aria-label="x"` | `"aria-label": "x"` |
    | `{...rest}` | `...rest` |
 
-4. The slot body becomes the `children` property. The choice is purely
-   syntactic — the transpiler never looks at the declared type:
+3. Slot elements inside a slot element are **its** slots: they become
+   properties of its value (*Recursive slots*).
+4. The rest of the body becomes the `children` property — purely syntactic:
 
    | Slot element | Property |
    | --- | --- |
@@ -485,9 +471,122 @@ For each component element `<P>`:
    | one `{expr}` | `expr` |
    | text alone | a string literal, as React renders it: whitespace collapsed by JSX's rules (`"Save"`); text with an HTML entity stays `<>…</>` |
    | several children | `<>…</>` |
-
-   A text body is a string, so it fills a slot typed `children: string`.
 5. Whatever is left in `<P>` stays as `children`.
+
+The emitted value is always an object, even with no props: `{}`, or
+`{ children: "Text" }`.
+
+### Recursive slots
+
+A slot's contract can contain slots, and slot elements inside a slot element
+fill them:
+
+```tsx
+// .rtsx
+<Dialog>
+  <$Action variant="solid">
+    <$IconStart>
+      <Icon name="close" />
+    </$IconStart>
+    Close
+  </$Action>
+</Dialog>
+```
+
+```tsx
+// .tsx
+<Dialog
+  $Action={{
+    variant: "solid",
+    $IconStart: { children: <Icon name="close" /> },
+    children: "Close",
+  }}
+/>
+```
+
+with `DialogProps { $Action: Slot<ButtonProps> }`: the attachment
+`<Button slot={$Action} />` spreads `$IconStart` onto `Button`, which attaches
+it in turn. A slot element belongs to its **nearest** parent element: in
+`<$Action><Button><$IconStart /></Button></$Action>` it fills `Button`'s
+`$IconStart`, not `$Action`'s.
+
+### Placement
+
+A slot element must be:
+
+- a **direct child** of a component element or of a slot element, or
+- inside **`Match`, `Switch` or `Each`**, recognised by import origin — a
+  custom component that wraps them is never inferred (`const MyMatch = Match`
+  is not flow control).
+
+Anywhere else — inside an intrinsic element, a fragment, `{c && <$X />}`,
+`.map()` — it is orphan-slot.
+
+### Repeated slots: last assignment wins
+
+A slot is one prop value. Assigning it again replaces it, as a repeated key in
+an object literal does:
+
+```tsx
+// .rtsx
+<Select>
+  <$Option value="1" />
+  <$Option value="2" />
+</Select>
+```
+
+```tsx
+// .tsx
+<Select $Option={{ value: "2" }} />
+```
+
+A slot element also replaces an explicit `$X={…}` attribute on the same
+element: slot elements come after written attributes.
+
+> OPEN (#7, provisional): last-wins together with conditional assignments.
+> Implemented as assignments in source order:
+> `<$X a /><Match on={c}><$X b /></Match>` → `$X={c ? { b } : { a }}`.
+> `Each` around slot elements, and `Match` / `Switch` with params around them,
+> are allowed by *Placement* but have no semantics yet: orphan-slot until
+> decided.
+
+### Conditional slots
+
+A slot may be filled conditionally. It falls out of compiling in passes (see
+*Compilation passes*):
+
+```tsx
+// .rtsx
+<Input value={value} onChange={onChange}>
+  <Match on={invalid}>
+    <$Hint>{renderErrors(errors)}</$Hint>
+  </Match>
+</Input>
+```
+
+```tsx
+// after pass 2 — Match → ternary
+<Input value={value} onChange={onChange}>
+  {invalid ? <$Hint>{renderErrors(errors)}</$Hint> : null}
+</Input>
+```
+
+```tsx
+// after pass 3 — a ternary of slot elements → a ternary prop
+<Input value={value} onChange={onChange}
+  $Hint={invalid ? { children: renderErrors(errors) } : undefined} />
+```
+
+- Each branch is desugared as a slot element on its own; a `null` branch is
+  the value before it (`undefined` when there is none).
+- A required slot filled only conditionally: TS7 reports that `undefined` is
+  not assignable; reworded as "`$Hint` is required and cannot be conditional".
+- Narrowing works: the branch is inline in the ternary.
+
+| Not supported | Error |
+| --- | --- |
+| branches that fill **different** slots (`c ? <$IconStart /> : <$IconEnd />`) | mixed-conditional-slot |
+| a branch that mixes a slot element with other children, or holds several | mixed-conditional-slot |
 
 ### Params on a component: `children` is the default slot
 
@@ -513,185 +612,15 @@ const items = getItems();
 </Each>
 ```
 
-The component is an ordinary runtime component that declares
-`children: SlotFn<…>` (or `OptionalSlotFn<…>`) and calls it; the whole
-*Declaration matrix* applies to `children` as to any slot. Nothing is compiled
-away and no wrapper is added.
-
-With slot elements present, they are hoisted to attributes first and the
-callback wraps what is left. The params are therefore in scope in the
+The component is an ordinary runtime component whose `children` is a
+function. With slot elements present, they are hoisted to attributes first
+and the callback wraps what is left: the params are in scope in the
 component's children only — not in its slot elements, and not in its own
 attributes.
 
-### Conditional slots
-
-An optional slot may be filled conditionally. No new rule is needed for it:
-it falls out of compiling in passes (see *Compilation passes*).
-
-```tsx
-// .rtsx
-<Input value={value} onChange={onChange}>
-  <Match on={invalid}>
-    <$Hint>{renderErrors(errors)}</$Hint>
-  </Match>
-</Input>
-```
-
-```tsx
-// after pass 2 — Match → ternary
-<Input value={value} onChange={onChange}>
-  {invalid ? <$Hint>{renderErrors(errors)}</$Hint> : null}
-</Input>
-```
-
-```tsx
-// after pass 3 — a ternary of slot elements → a ternary prop
-<Input value={value} onChange={onChange}
-  $Hint={invalid ? { children: renderErrors(errors) } : undefined} />
-```
-
-Slot hoisting therefore accepts two things as immediate children: a slot
-element, and a **conditional expression whose branches are slot elements of
-one slot, or `null`**. Where the ternary came from does not matter — a `Match`,
-a `Switch` (a chain of them), or one written by hand.
-
-- Each branch is desugared as a slot element on its own (options, params, body).
-- A `null` branch becomes `undefined`, so `$Hint?: {…}` types and
-  `{ $Hint = fallback }` defaults work unchanged.
-- The slot must be optional. For a required slot TS7 reports that `undefined`
-  is not assignable; reworded as "`$Hint` is required and cannot be conditional".
-- The container can now tell "no hint" (`undefined`) from "empty hint".
-- Narrowing works: the branch is inline in the ternary.
-
-| Not supported | Error |
-| --- | --- |
-| branches that fill **different** slots (`c ? <$IconStart /> : <$IconEnd />`) — it would take two props and evaluate `c` twice | mixed-conditional-slot |
-| a branch that mixes a slot element with other children, or holds several slot elements | mixed-conditional-slot |
-| `{c && <$Hint />}` — `&&` would put `false` or `0` into the slot | orphan-slot |
-| `Match` / `Switch` **with params** around a slot element — they lower to a function call, not a bare ternary | orphan-slot |
-
-### One slot, many items
-
-A slot is filled **once**. When a container renders many items, the data goes
-in as a prop and the slot is the per-item template; the container calls it
-once per item and hands the item out through the params.
-
-```tsx
-interface SelectProps {
-  options: Option[];
-  $Option: { children: SlotFn<Option> };
-}
-
-function Select({ options, $Option }: SelectProps) {
-  return (
-    <ul>
-      {options.map((option) => (
-        <li key={option.value}>{$Option.children(option)}</li>
-      ))}
-    </ul>
-  );
-}
-```
-
-```tsx
-// .rtsx
-const options = getOptions();
-<Select options>
-  <$Option { label, value }>
-    <Flag code={value} />
-    {label}
-  </$Option>
-</Select>
-```
-
-```tsx
-// .tsx
-const options = getOptions();
-<Select options={options}
-  $Option={{
-    children: ({ label, value }) => <><Flag code={value} />{label}</>,
-  }} />
-```
-
-Keys, item markup and iteration stay inside the container; the call site has
-no loop. Per-item variation is written inside the body.
-
-That pattern covers data-driven lists. Items that are **written out** — the
-fields of a form, the cases of a switch — need *List slots*.
-
-### List slots
-
-JSX cannot carry the same attribute twice, so a slot that is filled several
-times must become one array. A slot is a list slot when it is **declared as
-an array**:
-
-```tsx
-interface FormProps {
-  $Field: {
-    name: string;
-    children?: OptionalSlotFn<FieldParams>;
-  }[];  // <- list slot
-}
-```
-
-```tsx
-// .rtsx
-<Form>
-  <$Field name="a" />
-  <$Field name="b" />
-</Form>
-```
-
-```tsx
-// .tsx
-<Form $Field={[{ name: "a" }, { name: "b" }]} />
-```
-
-Same-named slot elements in one parent are collected, in source order, into
-one array attribute, placed where the first of them would be. Each item is
-desugared on its own — own options, own params, own body. Position relative to
-unslotted children is not preserved.
-
-**Array or object is type-directed** — the one place where types change the
-emitted code. The transpiler looks `$X` up in the parent's props type, ignoring
-`undefined` / `null`:
-
-| Declared type of `$X` | Emitted |
-| --- | --- |
-| array or tuple | always an array, even for a single `<$X>` → `[{…}]` |
-| anything else | an object; a second `<$X>` is duplicate-slot |
-
-A conditional item (*Conditional slots*) in a list slot is spread:
-
-```tsx
-// .rtsx
-<Form>
-  <$Field name="a" />
-  <Match on={showB}><$Field name="b" /></Match>
-</Form>
-```
-
-```tsx
-// .tsx
-<Form $Field={[{ name: "a" }, ...(showB ? [{ name: "b" }] : [])]} />
-```
-
-- Items that differ in shape are typed with a discriminated union as the
-  element type (`{ type: "number"; children: SlotFn<{ value: number }> } | …`);
-  TS7 picks the member per item from the literal option, so params are typed
-  per item.
-- "Slot required" for a list means `$Field: {…}[]` vs `$Field?: {…}[]`; an
-  empty list cannot be written, only an absent one.
-- `key` is still not an option of a slot (slot-key); the container keys its
-  items from their options (`name`).
-
-**Still deferred:** list items produced by a loop —
-`{xs.map(() => <$Option …>)}` or `Each` around slot elements. See the roadmap
-note in [Iteration](#iteration-each).
-
 ### Grammar
 
-Two parts.
+Three parts.
 
 **Slot elements — no grammar change.** `<$IconStart>` parses today as a
 component reference. `.rtsx` keeps React's rule for every plain-identifier
@@ -704,11 +633,8 @@ tag and takes only the ones starting with `$`:
 | `$IconStart` — starts with `$` | component | slot element |
 
 A `$` tag is never resolved as an identifier, so nothing needs importing and
-two containers can both have a `$Title` without colliding. No escape is
-needed: in `.rtsx` no component tag starts with `$`.
-
-Member-expression tags (`<motion.div>`, `<Icons.Plus>`, `<M.$Modal>`) are
-references, as today. The rule applies to plain identifiers only.
+two containers can both have a `$Title` without colliding. Member-expression
+tags (`<motion.div>`, `<Icons.Plus>`) are references, as today.
 
 > **Exception to the governing rule.** A tag starting with `$` parses today
 > as a component. In `.rtsx` it is a slot element. Never silent: a TSX
@@ -716,7 +642,7 @@ references, as today. The rule applies to plain identifiers only.
 > is component-name. Rename at the import: `import { $Modal as Modal }`,
 > then `<Modal>`.
 
-**Slot params — the first real grammar change.**
+**Slot params.**
 
 ```
 JsxAttributes  ::= … | JsxSlotParams
@@ -735,8 +661,8 @@ else is a syntax error. So:
 | `{ ...rest }` alone | spread attribute, never params |
 
 Slot params are a normal JS destructuring pattern: renaming, defaults, nesting
-and rest all work and are copied to the emitted parameter unchanged. Renaming
-is the way out of a name collision with the outer scope:
+and rest are copied to the emitted parameter unchanged. Renaming is the way
+out of a name collision with the outer scope:
 
 ```tsx
 // .rtsx
@@ -760,32 +686,28 @@ const label = "Country";
   }} />
 ```
 
-No type annotation inside the pattern; types come from the declaration.
+**Args: `&name` and `&&name`.**
+
+```
+JsxAttribute ::= … | ("&" | "&&") JsxAttributeName [ "=" JsxAttributeValue ]
+```
+
+`&` and `&&` cannot start an attribute in today's TSX (TypeScript, esbuild
+and Babel all reject them), so the forms are free to reserve. No whitespace
+after `&` / `&&`. Only on an attachment (`slot={$X}`); anywhere else is
+arg-without-slot.
 
 ### Typing behaviour
 
-**The transpiler is type-aware.** Before desugaring a container element it
-resolves the props type of its tag. That query depends only on the
-container's declaration, never on the call site being desugared, so there is
-no cycle. The types are used for:
+**The transpiler is purely syntactic**: it never reads a type to decide what
+to emit. TS7 checks the emitted `.tsx`, and that is what types slots:
 
-- **Emit** — array vs object for a slot (*List slots*). The only place where
-  types change the output; everything else is purely syntactic. How the Vite
-  plugin gets at the types: [vite.md](vite.md#types-in-the-transform).
-- **Diagnostics** — every error below is reported on the `.rtsx` source in
-  slot terms, not as an assignability error on emitted code.
-
-The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
-
-- Param names are contextually typed from `SlotFn<Params>`. `{ colour }` on a
-  slot that only hands out `size` → error.
-- Slot attributes are checked as a fresh object literal: unknown option →
-  excess-property error; missing required option → missing-property error.
-- Optional slot: `$IconStart?: {…}`. The container then writes
-  `renderSlot($IconStart?.children, { size })`.
-
-> ROADMAP: a helper such as `Slot<Children, Options = {}>` to shorten
-> declarations. Phase 1 writes slot types out in full.
+- Param names are contextually typed from the slot's function body:
+  `{ colour }` on a slot that only hands out `size` → error.
+- Slot attributes are checked as a fresh object literal: unknown prop →
+  excess-property error; missing required prop → missing-property error; a
+  body on a contract without `children` → excess-property error.
+- Args are checked by `renderSlot` (*Attachment*).
 
 ### Compile errors
 
@@ -793,64 +715,46 @@ The emitted `.tsx` is still fully checked by TS7, which is what types the rest:
 | --- | --- | --- | --- |
 | undeclared-slot | `$X` is not declared in `P` | parent has no `$X` prop | types |
 | missing-slot | `P` requires `$X` | required slot not filled | types |
-| params-required | `$X` requires params | body only, `children: SlotFn` | types |
-| no-values | `$X` provides no values | params, `children: ReactNode` | types |
-| content-required | `$X` requires content | `<$X … />`, `children` not optional | types |
-| orphan-slot | Slot must be immediate child of the component | after flow lowering, the slot element is neither an immediate child of a component element nor a branch of an immediate-child conditional expression | syntax |
+| no-values | `$X` provides no values | params on a slot whose body is not a function | types |
+| content-not-allowed | `$X` takes no body | a body on a slot whose contract has no `children` | types |
+| content-required | `$X` requires content | `<$X … />`, `children` required | types |
+| orphan-slot | Slot must be immediate child of the component | not placed as in *Placement* | syntax |
 | mixed-conditional-slot | A conditional slot fills one slot | see *Conditional slots* | syntax |
-| duplicate-slot | `$X` is already filled | second `<$X>` for a slot that is not a list slot | types |
-| duplicate-slot | `$X` is already filled | slot element plus explicit `$X={…}` attribute | syntax |
 | params-on-html | Params are only allowed on components and slot elements | `<div { size }>` — an intrinsic element by React's rule (lowercase, `-`, or `a:b`) | syntax |
 | duplicate-params | An element takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
-| slot-key | Slots are not elements | `key` on a slot element | syntax |
-| slot-render-children | The slot's body is its content; `Text` takes no children here | children on an element with `slot={$X}` | syntax |
-| component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name (`$Modal`) is in scope — reported instead of the slot errors | syntax |
-
-```tsx
-<Button>
-  <$TableCell><Icon /></$TableCell>  // Error: $TableCell is not declared in Button
-  Click me
-</Button>
-
-<Button>
-  <div>
-    <$IconStart><Icon /></$IconStart>  // Error: Slot must be immediate child of the component
-  </div>
-  Click me
-</Button>
-```
+| slot-key | Slots are not elements | `key` on a slot element (see OPEN #4) | syntax |
+| arg-without-slot | `&size` is an arg of a slot attachment | `&` / `&&` on an element without `slot={$X}` | syntax |
+| component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name is in scope — reported instead of the slot errors | syntax |
 
 ### Edge cases
 
 - **Params scope** covers the slot body only, not the slot element's own
   attributes: in `<$X spacing { spacing }>` the attribute `spacing` resolves
   in the outer scope.
-- **Shadowing** — a param shadows outer names inside the body, like any
-  parameter. To keep the outer name reachable, rename the param:
-  `{ label: optionLabel }`.
+- **Shadowing** — a param shadows outer names inside the body. To keep the
+  outer name reachable, rename the param: `{ label: optionLabel }`.
 - **Shorthand after renaming** — *Shorthand props* looks up the local name:
-  with `{ value: optionValue }`, `<Input value />` no longer sees the param;
-  write `<Input value={optionValue} />`.
-- **Not an immediate child** — `{cond && <$X />}`, `.map(...)`, inside a
-  fragment or an intrinsic element → orphan-slot. A ternary or a `Match` is
-  fine (*Conditional slots*).
+  with `{ value: optionValue }`, `<Input value />` no longer sees the param.
 - **Spread on the parent** — the slot attribute is appended last, so it wins
   over a `$X` inside the spread.
-- **Whitespace** — JSX already drops whitespace-only lines, so removing a slot
-  element leaves no stray text in `children`.
-- **Nesting** — a slot element belongs to its nearest parent element. A slot
-  body may contain containers with their own slots.
-- **Eager vs lazy** — a body without params is evaluated at the call site
-  like ordinary `children`; a body with params runs only when the container
-  calls `renderSlot`.
-- **Calling `children` directly** is safe only for `SlotFn`. For
-  `OptionalSlotFn` always go through `renderSlot`.
+- **Whitespace** — JSX drops whitespace-only lines, so removing a slot element
+  leaves no stray text in `children`.
+- **Eager vs lazy** — a body without params is evaluated at the call site like
+  ordinary `children`; a body with params runs only when the attachment
+  renders.
+- **`&&` evaluates its expression twice** — once as a prop, once as an arg.
 - **Identity** — the emitted object (and closure, if any) is new on every
   render, so a memoised container re-renders. Same as any render prop.
-- **Hooks** — with params, the body is called as a function, not rendered
-  as a component: a hook call written directly in it runs inside the
-  container's render.
+- **Hooks** — with params, the body is called as a function, not rendered as a
+  component: a hook call written directly in it runs inside the container's
+  render.
+
+> TECH DEBT: reachability. A supplied slot is useful only if its attachment is
+> reachable in the effective render tree. A declared slot the container never
+> attaches, and an attachment removed by an ancestor slot's body (a `$List`
+> whose body replaces the `Each` that attached `$Option`), drop the slot
+> silently. Phase 1 does not diagnose either.
 
 ### Prior art
 
@@ -893,8 +797,10 @@ imported. The package declares `Switch` as a container with a `$Case` slot, so
 the slot errors (undeclared-slot, orphan-slot) work exactly as for any
 container. Both are lowered away, so the emitted `.tsx` drops their import.
 
-`$Case` is a list slot (see [Slots](#list-slots)). Two things are sanctioned
-here and nowhere else, because the transpiler consumes these elements itself:
+`$Case` repeats, unlike any other slot (see *Slots → Repeated slots*): the
+transpiler consumes the `$Case` elements itself in pass 2, before slots are
+hoisted, so they never become a prop. Two more things are sanctioned here and
+nowhere else, for the same reason:
 
 - `$Case` accepts `key` (see *State across branches*); on any other slot it is slot-key.
 - Params on `Match` and `Switch` are consumed by the transpiler instead of
@@ -1376,13 +1282,11 @@ bash, `.gitignore`, YAML and Makefiles, and Node's subpath-import prefix.
 
 `{items.map((item, index) => <p key={…}>…</p>)}` is the third brace-expression
 that markup keeps falling into, after `&&` and `?:`. It nests badly, the
-closing `)}` is noise, and a forgotten `key` is a runtime warning instead of a
-compile error.
+closing `)}` is noise.
 
 `Each` needs **no syntax of its own**. It is an ordinary runtime component
 whose `children` is a slot function; params on a component
 (see [Slots](#params-on-a-component-children-is-the-default-slot)) do the rest.
-The only thing the transpiler adds is a key check.
 
 `.map()` keeps working — it parses today, so it keeps its meaning.
 
@@ -1428,14 +1332,9 @@ Both steps are general rules; nothing here is specific to `Each`:
 2. params → the body becomes the `children` callback — *Slots*.
 
 The `key` is written where React wants it: on the root element of the body.
-It may use the params.
-
-**The key is enforced at compile time.** `Each` is recognised by import origin
-for this check only: the body must be a single element that carries `key`.
-The check applies to the params form; a render prop written by hand
-(`<Each items={xs}>{(x) => …}</Each>`) is plain React and left alone. A
-body of several children or text has nowhere to put one — wrap it in an
-element, or in `<Fragment key={…}>`.
+It may use the params. **`Each` does not check it**, as a `for` loop would
+not: a missing key is React's runtime warning. (Where a missing key is
+reported for slots, see *Slots → Attachment*, OPEN #4.)
 
 `key` on `<Each>` itself keeps its React meaning: it keys the `Each` element,
 not the iterations.
@@ -1455,7 +1354,6 @@ All TS7, from `EachProps<T>`:
 
 | Code | Message | Condition | Needs |
 | --- | --- | --- | --- |
-| each-no-key | Each iteration needs a `key` on the root element of the body | the body is not a single element with `key` | syntax |
 | params-required | `Each` requires params | body without params (general slot error; write `{}` to ignore the values) | types |
 
 ### Edge cases
@@ -1465,9 +1363,9 @@ All TS7, from `EachProps<T>`:
 - **Hooks** are not allowed directly in the body: it is a callback run inside
   `Each`'s render.
 - **Slot elements in the body** — `<Select><Each …><$Option /></Each></Select>`
-  is orphan-slot **in phase 1**. A container that renders many items takes the
-  data as a prop and one slot as the template (*One slot, many items*).
-  Phase 2 lifts this — see *Roadmap*.
+  is allowed by *Slots → Placement* but has no semantics yet (OPEN #7):
+  orphan-slot until decided. A slot is singular; a container that renders many
+  items attaches it inside its own `Each` (*Slots → Attachment*).
 - **Segment roots in the body** would repeat an id — segment-in-loop (see
   [Segment roots](#compile-errors-3)).
 - **Nested `Each`** — inner params shadow outer ones; rename to reach both.
@@ -1480,37 +1378,6 @@ All TS7, from `EachProps<T>`:
 **Rejected:** iterables (`Set`, `Map`, generators) as `items`. `Each` takes
 arrays only, so that `index` has one stable meaning and type, `number`: the
 position in `items`. Convert at the call site: `items={[...set]}`.
-
-### Roadmap
-
-> ROADMAP (phase 2): slots inside `Each`.
->
-> ```tsx
-> <Select>
->   <Each items={options} { item: { value, label } }>
->     <$Option value>{label}</$Option>
->   </Each>
-> </Select>
-> ```
->
-> Goal: an `Each` that is an immediate child of a container may produce that
-> container's slot elements, one per item. `<$Option value>` picks `value` up
-> from the params through *Shorthand props*.
->
-> Not designed yet. It depends on:
->
-> - **list slots** ([Slots](#list-slots)) — these exist in phase 1; what is
->   missing is producing their items from a loop;
-> - an exception to **orphan-slot**: a slot element whose parent is an `Each`
->   that is itself an immediate child of the container;
-> - `Each` being **compiled** in this position rather than rendered — the
->   result is data for a prop, roughly
->   `$Option={options.map(({ value, label }) => ({ value, children: <>{label}</> }))}`,
->   not elements, so the key rule does not apply;
-> - mixing static `<$Option>` elements with an `Each` in one container.
->
-> Phase 1 must not close this door: keep `Each` recognised by import origin,
-> and keep orphan-slot an error (not a silent pass-through to `children`).
 
 ### Prior art
 

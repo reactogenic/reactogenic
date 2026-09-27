@@ -1,16 +1,12 @@
-import { Text } from "./text";
 import { renderSlot as _renderSlot } from "@reactogenic/core";
-export function Button(props: any) {
-  const { $Label, $IconEnd, size } = props;
+export function Select({ options, $Option, selected }: any) {
   return (
-    <button>
-      {$Label ? <Text {...$Label}>{_renderSlot($Label.children, {})}</Text> : null}
-      {$IconEnd ? <div {...$IconEnd} key="icon">{_renderSlot($IconEnd.children, { size: size, ...extra })}</div> : null}
-      {props.$Hint ? <span {...props.$Hint}>{_renderSlot(props.$Hint.children, {})}</span> : null}
-      <div slot="header" />
-      <div slot={name} />
-      <Tooltip $Content={{ children: $Label ? <em {...$Label}>{_renderSlot($Label.children, {})}</em> : null }} />
-    </button>
+    <select>
+      <Each items={options}>{({ item: option }) => $Option ? <option key={option.value} className="opt" value={option.value} selected={selected === option.value} {...$Option}>{_renderSlot($Option, { value: option.value, label: option.label, selected: selected === option.value }, option.label)}</option> : <option key={option.value} className="opt" value={option.value} selected={selected === option.value}>
+          {option.label}
+        </option>}</Each>
+    </select>
   );
 }
-export const lone = () => ($Only ? <Text {...$Only}>{_renderSlot($Only.children, {})}</Text> : null);
+export const d = (props.$Icon ? <i size={size} {...props.$Icon}>{_renderSlot(props.$Icon, { size: size, count: n + 1 })}</i> : null);
+export const e = <div slot="header" />;

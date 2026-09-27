@@ -1,5 +1,2 @@
+# Each does not check keys, as a for loop would not; only the segment root errs.
 7:53 error segment-in-loop
-3:44 error each-no-key
-4:18 error each-no-key
-5:18 error each-no-key
-7:44 error each-no-key

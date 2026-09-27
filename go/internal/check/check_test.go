@@ -93,69 +93,19 @@ func TestClean(t *testing.T) {
 var coreStub = map[string]string{
 	"node_modules/@reactogenic/core/package.json": `{ "name": "@reactogenic/core", "types": "index.d.ts" }`,
 	"node_modules/@reactogenic/core/index.d.ts": `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol }; // as React: a function is not a node
-export type SlotFn<Params> = (params: Params) => ReactNode;
-export type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;
-export type Slot<Props, Children = never> = [Children] extends [never] ? Props : Omit<Props, "children"> & { children: Children };
+export type Slot<Props> = Props;
+export type FnSlot<Props, Args> = Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
 export type NoArgs = { readonly [arg: string]: never };
-export declare function renderSlot<Children>(children: Children, args: Children extends (params: infer Params) => ReactNode ? Params : NoArgs): ReactNode;`,
+export type ArgsOf<S> = S extends { children?: infer Body } ? NonNullable<Body> extends (args: infer Args) => ReactNode ? Args : NoArgs : NoArgs;
+export declare function renderSlot<S extends object>(slot: S, args: S extends readonly unknown[] ? never : ArgsOf<S>, fallback?: ReactNode): ReactNode;`,
 }
 
-// syntax.md, *Rendering a slot*: a function slot rendered without the args
-// it declares is a TS error, reported on the element in the .rtsx.
-func TestFunctionSlotNeedsArgs(t *testing.T) {
-	files := map[string]string{
-		"tsconfig.json": tsconfig,
-		"src/jsx.d.ts":  jsxTypes,
-		"src/button.rtsx": `import type { Slot, SlotFn } from "@reactogenic/core";
-interface ButtonProps {
-  size: string;
-  $IconEnd?: Slot<{ className?: string }, SlotFn<{ size: string }>>;
-}
-export function Button({ size, $IconEnd }: ButtonProps) {
-  return (
-    <button>
-      <div slot={$IconEnd} />
-      <i slot={$IconEnd} size />
-    </button>
-  );
-}
-`,
-	}
-	for k, v := range coreStub {
-		files[k] = v
-	}
-	dir := writeProject(t, files)
-	var got []string
-	for _, r := range Run(dir + "/tsconfig.json") {
-		got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+" "+r.Code+" "+r.Message)
-	}
-	// Line 9 lacks `size`; line 10 passes it (shorthand) and is fine.
-	if len(got) != 1 || !strings.HasPrefix(got[0], "src/button.rtsx:9 TS2741") || !strings.Contains(got[0], "size") {
-		t.Errorf("got %q", got)
-	}
-}
-
-// A slot whose body is not a function takes no args: an arg is an error on
-// that attribute, as calling a function of no parameters with one.
-func TestPlainSlotTakesNoArgs(t *testing.T) {
-	files := map[string]string{
-		"tsconfig.json": tsconfig,
-		"src/jsx.d.ts":  jsxTypes,
-		"src/label.rtsx": `import type { Slot } from "@reactogenic/core";
-interface LabelProps {
-  $Label?: Slot<{ title?: string; children?: string }>;
-}
-export function Label({ $Label }: LabelProps) {
-  const tone = "muted";
-  return (
-    <p>
-      <span slot={$Label} />
-      <span slot={$Label} tone />
-    </p>
-  );
-}
-`,
-	}
+// checkProject writes a project with the core stub and returns its reports
+// as "file:line:col CODE".
+func checkProject(t *testing.T, files map[string]string) []string {
+	t.Helper()
+	files["tsconfig.json"] = tsconfig
+	files["src/jsx.d.ts"] = jsxTypes
 	for k, v := range coreStub {
 		files[k] = v
 	}
@@ -164,8 +114,73 @@ export function Label({ $Label }: LabelProps) {
 	for _, r := range Run(dir + "/tsconfig.json") {
 		got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+":"+strconv.Itoa(r.Col)+" "+r.Code)
 	}
-	// Line 10, the `tone` attribute; line 9 passes nothing and is fine.
-	if len(got) != 1 || got[0] != "src/label.rtsx:10:27 TS2322" {
+	return got
+}
+
+// syntax.md, *Slots → Attachment*: args follow function-call rules, checked
+// by TS7 through renderSlot and reported on the .rtsx.
+func TestSlotArgs(t *testing.T) {
+	got := checkProject(t, map[string]string{"src/button.rtsx": `import type { FnSlot, Slot } from "@reactogenic/core";
+interface ButtonProps {
+  size: string;
+  $Icon?: FnSlot<{ className?: string }, { size: string }>;
+  $Label?: Slot<{ title?: string; children?: string }>;
+  $List?: Slot<{ children?: string }>[];
+}
+export function Button({ size, $Icon, $Label, $List }: ButtonProps) {
+  const tone = "muted";
+  return (
+    <button>
+      <i slot={$Icon} &size />
+      <i slot={$Icon} />
+      <span slot={$Label} />
+      <span slot={$Label} &tone />
+      <span slot={$List} />
+    </button>
+  );
+}
+`})
+	want := []string{
+		"src/button.rtsx:13:7 TS2741",  // a function slot without its args: "size" is missing
+		"src/button.rtsx:15:27 TS2322", // an arg to a slot whose body is not a function
+		"src/button.rtsx:16:7 TS2345",  // a slot typed as an array
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
+// The attachment's children are the fallback; recursive slots and last-wins
+// type-check clean.
+func TestSlotsTypeCheck(t *testing.T) {
+	got := checkProject(t, map[string]string{
+		"src/button.rtsx": `import type { Slot } from "@reactogenic/core";
+export interface ButtonProps {
+  variant?: string;
+  $IconStart?: Slot<{ children?: JSX.Element }>;
+  children?: string;
+}
+export function Button({ $IconStart, children }: ButtonProps) {
+  return <button><span slot={$IconStart}>+</span>{children}</button>;
+}
+`,
+		"src/dialog.rtsx": `import type { Slot } from "@reactogenic/core";
+import { Button, type ButtonProps } from "./button";
+export function Dialog({ $Action }: { $Action?: Slot<ButtonProps> }) {
+  return <dialog><Button slot={$Action} /></dialog>;
+}
+export const page = (
+  <Dialog>
+    <$Action variant="ghost">Cancel</$Action>
+    <$Action variant="solid">
+      <$IconStart><b /></$IconStart>
+      Close
+    </$Action>
+  </Dialog>
+);
+`,
+	})
+	if len(got) != 0 {
 		t.Errorf("got %q", got)
 	}
 }

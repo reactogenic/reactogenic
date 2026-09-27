@@ -65,8 +65,8 @@ them, so each screen ships exactly the HTML, CSS and JS it needs."
 - **Compiler**: Go, forked from the tsgo (TypeScript 7) parser **and
   type-aware** (embeds the checker). Emits plain `.tsx` for TS7 to type-check,
   Go templates for shells, per-route CSS; embedded esbuild; Go server. Types
-  drive diagnostics and the language service; they change emitted code in one
-  place only (list slots).
+  drive diagnostics and the language service; the transpiler itself is purely
+  syntactic — types never change emitted code.
 - The design system's core catalog is authored in plain `.tsx`, executed by
   the compiler in shell code and rendered by React in islands.
 - Islands own their data via `useQuery(key, queryFn)` — React Query
@@ -91,25 +91,28 @@ Babel): TypeScript's own parser accepts `#name` as an attribute named
 
 1. **Shorthand props** — scope-directed: `<Input value />` → `value={value}`
    if a `value` binding is in the module's scope chain, else React's `true`.
-2. **Slots** — `<$IconStart spacing="tight" { size }>…</$IconStart>` →
-   `$IconStart={{ spacing: "tight", children: ({ size }) => … }}`. Terms:
-   options (in), params (out), body. Declared `$X: Slot<Props, Children>`:
-   options are the props of the element the container renders with
-   `<El slot={$X} args… />` (unfilled → nothing; attributes = args of a
-   function slot only). Types `SlotFn` / `OptionalSlotFn` / `renderSlot`. Params on a component make its `children` a callback. List
-   slots (`$X: {…}[]`, type-directed array emit). Conditional slots
-   (`Match` around a slot element → ternary prop).
+2. **Slots** — `<$X>` constructs the prop `$X`:
+   `<$IconStart className="i" { size }>…</$IconStart>` →
+   `$IconStart={{ className: "i", children: ({ size }) => … }}`. Declared
+   `Slot<P>` (P is the complete contract) or `FnSlot<P, A>`; singular (never a
+   list; repeated → last wins). The container attaches with
+   `<span slot={$X} className="default" &arg &&both={x}>fallback</span>`:
+   slot props replace attachment props per prop; children are the fallback;
+   `&` = arg only, `&&` = arg + prop. Recursive slots; placement: direct child
+   of a component or slot element, or inside Match/Switch/Each. Params on a
+   component make its `children` a callback. The transpiler is purely
+   syntactic.
 3. **Flow control** — `<Match on={…}>` (if; params optional) and
    `<Switch on={…} [exhaustive] [{ value }]>` with `$Case is=` / `default`
    (first match wins; no match renders nothing; `exhaustive` proven by TS7).
 4. **Segment roots** — `<section #about-us />` mounts sibling `+about-us.rtsx`
    (default export, no props). Pure syntactic sugar: an import + a nested
    element.
-5. **`Each`** — plain runtime component + params; the transpiler only checks
-   `key` on the body root.
+5. **`Each`** — plain runtime component + params; no key check (as a `for`
+   loop).
 
 `specs/phase01/vite.md` — the Vite plugin, module resolution, the one type
-query in the transform (list slots), the runtime package.
+the transform needs no types (the transpiler is syntactic), the runtime package.
 `specs/phase01/diagnostics.md` — `reactogenic check`, source-map origins,
 rewrites of TS errors into slot terms.
 `specs/phase01/plan.md` — tasks `RGP1-xxx`; `specs/phase01/decisions.md` —

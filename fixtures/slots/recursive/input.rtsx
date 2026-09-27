@@ -1,0 +1,19 @@
+export const a = (
+  <Dialog>
+    <$Action variant="solid">
+      <$IconStart>
+        <Icon name="close" />
+      </$IconStart>
+      Close
+    </$Action>
+  </Dialog>
+);
+export const b = (
+  <Dialog>
+    <$Action>
+      <Button>
+        <$IconStart>x</$IconStart>
+      </Button>
+    </$Action>
+  </Dialog>
+);

@@ -25,8 +25,6 @@ fixtures/<area>/<name>/
 ├── output.tsx      expected output (optional)
 ├── errors.txt      expected diagnostics (optional; absent = none)
 ├── output.passN.tsx  expected output after pass N (optional; output only)
-├── list-slots.txt  the list slots this case declares, `Form.$Field` per line —
-│                   stands in for the checker until RGP1-051
 ├── check.txt       expected `reactogenic check` output (from RGP1-070)
 └── *.rtsx, *.tsx   any other files: segments (`+name.rtsx`), containers
 ```

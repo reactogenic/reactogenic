@@ -5,7 +5,6 @@ package conformance
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/reactogenic/reactogenic/go/internal/transpiler"
@@ -23,9 +22,6 @@ type Case struct {
 	WantErrors []Expectation
 	// IgnoreDiagnostics checks output only (spec examples, stages).
 	IgnoreDiagnostics bool
-	// ListSlots stands in for the checker until RGP1-051: the list slots
-	// the case declares, as "Container.$Slot".
-	ListSlots []string
 }
 
 // Expectation matches one diagnostic. Zero fields match anything, except
@@ -63,8 +59,7 @@ func (e Expectation) String() string {
 
 // Run transpiles c and returns why it fails, or "" when it passes.
 func Run(c Case, transpile func(transpiler.Input) (transpiler.Output, error)) string {
-	listSlot := func(container, slot string) bool { return slices.Contains(c.ListSlots, container+"."+slot) }
-	out, err := transpile(transpiler.Input{Files: c.Files, Entry: c.Entry, UntilPass: c.UntilPass, ListSlot: listSlot})
+	out, err := transpile(transpiler.Input{Files: c.Files, Entry: c.Entry, UntilPass: c.UntilPass})
 	if err != nil {
 		return err.Error()
 	}

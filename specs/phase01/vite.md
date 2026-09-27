@@ -38,8 +38,8 @@ export default defineConfig({
 - **Source map.** Vite chains it with the maps of later plugins, so devtools,
   stack traces and the error overlay show `.rtsx` positions.
 - **Errors.** The transform throws the transpiler's own errors — the ones the
-  *Compile errors* tables in [syntax.md](syntax.md) mark *syntax* or *files*,
-  plus duplicate-slot — with their `.rtsx` location: Vite's overlay in dev, a
+  *Compile errors* tables in [syntax.md](syntax.md) mark *syntax* or *files* —
+  with their `.rtsx` location: Vite's overlay in dev, a
   failed `vite build`. Errors marked *types* are TS errors in slot terms and
   are reported by `reactogenic check`, like every other type error.
 
@@ -74,28 +74,13 @@ options considered for later:
 - The type checker resolves identically; see
   [diagnostics.md](diagnostics.md#reactogenic-check).
 
-## Types in the transform
+## No types in the transform
 
-List slots are type-directed ([syntax.md](syntax.md#list-slots)): to emit
-`<Form>`'s `$Field` as an array, the transform must know that `FormProps`
-declares `$Field` as one. So the plugin holds a type checker: TS7, in the Go
-transpiler, which the plugin drives as one long-lived process
-([decisions.md](decisions.md#rgp1-001--checker-and-implementation-language)).
-
-- **One program** over the project's `tsconfig.json`, kept for the life of the
-  dev server or build. Every `.rtsx` file is in it as its emitted `.tsx`
-  (the same virtual files as `reactogenic check`).
-- **One query.** For each slot element `$X` under a container `P`: "is `$X` in
-  `P`'s props type an array or a tuple?" Nothing else in the emit reads
-  types.
-- **No cycle.** The answer comes from `P`'s declared props type. Desugaring
-  changes JSX, never declarations, so a container declared in an `.rtsx`
-  file has the same props type before and after its own transform.
-- **HMR.** An emit now depends on types declared in other files. The plugin
-  records which containers each transform asked about; when such a
-  declaration changes, the `.rtsx` files that asked are transformed again.
-  Without this, editing `FormProps` would leave stale output.
-
+The transpiler is purely syntactic (syntax.md, *Slots → Typing behaviour*):
+the transform of one file reads that file, and the segment files next to it,
+and nothing else. It holds no checker and no program; types are TS7's job, in
+`reactogenic check`. (Until the slot model of RGP1-043, list slots made the
+emit type-directed; they are gone.)
 
 ## Runtime
 
@@ -114,8 +99,8 @@ All packages are scoped to the `@reactogenic` npm org. Phase 1 ships:
 
 | Export | Kind | Note |
 | --- | --- | --- |
-| `SlotFn`, `OptionalSlotFn` | types | slot declarations |
-| `renderSlot` | function | used by containers |
+| `Slot`, `FnSlot`, `SlotFn`, `ArgsOf`, `NoArgs` | types | slot declarations |
+| `renderSlot` | function | imported by emitted attachments, under a generated name |
 | `Each` | component | an ordinary runtime component |
 | `Switch`, `Match` | declarations only | lowered away; the emitted `.tsx` drops their import |
 | `noMatch` | function | imported by emitted code for `exhaustive`, under a generated name |

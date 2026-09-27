@@ -17,10 +17,6 @@ type Input struct {
 	// UntilPass stops after the given pass of syntax.md, *Compilation
 	// passes*; 0 runs them all.
 	UntilPass int
-	// ListSlot answers the transpiler's one type question: is slot `slot`
-	// of the component written `container` declared as an array (syntax.md,
-	// *List slots*)? nil answers no. The checker provides it (RGP1-051).
-	ListSlot func(container, slot string) bool
 	// ReadFile reads a file that is not in Files — segments next to the
 	// entry. nil: only Files exist.
 	ReadFile func(path string) (string, bool)
@@ -126,7 +122,7 @@ func Transpile(in Input) (Output, error) {
 			continue
 		}
 		rtsx.Bind(file)
-		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, listSlot: in.ListSlot, entry: in.Entry, readFile: in.readFile,
+		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, entry: in.Entry, readFile: in.readFile,
 			report: func(s emit.Span, sev Severity, code, msg string) {
 				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
 			}}
@@ -159,7 +155,7 @@ func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg stri
 func checks(c *passContext) []emit.Edit {
 	var errs []syntax.Error
 	for _, check := range []func(*rtsx.SourceFile) []syntax.Error{
-		syntax.Check, syntax.CheckFlowAsValue, syntax.CheckSlotTags, syntax.CheckSegments, syntax.CheckEachKeys,
+		syntax.Check, syntax.CheckFlowAsValue, syntax.CheckSlotTags, syntax.CheckSegments,
 	} {
 		errs = append(errs, check(c.file)...)
 	}

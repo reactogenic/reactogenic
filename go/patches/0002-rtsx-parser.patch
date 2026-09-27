@@ -1,8 +1,17 @@
 diff --git a/internal/parser/parser.go b/internal/parser/parser.go
-index f54b4bc..7f2a1b3 100644
+index f54b4bc..535bfd4 100644
 --- a/internal/parser/parser.go
 +++ b/internal/parser/parser.go
-@@ -5058,6 +5058,9 @@ func (p *Parser) parseJsxAttributes() *ast.Node {
+@@ -904,7 +904,7 @@ func (p *Parser) isListElement(parsingContext ParsingContext, inErrorRecovery bo
+ 		}
+ 		return tokenIsIdentifierOrKeyword(p.token)
+ 	case PCJsxAttributes:
+-		return tokenIsIdentifierOrKeyword(p.token) || p.token == ast.KindOpenBraceToken
++		return tokenIsIdentifierOrKeyword(p.token) || p.token == ast.KindOpenBraceToken || p.isRTSXArgStart() // Reactogenic: rtsx.go
+ 	case PCJsxChildren:
+ 		return true
+ 	case PCJSDocComment:
+@@ -5058,8 +5058,14 @@ func (p *Parser) parseJsxAttributes() *ast.Node {
  
  func (p *Parser) parseJsxAttribute() *ast.Node {
  	if p.token == ast.KindOpenBraceToken {
@@ -11,13 +20,18 @@ index f54b4bc..7f2a1b3 100644
 +		}
  		return p.parseJsxSpreadAttribute()
  	}
++	if p.isRTSXArgStart() {
++		return p.parseJsxArgAttribute() // Reactogenic: rtsx.go
++	}
  	pos := p.nodePos()
+ 	return p.finishNode(p.factory.NewJsxAttribute(p.parseJsxAttributeName(), p.parseJsxAttributeValue()), pos)
+ }
 diff --git a/internal/parser/rtsx.go b/internal/parser/rtsx.go
 new file mode 100644
-index 0000000..c7dd6f6
+index 0000000..8bfdd2d
 --- /dev/null
 +++ b/internal/parser/rtsx.go
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,61 @@
 +// Reactogenic: the .rtsx extensions to JSX attribute parsing.
 +// Not part of upstream: added by go/patches/0002-rtsx-parser.patch.
 +
@@ -25,6 +39,7 @@ index 0000000..c7dd6f6
 +
 +import (
 +	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
 +	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 +)
 +
@@ -50,4 +65,31 @@ index 0000000..c7dd6f6
 +	pos := p.nodePos()
 +	pattern := p.parseObjectBindingPattern()
 +	return p.finishNode(p.factory.NewJsxSpreadAttribute(pattern), pos)
++}
++
++// isRTSXArgStart: `&` or `&&` starting a slot arg in an .rtsx attribute list.
++func (p *Parser) isRTSXArgStart() bool {
++	return (p.token == ast.KindAmpersandToken || p.token == ast.KindAmpersandAmpersandToken) && p.isRTSX()
++}
++
++// parseJsxArgAttribute parses a slot arg on an attachment: `&size`,
++// `&label={x}`, `&&value={x}`. It is stored as a JsxAttribute whose name is
++// an identifier spelled with its prefix ("&size", "&&value") — as TypeScript
++// already stores `#name` — so no new node kind is needed. The checker never
++// sees it: the transpiler lowers args away first.
++func (p *Parser) parseJsxArgAttribute() *ast.Node {
++	pos := p.nodePos()
++	prefix := "&"
++	if p.token == ast.KindAmpersandAmpersandToken {
++		prefix = "&&"
++	}
++	prefixEnd := p.scanner.TokenEnd()
++	p.nextToken()
++	if p.scanner.TokenStart() != prefixEnd || !tokenIsIdentifierOrKeyword(p.token) {
++		p.parseErrorAtCurrentToken(diagnostics.Identifier_expected) // `& size`, `&{…}`
++	}
++	p.scanJsxIdentifier()
++	name := p.parseIdentifierNameErrorOnUnicodeEscapeSequence()
++	id := p.finishNode(p.factory.NewIdentifier(prefix+name.Text()), pos)
++	return p.finishNode(p.factory.NewJsxAttribute(id, p.parseJsxAttributeValue()), pos)
 +}

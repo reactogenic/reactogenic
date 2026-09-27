@@ -1,0 +1,9 @@
+import { Match } from "@reactogenic/core";
+export const a = <Select><$Option value="1" /><$Option value="2" /></Select>;
+export const b = <Select $Option={{ value: "0" }}><$Option value="1" /></Select>;
+export const c = (
+  <Select>
+    <$Option value="a" />
+    <Match on={b}><$Option value="b" /></Match>
+  </Select>
+);

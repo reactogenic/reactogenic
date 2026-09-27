@@ -904,7 +904,7 @@ func (p *Parser) isListElement(parsingContext ParsingContext, inErrorRecovery bo
 		}
 		return tokenIsIdentifierOrKeyword(p.token)
 	case PCJsxAttributes:
-		return tokenIsIdentifierOrKeyword(p.token) || p.token == ast.KindOpenBraceToken
+		return tokenIsIdentifierOrKeyword(p.token) || p.token == ast.KindOpenBraceToken || p.isRTSXArgStart() // Reactogenic: rtsx.go
 	case PCJsxChildren:
 		return true
 	case PCJSDocComment:
@@ -5062,6 +5062,9 @@ func (p *Parser) parseJsxAttribute() *ast.Node {
 			return p.parseJsxSlotParams() // Reactogenic: rtsx.go
 		}
 		return p.parseJsxSpreadAttribute()
+	}
+	if p.isRTSXArgStart() {
+		return p.parseJsxArgAttribute() // Reactogenic: rtsx.go
 	}
 	pos := p.nodePos()
 	return p.finishNode(p.factory.NewJsxAttribute(p.parseJsxAttributeName(), p.parseJsxAttributeValue()), pos)

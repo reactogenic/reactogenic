@@ -23,43 +23,12 @@ type Project struct {
 	disk        rtsx.FS
 	outputs     map[string]transpiler.Output // by .rtsx path
 	sources     map[string]string            // .rtsx text, by path
-	listSlot    func(file, container, slot string) bool
 }
 
 // Open builds the program of the tsconfig at configPath (absolute).
-//
-// List slots are type-directed: the transpiler asks whether a container
-// declares a slot as an array. Open builds the program once with no answers,
-// asks that program's checker, and rebuilds if an answer changed an output.
-// The answer depends only on the container's declaration, which desugaring
-// never changes, so one round settles it (decisions.md, RGP1-001).
 func Open(configPath string) *Project {
 	p := &Project{config: configPath, cwd: path.Dir(configPath), disk: rtsx.OSFS()}
 	p.build()
-	if p.Program == nil {
-		return p
-	}
-	checker, done := rtsx.GetChecker(p.Program)
-	answers := map[string]bool{}
-	p.listSlot = func(file, container, slot string) bool {
-		key := file + "|" + container + "|" + slot
-		if answer, ok := answers[key]; ok {
-			return answer
-		}
-		tag := findTag(p.Program.GetSourceFile(tsxPath(file)), container)
-		answers[key] = tag != nil && rtsx.IsListSlot(checker, tag, slot)
-		return answers[key]
-	}
-	changed := false
-	for file, out := range p.outputs {
-		if next := p.transpile(file); next.TSX != out.TSX {
-			changed = true
-		}
-	}
-	done()
-	if changed {
-		p.build() // reads the settled outputs
-	}
 	return p
 }
 
@@ -121,11 +90,7 @@ func (p *Project) transpile(file string) transpiler.Output {
 		text, _ = p.disk.ReadFile(file)
 		p.sources[file] = text
 	}
-	in := transpiler.Input{Files: map[string]string{file: text}, Entry: file, ReadFile: p.disk.ReadFile}
-	if p.listSlot != nil {
-		in.ListSlot = func(container, slot string) bool { return p.listSlot(file, container, slot) }
-	}
-	out, err := transpiler.Transpile(in)
+	out, err := transpiler.Transpile(transpiler.Input{Files: map[string]string{file: text}, Entry: file, ReadFile: p.disk.ReadFile})
 	if err != nil {
 		out = transpiler.Output{Diagnostics: []transpiler.Diagnostic{{File: file, Line: 1, Col: 1, Code: "internal", Message: err.Error()}}}
 	}
@@ -164,26 +129,4 @@ func (p *Project) Diagnostics() []*rtsx.Diagnostic {
 		return p.ConfigDiagnostics
 	}
 	return append(p.ConfigDiagnostics, rtsx.AllDiagnostics(p.Program)...)
-}
-
-// findTag returns the tag name of the first JSX element in file written as
-// container: where the list-slot question is asked.
-func findTag(file *rtsx.SourceFile, container string) *rtsx.Node {
-	if file == nil {
-		return nil
-	}
-	var found *rtsx.Node
-	var visit func(n *rtsx.Node) bool
-	visit = func(n *rtsx.Node) bool {
-		if n.Kind == rtsx.KindJsxOpeningElement || n.Kind == rtsx.KindJsxSelfClosingElement {
-			tag := n.TagName()
-			if strings.TrimSpace(file.Text()[rtsx.TokenStart(file, tag):tag.End()]) == container {
-				found = tag
-				return true
-			}
-		}
-		return n.ForEachChild(visit)
-	}
-	file.AsNode().ForEachChild(visit)
-	return found
 }

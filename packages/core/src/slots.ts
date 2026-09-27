@@ -1,35 +1,42 @@
 import type { ReactNode } from "react";
 
-/** A slot body that needs the container's values: `(params) => body`. */
+/** A function of params that renders: `Each`'s body, a function slot's body. */
 export type SlotFn<Params> = (params: Params) => ReactNode;
 
-/** A slot body that may take the container's values, or not. */
-export type OptionalSlotFn<Params> = ReactNode | SlotFn<Params>;
-
 /**
- * A slot: the props of the element the container renders for it (its
- * options), and its body. Without `Children`, the body is the props' own
- * `children` — `Slot<{ children?: ReactNode }>` has an optional body. With
- * it, `Children` replaces them and the body is required:
- * `Slot<ComponentProps<"div">, SlotFn<{ size: Size }>>`.
- * Rendered with `<El slot={$X} … />` in .rtsx.
+ * A slot: the complete prop contract of the element the container attaches
+ * it to. A body is allowed only if `children` is in the contract, and
+ * required only if `children` is.
  */
-export type Slot<Props, Children = never> = [Children] extends [never]
-  ? Props
-  : Omit<Props, "children"> & { children: Children };
+export type Slot<Props> = Props;
 
-/** No args: what a body that is not a function takes. */
+/** A function slot: its body receives the attachment's args (`&name`). */
+export type FnSlot<Props, Args> = Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
+
+/** No args: what a slot whose body is not a function takes. */
 export type NoArgs = { readonly [arg: string]: never };
 
+/** The args a slot's body takes: a function slot's parameter, or none. */
+export type ArgsOf<S> = S extends { children?: infer Body }
+  ? NonNullable<Body> extends (args: infer Args) => ReactNode
+    ? Args
+    : NoArgs
+  : NoArgs;
+
 /**
- * Renders a slot body: calls it with `args` when it is a function, returns
- * it as it is otherwise. The args are the function's parameter; a body that
- * cannot be a function takes none — as calling a function of no parameters
- * with one is an error.
+ * Renders a slot's body at its attachment: calls it with `args` when it is a
+ * function, returns it as it is otherwise, and returns `fallback` — the
+ * attachment's children — when there is no body. Args follow function-call
+ * rules; a slot typed as an array takes none at all, so it is rejected here.
  */
-export function renderSlot<Children>(
-  children: Children,
-  args: Children extends (params: infer Params) => ReactNode ? Params : NoArgs,
+export function renderSlot<S extends object>(
+  slot: S,
+  args: S extends readonly unknown[] ? never : ArgsOf<S>,
+  fallback?: ReactNode,
 ): ReactNode {
-  return typeof children === "function" ? children(args) : (children as ReactNode);
+  const body = (slot as { children?: unknown }).children;
+  if (body === undefined) {
+    return fallback;
+  }
+  return typeof body === "function" ? body(args) : (body as ReactNode);
 }

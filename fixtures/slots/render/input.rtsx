@@ -1,17 +1,13 @@
-import { Text } from "./text";
-export function Button(props: any) {
-  const { $Label, $IconEnd, size } = props;
+export function Select({ options, $Option, selected }: any) {
   return (
-    <button>
-      <Text slot={$Label} />
-      <div slot={$IconEnd} size {...extra} key="icon" />
-      <span slot={props.$Hint} />
-      <div slot="header" />
-      <div slot={name} />
-      <Tooltip>
-        <$Content><em slot={$Label} /></$Content>
-      </Tooltip>
-    </button>
+    <select>
+      <Each items={options} { item: option }>
+        <option key={option.value} slot={$Option} className="opt" &&value={option.value} &label={option.label} &&selected={selected === option.value}>
+          {option.label}
+        </option>
+      </Each>
+    </select>
   );
 }
-export const lone = () => <Text slot={$Only} />;
+export const d = <i slot={props.$Icon} &&size &count={n + 1} />;
+export const e = <div slot="header" />;

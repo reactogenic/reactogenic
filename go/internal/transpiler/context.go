@@ -20,8 +20,6 @@ type passContext struct {
 	names map[string]bool
 	// imports added by this run of the pass, to add each once.
 	imports map[string]bool
-	// listSlot answers the one type question (Input.ListSlot).
-	listSlot func(container, slot string) bool
 	// entry and readFile reach the other files: segments (Input).
 	entry    string
 	readFile func(path string) (string, bool)
@@ -34,6 +32,15 @@ func (c *passContext) span(n *rtsx.Node) emit.Span {
 
 func (c *passContext) copy(n *rtsx.Node) emit.Piece {
 	return emit.Copy(c.text, c.span(n))
+}
+
+// copyChild copies a JSX child. JSX text starts at its first byte: its
+// leading whitespace is content, not trivia.
+func (c *passContext) copyChild(n *rtsx.Node) emit.Piece {
+	if n.Kind == rtsx.KindJsxText {
+		return emit.Copy(c.text, emit.Span{Pos: n.Pos(), End: n.End()})
+	}
+	return c.copy(n)
 }
 
 func (c *passContext) errorAt(n *rtsx.Node, code, format string, args ...any) {
