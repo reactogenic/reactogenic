@@ -1,0 +1,13 @@
+import { Card } from "./card";
+
+export function Page() {
+  const greeting: string = "hello-from-rtsx";
+  return (
+    <main>
+      <Card>
+        <$Title tone="loud">{greeting}</$Title>
+      </Card>
+      <section #intro />
+    </main>
+  );
+}

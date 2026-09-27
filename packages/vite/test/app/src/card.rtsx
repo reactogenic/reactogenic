@@ -1,0 +1,10 @@
+import type { ReactNode } from "react";
+import type { Slot } from "@reactogenic/core";
+
+export function Card({ $Title }: { $Title?: Slot<{ tone?: string; children?: ReactNode }> }) {
+  return (
+    <article>
+      <h2 slot={$Title}>untitled</h2>
+    </article>
+  );
+}

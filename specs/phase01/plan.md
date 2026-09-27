@@ -314,7 +314,7 @@ without their leading whitespace (`{a} (` lost its space) — fixed.
   the files that use `<Form>`.
 - Depends on: 051.
 
-### RGP1-053 — Stdio server · M
+### RGP1-053 — Stdio server · M · done
 The Go side of the plugin: a long-lived process that serves `open`,
 `transform`, `change` and `close` over stdio
 ([decisions.md](decisions.md#rgp1-001--checker-and-implementation-language)).
@@ -328,7 +328,7 @@ The Go side of the plugin: a long-lived process that serves `open`,
 
 ## M5 — Vite plugin
 
-### RGP1-060 — Plugin skeleton and `config` · S
+### RGP1-060 — Plugin skeleton and `config` · S · done
 - Unblocked: the plugin compiles `.rtsx` itself with Vite's
   `transformWithOxc`; no Fast Refresh for `.rtsx` in phase 1 (vite.md).
 - `enforce: "pre"`.
@@ -340,7 +340,7 @@ The Go side of the plugin: a long-lived process that serves `open`,
   `vite dev`; an edit reloads the page (no Fast Refresh in phase 1).
 - Depends on: 003, 030.
 
-### RGP1-061 — `transform` · M
+### RGP1-061 — `transform` · M · done
 - `.rtsx` goes in; `.tsx` and a v3 source map come out.
 - Transpiler errors are thrown with `loc`, so they appear in Vite's overlay
   in dev and fail `vite build`.
@@ -350,7 +350,7 @@ The Go side of the plugin: a long-lived process that serves `open`,
   frame.
 - Depends on: 060, 053, all of M3.
 
-### RGP1-062 — Resolution · S
+### RGP1-062 — Resolution · S · done (extensionless `.rtsx` and segment imports; the `.tsx` + `.rtsx` ambiguity error is not raised yet)
 - Extensionless imports, including segment imports, go through Vite's
   resolver.
 - The `Foo.tsx` + `Foo.rtsx` ambiguity error from RGP1-040 is raised at the
@@ -359,7 +359,7 @@ The Go side of the plugin: a long-lived process that serves `open`,
   dev and in build.
 - Depends on: 061.
 
-### RGP1-063 — HMR across type dependencies · M
+### RGP1-063 — HMR across type dependencies · M · removed by RGP1-043 (no type dependencies; an edit reloads the page)
 When a container's declaration changes, invalidate the `.rtsx` modules that
 queried it (RGP1-052), not only the modules that import it.
 - **Done when:** in a running dev server, turning `$Field` from an array
@@ -374,6 +374,18 @@ Needs your approval first: it creates files outside `specs/`.
 - Browser tests run it in `vite dev` and against the `vite build` output.
 - **Done when:** end-to-end tests are green in CI in both modes.
 - Depends on: 062.
+
+**M4/M5 so far.** `reactogenic serve` (`go/internal/server`): stateless,
+newline-delimited JSON, `transform` → TSX + v3 map + diagnostics.
+`@reactogenic/vite`: `.rtsx` → TSX (Go) → JS (`transformWithOxc`, lang
+`tsx`, the incoming map chained); transpiler errors fail the transform at
+their `.rtsx` position, warnings go to `this.warn`; one Go process per build
+or dev server. Tested end to end with the real binary (built in the test
+setup): `vite build` of an app with extensionless `.rtsx` imports, a segment
+root and a slot attachment; the dev server's transform (JS, map back to the
+`.rtsx`); a transpiler error failing the build at `bad.rtsx:2:7`. Left:
+RGP1-052 (incremental program, for `check --watch`), RGP1-064 (a browser
+e2e run).
 
 ## M6 — `reactogenic check`
 

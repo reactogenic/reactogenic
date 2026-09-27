@@ -16,9 +16,14 @@ export default defineConfig({
 });
 ```
 
-- `reactogenic()` runs first (`enforce: "pre"`) and turns `.rtsx` into `.tsx`.
-  Everything after that — stripping types, the JSX transform, Fast Refresh —
-  is Vite's and plugin-react's, unchanged.
+- `reactogenic()` runs first (`enforce: "pre"`) and compiles `.rtsx` itself:
+  the Go transpiler turns it into TSX, and Vite's own `transformWithOxc`
+  turns that into JS, with one source map back to the `.rtsx` (*Findings*
+  below). `.tsx` files go through Vite and plugin-react as usual.
+- It drives one `reactogenic serve` process per build or dev server: the
+  binary from the `binary` option, else `$REACTOGENIC_BINARY`, else
+  `reactogenic` on `PATH` (the npm package with platform binaries is
+  RGP1-092).
 - `.tsx` and `.rtsx` live side by side and import each other. Renaming a
   `.tsx` file to `.rtsx` is the whole migration (mind the *silent flip* in
   [syntax.md](syntax.md#edge-cases)).
@@ -27,11 +32,10 @@ export default defineConfig({
 
 | Plugin hook | Does |
 | --- | --- |
-| `config` | adds `.rtsx` to `resolve.extensions` and to the files plugin-react processes |
-| `transform` | for an id ending in `.rtsx`: runs the passes of [syntax.md](syntax.md#compilation-passes); returns `.tsx` source + source map |
+| `config` | adds `.rtsx` to `resolve.extensions` |
+| `transform` | for an id ending in `.rtsx` (query ignored): the passes of [syntax.md](syntax.md#compilation-passes) in Go, then Oxc; returns JS (`moduleType: "js"`) + source map |
+| `closeBundle`, dev server close | ends the Go process |
 
-- **The output is TSX, not JS.** The plugin neither strips types nor
-  transforms JSX; the rest of the pipeline does that as for any `.tsx`.
 - **One transpiler.** The transform and `reactogenic check`
   ([diagnostics.md](diagnostics.md)) run the same code on the same input, so
   what is type-checked is exactly what runs.
