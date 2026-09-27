@@ -20,7 +20,12 @@ func shorthand(c *passContext) []emit.Edit {
 		if n.Kind == rtsx.KindJsxAttribute && n.Initializer() == nil {
 			if name := n.Name(); name.Kind == rtsx.KindIdentifier {
 				text := rtsx.NodeText(name)
-				if _, isSegment := syntax.SegmentRoot(n); !isSegment && syntax.Binding(n, text) != nil {
+				_, isSegment := syntax.SegmentRoot(n)
+				_, arg := syntax.SlotArg(n)
+				if !isSegment && arg == syntax.NotArg && syntax.Binding(n, text) == nil {
+					c.note(c.span(n), "shorthand-true", text, "")
+				}
+				if !isSegment && arg == syntax.NotArg && syntax.Binding(n, text) != nil {
 					attr := emit.Span{Pos: rtsx.TokenStart(c.file, n), End: n.End()}
 					nameSpan := emit.Span{Pos: rtsx.TokenStart(c.file, name), End: name.End()}
 					edits = append(edits, emit.Edit{

@@ -408,14 +408,14 @@ e2e run).
 - **Done when:** one fixture per row of the origins table passes.
 - Depends on: 030c, 070.
 
-### RGP1-072 — Generated-name replacement · S
+### RGP1-072 — Generated-name replacement · S · done
 Replace generated names in messages with what the author wrote: `_on` with
 the `on` expression, `_Section_aboutUs` with `#about-us`, the `noMatch` alias
 with nothing the author would see.
 - **Done when:** no fixture's expected output contains a generated name.
 - Depends on: 071.
 
-### RGP1-073 — Rewrites · M
+### RGP1-073 — Rewrites · M · done
 One subtask and one fixture per row of the rewrites table in
 [diagnostics.md](diagnostics.md#rewrites):
 - **073a** undeclared-slot
@@ -467,6 +467,19 @@ projects: a TS error on a shorthand-rewritten attribute lands on the
 attribute the author wrote, and one on a list-slot item's option lands on
 that option. Left: generated-name replacement (072), rewrites into slot
 terms (073), `--watch` (076).
+
+**RGP1-072/073.** The transpiler records `Output.Notes` — what it
+synthesized for which source span (slot prop, body, params, args, arg,
+no-match, segment, a bare attribute left `true`) — and `Output.Generated`
+(`_Div_num` → `#num`, `_on` → `getStatus()`; per-construct names are unique).
+`check` rewrites by note kind, TS code and structured message arguments,
+never message text; generated names are replaced in every message. Finer
+origins: `$X={` points at its slot element, `children:` at the body. Tested
+on one project covering every rule (`internal/check/rewrite_test.go`).
+Found: `content-required` cannot be specific — `NotAssigned` in `Slot` turns
+TS's "children is missing" into a union mismatch, reported as slot-type; and
+tsgo parses files in parallel, so the project's overlay raced on its maps —
+fixed with a mutex, `-race` clean.
 
 ## M7 — Conformance and release
 

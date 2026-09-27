@@ -86,6 +86,7 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 		if !identifierName.MatchString(name) {
 			argKey = `"` + name + `"`
 		}
+		c.note(c.span(attr), "slot-arg", c.sourceText(ref), name)
 		args = append(args, append([]emit.Piece{emit.Synth(argKey+": ", c.span(attr))}, c.argValue(attr, name)...))
 		if kind == syntax.ArgProp {
 			prop := []emit.Piece{emit.Synth(name+"=", c.span(attr))}
@@ -98,6 +99,7 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 		}
 	}
 	fallback := meaningfulChildren(childrenOf(el))
+	c.note(origin, "slot-args", c.sourceText(ref), "")
 
 	render := c.core("renderSlot", origin)
 	assigned := c.core("isAssigned", origin)

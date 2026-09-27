@@ -59,7 +59,16 @@ func fromTS(p *project.Project, d *rtsx.Diagnostic) Report {
 	if d.File() == nil {
 		return r
 	}
-	r.File, r.Line, r.Col = position(p, d.File(), emit.Span{Pos: rtsx.SkipTrivia(d.File().Text(), d.Pos()), End: d.End()})
+	span := emit.Span{Pos: rtsx.SkipTrivia(d.File().Text(), d.Pos()), End: d.End()}
+	r.File, r.Line, r.Col = position(p, d.File(), span)
+	if src, ok := p.SourceOf(d.File().FileName()); ok {
+		out, _ := p.Output(src)
+		text, _ := p.Source(src)
+		if code, message, related, ok := rewrite(d, out, text, out.Map.Source(span)); ok {
+			r.Code, r.Message, r.Related = code, message, related
+		}
+		r.Message = renameGenerated(r.Message, out.Generated)
+	}
 	for _, rel := range d.RelatedInformation() {
 		rr := Report{Message: flatten(rel)}
 		if rel.File() != nil {

@@ -84,12 +84,12 @@ they never wrote:
 
 | Code | TS reports on the emitted code | Reported at |
 | --- | --- | --- |
-| undeclared-slot | property `$X` does not exist on the props type | slot tag |
+| undeclared-slot | property `$X` does not exist on the props type (TS2322 › TS2339) | slot tag |
 | missing-slot | property `$X` is missing | container tag |
 | params-required | a body is not assignable to a function slot's `(args) => …` | slot tag |
 | content-not-allowed | property `children` does not exist in the slot's contract | slot tag: "`$X` takes no body" |
-| no-values | a function is not assignable to `ReactNode` | params pattern |
-| content-required | property `children` is missing in the slot object | slot tag |
+| no-values | the params get no contextual type (TS7031, implicit `any`) | params pattern |
+| content-required | property `children` is missing in the slot object | slot tag — **not specific yet**: with `NotAssigned` in `Slot`, TS reports a union mismatch; reported as slot-type, "`$X` does not match its declaration in `P`: …" |
 | — (required slot filled conditionally) | `undefined` is not assignable to the slot's type | `Match` tag: "`$Hint` is required and cannot be conditional" |
 | switch-missing-case | `noMatch`'s argument is not assignable to `never` | `Switch` tag: "Missing `"success"`" — the leftover type, printed as cases |
 | segment-not-component | the module has no default export, or it is not a component | `#name` |

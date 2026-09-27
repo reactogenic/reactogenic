@@ -16,6 +16,9 @@ type passContext struct {
 	file   *rtsx.SourceFile
 	text   string
 	report func(s emit.Span, severity Severity, code, message string)
+	// note and generated record Output.Notes and Output.Generated.
+	note      func(s emit.Span, kind, name, detail string)
+	generated func(local, written string)
 	// names holds every identifier of the original source, so generated
 	// names can never capture or shadow the author's.
 	names map[string]bool
@@ -61,6 +64,22 @@ func (c *passContext) fresh(base string) string {
 	return name
 }
 
+// unique is fresh, and reserves the name, so the next one differs: for a
+// name that stands for one construct (`_on` of one Switch), which a message
+// must be able to trace back.
+func (c *passContext) unique(base, written string) string {
+	name := c.fresh(base)
+	c.names[name] = true
+	c.generated(name, written)
+	return name
+}
+
+// sourceText is n as written in this pass's input.
+func (c *passContext) sourceText(n *rtsx.Node) string {
+	s := c.span(n)
+	return c.text[s.Pos:s.End]
+}
+
 // identifiers collects every identifier in file.
 func identifiers(file *rtsx.SourceFile) map[string]bool {
 	names := map[string]bool{}
@@ -84,6 +103,7 @@ func (c *passContext) core(export string, origin emit.Span) string {
 	}
 	local := c.fresh("_" + export)
 	c.coreNames[export] = local
+	c.generated(local, export)
 	return local
 }
 

@@ -63,6 +63,21 @@ type Output struct {
 	Diagnostics []Diagnostic
 	// Map maps TSX back to the entry's source (diagnostics.md, *Mapping*).
 	Map *emit.Map
+	// Notes say what the code synthesized for a construct is, so a TS error
+	// on it can be reworded in the author's terms (diagnostics.md,
+	// *Rewrites*).
+	Notes []Note
+	// Generated maps each generated name to what the author wrote:
+	// `_Div_num` → `#num`, `_on` → `getStatus()`.
+	Generated map[string]string
+}
+
+// Note marks a source span: what was synthesized for it.
+type Note struct {
+	Span   emit.Span // in the source
+	Kind   string    // slot-prop, slot-body, slot-params, slot-args, slot-arg, no-match, segment, shorthand-true
+	Name   string    // the slot (`$Title`), segment (`about-us`) or attribute
+	Detail string    // the container tag, the arg name, …
 }
 
 // A pass reads its input — the source, or the previous pass's output — and
@@ -125,6 +140,15 @@ func Transpile(in Input) (Output, error) {
 		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, entry: in.Entry, readFile: in.readFile,
 			report: func(s emit.Span, sev Severity, code, msg string) {
 				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
+			},
+			note: func(s emit.Span, kind, name, detail string) {
+				out.Notes = append(out.Notes, Note{Span: toSource.Source(s), Kind: kind, Name: name, Detail: detail})
+			},
+			generated: func(local, written string) {
+				if out.Generated == nil {
+					out.Generated = map[string]string{}
+				}
+				out.Generated[local] = written
 			}}
 		edits := p.run(c)
 		if len(edits) == 0 {

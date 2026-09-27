@@ -7,6 +7,7 @@ package project
 import (
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 
@@ -21,8 +22,11 @@ type Project struct {
 
 	config, cwd string
 	disk        rtsx.FS
-	outputs     map[string]transpiler.Output // by .rtsx path
-	sources     map[string]string            // .rtsx text, by path
+	// tsgo parses files in parallel, so the overlay transpiles from many
+	// goroutines: mu guards outputs and sources.
+	mu      sync.Mutex
+	outputs map[string]transpiler.Output // by .rtsx path
+	sources map[string]string            // .rtsx text, by path
 }
 
 // Open builds the program of the tsconfig at configPath (absolute).
@@ -46,9 +50,6 @@ func (p *Project) build() {
 		},
 		ReadFile: func(name string) (string, bool) {
 			if src, ok := p.virtual(name); ok {
-				if out, ok := p.outputs[src]; ok {
-					return out.TSX, true
-				}
 				return p.transpile(src).TSX, true
 			}
 			return p.disk.ReadFile(name)
@@ -83,8 +84,14 @@ func tsxPath(rtsxPath string) string {
 	return strings.TrimSuffix(rtsxPath, ".rtsx") + ".tsx"
 }
 
-// transpile runs the transpiler on one .rtsx file and keeps the output.
+// transpile runs the transpiler on one .rtsx file, once, and keeps the
+// output.
 func (p *Project) transpile(file string) transpiler.Output {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if out, ok := p.outputs[file]; ok {
+		return out
+	}
 	text, ok := p.sources[file]
 	if !ok {
 		text, _ = p.disk.ReadFile(file)
@@ -100,12 +107,16 @@ func (p *Project) transpile(file string) transpiler.Output {
 
 // Output returns the transpiler output of an .rtsx file of the project.
 func (p *Project) Output(rtsxPath string) (transpiler.Output, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	out, ok := p.outputs[rtsxPath]
 	return out, ok
 }
 
 // Source returns the text of an .rtsx file of the project, as transpiled.
 func (p *Project) Source(rtsxPath string) (string, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	text, ok := p.sources[rtsxPath]
 	return text, ok
 }
@@ -113,13 +124,21 @@ func (p *Project) Source(rtsxPath string) (string, bool) {
 // SourceOf returns the .rtsx file behind a virtual .tsx of the program.
 func (p *Project) SourceOf(tsxPath string) (string, bool) {
 	src := strings.TrimSuffix(tsxPath, ".tsx") + ".rtsx"
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	_, ok := p.outputs[src]
 	return src, ok && strings.HasSuffix(tsxPath, ".tsx")
 }
 
 // Outputs lists the .rtsx files the program read.
 func (p *Project) Outputs() map[string]transpiler.Output {
-	return p.outputs
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	outputs := make(map[string]transpiler.Output, len(p.outputs))
+	for file, out := range p.outputs {
+		outputs[file] = out
+	}
+	return outputs
 }
 
 // Diagnostics returns what `tsc --noEmit` reports on the program, with

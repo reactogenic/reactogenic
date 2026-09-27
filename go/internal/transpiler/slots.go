@@ -193,7 +193,8 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 		opening = p.AsJsxElement().OpeningElement
 	}
 	a := readAttributes(p)
-	names, values, replaced, remaining := c.assignSlots(p, a)
+	names, values, replaced, remaining, first := c.assignSlots(p, a)
+	tagText := c.tagText(p)
 
 	// The new element: written attributes (minus params and replaced `$X=`),
 	// then the slot props.
@@ -207,8 +208,9 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 		out = append(out, emit.Synth(" ", origin), c.copy(attr))
 	}
 	for _, name := range names {
-		out = append(out, emit.Synth(" "+name+"={", origin))
-		out = append(append(out, values[name]...), emit.Synth("}", origin))
+		c.note(first[name], "slot-prop", name, tagText)
+		out = append(out, emit.Synth(" ", origin), emit.Synth(name+"={", first[name]))
+		out = append(append(out, values[name]...), emit.Synth("}", first[name]))
 	}
 
 	meaningful := meaningfulChildren(remaining)
@@ -256,9 +258,10 @@ func meaningfulChildren(children []*rtsx.Node) []*rtsx.Node {
 //
 // It returns the slots in order of first appearance, their values, the
 // replaced attributes, and the children that are not slots.
-func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map[string][]emit.Piece, map[*rtsx.Node]bool, []*rtsx.Node) {
+func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map[string][]emit.Piece, map[*rtsx.Node]bool, []*rtsx.Node, map[string]emit.Span) {
 	var names []string
 	values := map[string][]emit.Piece{}
+	first := map[string]emit.Span{} // where each slot is first filled
 	replaced := map[*rtsx.Node]bool{}
 	var rest []*rtsx.Node
 	previous := func(name string) []emit.Piece {
@@ -273,24 +276,31 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 		return nil
 	}
 	if owner.Kind != rtsx.KindJsxElement {
-		return nil, values, replaced, nil
+		return nil, values, replaced, nil, first
 	}
 	for _, ch := range owner.Children().Nodes {
 		switch {
 		case isSlotElement(ch):
 			name := rtsx.NodeText(tagOf(ch))
 			previous(name)
+			if _, ok := first[name]; !ok {
+				first[name] = c.openingSpan(ch)
+			}
 			values[name] = c.slotObject(ch)
 		case slotConditional(ch) != nil:
 			cond := slotConditional(ch)
 			if name, ok := c.conditionalSlotName(cond); ok {
-				values[name] = c.conditionalValue(cond, previous(name), c.openingSpan(owner))
+				prev := previous(name)
+				if _, ok := first[name]; !ok {
+					first[name] = c.span(ch)
+				}
+				values[name] = c.conditionalValue(cond, prev, c.openingSpan(owner))
 			}
 		default:
 			rest = append(rest, ch)
 		}
 	}
-	return names, values, replaced, rest
+	return names, values, replaced, rest, first
 }
 
 // conditionalSlotName checks a conditional's branches: each must be one slot
@@ -410,8 +420,9 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		opening = el.AsJsxElement().OpeningElement
 	}
 	a := readAttributes(el)
-	names, values, replaced, rest := c.assignSlots(el, a)
+	names, values, replaced, rest, first := c.assignSlots(el, a)
 	body := meaningfulChildren(rest)
+	slotName := c.tagText(el)
 	var attrs []*rtsx.Node
 	for _, attr := range opening.Attributes().Properties() {
 		if _, ok := syntax.SlotParams(attr); ok || replaced[attr] {
@@ -431,14 +442,24 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 	}
 	props := c.attributeProps(attrs)
 	for _, name := range names {
-		props = append(props, append([]emit.Piece{emit.Synth(name+": ", origin)}, values[name]...))
+		c.note(first[name], "slot-prop", name, slotName)
+		props = append(props, append([]emit.Piece{emit.Synth(name+": ", first[name])}, values[name]...))
+	}
+	if a.params != nil {
+		c.note(c.span(a.params), "slot-params", slotName, "")
 	}
 	if len(body) > 0 {
 		var all []emit.Piece
 		for _, ch := range rest {
 			all = append(all, c.copyChild(ch))
 		}
-		prop := []emit.Piece{emit.Synth("children: ", origin)}
+		bodySpan := c.childrenSpan(el)
+		detail := ""
+		if a.params != nil {
+			detail = "params"
+		}
+		c.note(bodySpan, "slot-body", slotName, detail)
+		prop := []emit.Piece{emit.Synth("children: ", bodySpan)}
 		if a.params != nil {
 			prop = append(prop, emit.Synth("(", origin), c.copy(a.params), emit.Synth(") => ", origin))
 		}

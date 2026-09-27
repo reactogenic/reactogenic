@@ -30,7 +30,8 @@ func segments(c *passContext) []emit.Edit {
 		name, _ := syntax.SegmentRoot(attr)
 		opening := attr.Parent.Parent
 		origin := c.span(attr)
-		local := c.fresh("_" + tagIdentifier(c.tagText(opening)) + "_" + camel(name))
+		local := c.unique("_"+tagIdentifier(c.tagText(opening))+"_"+camel(name), "#"+name)
+		c.note(origin, "segment", name, c.tagText(opening))
 
 		edits = append(edits, emit.Edit{Span: origin, Pieces: []emit.Piece{emit.Synth(fmt.Sprintf("id=%q", name), origin)}})
 		mount := emit.Synth("<"+local+" />", origin)

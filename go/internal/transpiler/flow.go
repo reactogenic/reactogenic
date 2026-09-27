@@ -136,7 +136,7 @@ func (c *passContext) lowerMatch(el *rtsx.Node) []emit.Edit {
 	}
 	// `value` is destructured further (`{ value: { name } }`): test the whole
 	// value, then destructure it for the body.
-	v := c.fresh("_value")
+	v := c.unique("_value", c.sourceText(on))
 	expr := []emit.Piece{emit.Synth("(("+v+") => "+v+" ? ((", origin), pattern, emit.Synth(") => ", origin)}
 	expr = append(append(expr, body...), emit.Synth(")({ value: "+v+" }) : null)(", origin))
 	expr = append(append(expr, c.operand(on, rtsx.PrecedenceComma)...), emit.Synth(")", origin))

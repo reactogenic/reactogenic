@@ -17,7 +17,7 @@ jobs:
       - name: Vet
         run: go vet github.com/reactogenic/reactogenic/go/...
       - name: Test
-        run: go test github.com/reactogenic/reactogenic/go/...
+        run: go test -race github.com/reactogenic/reactogenic/go/... # tsgo parses files in parallel
       - name: gofmt
         run: test -z "$(gofmt -l go/cmd go/internal)"
 

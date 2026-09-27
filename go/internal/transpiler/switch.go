@@ -57,7 +57,7 @@ func (c *passContext) lowerSwitch(el *rtsx.Node) []emit.Edit {
 	}
 	var onName string
 	if !dynamic && !reference {
-		onName = c.fresh("_on")
+		onName = c.unique("_on", c.sourceText(on))
 		subject = func() []emit.Piece { return []emit.Piece{emit.Synth(onName, origin)} }
 	}
 
@@ -83,7 +83,9 @@ func (c *passContext) lowerSwitch(el *rtsx.Node) []emit.Edit {
 		edits = append(edits, e...)
 		chain = append(chain, body...)
 	case exhaustive != nil:
+		c.note(origin, "no-match", "", "")
 		noMatch := c.fresh("_noMatch")
+		c.generated(noMatch, "noMatch")
 		edits = append(edits, c.ensureImport("@reactogenic/core", "noMatch", noMatch, origin)...)
 		chain = append(append(append(chain, emit.Synth(noMatch+"(", origin)), subject()...), emit.Synth(")", origin))
 	default:
