@@ -164,6 +164,17 @@ func (m *Map) Source(out Span) Span {
 	return Span{min(start, end), max(start, end)}
 }
 
+// Output maps an input position to the output, through copied text only:
+// the first copy of pos. Text the passes rewrote has no output position.
+func (m *Map) Output(pos int) (int, bool) {
+	for _, s := range m.Segments {
+		if s.Copied && s.In.Pos <= pos && pos < s.In.End {
+			return s.Out.Pos + pos - s.In.Pos, true
+		}
+	}
+	return 0, false
+}
+
 // Then composes two passes: m maps this pass's output to its input, and
 // prev maps that input to the original source. The result maps this pass's
 // output straight to the source.

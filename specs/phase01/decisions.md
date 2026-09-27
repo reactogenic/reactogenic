@@ -283,3 +283,11 @@ answers #4: the key of a slot call is the React key of what it renders. The
 value carries the `KEYED` brand in its object literal — entries stay
 type-checked as slot values — and `slotEntry` returns the entry of a keyed
 slot, or a singular slot as it is. `FnSlot<P, A>` is folded into `Slot<P, A>`.
+
+**Required slots and `NOT_ASSIGNED`.** `Slot<P>` keeps one type for required
+and optional slots; no separate type keeps the sentinel out of required ones.
+A required slot filled only conditionally is an error — "Required slot without
+fallback cannot be conditional" (slot-conditional) — unless the component
+attaches it with a fallback. `reactogenic check` joins the caller's
+conditional (a transpiler note with the component's tag) with the component's
+attachments (notes with or without fallback) through the checker.

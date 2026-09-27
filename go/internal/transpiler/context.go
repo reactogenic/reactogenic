@@ -18,6 +18,7 @@ type passContext struct {
 	report func(s emit.Span, severity Severity, code, message string)
 	// note and generated record Output.Notes and Output.Generated.
 	note      func(s emit.Span, kind, name, detail string)
+	noteTag   func(s, tag emit.Span, kind, name string)
 	generated func(local, written string)
 	// names holds every identifier of the original source, so generated
 	// names can never capture or shadow the author's.

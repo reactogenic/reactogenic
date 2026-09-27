@@ -291,7 +291,14 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 		}
 		return keyAttribute(keyedFirst[name]) != nil
 	}
+	// unassignable: slots whose final value may be NOT_ASSIGNED — the last
+	// assignment is a conditional with a null branch and nothing before it.
+	// The checker decides if that is allowed (slot-conditional in check).
+	unassignable := map[string]emit.Span{}
 	for _, ch := range owner.Children().Nodes {
+		if isSlotElement(ch) {
+			delete(unassignable, rtsx.NodeText(tagOf(ch)))
+		}
 		switch {
 		case isSlotElement(ch):
 			name := rtsx.NodeText(tagOf(ch))
@@ -325,9 +332,24 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 					continue
 				}
 				values[name] = c.conditionalValue(cond, prev, c.openingSpan(owner))
+				delete(unassignable, name)
+				if prev == nil && hasNullBranch(cond) {
+					unassignable[name] = c.span(ch)
+				}
 			}
 		default:
 			rest = append(rest, ch)
+		}
+	}
+	if !isSlotElement(owner) {
+		opening := owner
+		if owner.Kind == rtsx.KindJsxElement {
+			opening = owner.AsJsxElement().OpeningElement
+		}
+		for _, name := range names {
+			if at, ok := unassignable[name]; ok {
+				c.noteTag(at, c.span(opening.TagName()), "slot-conditional", name)
+			}
 		}
 	}
 	for name, entries := range keyed {
@@ -432,6 +454,17 @@ func (c *passContext) conditionalSlotName(expr *rtsx.Node) (string, bool) {
 	}
 	walk(expr)
 	return name, ok && name != ""
+}
+
+// hasNullBranch reports whether a conditional of slot elements has a branch
+// that assigns nothing.
+func hasNullBranch(expr *rtsx.Node) bool {
+	expr = unwrapParens(expr)
+	if expr.Kind == rtsx.KindConditionalExpression {
+		ce := expr.AsConditionalExpression()
+		return hasNullBranch(ce.WhenTrue) || hasNullBranch(ce.WhenFalse)
+	}
+	return isNullish(expr)
 }
 
 func isNullish(n *rtsx.Node) bool {

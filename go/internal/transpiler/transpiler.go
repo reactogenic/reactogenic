@@ -75,9 +75,12 @@ type Output struct {
 // Note marks a source span: what was synthesized for it.
 type Note struct {
 	Span   emit.Span // in the source
-	Kind   string    // slot-prop, slot-body, slot-params, slot-args, slot-arg, no-match, segment, shorthand-true
+	Kind   string    // slot-prop, slot-body, slot-params, slot-args, slot-arg, slot-conditional, attachment, no-match, segment, shorthand-true
 	Name   string    // the slot (`$Title`), segment (`about-us`) or attribute
 	Detail string    // the container tag, the arg name, …
+	// Tag is, for slot-conditional, the owner's tag name in the source: the
+	// component whose slot may be left NOT_ASSIGNED.
+	Tag emit.Span
 }
 
 // A pass reads its input — the source, or the previous pass's output — and
@@ -143,6 +146,9 @@ func Transpile(in Input) (Output, error) {
 			},
 			note: func(s emit.Span, kind, name, detail string) {
 				out.Notes = append(out.Notes, Note{Span: toSource.Source(s), Kind: kind, Name: name, Detail: detail})
+			},
+			noteTag: func(s, tag emit.Span, kind, name string) {
+				out.Notes = append(out.Notes, Note{Span: toSource.Source(s), Kind: kind, Name: name, Tag: toSource.Source(tag)})
 			},
 			generated: func(local, written string) {
 				if out.Generated == nil {

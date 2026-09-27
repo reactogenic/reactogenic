@@ -39,6 +39,7 @@ func Run(configPath string) []Report {
 	for _, d := range p.Diagnostics() {
 		reports = append(reports, fromTS(p, d))
 	}
+	reports = append(reports, slotConditionals(p)...)
 	for _, file := range p.Ambiguous() {
 		tsx := strings.TrimSuffix(file, ".rtsx") + ".tsx"
 		reports = append(reports, Report{File: file, Line: 1, Col: 1, Error: true, Code: "ambiguous-module",

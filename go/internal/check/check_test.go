@@ -106,7 +106,8 @@ export declare function isAssigned<S>(slot: S): slot is Exclude<S, NotAssigned |
 export declare function slotProps<S extends object>(slot: S): S;
 export type NoArgs = { readonly [arg: string]: never };
 export type ArgsOf<S> = S extends { children?: infer Body } ? NonNullable<Body> extends (args: infer Args) => ReactNode ? Args : NoArgs : NoArgs;
-export declare function renderSlot<S extends object>(slot: S, args: S extends readonly unknown[] ? never : ArgsOf<S>, fallback?: ReactNode): ReactNode;`,
+export declare function renderSlot<S extends object>(slot: S, args: S extends readonly unknown[] ? never : ArgsOf<S>, fallback?: ReactNode): ReactNode;
+export declare function Match(props: { on: unknown; children?: unknown }): never;`,
 }
 
 // checkProject writes a project with the core stub and returns its reports
@@ -259,5 +260,58 @@ export const typo = (
 	// Only the typo: an excess property of an entry, on its line.
 	if len(got) != 1 || !strings.HasPrefix(got[0], "src/table.rtsx:17:") {
 		t.Errorf("got %q", got)
+	}
+}
+
+// syntax.md, *Conditional slots*: a required slot that the component attaches
+// without a fallback cannot be filled conditionally — its false branch is
+// NOT_ASSIGNED, and nothing would render.
+func TestSlotConditional(t *testing.T) {
+	got := checkProject(t, map[string]string{
+		"src/card.rtsx": `import type { Slot } from "@reactogenic/core";
+export interface CardProps {
+  $Title: Slot<{ children?: string }>;
+  $Footer: Slot<{ children?: string }>;
+  $Badge?: Slot<{ children?: string }>;
+}
+export function Card({ $Title, $Footer, $Badge }: CardProps) {
+  return (
+    <article>
+      <h2 slot={$Title} />
+      <footer slot={$Footer}>Default</footer>
+      <i slot={$Badge} />
+    </article>
+  );
+}
+`,
+		"src/page.rtsx": `import { Match } from "@reactogenic/core";
+import { Card } from "./card";
+declare const c: boolean;
+export const bad = (
+  <Card>
+    <Match on={c}><$Title>Hi</$Title></Match>
+    <$Footer />
+  </Card>
+);
+export const fine = (
+  <Card>
+    <$Title>Always</$Title>
+    <Match on={c}><$Title>Sometimes</$Title></Match>
+    <Match on={c}><$Footer>Sometimes</$Footer></Match>
+    <Match on={c}><$Badge>New</$Badge></Match>
+  </Card>
+);
+export const later = (
+  <Card>
+    <Match on={c}><$Title>Sometimes</$Title></Match>
+    <$Title>Always</$Title>
+    <$Footer />
+  </Card>
+);
+`,
+	})
+	want := []string{"src/page.rtsx:6:5 slot-conditional"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }

@@ -11,6 +11,7 @@ emitted code, never a generated name.
 | transpiler | orphan-slot, arg-without-slot, segment-not-found, segment-in-loop | the Vite transform and `reactogenic check` |
 | TS on the emitted `.tsx`, rewritten into slot terms | undeclared-slot, missing-slot, switch-missing-case | `reactogenic check` |
 | TS on the emitted `.tsx`, as is | any other `TSxxxx` | `reactogenic check` |
+| transpiler notes joined by the checker, across files | slot-conditional | `reactogenic check` |
 
 The errors marked *types* in the *Compile errors* tables of
 [syntax.md](syntax.md) are the middle row: TS already finds them on the
@@ -90,7 +91,6 @@ they never wrote:
 | content-not-allowed | property `children` does not exist in the slot's contract | slot tag: "`$X` takes no body" |
 | no-values | the params get no contextual type (TS7031, implicit `any`) | params pattern |
 | content-required | property `children` is missing in the slot object | slot tag — **not specific yet**: with `NotAssigned` in `Slot`, TS reports a union mismatch; reported as slot-type, "`$X` does not match its declaration in `P`: …" |
-| — (required slot filled conditionally) | `undefined` is not assignable to the slot's type | `Match` tag: "`$Hint` is required and cannot be conditional" |
 | switch-missing-case | `noMatch`'s argument is not assignable to `never` | `Switch` tag: "Missing `"success"`" — the leftover type, printed as cases |
 | segment-not-component | the module has no default export, or it is not a component | `#name` |
 | segment-props | required props missing on `<_Section_x />` | `#name` |

@@ -663,11 +663,30 @@ import { NOT_ASSIGNED as _NOT_ASSIGNED } from "@reactogenic/core";
   `$IconStart: undefined` spread onto `Button` overrides the attachment's own
   `$IconStart`); `NOT_ASSIGNED` never does: an attachment treats it as no slot
   (`isAssigned`), and a spread of slot props skips it (`slotProps`).
-- `Slot<P>` and `Slot<P, A>` include `NotAssigned`, so an optional slot
-  takes it.
-  > OPEN: a *required* slot filled only conditionally is therefore no longer
-  > a type error (it was: `undefined` is not assignable). Keep the sentinel
-  > out of required slots — a separate type for optional ones — or accept?
+- `Slot<P>` and `Slot<P, A>` include `NotAssigned`: one type for required
+  and optional slots. A **required** slot may be filled conditionally only
+  when the component gives it a fallback — then `NOT_ASSIGNED` renders the
+  fallback. When every attachment of the slot in the component is without a
+  fallback, it is an error (slot-conditional): its false branch would render
+  nothing, which is what optional (`$X?`) says.
+
+  ```tsx
+  function Card({ $Title, $Footer }: { $Title: Slot<…>; $Footer: Slot<…> }) {
+    return <article><h2 slot={$Title} /><footer slot={$Footer}>Default</footer></article>;
+  }
+
+  <Card>
+    <Match on={c}><$Title>Hi</$Title></Match>    {/* slot-conditional */}
+    <Match on={c}><$Footer>Bye</$Footer></Match> {/* fine: falls back to "Default" */}
+  </Card>
+  ```
+
+  Only the final value counts: a conditional after an unconditional `<$X>`
+  keeps it, and an unconditional `<$X>` after a conditional replaces it —
+  neither is an error. Keyed slots are exempt (a missing entry is normal).
+  The check needs both files and the component's props type, so
+  `reactogenic check` reports it, not the Vite transform; a component
+  written in `.tsx`, or one that never attaches the slot, is not checked.
 - Narrowing works: the branch is inline in the ternary.
 
 | Not supported | Error |
@@ -807,6 +826,7 @@ to emit. TS7 checks the emitted `.tsx`, and that is what types slots:
 | content-required | `$X` requires content | `<$X … />`, `children` required | types |
 | orphan-slot | Slot must be immediate child of the component | not placed as in *Placement* | syntax |
 | mixed-conditional-slot | A conditional slot fills one slot | see *Conditional slots* | syntax |
+| slot-conditional | Required slot without fallback cannot be conditional | a required slot filled only conditionally, attached without a fallback everywhere in the component (*Conditional slots*) | types |
 | params-on-html | Params are only allowed on components and slot elements | `<div { size }>` — an intrinsic element by React's rule (lowercase, `-`, or `a:b`) | syntax |
 | duplicate-params | An element takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |

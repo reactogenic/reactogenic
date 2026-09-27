@@ -7,6 +7,8 @@ package rtsx
 import (
 	"context"
 
+	"github.com/microsoft/TypeScript/tsc/internal/ast"
+	"github.com/microsoft/TypeScript/tsc/internal/astnav"
 	"github.com/microsoft/TypeScript/tsc/internal/bundled"
 	"github.com/microsoft/TypeScript/tsc/internal/checker"
 	"github.com/microsoft/TypeScript/tsc/internal/compiler"
@@ -60,6 +62,38 @@ func AllDiagnostics(p *Program) []*Diagnostic {
 // GetChecker returns p's checker and the func that releases it.
 func GetChecker(p *Program) (*Checker, func()) {
 	return p.GetTypeChecker(context.Background())
+}
+
+// TokenAt is the token at pos in file.
+func TokenAt(file *SourceFile, pos int) *Node {
+	return astnav.GetTokenAtPosition(file, pos)
+}
+
+// FileOf is the source file a node belongs to.
+func FileOf(n *Node) *SourceFile {
+	return ast.GetSourceFileOfNode(n)
+}
+
+// SlotDeclaration answers, for a JSX tag: the declaration of the component
+// it refers to, and whether the component's props declare the prop slot, and
+// as optional. It reads the props type from the component's call
+// signatures.
+func SlotDeclaration(c *Checker, tag *Node, slot string) (decl *Node, declared, optional bool) {
+	if sym := c.GetSymbolAtLocation(tag); sym != nil {
+		if sym.Flags&ast.SymbolFlagsAlias != 0 {
+			sym = c.GetAliasedSymbol(sym)
+		}
+		decl = sym.ValueDeclaration
+	}
+	for _, sig := range c.GetSignaturesOfType(c.GetTypeAtLocation(tag), checker.SignatureKindCall) {
+		if len(sig.Parameters()) == 0 {
+			continue
+		}
+		if prop := c.GetPropertyOfType(c.GetTypeAtPosition(sig, 0), slot); prop != nil {
+			return decl, true, prop.Flags&ast.SymbolFlagsOptional != 0
+		}
+	}
+	return decl, false, false
 }
 
 // IsError reports whether a diagnostic is an error, not a warning or a

@@ -100,6 +100,11 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 	}
 	fallback := meaningfulChildren(childrenOf(el))
 	c.note(origin, "slot-args", c.sourceText(ref), "")
+	if len(fallback) > 0 {
+		c.note(origin, "attachment", c.sourceText(ref), "fallback")
+	} else {
+		c.note(origin, "attachment", c.sourceText(ref), "")
+	}
 
 	render := c.core("renderSlot", origin)
 	assigned := c.core("isAssigned", origin)
