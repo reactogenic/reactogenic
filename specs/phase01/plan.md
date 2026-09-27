@@ -488,7 +488,15 @@ fixed with a mutex, `-race` clean.
 
 ## M7 — Conformance and release
 
-### RGP1-090 — Spec conformance gate · S
+### RGP1-090 — Spec conformance gate · S · done
+`go/internal/conformance/coverage_test.go`: every syntax.md example passes
+(strictly); every transpiler code of the *Compile errors* tables is expected
+by a fixture; every *types* code and diagnostics.md rewrite is asserted by a
+`reactogenic check` test — except rows marked "not specific yet"
+(content-required), a documented gap. On its first run it found three gaps,
+now filled (arg-without-slot and segment-self fixtures; fixtures may name
+their entry in an `entry` file). A mutation check confirmed it fails when a
+code loses its fixture.
 CI fails if:
 - any code-block pair in syntax.md has no passing fixture;
 - any error code in the *Compile errors* tables of syntax.md has no fixture;

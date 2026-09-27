@@ -13,7 +13,8 @@ import (
 )
 
 // LoadFixtures reads every fixture directory under root: a directory that
-// holds an input.rtsx. See fixtures/README.md.
+// holds an input.rtsx, or an `entry` file naming its entry. See
+// fixtures/README.md.
 func LoadFixtures(root string) ([]Case, error) {
 	fsys := os.DirFS(root)
 	var cases []Case
@@ -21,7 +22,9 @@ func LoadFixtures(root string) ([]Case, error) {
 		if err != nil || !d.IsDir() {
 			return err
 		}
-		if _, err := fs.Stat(fsys, path.Join(p, "input.rtsx")); err != nil {
+		_, errInput := fs.Stat(fsys, path.Join(p, "input.rtsx"))
+		_, errEntry := fs.Stat(fsys, path.Join(p, "entry"))
+		if errInput != nil && errEntry != nil {
 			return nil
 		}
 		cs, err := loadFixture(fsys, p)
@@ -63,6 +66,11 @@ func loadFixture(fsys fs.FS, dir string) ([]Case, error) {
 			continue
 		}
 		switch e.Name() {
+		case "entry":
+			c.Entry = strings.TrimSpace(string(data))
+			for i := range stages {
+				stages[i].Entry = c.Entry
+			}
 		case "output.tsx":
 			c.WantTSX = string(data)
 		case "errors.txt":
@@ -78,6 +86,7 @@ func loadFixture(fsys fs.FS, dir string) ([]Case, error) {
 	}
 	for i := range stages {
 		stages[i].Files = c.Files
+		stages[i].Entry = c.Entry
 	}
 	if c.WantTSX == "" && !hasErrors && len(stages) > 0 {
 		return stages, nil // only stages: no final case that checks nothing

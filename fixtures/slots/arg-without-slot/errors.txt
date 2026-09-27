@@ -1,0 +1,2 @@
+1:26 error arg-without-slot
+2:40 error arg-without-slot

@@ -22,6 +22,7 @@ A directory that holds an `input.rtsx`:
 ```
 fixtures/<area>/<name>/
 ├── input.rtsx      the entry file
+├── entry           or: the name of the entry file (for a `+segment.rtsx` entry)
 ├── output.tsx      expected output (optional)
 ├── errors.txt      expected diagnostics (optional; absent = none)
 ├── output.passN.tsx  expected output after pass N (optional; output only)

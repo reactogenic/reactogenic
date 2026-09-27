@@ -18,6 +18,7 @@ fixtures/parse/segment-second-id
 fixtures/parse/segment-syntax
 fixtures/segments/errors
 fixtures/segments/mount
+fixtures/segments/self
 fixtures/shorthand/case-a
 fixtures/shorthand/globals-and-types
 fixtures/shorthand/intrinsic-spread-explicit
@@ -25,6 +26,7 @@ fixtures/shorthand/never-bindings
 fixtures/shorthand/no-binding
 fixtures/shorthand/slot-params@pass1
 fixtures/shorthand/tdz
+fixtures/slots/arg-without-slot
 fixtures/slots/attributes
 fixtures/slots/errors
 fixtures/slots/last-wins
