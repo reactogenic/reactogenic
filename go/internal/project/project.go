@@ -27,6 +27,9 @@ type Project struct {
 	mu      sync.Mutex
 	outputs map[string]transpiler.Output // by .rtsx path
 	sources map[string]string            // .rtsx text, by path
+	// ambiguous are the .rtsx files with a .tsx of the same name next to
+	// them: the program sees the .tsx, so they are never transpiled.
+	ambiguous map[string]bool
 }
 
 // Open builds the program of the tsconfig at configPath (absolute).
@@ -42,6 +45,7 @@ func (p *Project) build() {
 	if p.outputs == nil {
 		p.outputs = map[string]transpiler.Output{}
 		p.sources = map[string]string{}
+		p.ambiguous = map[string]bool{}
 	}
 	fs := rtsx.WrapFS(p.disk, rtsx.FSReplacements{
 		FileExists: func(name string) bool {
@@ -61,8 +65,15 @@ func (p *Project) build() {
 				have[f] = true
 			}
 			for _, f := range entries.Files {
-				if tsx := strings.TrimSuffix(f, ".rtsx") + ".tsx"; strings.HasSuffix(f, ".rtsx") && !have[tsx] {
+				if !strings.HasSuffix(f, ".rtsx") {
+					continue
+				}
+				if tsx := strings.TrimSuffix(f, ".rtsx") + ".tsx"; !have[tsx] {
 					entries.Files = append(entries.Files, tsx)
+				} else {
+					p.mu.Lock()
+					p.ambiguous[path.Join(dir, f)] = true
+					p.mu.Unlock()
 				}
 			}
 			return entries
@@ -128,6 +139,17 @@ func (p *Project) SourceOf(tsxPath string) (string, bool) {
 	defer p.mu.Unlock()
 	_, ok := p.outputs[src]
 	return src, ok && strings.HasSuffix(tsxPath, ".tsx")
+}
+
+// Ambiguous lists the .rtsx files hidden by a .tsx of the same name.
+func (p *Project) Ambiguous() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var files []string
+	for f := range p.ambiguous {
+		files = append(files, f)
+	}
+	return files
 }
 
 // Outputs lists the .rtsx files the program read.

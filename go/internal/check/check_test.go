@@ -188,3 +188,15 @@ export const page = (
 		t.Errorf("got %q", got)
 	}
 }
+
+// Foo.tsx next to Foo.rtsx: the program sees the .tsx, so the .rtsx is
+// never transpiled — reported, not silently skipped.
+func TestAmbiguousModule(t *testing.T) {
+	got := checkProject(t, map[string]string{
+		"src/card.rtsx": "export const a = <p>rtsx</p>;\n",
+		"src/card.tsx":  "export const a = <p>tsx</p>;\n",
+	})
+	if len(got) != 1 || got[0] != "src/card.rtsx:1:1 ambiguous-module" {
+		t.Errorf("got %q", got)
+	}
+}

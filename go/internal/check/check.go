@@ -39,6 +39,12 @@ func Run(configPath string) []Report {
 	for _, d := range p.Diagnostics() {
 		reports = append(reports, fromTS(p, d))
 	}
+	for _, file := range p.Ambiguous() {
+		tsx := strings.TrimSuffix(file, ".rtsx") + ".tsx"
+		reports = append(reports, Report{File: file, Line: 1, Col: 1, Error: true, Code: "ambiguous-module",
+			Message: fmt.Sprintf("`%s` and `%s` side by side: an import of `./%s` is ambiguous, and the `.rtsx` is not checked",
+				filepath.Base(tsx), filepath.Base(file), strings.TrimSuffix(filepath.Base(tsx), ".tsx"))})
+	}
 	sort.SliceStable(reports, func(i, j int) bool {
 		a, b := reports[i], reports[j]
 		if a.File != b.File {

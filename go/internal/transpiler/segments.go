@@ -105,6 +105,19 @@ func (c *passContext) ensureDefaultImport(module, local string, origin emit.Span
 	return []emit.Edit{{Span: emit.Span{}, Pieces: []emit.Piece{emit.Synth(text+"\n\n", origin)}}}
 }
 
+// checkAmbiguousModule reports ambiguous-module: `Foo.tsx` next to
+// `Foo.rtsx` makes an import of `./Foo` ambiguous (vite.md, *Module
+// resolution*).
+func (c *passContext) checkAmbiguousModule() {
+	if !strings.HasSuffix(c.entry, ".rtsx") {
+		return
+	}
+	tsx := strings.TrimSuffix(c.entry, ".rtsx") + ".tsx"
+	if _, ok := c.readFile(tsx); ok {
+		c.report(emit.Span{}, Error, "ambiguous-module", fmt.Sprintf("`%s` and `%s` side by side: an import of `./%s` is ambiguous", path.Base(tsx), path.Base(c.entry), strings.TrimSuffix(path.Base(tsx), ".tsx")))
+	}
+}
+
 // checkSegmentFiles reports segment-not-found (no `+name.rtsx` or
 // `+name.tsx` next to the file) and segment-self (a segment that mounts
 // itself, directly or through other segments).

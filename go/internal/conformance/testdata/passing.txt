@@ -11,6 +11,7 @@ fixtures/flow/match-nested-pattern
 fixtures/flow/nested
 fixtures/flow/precedence
 fixtures/flow/re-export
+fixtures/modules/ambiguous
 fixtures/parse/duplicate-params
 fixtures/parse/params-on-html
 fixtures/parse/segment-second-id

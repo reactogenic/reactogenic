@@ -191,5 +191,6 @@ func checks(c *passContext) []emit.Edit {
 		c.report(emit.Span{Pos: e.Pos, End: e.End}, sev, e.Code, e.Message)
 	}
 	c.checkSegmentFiles()
+	c.checkAmbiguousModule()
 	return nil
 }
