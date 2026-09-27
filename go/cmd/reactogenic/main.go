@@ -9,12 +9,16 @@ import (
 	"path/filepath"
 
 	"github.com/reactogenic/reactogenic/go/internal/check"
+	"github.com/reactogenic/reactogenic/go/internal/server"
 )
 
 const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false]
+       reactogenic serve
 
   check   type-check the project, with .rtsx transpiled; errors are reported
-          on the .rtsx files (exit status 1 when there are errors)`
+          on the .rtsx files (exit status 1 when there are errors)
+  serve   transform .rtsx for the Vite plugin: JSON requests on stdin, one
+          response per line on stdout`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -24,6 +28,11 @@ func main() {
 	switch os.Args[1] {
 	case "check":
 		os.Exit(runCheck(os.Args[2:]))
+	case "serve":
+		if err := server.Serve(os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "reactogenic serve:", err)
+			os.Exit(1)
+		}
 	case "-h", "--help", "help":
 		fmt.Println(usage)
 	default:
