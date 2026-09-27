@@ -1,7 +1,7 @@
 // Type-level tests: `tsc --noEmit` (pnpm typecheck) fails if an expectation
 // breaks. syntax.md, *Slots*.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, isAssigned, NOT_ASSIGNED, renderSlot, type FnSlot, type Slot } from "./index.ts";
+import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, slotEntry, type KeyedSlot, type Slot } from "./index.ts";
 
 // Slot<P> is the complete contract: a body only if `children` is in it.
 type Box = Slot<{ color: string }>;
@@ -19,8 +19,8 @@ export const e: Span = { className: "x", children: "Save" };
 // @ts-expect-error `colour` is not a prop of <span>
 export const f: Span = { colour: "red" };
 
-// FnSlot<P, A>: the body takes the args.
-type Icon = FnSlot<ComponentProps<"span">, { size: "md" | "lg" }>;
+// Slot<P, A>: the body takes the args.
+type Icon = Slot<ComponentProps<"span">, { size: "md" | "lg" }>;
 export const g: Icon = { className: "i", children: ({ size }) => size };
 export const h: Icon = { className: "i" }; // no body: the attachment's fallback
 // @ts-expect-error `colour` is not an arg
@@ -45,3 +45,17 @@ export const r5 = renderSlot(list, {});
 export const k = <Each items={[1, 2]}>{({ item }) => <b key={item}>{item.toFixed(1)}</b>}</Each>;
 // @ts-expect-error item is a number
 export const l = <Each items={[1, 2]}>{({ item }) => item.toUpperCase()}</Each>;
+
+// KeyedSlot<P> / KeyedSlot<P, A>: entries by key, as the caller's compiled
+// object literal writes them — entry props still checked.
+type Column = KeyedSlot<{ width?: number; children?: ReactNode }>;
+export const m1: Column = { [KEYED]: true, email: { width: 2 }, name: { children: "Name" } };
+// @ts-expect-error `widht` is not a prop of an entry
+export const m2: Column = { [KEYED]: true, email: { widht: 2 } };
+type Cell = KeyedSlot<{ className?: string }, { row: number }>;
+export const m3: Cell = { [KEYED]: true, total: { children: ({ row }) => row } };
+// An attachment with `key` gets the entry of a keyed slot, the slot itself otherwise.
+declare const columns: Column;
+export const e1: { width?: number; children?: ReactNode } | undefined = slotEntry(columns, "email");
+declare const option: Slot<{ value?: string }>;
+export const e2: Slot<{ value?: string }> = slotEntry(option, "a");

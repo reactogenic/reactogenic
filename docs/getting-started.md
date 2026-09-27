@@ -77,11 +77,11 @@ const value = "hello";
 
 ```tsx
 // Button.rtsx
-import type { FnSlot, Slot } from "@reactogenic/core";
+import type { Slot } from "@reactogenic/core";
 
 interface ButtonProps {
   $Label?: Slot<{ className?: string; children?: ReactNode }>;
-  $Icon?: FnSlot<ComponentProps<"span">, { size: Size }>;
+  $Icon?: Slot<ComponentProps<"span">, { size: Size }>;
   size: Size;
 }
 
@@ -109,6 +109,9 @@ function Button({ $Label, $Icon, size }: ButtonProps) {
   `{ size }`; `&&value={x}` also sets `value` on the element.
 - A slot is one value: writing `<$Label>` twice keeps the last one. To render
   something once per item, attach the slot inside an `Each` in the component.
+- Many values of one kind — table columns, form fields — are a `KeyedSlot`:
+  the caller writes `<$Column key="email" …/>` per entry, and the component's
+  `<th key={col.name} slot={$Column} />` renders the entry of each key.
 
 **Flow control.**
 

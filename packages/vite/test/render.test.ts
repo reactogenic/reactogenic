@@ -11,7 +11,7 @@ import { build } from "vite";
 import { beforeAll, expect, test } from "vitest";
 import reactogenic from "../src/index.ts";
 
-let app: { WithSlots: ComponentType<{ mode: "loading" | "ready" }>; WithoutSlots: ComponentType };
+let app: { WithSlots: ComponentType<{ mode: "loading" | "ready" }>; WithoutSlots: ComponentType; Columns: ComponentType };
 
 beforeAll(async () => {
   const outDir = mkdtempSync(join(tmpdir(), "reactogenic-render-"));
@@ -42,4 +42,11 @@ test("without slots, the attachments render their fallbacks", () => {
   const html = renderToStaticMarkup(createElement(app.WithoutSlots));
   expect(html).toContain('<h1 class="default">Untitled</h1>');
   expect(html).toContain('<li class="a">Alpha</li><li class="b">Beta</li>');
+});
+
+test("a keyed slot renders each column's entry, or its fallback", () => {
+  const html = renderToStaticMarkup(createElement(app.Columns));
+  // email: an entry with props and body; name: no entry, the fallback; age:
+  // an entry without a body, so the attachment's children are its body.
+  expect(html).toBe('<tr><th class="wide">Mail</th><th>Name</th><th>Age</th></tr>');
 });

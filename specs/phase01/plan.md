@@ -281,6 +281,17 @@ without their leading whitespace (`{a} (` lost its space) — fixed.
   `undefined`; attachments use `isAssigned` / `slotProps`; the helpers a run
   needs are imported in one declaration.
 
+### RGP1-044 — Keyed slots; `Slot<P, A>` · M · done
+`KeyedSlot<P>` / `KeyedSlot<P, A>` (syntax.md, *Keyed slots*): slot elements
+with React's `key` build a branded object literal (`[_KEYED]: true`, entries
+by key; conditional entries spread in; keyed-slot-mixed); an attachment with
+`key` renders `_slotEntry($X, key)` — the entry of a keyed slot, a singular
+slot as it is — evaluated once. `FnSlot<P, A>` folded into `Slot<P, A>`.
+Resolves #4 (keys of slots attached per item). Tests: keyed fixture, spec
+examples, a check test (entry props stay type-checked), a runtime render of
+a keyed table. The `@reactogenic/core` helper imports of a file are merged
+into one declaration.
+
 ## M4 — Type service
 
 ### RGP1-050 — Project program with virtual `.tsx` · M · done

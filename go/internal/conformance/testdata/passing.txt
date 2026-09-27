@@ -29,6 +29,7 @@ fixtures/shorthand/tdz
 fixtures/slots/arg-without-slot
 fixtures/slots/attributes
 fixtures/slots/errors
+fixtures/slots/keyed
 fixtures/slots/last-wins
 fixtures/slots/nested
 fixtures/slots/params-on-components
@@ -55,6 +56,8 @@ syntax.md#desugaring/1
 syntax.md#desugaring/2
 syntax.md#desugaring/3
 syntax.md#grammar-1/1
+syntax.md#keyed-slots/1
+syntax.md#keyed-slots/2
 syntax.md#params-on-a-component-children-is-the-default-slot/1
 syntax.md#recursive-slots/1
 syntax.md#repeated-slots-last-assignment-wins/1

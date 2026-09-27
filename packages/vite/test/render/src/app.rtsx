@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Each, Match, Switch, type FnSlot, type Slot } from "@reactogenic/core";
+import { Each, Match, Switch, type KeyedSlot, type Slot } from "@reactogenic/core";
 
 // A container: three attachments — plain with fallback, function slot with
 // args, and a slot attached once per option.
@@ -7,7 +7,7 @@ interface ListProps {
   options: { value: string; label: string }[];
   selected: string;
   $Title?: Slot<{ className?: string; children?: ReactNode }>;
-  $Option?: FnSlot<{ className?: string }, { label: string; selected: boolean }>;
+  $Option?: Slot<{ className?: string }, { label: string; selected: boolean }>;
 }
 
 function List({ options, selected, $Title, $Option }: ListProps) {
@@ -52,4 +52,34 @@ export function WithSlots({ mode }: { mode: "loading" | "ready" }) {
 
 export function WithoutSlots() {
   return <List options={options} selected="a" />;
+}
+
+// A keyed slot: entries by key, attached by the key of each column.
+interface TableProps {
+  columns: { name: string; label: string }[];
+  $Column?: KeyedSlot<{ className?: string; children?: ReactNode }>;
+}
+
+function Table({ columns, $Column }: TableProps) {
+  return (
+    <tr>
+      <Each items={columns} { item: col }>
+        <th key={col.name} slot={$Column}>{col.label}</th>
+      </Each>
+    </tr>
+  );
+}
+
+export function Columns() {
+  const columns = [
+    { name: "email", label: "E-mail" },
+    { name: "name", label: "Name" },
+    { name: "age", label: "Age" },
+  ];
+  return (
+    <Table columns>
+      <$Column key="email" className="wide">Mail</$Column>
+      <$Column key="age" />
+    </Table>
+  );
 }

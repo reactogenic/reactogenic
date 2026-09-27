@@ -273,3 +273,13 @@ does. Attachments test `isAssigned($X)` and spread `slotProps($X)`, which
 drops sentinel entries (a nested slot that was not assigned keeps the
 attachment's default). `Slot` / `FnSlot` include `NotAssigned`; open whether a
 required slot should exclude it (syntax.md).
+
+**Keyed slots** (#4). Many values of one kind are a `KeyedSlot<P>` /
+`KeyedSlot<P, A>`, keyed by React's `key` at the call site
+(`<$Column key="email" />`) and selected by the attachment's `key`
+(`<th key={col.name} slot={$Column} />`). `key` keeps the transpiler
+syntactic (a prop chosen as the key would need types on both sides) and
+answers #4: the key of a slot call is the React key of what it renders. The
+value carries the `KEYED` brand in its object literal — entries stay
+type-checked as slot values — and `slotEntry` returns the entry of a keyed
+slot, or a singular slot as it is. `FnSlot<P, A>` is folded into `Slot<P, A>`.

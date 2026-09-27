@@ -13,9 +13,9 @@ func TestRewrites(t *testing.T) {
 	files := map[string]string{
 		"tsconfig.json": tsconfig,
 		"src/jsx.d.ts":  jsxTypes,
-		"src/lib.tsx": `import type { Slot, FnSlot } from "@reactogenic/core";
+		"src/lib.tsx": `import type { Slot } from "@reactogenic/core";
 type ReactNode = string | JSX.Element | undefined;
-export function Card(p: { $Title?: Slot<{ tone?: string; children?: ReactNode }>; $Box?: Slot<{ color: string }>; $Label?: Slot<{ children: ReactNode }>; $Icon?: FnSlot<{ id?: string }, { size: string }> }) { return <div />; }
+export function Card(p: { $Title?: Slot<{ tone?: string; children?: ReactNode }>; $Box?: Slot<{ color: string }>; $Label?: Slot<{ children: ReactNode }>; $Icon?: Slot<{ id?: string }, { size: string }> }) { return <div />; }
 export function Must(p: { $Title: Slot<{ children?: ReactNode }> }) { return <div />; }
 export function Plain(p: { className?: string }) { return <div />; }
 export function Input(p: { value: string }) { return <input />; }

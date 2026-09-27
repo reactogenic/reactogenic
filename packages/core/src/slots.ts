@@ -11,17 +11,49 @@ export type SlotFn<Params> = (params: Params) => ReactNode;
 export const NOT_ASSIGNED: unique symbol = Symbol.for("reactogenic.notAssigned");
 export type NotAssigned = typeof NOT_ASSIGNED;
 
+/** A slot's value: its props, with a body that takes `Args` when given. */
+export type SlotValue<Props, Args = never> = [Args] extends [never]
+  ? Props
+  : Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
+
 /**
  * A slot: the complete prop contract of the element the container attaches
- * it to. A body is allowed only if `children` is in the contract, and
- * required only if `children` is.
+ * it to — `Slot<P>` — or, with `Args`, a slot whose body is a function of the
+ * attachment's args (`&name`) — `Slot<P, A>`. A body is allowed only if
+ * `children` is in the contract, or `Args` is given.
  */
-export type Slot<Props> = Props | NotAssigned;
+export type Slot<Props, Args = never> = SlotValue<Props, Args> | NotAssigned;
 
-/** A function slot: its body receives the attachment's args (`&name`). */
-export type FnSlot<Props, Args> =
-  | (Omit<Props, "children"> & { children?: (args: Args) => ReactNode })
-  | NotAssigned;
+/**
+ * Marks a keyed slot's value. The caller's compiled code puts it in the
+ * object literal, so an attachment can tell a keyed slot from a singular one.
+ */
+export const KEYED: unique symbol = Symbol.for("reactogenic.keyed");
+
+/**
+ * A keyed slot: entries by key, each a `Slot<P, A>` value. The caller fills
+ * it with `<$X key=…>`; an attachment with `key` renders the entry of that
+ * key. Keys are strings or numbers (integer-like keys enumerate first).
+ */
+export type KeyedSlot<Props, Args = never> = { readonly [KEYED]: true } & {
+  readonly [key: string]: SlotValue<Props, Args>;
+};
+
+/** A keyed slot's entry type, or the slot itself for a singular one. */
+export type SlotEntry<S> = S extends { readonly [KEYED]: true } & { readonly [key: string]: infer Entry }
+  ? Entry | undefined
+  : S;
+
+/**
+ * The value an attachment with `key` renders: a keyed slot's entry for that
+ * key, or — for a singular slot attached many times — the slot itself.
+ */
+export function slotEntry<S>(slot: S, key: string | number): SlotEntry<S> {
+  if (typeof slot === "object" && slot !== null && (slot as { [KEYED]?: true })[KEYED] === true) {
+    return (slot as unknown as Record<string, unknown>)[key] as SlotEntry<S>;
+  }
+  return slot as SlotEntry<S>;
+}
 
 /** Is the slot there: neither missing nor NOT_ASSIGNED? */
 export function isAssigned<S>(slot: S): slot is Exclude<S, NotAssigned | undefined | null> {

@@ -120,6 +120,18 @@ func (c *passContext) coreImport() []emit.Edit {
 		return nil
 	}
 	sort.Strings(specs)
+	// Extend an import of the package this pass added before, if there is one.
+	for _, stmt := range c.file.Statements.Nodes {
+		if stmt.Kind != rtsx.KindImportDeclaration || rtsx.NodeText(stmt.AsImportDeclaration().ModuleSpecifier) != "@reactogenic/core" {
+			continue
+		}
+		named := namedImports(stmt)
+		if len(named) == 0 || !strings.HasPrefix(rtsx.NodeText(named[0].Name()), "_") {
+			continue // the author's own import: leave it as written
+		}
+		end := named[len(named)-1].End()
+		return []emit.Edit{{Span: emit.Span{Pos: end, End: end}, Pieces: []emit.Piece{emit.Synth(", "+strings.Join(specs, ", "), c.coreOrigin)}}}
+	}
 	text := fmt.Sprintf("import { %s } from %q;", strings.Join(specs, ", "), "@reactogenic/core")
 	var last *rtsx.Node
 	for _, stmt := range c.file.Statements.Nodes {

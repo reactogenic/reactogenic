@@ -96,8 +96,12 @@ var coreStub = map[string]string{
 	"node_modules/@reactogenic/core/index.d.ts": `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol }; // as React: a function is not a node
 export declare const NOT_ASSIGNED: unique symbol;
 export type NotAssigned = typeof NOT_ASSIGNED;
-export type Slot<Props> = Props | NotAssigned;
-export type FnSlot<Props, Args> = (Omit<Props, "children"> & { children?: (args: Args) => ReactNode }) | NotAssigned;
+export type SlotValue<Props, Args = never> = [Args] extends [never] ? Props : Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
+export type Slot<Props, Args = never> = SlotValue<Props, Args> | NotAssigned;
+export declare const KEYED: unique symbol;
+export type KeyedSlot<Props, Args = never> = { readonly [KEYED]: true } & { readonly [key: string]: SlotValue<Props, Args> };
+export type SlotEntry<S> = S extends { readonly [KEYED]: true } & { readonly [key: string]: infer Entry } ? Entry | undefined : S;
+export declare function slotEntry<S>(slot: S, key: string | number): SlotEntry<S>;
 export declare function isAssigned<S>(slot: S): slot is Exclude<S, NotAssigned | undefined | null>;
 export declare function slotProps<S extends object>(slot: S): S;
 export type NoArgs = { readonly [arg: string]: never };
@@ -125,10 +129,10 @@ func checkProject(t *testing.T, files map[string]string) []string {
 // syntax.md, *Slots → Attachment*: args follow function-call rules, checked
 // by TS7 through renderSlot and reported on the .rtsx.
 func TestSlotArgs(t *testing.T) {
-	got := checkProject(t, map[string]string{"src/button.rtsx": `import type { FnSlot, Slot } from "@reactogenic/core";
+	got := checkProject(t, map[string]string{"src/button.rtsx": `import type { Slot } from "@reactogenic/core";
 interface ButtonProps {
   size: string;
-  $Icon?: FnSlot<{ className?: string }, { size: string }>;
+  $Icon?: Slot<{ className?: string }, { size: string }>;
   $Label?: Slot<{ title?: string; children?: string }>;
   $List?: Slot<{ children?: string }>[];
 }
@@ -227,5 +231,33 @@ func TestWatch(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the edit was not picked up")
+	}
+}
+
+// Keyed slots type-check: entries as slot values, attached by key.
+func TestKeyedSlots(t *testing.T) {
+	got := checkProject(t, map[string]string{"src/table.rtsx": `import type { KeyedSlot } from "@reactogenic/core";
+interface TableProps {
+  columns: { name: string; label: string }[];
+  $Column?: KeyedSlot<{ width?: number; children?: string }>;
+}
+export function Table({ columns, $Column }: TableProps) {
+  return <tr>{columns.map((col) => <th key={col.name} slot={$Column}>{col.label}</th>)}</tr>;
+}
+export const ok = (
+  <Table columns={[]}>
+    <$Column key="email" width={2}>Email</$Column>
+    <$Column key="name" />
+  </Table>
+);
+export const typo = (
+  <Table columns={[]}>
+    <$Column key="email" widht={2} />
+  </Table>
+);
+`})
+	// Only the typo: an excess property of an entry, on its line.
+	if len(got) != 1 || !strings.HasPrefix(got[0], "src/table.rtsx:17:") {
+		t.Errorf("got %q", got)
 	}
 }

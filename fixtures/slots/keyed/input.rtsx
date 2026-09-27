@@ -1,0 +1,18 @@
+import { Match } from "@reactogenic/core";
+export const a = (
+  <Table data>
+    <$Column key="email" {...emailColumn} />
+    <$Column key={nameKey} width={2}>Name</$Column>
+    <Match on={showAge}><$Column key="age" /></Match>
+  </Table>
+);
+export const b = <Table><$Column key="x" /><$Column /></Table>;
+export function Table({ columns, $Column }: any) {
+  return (
+    <table>
+      <Each items={columns} { item: col }>
+        <th key={col.name} slot={$Column} &col>{col.label}</th>
+      </Each>
+    </table>
+  );
+}

@@ -229,23 +229,23 @@ the container decides where that element goes.
 | **attachment** | container | `<span slot={$IconStart} />` | where the slot renders |
 | **args** | container | `&size` on the attachment | what the params receive |
 
-### Declaration: `Slot<P>` and `FnSlot<P, A>`
+### Declaration: `Slot` and `KeyedSlot`
 
 A slot is a `$`-named prop. Its type is the **complete prop contract** of the
 element it stands for:
 
-```tsx
-type Slot<Props> = Props;
-
-// A function slot: its body receives the attachment's args.
-type FnSlot<Props, Args> = Omit<Props, "children"> & { children?: (args: Args) => ReactNode };
-```
+| Type | Value |
+| --- | --- |
+| `Slot<P>` | one set of props `P` |
+| `Slot<P, A>` | one set of props `P`, whose body is a function of the attachment's args `A` |
+| `KeyedSlot<P>` | entries by key, each a `Slot<P>` value (*Keyed slots*) |
+| `KeyedSlot<P, A>` | entries by key, each a `Slot<P, A>` value |
 
 ```tsx
 interface ButtonProps {
   $IconStart: Slot<ComponentProps<"span">>;   // required
   $IconEnd?: Slot<ComponentProps<"span">>;    // optional
-  $Badge?: FnSlot<ComponentProps<"span">, { size: ButtonSize }>;
+  $Badge?: Slot<ComponentProps<"span">, { size: ButtonSize }>;
   size?: ButtonSize;
   children: ReactNode;
 }
@@ -256,8 +256,10 @@ interface ButtonProps {
   body: `<$Box color="red" />` is fine, `<$Box color="red">Hi</$Box>` is an
   error — unless `children` is in the contract, and then its optionality
   decides whether a body is required.
-- **Slots are singular.** A slot is one prop value, never a list; a slot typed
-  as an array (`Slot<P>[]`) is an error at its attachment (below).
+- **A slot is one value, never a list**; a slot typed as an array
+  (`Slot<P>[]`) is an error at its attachment (below). Many values of one kind
+  — the columns of a table, the fields of a form — are a `KeyedSlot`: one
+  value that holds entries by key.
 
 ### Attachment: `slot={$X}`
 
@@ -362,12 +364,9 @@ function Select({ options, $Option }: SelectProps) {
 
 There is one `$Option` value; its attachment runs once per option.
 
-> OPEN (#4): keys when an attachment runs per item. The report of a missing
-> key belongs on the slot call (`<$Option { label }>`), not on the
-> attachment or on `Each`. How a per-item key reaches the rendered element is
-> not decided: `key` among the args, or params in scope in the slot
-> element's own attributes (`<$Option { value } key={value}>`). Until then
-> `key` on a slot element stays slot-key.
+The `key` of an attachment is React's key of the element it renders, and
+selects the entry of a keyed slot (*Keyed slots*); for a singular slot like
+`$Option` it selects nothing — the slot is rendered as it is.
 
 ### Usage and desugaring
 
@@ -523,6 +522,80 @@ A slot element must be:
 Anywhere else — inside an intrinsic element, a fragment, `{c && <$X />}`,
 `.map()` — it is orphan-slot.
 
+### Keyed slots
+
+A `KeyedSlot<P>` holds many entries, one per key. The caller writes each entry
+as a slot element with React's `key`; the container attaches the slot with a
+`key`, and each attachment renders the entry of its key — or its fallback when
+there is none:
+
+```tsx
+// .rtsx
+<Table data>
+  <$Column key="email" {...emailColumn} />
+  <$Column key="name" width={2}>Name</$Column>
+</Table>
+```
+
+```tsx
+// .tsx
+import { KEYED as _KEYED } from "@reactogenic/core";
+
+<Table data $Column={{ [_KEYED]: true, "email": { ...emailColumn }, "name": { width: 2, children: "Name" } }} />
+```
+
+```tsx
+// .rtsx
+function Table({ columns, $Column }: TableProps) {
+  return (
+    <tr>
+      <Each items={columns} { item: col }>
+        <th key={col.name} slot={$Column}>{col.label}</th>
+      </Each>
+    </tr>
+  );
+}
+```
+
+```tsx
+// .tsx
+import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotEntry as _slotEntry, slotProps as _slotProps } from "@reactogenic/core";
+
+function Table({ columns, $Column }: TableProps) {
+  return (
+    <tr>
+      <Each items={columns}>
+        {({ item: col }) => ((_entry) => _isAssigned(_entry)
+          ? <th key={col.name} {..._slotProps(_entry)}>{_renderSlot(_entry, {}, col.label)}</th>
+          : <th key={col.name}>{col.label}</th>)(_slotEntry($Column, col.name))}
+      </Each>
+    </tr>
+  );
+}
+```
+
+- **`key` makes a slot keyed**, at the call site: the slot elements of one
+  slot carry a `key` on every element, or on none (keyed-slot-mixed). `key` is
+  the entry's key, never one of its props.
+- `key="email"` → `"email": {…}`; `key={expr}` → `[expr]: {…}`. A repeated
+  key is last-wins, as in any object literal.
+- The value carries `KEYED`, so an attachment tells a keyed slot from a
+  singular one attached many times (`$Option`): `slotEntry(slot, key)` returns
+  the entry of a keyed slot, the slot itself otherwise.
+- A conditional entry is spread in: `<Match on={c}><$Column key="age" /></Match>`
+  → `...(c ? { "age": {} } : {})`. An explicit `$Column={…}` attribute comes
+  first, spread.
+- **Keys are strings or numbers.** Symbols are excluded — `Object.keys` and
+  `Object.values` skip them. Integer-like keys (`2`, `"10"`) enumerate first,
+  in ascending order; the container decides the rendering order (here: its own
+  `columns`), so this matters only to a container that iterates the slot's
+  entries itself.
+- Types check each entry as a slot value: `<$Column key="email" widht={2} />`
+  is an excess-property error, as for any slot.
+
+This also answers where keys come from when an attachment runs per item: from
+the attachment's `key`, the one React needs there anyway.
+
 ### Repeated slots: last assignment wins
 
 A slot is one prop value. Assigning it again replaces it, as a repeated key in
@@ -590,7 +663,7 @@ import { NOT_ASSIGNED as _NOT_ASSIGNED } from "@reactogenic/core";
   `$IconStart: undefined` spread onto `Button` overrides the attachment's own
   `$IconStart`); `NOT_ASSIGNED` never does: an attachment treats it as no slot
   (`isAssigned`), and a spread of slot props skips it (`slotProps`).
-- `Slot<P>` and `FnSlot<P, A>` include `NotAssigned`, so an optional slot
+- `Slot<P>` and `Slot<P, A>` include `NotAssigned`, so an optional slot
   takes it.
   > OPEN: a *required* slot filled only conditionally is therefore no longer
   > a type error (it was: `undefined` is not assignable). Keep the sentinel
@@ -737,7 +810,7 @@ to emit. TS7 checks the emitted `.tsx`, and that is what types slots:
 | params-on-html | Params are only allowed on components and slot elements | `<div { size }>` — an intrinsic element by React's rule (lowercase, `-`, or `a:b`) | syntax |
 | duplicate-params | An element takes one params pattern | `<$X { a } { b }>` | syntax |
 | slot-children-conflict | | `children=` attribute on a slot element that also has a body | syntax |
-| slot-key | Slots are not elements | `key` on a slot element (see OPEN #4) | syntax |
+| keyed-slot-mixed | `$Column` is keyed: every `<$Column>` needs a `key`, or none | slot elements of one slot, some with `key` and some without | syntax |
 | arg-without-slot | `&size` is an arg of a slot attachment | `&` / `&&` on an element without `slot={$X}` | syntax |
 | component-name | `$Modal` is a slot tag; rename the component where it is imported | a `$` tag while a value binding of the same name is in scope — reported instead of the slot errors | syntax |
 
@@ -816,7 +889,8 @@ transpiler consumes the `$Case` elements itself in pass 2, before slots are
 hoisted, so they never become a prop. Two more things are sanctioned here and
 nowhere else, for the same reason:
 
-- `$Case` accepts `key` (see *State across branches*); on any other slot it is slot-key.
+- `$Case` accepts `key` (see *State across branches*): it keys the case's body,
+  not an entry — `$Case` is consumed in pass 2, before keyed slots exist.
 - Params on `Match` and `Switch` are consumed by the transpiler instead of
   becoming a `children` callback: the bodies must stay inline for narrowing,
   and `Switch` params must reach the `is` of every `$Case`.

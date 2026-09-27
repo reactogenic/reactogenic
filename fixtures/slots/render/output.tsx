@@ -1,10 +1,10 @@
-import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotProps as _slotProps } from "@reactogenic/core";
+import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotEntry as _slotEntry, slotProps as _slotProps } from "@reactogenic/core";
 export function Select({ options, $Option, selected }: any) {
   return (
     <select>
-      <Each items={options}>{({ item: option }) => _isAssigned($Option) ? <option key={option.value} className="opt" value={option.value} selected={selected === option.value} {..._slotProps($Option)}>{_renderSlot($Option, { value: option.value, label: option.label, selected: selected === option.value }, option.label)}</option> : <option key={option.value} className="opt" value={option.value} selected={selected === option.value}>
+      <Each items={options}>{({ item: option }) => ((_entry) => _isAssigned(_entry) ? <option key={option.value} className="opt" value={option.value} selected={selected === option.value} {..._slotProps(_entry)}>{_renderSlot(_entry, { value: option.value, label: option.label, selected: selected === option.value }, option.label)}</option> : <option key={option.value} className="opt" value={option.value} selected={selected === option.value}>
           {option.label}
-        </option>}</Each>
+        </option>)(_slotEntry($Option, option.value))}</Each>
     </select>
   );
 }

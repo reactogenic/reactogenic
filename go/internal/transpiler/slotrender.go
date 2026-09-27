@@ -105,6 +105,16 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 	assigned := c.core("isAssigned", origin)
 	spread := c.core("slotProps", origin)
 
+	// With `key`, the attachment renders one entry: of a keyed slot, the
+	// entry of that key; of a singular slot, the slot itself (syntax.md,
+	// *Keyed slots*). The lookup runs once, through an inline function.
+	slot := func() emit.Piece { return c.copy(ref) }
+	var entry string
+	if key != nil && value(key) != nil {
+		entry = c.fresh("_entry")
+		slot = func() emit.Piece { return emit.Synth(entry, c.span(ref)) }
+	}
+
 	tag := emit.Span{Pos: c.span(opening.TagName()).Pos, End: opening.Attributes().Pos()}
 	tag.End = tag.Pos + len(strings.TrimRight(c.text[tag.Pos:tag.End], " \t\r\n"))
 	element := func(withSlot bool) []emit.Piece {
@@ -116,7 +126,7 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 			out = append(append(out, emit.Synth(" ", origin)), p...)
 		}
 		if withSlot {
-			out = append(out, emit.Synth(" {..."+spread+"(", origin), c.copy(ref), emit.Synth(")}>{"+render+"(", origin), c.copy(ref), emit.Synth(", ", origin))
+			out = append(out, emit.Synth(" {..."+spread+"(", origin), slot(), emit.Synth(")}>{"+render+"(", origin), slot(), emit.Synth(", ", origin))
 			out = append(out, objectLiteral(args, origin)...)
 			if len(fallback) > 0 {
 				var all []emit.Piece
@@ -131,12 +141,19 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 		}
 		return append(out, emit.Synth("</", origin), c.copy(opening.TagName()), emit.Synth(">", origin))
 	}
-	expr := append([]emit.Piece{emit.Synth(assigned+"(", origin), c.copy(ref), emit.Synth(") ? ", origin)}, element(true)...)
+	expr := append([]emit.Piece{emit.Synth(assigned+"(", origin), slot(), emit.Synth(") ? ", origin)}, element(true)...)
 	expr = append(expr, emit.Synth(" : ", origin))
 	if len(fallback) > 0 {
 		expr = append(expr, element(false)...)
 	} else {
 		expr = append(expr, emit.Synth("null", origin))
+	}
+	if entry != "" {
+		lookup := c.core("slotEntry", origin)
+		wrapped := append([]emit.Piece{emit.Synth("(("+entry+") => ", origin)}, expr...)
+		wrapped = append(wrapped, emit.Synth(")("+lookup+"(", origin), c.copy(ref), emit.Synth(", ", origin))
+		wrapped = append(wrapped, c.operand(value(key), rtsx.PrecedenceComma)...)
+		expr = append(wrapped, emit.Synth("))", origin))
 	}
 	return c.replace(el, origin, expr)
 }

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { Each, isAssigned, Match, NOT_ASSIGNED, noMatch, renderSlot, slotProps, Switch } from "./index.ts";
+import { Each, isAssigned, KEYED, Match, NOT_ASSIGNED, noMatch, renderSlot, slotEntry, slotProps, Switch } from "./index.ts";
 
 describe("renderSlot", () => {
   test("calls a function body with the args", () => {
@@ -23,6 +23,16 @@ describe("NOT_ASSIGNED", () => {
   });
   test("slotProps skips the entries that were not assigned", () => {
     expect(slotProps({ variant: "solid", $IconStart: NOT_ASSIGNED, children: "x" })).toEqual({ variant: "solid", children: "x" });
+  });
+});
+
+describe("keyed slots", () => {
+  test("slotEntry picks a keyed slot's entry, and passes a singular slot through", () => {
+    const columns = { [KEYED]: true as const, email: { width: 2 } };
+    expect(slotEntry(columns, "email")).toEqual({ width: 2 });
+    expect(slotEntry(columns, "name")).toBeUndefined();
+    const option = { value: "a" };
+    expect(slotEntry(option, "x")).toBe(option);
   });
 });
 

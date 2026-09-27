@@ -278,13 +278,34 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 	if owner.Kind != rtsx.KindJsxElement {
 		return nil, values, replaced, nil, first
 	}
+	// A slot whose elements carry `key` is keyed (syntax.md, *Keyed slots*):
+	// its value collects the entries instead of keeping the last one.
+	keyed := map[string][][]emit.Piece{} // name → entries, or spreads of conditional entries
+	keyedFirst := map[string]*rtsx.Node{}
+	isKeyed := func(name string, el *rtsx.Node) bool {
+		k := keyAttribute(el) != nil
+		if other, seen := keyedFirst[name]; seen && (keyAttribute(other) != nil) != k {
+			c.errorAt(el, "keyed-slot-mixed", "`%s` is keyed: every `<%s>` needs a `key`, or none", name, name)
+		} else if !seen {
+			keyedFirst[name] = el
+		}
+		return keyAttribute(keyedFirst[name]) != nil
+	}
 	for _, ch := range owner.Children().Nodes {
 		switch {
 		case isSlotElement(ch):
 			name := rtsx.NodeText(tagOf(ch))
-			previous(name)
+			prev := previous(name)
 			if _, ok := first[name]; !ok {
 				first[name] = c.openingSpan(ch)
+			}
+			if isKeyed(name, ch) {
+				if _, started := keyed[name]; !started && prev != nil {
+					keyed[name] = append(keyed[name], append([]emit.Piece{emit.Synth("...", first[name])}, prev...))
+				}
+				keyed[name] = append(keyed[name], c.keyedEntry(ch))
+				values[name] = nil
+				continue
 			}
 			values[name] = c.slotObject(ch)
 		case slotConditional(ch) != nil:
@@ -294,13 +315,93 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 				if _, ok := first[name]; !ok {
 					first[name] = c.span(ch)
 				}
+				if el := firstSlotLeaf(cond); el != nil && isKeyed(name, el) {
+					if _, started := keyed[name]; !started && prev != nil {
+						keyed[name] = append(keyed[name], append([]emit.Piece{emit.Synth("...", first[name])}, prev...))
+					}
+					spread := append([]emit.Piece{emit.Synth("...(", c.span(ch))}, c.keyedConditional(cond, c.openingSpan(owner))...)
+					keyed[name] = append(keyed[name], append(spread, emit.Synth(")", c.span(ch))))
+					values[name] = nil
+					continue
+				}
 				values[name] = c.conditionalValue(cond, prev, c.openingSpan(owner))
 			}
 		default:
 			rest = append(rest, ch)
 		}
 	}
+	for name, entries := range keyed {
+		marker := c.core("KEYED", first[name])
+		props := append([][]emit.Piece{{emit.Synth("["+marker+"]: true", first[name])}}, entries...)
+		values[name] = objectLiteral(props, first[name])
+	}
 	return names, values, replaced, rest, first
+}
+
+// keyAttribute is a slot element's `key` attribute, if any.
+func keyAttribute(el *rtsx.Node) *rtsx.Node {
+	opening := el
+	if el.Kind == rtsx.KindJsxElement {
+		opening = el.AsJsxElement().OpeningElement
+	}
+	for _, attr := range opening.Attributes().Properties() {
+		if attr.Kind == rtsx.KindJsxAttribute && attr.Name().Kind == rtsx.KindIdentifier && rtsx.NodeText(attr.Name()) == "key" {
+			return attr
+		}
+	}
+	return nil
+}
+
+// firstSlotLeaf is the first slot element among a conditional's branches.
+func firstSlotLeaf(expr *rtsx.Node) *rtsx.Node {
+	expr = unwrapParens(expr)
+	switch {
+	case expr.Kind == rtsx.KindConditionalExpression:
+		ce := expr.AsConditionalExpression()
+		if el := firstSlotLeaf(ce.WhenTrue); el != nil {
+			return el
+		}
+		return firstSlotLeaf(ce.WhenFalse)
+	case isSlotElement(expr):
+		return expr
+	}
+	return nil
+}
+
+// keyedEntry is one entry of a keyed slot: `"email": { … }` for
+// `key="email"`, `[expr]: { … }` for `key={expr}`.
+func (c *passContext) keyedEntry(el *rtsx.Node) []emit.Piece {
+	attr := keyAttribute(el)
+	if attr == nil { // keyed-slot-mixed was reported
+		return append([]emit.Piece{emit.Synth("[undefined]: ", c.openingSpan(el))}, c.slotObject(el)...)
+	}
+	var key []emit.Piece
+	switch v := value(attr); {
+	case v == nil:
+		key = []emit.Piece{emit.Synth("[undefined]", c.span(attr))} // a bare `key`: TS reports it
+	case v.Kind == rtsx.KindStringLiteral:
+		key = []emit.Piece{c.copy(v)}
+	default:
+		key = append(append([]emit.Piece{emit.Synth("[", c.span(attr))}, c.operand(v, rtsx.PrecedenceComma)...), emit.Synth("]", c.span(attr)))
+	}
+	return append(append(key, emit.Synth(": ", c.span(attr))), c.slotObject(el)...)
+}
+
+// keyedConditional rebuilds a conditional of keyed slot elements as a
+// conditional of entry objects: a null branch adds no entry.
+func (c *passContext) keyedConditional(expr *rtsx.Node, origin emit.Span) []emit.Piece {
+	expr = unwrapParens(expr)
+	switch {
+	case expr.Kind == rtsx.KindConditionalExpression:
+		ce := expr.AsConditionalExpression()
+		out := append(c.operand(ce.Condition, rtsx.PrecedenceConditional), emit.Synth(" ? ", origin))
+		out = append(out, c.keyedConditional(ce.WhenTrue, origin)...)
+		out = append(out, emit.Synth(" : ", origin))
+		return append(out, c.keyedConditional(ce.WhenFalse, origin)...)
+	case isNullish(expr):
+		return []emit.Piece{emit.Synth("{}", c.span(expr))}
+	}
+	return append(append([]emit.Piece{emit.Synth("{ ", origin)}, c.keyedEntry(expr)...), emit.Synth(" }", origin))
 }
 
 // conditionalSlotName checks a conditional's branches: each must be one slot
@@ -430,8 +531,7 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		}
 		if attr.Kind == rtsx.KindJsxAttribute {
 			switch name := attrName(c, attr); {
-			case name == "key":
-				c.errorAt(attr, "slot-key", "Slots are not elements: `key` is not allowed")
+			case name == "key": // the entry's key in a keyed slot (keyedEntry)
 				continue
 			case name == "children" && len(body) > 0:
 				c.errorAt(attr, "slot-children-conflict", "`children` is given twice: as an attribute and as the body")
