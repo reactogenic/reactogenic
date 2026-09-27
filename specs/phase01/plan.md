@@ -506,7 +506,11 @@ CI fails if:
 - **Done when:** the gate is on, and green.
 - Depends on: 004, M3, M6.
 
-### RGP1-091 — Getting-started docs · S
+### RGP1-091 — Getting-started docs · S · done
+`docs/getting-started.md` (install, Vite, `check`, the syntax in five minutes,
+migrating), and a root `README.md`. The `Button` example was type-checked with the
+real binary and React's types: clean, and a broken variant reports
+`params-required`.
 - Install, `vite.config.ts`, `reactogenic check` in `package.json`.
 - Migrating from `.tsx`: a warning about the silent flip.
 - **Done when:** a new project reaches a rendering `.rtsx` page by following
@@ -530,6 +534,11 @@ win32-x64 (PE32+) built; the shim ran `check` from a scratch `node_modules`.
 - Depends on: 003, 053.
 
 ### RGP1-093 — Publish · S
+- **Before publishing:** `@reactogenic/core` (and `vite`, `cli`) ship TypeScript
+  source that imports with `.ts` extensions — a consumer's `tsc` rejects that
+  without `allowImportingTsExtensions` (found checking the docs). Add a build
+  step that emits `.js` + `.d.ts`, and point `exports` at it. The packages are
+  `private: true` until then.
 Versioning, changelog, and publishing to npm. Publishing is outward-facing,
 so it happens only on your go-ahead.
 - Depends on: 090, 091, 092.
