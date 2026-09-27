@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 const tsconfig = `{
@@ -198,5 +199,33 @@ func TestAmbiguousModule(t *testing.T) {
 	})
 	if len(got) != 1 || got[0] != "src/card.rtsx:1:1 ambiguous-module" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// RGP1-076: an edit is picked up and re-checked.
+func TestWatch(t *testing.T) {
+	dir := writeProject(t, map[string]string{
+		"tsconfig.json": tsconfig,
+		"src/jsx.d.ts":  jsxTypes,
+		"src/a.rtsx":    "export const a: number = 1;\n",
+	})
+	stop := make(chan struct{})
+	runs := make(chan []Report, 4)
+	go Watch(dir+"/tsconfig.json", 20*time.Millisecond, stop, func(r []Report) { runs <- r })
+	defer close(stop)
+
+	if first := <-runs; len(first) != 0 {
+		t.Fatalf("first run: %+v", first)
+	}
+	if err := os.WriteFile(dir+"/src/a.rtsx", []byte("export const a: number = \"x\";\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case second := <-runs:
+		if len(second) != 1 || second[0].Code != "TS2322" {
+			t.Errorf("second run: %+v", second)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the edit was not picked up")
 	}
 }

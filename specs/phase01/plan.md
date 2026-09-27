@@ -457,7 +457,9 @@ one code path and no duplicates.
   both, once each.
 - Depends on: 061, 071.
 
-### RGP1-076 — `--watch` · S
+### RGP1-076 — `--watch` · S · done (full re-check per change; incremental is RGP1-052)
+`reactogenic check --watch`: polls the project's source files (skipping
+`node_modules` and hidden directories) and re-checks on a change.
 Re-check on change, using the incremental program (RGP1-052).
 - **Done when:** an edit re-reports within the budget set in RGP1-052.
 - Depends on: 052, 074.

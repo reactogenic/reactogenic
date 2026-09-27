@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/reactogenic/reactogenic/go/internal/check"
 	"github.com/reactogenic/reactogenic/go/internal/server"
 )
 
-const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false]
+const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]
        reactogenic serve
 
   check   type-check the project, with .rtsx transpiled; errors are reported
@@ -45,6 +46,7 @@ func runCheck(args []string) int {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	projectFlag := flags.String("p", "", "tsconfig.json, or a directory holding one")
 	pretty := flags.Bool("pretty", true, "code frames, and `file:line:col` positions")
+	watch := flags.Bool("watch", false, "check again whenever a source file changes")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -64,11 +66,19 @@ func runCheck(args []string) int {
 		fmt.Fprintf(os.Stderr, "reactogenic check: no tsconfig at %s\n", config)
 		return 2
 	}
-	reports := check.Run(filepath.ToSlash(config))
-	check.Print(os.Stdout, reports, filepath.ToSlash(cwd), *pretty, func(p string) (string, bool) {
+	readFile := func(p string) (string, bool) {
 		b, err := os.ReadFile(p)
 		return string(b), err == nil
-	})
+	}
+	if *watch {
+		check.Watch(filepath.ToSlash(config), 300*time.Millisecond, nil, func(reports []check.Report) {
+			fmt.Printf("\n[%s] %d error(s). Watching for file changes.\n", time.Now().Format("15:04:05"), check.Errors(reports))
+			check.Print(os.Stdout, reports, filepath.ToSlash(cwd), *pretty, readFile)
+		})
+		return 0
+	}
+	reports := check.Run(filepath.ToSlash(config))
+	check.Print(os.Stdout, reports, filepath.ToSlash(cwd), *pretty, readFile)
 	if check.Errors(reports) > 0 {
 		return 1
 	}
