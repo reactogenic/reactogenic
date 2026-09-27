@@ -512,7 +512,14 @@ CI fails if:
 - **Done when:** a new project reaches a rendering `.rtsx` page by following
   only the docs.
 
-### RGP1-092 — Platform binaries · M
+### RGP1-092 — Platform binaries · M · done (CI cross-platform install check left)
+`scripts/build-binaries.sh [version] [targets…]` cross-compiles (`CGO_ENABLED=0`,
+`-trimpath -s -w`, ~20 MB) into `dist/npm/cli-<platform>-<arch>/` with a generated
+`package.json` (`os`, `cpu`, `preferUnplugged`); binaries are never committed.
+`@reactogenic/cli`: the `reactogenic` shim and `binaryPath()` (platform package,
+or `$REACTOGENIC_BINARY`), with the six platforms as `optionalDependencies`. The
+Vite plugin gets its binary from it. Verified: darwin-arm64, linux-x64 (ELF) and
+win32-x64 (PE32+) built; the shim ran `check` from a scratch `node_modules`.
 - Cross-compile the Go binary for each platform.
 - Publish one npm package per platform, as an `optionalDependency` of
   `@reactogenic/cli` (the esbuild model).

@@ -1,9 +1,10 @@
 // @reactogenic/vite — runs .rtsx in Vite (specs/phase01/vite.md).
+import { binaryPath } from "@reactogenic/cli";
 import { transformWithOxc, type Plugin, type ResolvedConfig } from "vite";
 import { Server } from "./server.ts";
 
 export interface ReactogenicOptions {
-  /** The `reactogenic` binary. Default: $REACTOGENIC_BINARY, else `reactogenic` on PATH. */
+  /** The `reactogenic` binary. Default: $REACTOGENIC_BINARY, else the one @reactogenic/cli installed for this platform. */
   binary?: string;
 }
 
@@ -41,7 +42,7 @@ export default function reactogenic(options: ReactogenicOptions = {}): Plugin {
       if (!file.endsWith(".rtsx")) {
         return;
       }
-      server ??= new Server(options.binary ?? process.env.REACTOGENIC_BINARY ?? "reactogenic");
+      server ??= new Server(options.binary ?? binaryPath());
       const tsx = await server.transform(file, code);
       for (const d of tsx.diagnostics) {
         const report = { message: `${d.code}: ${d.message}`, id: file, loc: { file, line: d.line, column: d.column - 1 } };
