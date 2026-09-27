@@ -366,7 +366,12 @@ queried it (RGP1-052), not only the modules that import it.
   into an object re-emits the page that uses it, with no restart.
 - Depends on: 052, 061.
 
-### RGP1-064 — Example app and end-to-end tests · M
+### RGP1-064 — Example app and end-to-end tests · M · done (runtime; a browser run is left)
+`packages/vite/test/render.test.ts`: an app built with the plugin for Node
+(`vite build --ssr`), imported and rendered by React. It checks what the
+compiled code does: per-prop replacement and fallbacks, `&&` props and `&`
+args on an attachment run per option, `Match` in a slot body, `Switch`, a
+segment root. A real-browser run (Playwright) is left.
 Needs your approval first: it creates files outside `specs/`.
 - A small Vite app that uses every extension: shorthand props, slots with
   params, list and conditional slots, `Match`, every `Switch` mode, segment

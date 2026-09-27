@@ -1,0 +1,55 @@
+import type { ReactNode } from "react";
+import { Each, Match, Switch, type FnSlot, type Slot } from "@reactogenic/core";
+
+// A container: three attachments — plain with fallback, function slot with
+// args, and a slot attached once per option.
+interface ListProps {
+  options: { value: string; label: string }[];
+  selected: string;
+  $Title?: Slot<{ className?: string; children?: ReactNode }>;
+  $Option?: FnSlot<{ className?: string }, { label: string; selected: boolean }>;
+}
+
+function List({ options, selected, $Title, $Option }: ListProps) {
+  return (
+    <section>
+      <h1 slot={$Title} className="default">Untitled</h1>
+      <ul>
+        <Each items={options} { item: option }>
+          <li key={option.value} slot={$Option} &&className={option.value} &label={option.label} &selected={option.value === selected}>
+            {option.label}
+          </li>
+        </Each>
+      </ul>
+    </section>
+  );
+}
+
+const options = [
+  { value: "a", label: "Alpha" },
+  { value: "b", label: "Beta" },
+];
+
+export function WithSlots({ mode }: { mode: "loading" | "ready" }) {
+  const selected = "b";
+  return (
+    <main>
+      <List options selected>
+        <$Title className="custom">Picked</$Title>
+        <$Option { label, selected }>
+          {label}
+          <Match on={selected}>!</Match>
+        </$Option>
+      </List>
+      <Switch on={mode}>
+        <$Case is="loading">Loading</$Case>
+        <$Case is="ready">Ready</$Case>
+      </Switch>
+      <section #intro />
+    </main>
+  );
+}
+
+export function WithoutSlots() {
+  return <List options={options} selected="a" />;
+}
