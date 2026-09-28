@@ -47,14 +47,25 @@ publish)
     [[ -f "$release/$tgz" ]] || { echo "missing $tgz: run pack first" >&2; exit 1; }
   done
   # A one-time password lasts about 30 seconds: a rerun with a fresh one
-  # skips what is already on the registry.
+  # skips what is already on the registry. The public view of a new package
+  # lags behind its publish, so a name the org owns with no public versions
+  # yet counts as just published; the registry's refusal is the last check.
+  owned="$(npm access list packages @reactogenic 2>/dev/null || true)"
   for tgz in "${order[@]}"; do
     name="$(tar xzf "$release/$tgz" -O package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).name')"
-    if npm view "$name@$version" version >/dev/null 2>&1; then
+    published="$(npm view "$name@$version" version 2>/dev/null || true)"
+    if [[ "$published" == "$version" ]] || { grep -q "^$name:" <<<"$owned" && [[ -z "$(npm view "$name" versions 2>/dev/null || true)" ]]; }; then
       echo "skip $name@$version: already published"
       continue
     fi
-    npm publish "$release/$tgz" --tag "$tag" --access public --otp "$otp"
+    if out="$(npm publish "$release/$tgz" --tag "$tag" --access public --otp "$otp" 2>&1)"; then
+      grep '^+ ' <<<"$out"
+    elif grep -q "cannot publish over the previously published version" <<<"$out"; then
+      echo "skip $tgz: already published"
+    else
+      grep -v '^npm notice' <<<"$out" >&2
+      exit 1
+    fi
   done
   ;;
 *)
