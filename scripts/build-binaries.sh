@@ -21,15 +21,22 @@ for target in "${targets[@]}"; do
   out="$root/dist/npm/cli-$target"
   mkdir -p "$out/bin"
   (cd "$root/go" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$out/bin/$exe" ./cmd/reactogenic)
+  # The binary holds tsgo (Apache-2.0) as well as our code (MIT).
+  cp "$root/LICENSE" "$out/LICENSE"
+  cp "$root/go/third_party/tsgo/LICENSE" "$out/LICENSE-typescript-go"
+  cp "$root/go/third_party/tsgo/NOTICE.txt" "$out/NOTICE-typescript-go.txt"
   cat > "$out/package.json" <<JSON
 {
   "name": "@reactogenic/cli-$target",
   "version": "$version",
   "description": "The reactogenic binary for $platform $arch",
+  "license": "MIT AND Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/reactogenic/reactogenic.git" },
   "os": ["$platform"],
   "cpu": ["$arch"],
   "preferUnplugged": true,
-  "files": ["bin"]
+  "files": ["bin", "LICENSE-typescript-go", "NOTICE-typescript-go.txt"],
+  "publishConfig": { "access": "public" }
 }
 JSON
   echo "built $out/bin/$exe"

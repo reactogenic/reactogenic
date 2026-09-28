@@ -8,9 +8,11 @@ wrote.
 ## Install
 
 ```sh
-pnpm add @reactogenic/core
-pnpm add -D @reactogenic/vite @reactogenic/cli
+pnpm add @reactogenic/core@alpha
+pnpm add -D @reactogenic/vite@alpha @reactogenic/cli@alpha
 ```
+
+Reactogenic is in alpha: the packages are published under the `alpha` tag.
 
 `@reactogenic/cli` brings the `reactogenic` binary for your platform (macOS,
 Linux and Windows, arm64 and x64).

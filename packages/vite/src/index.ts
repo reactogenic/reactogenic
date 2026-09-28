@@ -51,11 +51,15 @@ export default function reactogenic(options: ReactogenicOptions = {}): Plugin {
         }
         this.warn(report);
       }
+      // The app's JSX settings, without Fast Refresh: plugin-react turns on
+      // `refresh`, whose registration calls fail wherever its runtime is not
+      // set up (SSR), and `.rtsx` has no Fast Refresh in phase 1.
       const oxc = typeof config.oxc === "object" ? config.oxc : {};
+      const jsx = typeof oxc.jsx === "object" ? { ...oxc.jsx, refresh: false } : (oxc.jsx ?? { runtime: "automatic" as const, development: !config.isProduction });
       const js = await transformWithOxc(
         tsx.code,
         file,
-        { lang: "tsx", jsx: oxc.jsx ?? { runtime: "automatic", development: !config.isProduction }, sourcemap: true },
+        { lang: "tsx", jsx, sourcemap: true },
         JSON.parse(tsx.map) as object,
       );
       return { code: js.code, map: js.map, moduleType: "js" };

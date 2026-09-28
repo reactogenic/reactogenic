@@ -1,7 +1,18 @@
 {
   "name": "@reactogenic/cli",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.0",
+  "description": "The reactogenic command: type-checks .rtsx with TypeScript 7.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reactogenic/reactogenic.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/reactogenic/reactogenic#readme",
+  "bugs": "https://github.com/reactogenic/reactogenic/issues",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "bin": {
     "reactogenic": "bin/reactogenic.js"
@@ -17,16 +28,25 @@
     "typecheck": "tsc --noEmit"
   },
   "optionalDependencies": {
-    "@reactogenic/cli-darwin-arm64": "0.0.0",
-    "@reactogenic/cli-darwin-x64": "0.0.0",
-    "@reactogenic/cli-linux-arm64": "0.0.0",
-    "@reactogenic/cli-linux-x64": "0.0.0",
-    "@reactogenic/cli-win32-arm64": "0.0.0",
-    "@reactogenic/cli-win32-x64": "0.0.0"
+    "@reactogenic/cli-darwin-arm64": "0.1.0-alpha.0",
+    "@reactogenic/cli-darwin-x64": "0.1.0-alpha.0",
+    "@reactogenic/cli-linux-arm64": "0.1.0-alpha.0",
+    "@reactogenic/cli-linux-x64": "0.1.0-alpha.0",
+    "@reactogenic/cli-win32-arm64": "0.1.0-alpha.0",
+    "@reactogenic/cli-win32-x64": "0.1.0-alpha.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0"
+  },
+  "files": [
+    "bin",
+    "binary.js",
+    "binary.d.ts"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
   }
 }

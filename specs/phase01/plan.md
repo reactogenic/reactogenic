@@ -545,8 +545,18 @@ win32-x64 (PE32+) built; the shim ran `check` from a scratch `node_modules`.
   `reactogenic check` and `vite build` from CI.
 - Depends on: 003, 053.
 
-### RGP1-093 — Publish · S
-- **Before publishing:** `@reactogenic/core` (and `vite`, `cli`) ship TypeScript
+### RGP1-093 — Publish · S · packed, not yet published (0.1.0-alpha.0)
+`scripts/release.sh pack <version>` builds the six binaries and packs all nine
+packages into `dist/release/`; `scripts/release.sh publish <otp>` publishes
+those tarballs, binaries first, under the prerelease's dist-tag (`alpha`).
+`core` and `vite` build to `dist/` (`.js`, `.d.ts`, maps, with `src`);
+`publishConfig.exports` points the published packages there while the repo
+keeps using `src`. MIT (`LICENSE`); the binary packages carry tsgo's
+Apache-2.0 license and notice too. Smoke-tested from the tarballs in a fresh
+Vite + React app (`check`, `vite build`, a dev-transform render with
+plugin-react), which found `.rtsx` inheriting plugin-react's Fast Refresh
+(`$RefreshReg$ is not defined` outside the browser) — fixed, with a test.
+- **Before publishing (resolved):** `@reactogenic/core` (and `vite`, `cli`) ship TypeScript
   source that imports with `.ts` extensions — a consumer's `tsc` rejects that
   without `allowImportingTsExtensions` (found checking the docs). Add a build
   step that emits `.js` + `.d.ts`, and point `exports` at it. The packages are

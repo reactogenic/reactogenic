@@ -1,14 +1,26 @@
 {
   "name": "@reactogenic/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.0",
+  "description": "Runtime of Reactogenic's .rtsx: slots, Match / Switch, Each.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reactogenic/reactogenic.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/reactogenic/reactogenic#readme",
+  "bugs": "https://github.com/reactogenic/reactogenic/issues",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/fix-dts.mjs dist"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
@@ -20,5 +32,23 @@
   },
   "peerDependencies": {
     "react": ">=19"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!dist/**/*.test.*",
+    "!dist/**/*.check.*",
+    "!src/**/*.test.*",
+    "!src/**/*.check.*"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   }
 }
