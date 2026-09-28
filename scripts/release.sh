@@ -46,7 +46,14 @@ publish)
   for tgz in "${order[@]}"; do
     [[ -f "$release/$tgz" ]] || { echo "missing $tgz: run pack first" >&2; exit 1; }
   done
+  # A one-time password lasts about 30 seconds: a rerun with a fresh one
+  # skips what is already on the registry.
   for tgz in "${order[@]}"; do
+    name="$(tar xzf "$release/$tgz" -O package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).name')"
+    if npm view "$name@$version" version >/dev/null 2>&1; then
+      echo "skip $name@$version: already published"
+      continue
+    fi
     npm publish "$release/$tgz" --tag "$tag" --access public --otp "$otp"
   done
   ;;
