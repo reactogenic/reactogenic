@@ -14,7 +14,7 @@ import (
 // segments is pass 4 (syntax.md, *Segment roots*):
 //
 //	<section #about-us className="band" />
-//	→ import _Section_aboutUs from "./+about-us";
+//	→ import _Section_aboutUs from "./about-us.rtsx";
 //	  <section id="about-us" className="band"><_Section_aboutUs /></section>
 //
 // A root's children are overwritten, roots inside them included (pass 0
@@ -43,7 +43,13 @@ func segments(c *passContext) []emit.Edit {
 		} else {
 			edits = append(edits, emit.Edit{Span: c.childrenSpan(opening.Parent), Pieces: []emit.Piece{mount}})
 		}
-		edits = append(edits, c.ensureDefaultImport("./+"+name, local, origin)...)
+		// The import names the file found, extension included: an
+		// extensionless one would resolve by TS's and Vite's own orders.
+		module := "./" + name
+		if file, ok := c.segmentFile(path.Dir(c.entry), name); ok {
+			module = "./" + path.Base(file)
+		}
+		edits = append(edits, c.ensureDefaultImport(module, local, origin)...)
 	}
 	return edits
 }
@@ -118,8 +124,8 @@ func (c *passContext) checkAmbiguousModule() {
 	}
 }
 
-// checkSegmentFiles reports segment-not-found (no `+name.rtsx` or
-// `+name.tsx` next to the file) and segment-self (a segment that mounts
+// checkSegmentFiles reports segment-not-found (no file of the name next to
+// the entry, see segmentExtensions) and segment-self (a segment that mounts
 // itself, directly or through other segments).
 func (c *passContext) checkSegmentFiles() {
 	dir := path.Dir(c.entry)
@@ -127,7 +133,7 @@ func (c *passContext) checkSegmentFiles() {
 		name, _ := syntax.SegmentRoot(attr)
 		file, ok := c.segmentFile(dir, name)
 		if !ok {
-			c.errorAt(attr, "segment-not-found", "No segment `+%s.rtsx` or `+%s.tsx` next to `%s`", name, name, path.Base(c.entry))
+			c.errorAt(attr, "segment-not-found", "No segment `%s` next to `%s`: looked for `%s.rtsx`, `.tsx`, `.jsx`, `.ts`, `.js`", name, path.Base(c.entry), name)
 			continue
 		}
 		if c.mountsEntry(file, map[string]bool{}) {
@@ -136,9 +142,13 @@ func (c *passContext) checkSegmentFiles() {
 	}
 }
 
+// segmentExtensions is the lookup order of `#name` (syntax.md, *Segment
+// files*): the first `name<ext>` next to the file is the segment.
+var segmentExtensions = []string{".rtsx", ".tsx", ".jsx", ".ts", ".js"}
+
 func (c *passContext) segmentFile(dir, name string) (string, bool) {
-	for _, ext := range []string{".rtsx", ".tsx"} {
-		p := path.Join(dir, "+"+name+ext)
+	for _, ext := range segmentExtensions {
+		p := path.Join(dir, name+ext)
 		if _, ok := c.readFile(p); ok {
 			return p, true
 		}
@@ -152,7 +162,7 @@ func (c *passContext) mountsEntry(file string, seen map[string]bool) bool {
 	if file == c.entry {
 		return true
 	}
-	if seen[file] {
+	if seen[file] || !strings.HasSuffix(file, ".rtsx") { // only .rtsx has segment roots
 		return false
 	}
 	seen[file] = true

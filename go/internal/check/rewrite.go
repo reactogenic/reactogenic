@@ -46,9 +46,9 @@ func rewrite(d *rtsx.Diagnostic, out transpiler.Output, src string, at emit.Span
 	case note.Kind == "no-match" && d.Code() == 2345:
 		return "switch-missing-case", "Missing " + cases(arg(0)), nil, true
 	case note.Kind == "segment" && d.Code() == 2604:
-		return "segment-not-component", fmt.Sprintf("`+%s` has no default component", note.Name), nil, true
+		return "segment-not-component", fmt.Sprintf("The segment `%s` has no default component", note.Name), nil, true
 	case note.Kind == "segment" && d.Code() == 2741:
-		return "segment-props", fmt.Sprintf("A segment takes no props: `+%s` requires `%s`", note.Name, arg(0)), nil, true
+		return "segment-props", fmt.Sprintf("A segment takes no props: `%s` requires `%s`", note.Name, arg(0)), nil, true
 	case note.Kind == "segment" && (chainHas(d, 2339, "id") || chainHas(d, 2339, "children")):
 		return "segment-root-props", fmt.Sprintf("`%s` must accept `id` and `children` to be a segment root", note.Detail), nil, true
 	case note.Kind == "slot-args" && d.Code() == 2741:

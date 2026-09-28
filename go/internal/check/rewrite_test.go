@@ -20,9 +20,9 @@ export function Must(p: { $Title: Slot<{ children?: ReactNode }> }) { return <di
 export function Plain(p: { className?: string }) { return <div />; }
 export function Input(p: { value: string }) { return <input />; }
 `,
-		"src/+num.rtsx":   "export default 42;\n",
-		"src/+props.rtsx": "export default function P(p: { x: string }) { return <div />; }\n",
-		"src/+ok.rtsx":    "export default function Ok() { return <div />; }\n",
+		"src/num.rtsx":   "export default 42;\n",
+		"src/props.rtsx": "export default function P(p: { x: string }) { return <div />; }\n",
+		"src/ok.rtsx":    "export default function Ok() { return <div />; }\n",
 		"src/page.rtsx": `import { Card, Must, Plain, Input } from "./lib";
 import { Switch } from "@reactogenic/core";
 declare function getStatus(): "a" | "b" | "c";
@@ -57,8 +57,8 @@ export const p11 = <Input value />;
 		"8:25 slot-type: `$Label` does not match its declaration in `Card`: Type '{}' is not assignable to type 'Slot<{ children: ReactNode; }> | undefined'.",
 		"9:32 params-required: `$Icon` requires params: its body is a function of the attachment's args",
 		"10:19 switch-missing-case: Missing `\"b\"`, `\"c\"`",
-		"11:24 segment-not-component: `+num` has no default component",
-		"12:24 segment-props: A segment takes no props: `+props` requires `x`",
+		"11:24 segment-not-component: The segment `num` has no default component",
+		"12:24 segment-props: A segment takes no props: `props` requires `x`",
 		"13:27 segment-root-props: `Plain` must accept `id` and `children` to be a segment root",
 		"14:27 TS2322: Type 'boolean' is not assignable to type 'string'.",
 	}

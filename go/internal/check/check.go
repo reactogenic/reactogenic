@@ -41,6 +41,9 @@ func Run(configPath string) []Report {
 	}
 	var ts []Report
 	for _, d := range p.Diagnostics() {
+		if segmentImport(p, d) {
+			continue
+		}
 		ts = append(ts, fromTS(p, d))
 	}
 	reports = append(reports, superseded(ts)...)
@@ -93,6 +96,24 @@ func fromTS(p *project.Project, d *rtsx.Diagnostic) Report {
 		r.Related = append(r.Related, rr)
 	}
 	return r
+}
+
+// segmentImport: TS5097 (an import path ending in `.tsx` or `.ts`) on the
+// import a segment root emits. The import names the file found, extension
+// included (syntax.md, *Segment files*); it is not the author's, and needs
+// no allowImportingTsExtensions.
+func segmentImport(p *project.Project, d *rtsx.Diagnostic) bool {
+	if d.Code() != 5097 || d.File() == nil {
+		return false
+	}
+	src, ok := p.SourceOf(d.File().FileName())
+	if !ok {
+		return false
+	}
+	out, _ := p.Output(src)
+	at := out.Map.Source(emit.Span{Pos: rtsx.SkipTrivia(d.File().Text(), d.Pos()), End: d.End()})
+	note := innermostNote(out.Notes, at)
+	return note != nil && note.Kind == "segment"
 }
 
 // superseded drops the TS errors that follow from another one: a key

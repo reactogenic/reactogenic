@@ -34,7 +34,11 @@ terminal and CI.
    and `exclude` globs as `.tsx`.
 2. Transpile every `.rtsx` file. `Button.rtsx` enters the program as an
    in-memory `Button.tsx` — never written to disk — so extensionless imports
-   resolve with TS's own module resolution, segment imports included.
+   resolve with TS's own module resolution. A segment import names its file
+   (`./about-us.rtsx`): TS finds it as `about-us.rtsx.tsx`, an alias whose
+   real path is the virtual `about-us.tsx`, so the program holds one module.
+   TS5097 on a segment import (a `.tsx` / `.ts` extension) is dropped: the
+   import is the transpiler's.
 3. Check the program. Diagnostics in virtual files are mapped back (*Mapping*);
    diagnostics in real `.ts` / `.tsx` files pass through, with any related
    information that points into a virtual file mapped too.

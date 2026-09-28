@@ -59,7 +59,7 @@ func TestExtractSpec(t *testing.T) {
 	if got := c.Files["input.rtsx"]; strings.Contains(got, "Warning") || got != specPrelude+"<a #intro />\n" {
 		t.Errorf("annotation not stripped: %q", got)
 	}
-	if _, ok := c.Files["+intro.rtsx"]; !ok {
+	if _, ok := c.Files["intro.rtsx"]; !ok {
 		t.Errorf("no stub for segment #intro: %v", c.Files)
 	}
 }

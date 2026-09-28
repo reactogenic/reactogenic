@@ -15,7 +15,7 @@ test("vite build: .rtsx resolves without an extension and compiles", async () =>
   })) as Rolldown.RolldownOutput;
   const code = result.output.map((o) => ("code" in o ? o.code : "")).join("\n");
   expect(code).toContain("hello-from-rtsx"); // page.rtsx, imported as "./page"
-  expect(code).toContain("intro-segment"); // +intro.rtsx, mounted by #intro
+  expect(code).toContain("intro-segment"); // intro.rtsx, mounted by #intro
   expect(code).toContain("untitled"); // card.rtsx: the attachment's fallback
   expect(code).not.toContain("slot="); // slots lowered
   expect(code).not.toMatch(/greeting: string/); // types stripped

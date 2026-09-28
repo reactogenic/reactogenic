@@ -73,8 +73,9 @@ options considered for later:
 - `import Button from "./Button"` finds `Button.rtsx` as it finds
   `Button.tsx`. Both files side by side is an error: the import would be
   ambiguous.
-- Segment imports are emitted extensionless (`import … from "./+about-us"`)
-  and resolve the same way, to `+about-us.rtsx` or `+about-us.tsx`.
+- Segment imports name the file the transpiler found, extension included
+  (`import … from "./about-us.rtsx"`; syntax.md, *Segment files*): Vite
+  resolves them as they are written.
 - The type checker resolves identically; see
   [diagnostics.md](diagnostics.md#reactogenic-check).
 

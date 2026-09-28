@@ -363,3 +363,21 @@ export const reference = (
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }
+
+// syntax.md, *Segment files*: `#name` mounts the first of name.rtsx, .tsx,
+// .jsx, .ts, .js, and the import names that file — so TS checks the file the
+// lookup chose, not the one its own order would (`.ts` before `.tsx`).
+func TestSegmentLookup(t *testing.T) {
+	got := checkProject(t, map[string]string{
+		"src/page.rtsx":   "export default function Page() {\n  return <main><section #intro /><section #faq /><section #broken /></main>;\n}\n",
+		"src/intro.rtsx":  "export default function Intro() {\n  return <p>intro</p>;\n}\n",
+		"src/intro.ts":    "const notAComponent = 1;\nexport default notAComponent;\n",
+		"src/faq.tsx":     "export default function Faq() {\n  return <dl />;\n}\n",
+		"src/faq.ts":      "const notAComponent = 1;\nexport default notAComponent;\n",
+		"src/broken.rtsx": "const notAComponent = 1;\nexport default notAComponent;\n",
+	})
+	want := []string{"src/page.rtsx:2:59 segment-not-component"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}

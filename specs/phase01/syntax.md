@@ -1253,8 +1253,8 @@ Two kinds of component should look different at the point of use:
 | reusable component | imported, as in React | `<Button>`, `<Select>` |
 | **segment** — a part of one page or feature, split out so that `index.rtsx` does not pile up | mounted by name into a **segment root** | `<section #about-us />` |
 
-One token names the DOM id, the file (`+about-us.rtsx` — "plus this file") and
-the URL fragment. `#` already means
+One token names the DOM id, the file (`about-us.rtsx`) and the URL
+fragment. `#` already means
 "id" everywhere on the web (CSS, URLs), so the notation needs no explanation.
 No import, no wrapper component, and `/#about-us` scrolls to it for free.
 
@@ -1284,7 +1284,7 @@ Only `#name` mounts a segment. A plain `id` keeps its React meaning and mounts
 nothing:
 
 ```tsx
-<section id="about-us" />   // just an id — +about-us.rtsx is not involved
+<section id="about-us" />   // just an id — about-us.rtsx is not involved
 ```
 
 ### Desugaring
@@ -1296,7 +1296,7 @@ nothing:
 
 ```tsx
 // page.tsx
-import _Section_aboutUs from "./+about-us";
+import _Section_aboutUs from "./about-us.rtsx";
 
 <section id="about-us" className="band">
   <_Section_aboutUs />
@@ -1312,7 +1312,7 @@ A root may be any element, HTML or component — the transpiler only nests:
 
 ```tsx
 // page.tsx
-import _Section_aboutUs from "./+about-us";
+import _Section_aboutUs from "./about-us.rtsx";
 
 <Section id="about-us">
   <_Section_aboutUs />
@@ -1327,9 +1327,11 @@ Two constraints, both checked by TS7 on the emitted code:
 Rules:
 
 - `#name` → `id="name"`, in the position where it was written.
-- The segment is the **default export** of `+name.rtsx` (else `+name.tsx`) in
-  the same directory as the file that mentions it. The name is used verbatim;
-  there is no `name/index.rtsx` lookup. No such file → compile error.
+- The segment is the **default export** of the file `name` in the same
+  directory as the file that mentions it, looked up by extension
+  (*Segment files*). The name is used verbatim; there is no
+  `name/index.rtsx` lookup. No such file → compile error.
+- The import **names the file found, extension included**.
 - The import is **static**. A segment is part of the page, not a lazy chunk.
 - The generated identifier is `_<Tag>_<camelCasedName>`; it is not nameable
   from user code.
@@ -1337,9 +1339,7 @@ Rules:
   attributes on the root go to the root element.
 
 A segment root is syntactic sugar and nothing more: the `.tsx` above is its
-whole meaning — what TS7 checks and what Vite runs. The import is
-extensionless; resolving it to `+about-us.rtsx` is the plugin's job
-([vite.md](vite.md#module-resolution)).
+whole meaning — what TS7 checks and what Vite runs.
 
 **Deferred:** lazily loaded segments.
 
@@ -1347,12 +1347,12 @@ Children of a segment root are overwritten, with a warning:
 
 ```tsx
 // .rtsx
-<section #about-us>something here</section>   // Warning: contents will be overwritten by +about-us.rtsx
+<section #about-us>something here</section>   // Warning: contents will be overwritten by the segment `about-us`
 ```
 
 ```tsx
 // .tsx
-import _Section_aboutUs from "./+about-us";
+import _Section_aboutUs from "./about-us.rtsx";
 
 <section id="about-us">
   <_Section_aboutUs />
@@ -1361,20 +1361,36 @@ import _Section_aboutUs from "./+about-us";
 
 ### Segment files
 
-The `+` prefix marks a file as a segment and keeps the two kinds of component
-disjoint:
+A segment is an ordinary module: no prefix, no naming convention beyond the
+name itself. `#about-us` mounts the first of these next to the file:
 
-| Rule | Error |
+| Order | File |
 | --- | --- |
-| a `+` file default-exports a component with no required props — checked for every `+` file, mounted or not | segment-not-component, segment-props |
-| a `+` file is never imported by hand; `#name` is the only way in | segment-import |
-| `#name` mounts only `+` files; a plain `about-us.rtsx` is not a candidate | segment-not-found |
+| 1 | `about-us.rtsx` |
+| 2 | `about-us.tsx` |
+| 3 | `about-us.jsx` |
+| 4 | `about-us.ts` |
+| 5 | `about-us.js` |
 
-Other exports of a `+` file are unreachable and therefore pointless; types
-may still be exported and imported with `import type`.
+The emitted import names that file — `import … from "./about-us.rtsx"`, or
+`"./about-us.tsx"`. An extensionless import would resolve by someone else's
+order: TS tries `.ts` before `.tsx`, Vite has its own `resolve.extensions`.
+With the extension, the file the lookup chose is the file Vite runs and TS7
+checks.
 
-`+` is safe where `#` is not: it needs no quoting in a shell, is not a comment
-character anywhere, and is literal in URL paths.
+- `reactogenic check` resolves `./about-us.rtsx` to the transpiled
+  `about-us.rtsx` (TS finds it as `about-us.rtsx.tsx`, whose real path is the
+  virtual `about-us.tsx`), and accepts the `.tsx` / `.ts` extension of a
+  segment import without `allowImportingTsExtensions` — the import is the
+  transpiler's, not the author's.
+- A segment file may also be imported by hand, and may export other things:
+  it is a module like any other. What makes it a segment is being mounted.
+
+> OPEN: two known gaps of `reactogenic check` (Vite is right in both). (1)
+> Under `moduleResolution: node16` / `nodenext`, TS does not look for
+> `about-us.rtsx.tsx`, so an `.rtsx` segment is not found. (2) TS maps
+> `./about-us.jsx` to `about-us.ts` when both exist, so it checks the `.ts`
+> instead of the mounted `.jsx`.
 
 ### Typing behaviour
 
@@ -1388,9 +1404,8 @@ TS7 checks the emitted import and element:
 
 | Code | Message | Condition | Needs |
 | --- | --- | --- | --- |
-| segment-not-found | No segment `+about-us.rtsx` or `+about-us.tsx` next to `page.rtsx` | file missing | files |
-| segment-not-component | `+about-us.rtsx` has no default component | | types |
-| segment-import | Segments are mounted with `#about-us`, not imported | value import of a `+` file | syntax |
+| segment-not-found | No segment `about-us` next to `page.rtsx`: looked for `about-us.rtsx`, `.tsx`, `.jsx`, `.ts`, `.js` | file missing | files |
+| segment-not-component | The segment `about-us` has no default component | | types |
 | segment-props | A segment takes no props | required props on the default export | types |
 | segment-id | An element has one id: `#about` is already on it | explicit `id` attribute (or a spread), or a second `#name`, together with `#name` | syntax |
 | segment-syntax | `#about-us` is a segment root: it takes no value and no namespace | `#about-us="x"`, `#about:us` | syntax |
@@ -1398,7 +1413,7 @@ TS7 checks the emitted import and element:
 | segment-root-props | `Card` must accept `id` and `children` to be a segment root | `<Card #about-us />` where `CardProps` lacks either | types |
 | segment-self | | a segment that mounts itself, directly or through other segments | files |
 | segment-in-loop | `#about-us` would be mounted more than once | segment root inside `.map()` or the body of `Each` | syntax |
-| segment-children (warning) | Contents will be overwritten by `+about-us.rtsx` | root element has children | syntax |
+| segment-children (warning) | Contents will be overwritten by the segment `about-us` | root element has children | syntax |
 
 ### Edge cases
 
@@ -1430,7 +1445,6 @@ bash, `.gitignore`, YAML and Makefiles, and Node's subpath-import prefix.
 | | Form | Note |
 | --- | --- | --- |
 | Pug / Slim / Emmet | `section#about-us` | `#` = id, from CSS selectors; the source of the notation |
-| SvelteKit | `+page.svelte`, `+layout.svelte` | `+` prefix marks files the framework owns; the source of the file convention |
 | Next.js | `@modal/` parallel routes | file-system convention that fills a named place in a layout |
 | SSI / Rails partials | `<!--#include file="…" -->`, `render "about_us"` | include by file name |
 | Vue | `<template #name>` | **different meaning**: `#` is the slot shorthand there |

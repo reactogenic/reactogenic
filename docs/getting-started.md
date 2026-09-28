@@ -141,7 +141,7 @@ import { Each, Match, Switch } from "@reactogenic/core";
 **Segments.** Split a long page into files next to it, and mount them by name:
 
 ```tsx
-<section #pricing />   // mounts the default export of ./+pricing.rtsx
+<section #pricing />   // mounts the default export of ./pricing.rtsx
 ```
 
 ## Moving a `.tsx` file to `.rtsx`

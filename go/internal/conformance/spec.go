@@ -62,7 +62,7 @@ func ExtractSpec(name, markdown string) []Case {
 		}
 		files := map[string]string{entry: body}
 		for _, seg := range segmentRe.FindAllStringSubmatch(in.body, -1) {
-			files["+"+seg[1]+".rtsx"] = "export default function Segment() {\n  return null;\n}\n"
+			files[seg[1]+".rtsx"] = "export default function Segment() {\n  return null;\n}\n"
 		}
 		for i+1 < len(blocks) {
 			out := blocks[i+1]

@@ -301,3 +301,12 @@ replaces the attachment's `key`, as slot props replace attachment props. The
 function is held under `SLOT_KEY`, since `P` already has React's `key`. An
 attachment with args binds them once through `slotArgs`, which types them as
 `renderSlot` does, so arg errors still point at the arg.
+
+**Segment files by name.** `#about-us` mounts `about-us` — the first of
+`.rtsx`, `.tsx`, `.jsx`, `.ts`, `.js` next to the file. The `+` prefix is
+dropped: a segment is an ordinary module, made a segment by being mounted, so
+segment-import goes with it. The emitted import names the file found,
+extension included, so Vite and TS7 load the file the lookup chose rather than
+resolving by their own orders (TS: `.ts` before `.tsx`). `reactogenic check`
+resolves `./x.rtsx` through an `x.rtsx.tsx` alias of the virtual `x.tsx`, and
+drops TS5097 on segment imports.

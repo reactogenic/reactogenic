@@ -50,13 +50,24 @@ func (p *Project) build() {
 	fs := rtsx.WrapFS(p.disk, rtsx.FSReplacements{
 		FileExists: func(name string) bool {
 			_, virtual := p.virtual(name)
-			return virtual || p.disk.FileExists(name)
+			_, alias := p.alias(name)
+			return virtual || alias || p.disk.FileExists(name)
 		},
 		ReadFile: func(name string) (string, bool) {
 			if src, ok := p.virtual(name); ok {
 				return p.transpile(src).TSX, true
 			}
+			if tsx, ok := p.alias(name); ok {
+				src, _ := p.virtual(tsx)
+				return p.transpile(src).TSX, true
+			}
 			return p.disk.ReadFile(name)
+		},
+		Realpath: func(name string) string {
+			if tsx, ok := p.alias(name); ok {
+				return tsx
+			}
+			return p.disk.Realpath(name)
 		},
 		GetAccessibleEntries: func(dir string) rtsx.FSEntries {
 			entries := p.disk.GetAccessibleEntries(dir)
@@ -89,6 +100,19 @@ func (p *Project) virtual(name string) (string, bool) {
 	}
 	src := strings.TrimSuffix(name, ".tsx") + ".rtsx"
 	return src, p.disk.FileExists(src)
+}
+
+// alias resolves an import that names the .rtsx file — `./about-us.rtsx`,
+// as a segment root emits it: TS looks for `about-us.rtsx.tsx`, which is the
+// virtual `about-us.tsx` under another name. Its realpath is that file, so
+// the program holds one module, not two.
+func (p *Project) alias(name string) (string, bool) {
+	if !strings.HasSuffix(name, ".rtsx.tsx") {
+		return "", false
+	}
+	tsx := strings.TrimSuffix(name, ".rtsx.tsx") + ".tsx"
+	_, ok := p.virtual(tsx)
+	return tsx, ok
 }
 
 func tsxPath(rtsxPath string) string {

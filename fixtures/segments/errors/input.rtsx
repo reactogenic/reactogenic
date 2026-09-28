@@ -1,7 +1,4 @@
-import Other from "./+other";
-import type { Props } from "./+other";
-import { type Kind } from "./+other";
-import "./+other";
+import Other from "./other";
 export const a = <section id="x" #one />;
 export const b = <section {...p} #two />;
 export const c = <><div #three /><div #three /></>;

@@ -109,7 +109,8 @@ Babel): TypeScript's own parser accepts `#name` as an attribute named
 3. **Flow control** — `<Match on={…}>` (if; params optional) and
    `<Switch on={…} [exhaustive] [{ value }]>` with `$Case is=` / `default`
    (first match wins; no match renders nothing; `exhaustive` proven by TS7).
-4. **Segment roots** — `<section #about-us />` mounts sibling `+about-us.rtsx`
+4. **Segment roots** — `<section #about-us />` mounts sibling `about-us`
+   (first of `.rtsx`, `.tsx`, `.jsx`, `.ts`, `.js`; the import names it)
    (default export, no props). Pure syntactic sugar: an import + a nested
    element.
 5. **`Each`** — plain runtime component + params; no key check (as a `for`

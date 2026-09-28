@@ -249,7 +249,8 @@ implementation.
 - Pass 0 on the source: segment-id (explicit `id`, a spread), segment-
   duplicate, segment-in-loop (`.map()` / `.flatMap()` callbacks, `Each`
   bodies), segment-children (warning), segment-import (value imports of a
-  `+` file; `import type` and all-`type` named imports are fine),
+  `+` file; `import type` and all-`type` named imports are fine — removed
+  with the `+` convention, see decisions.md),
   each-no-key (the params form of `Each` only).
 - Files: segment-not-found and segment-self (followed through other
   segments), via `Input.Files` and `Input.ReadFile`.
