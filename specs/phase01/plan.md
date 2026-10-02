@@ -562,6 +562,10 @@ and Vite 8.3: clean. `release.sh publish` resumes across one-time passwords:
 a new package's public view lags its publish by minutes, so a name the org
 owns with no public versions counts as published. Left: the CI install check
 on Linux and Windows (RGP1-092).
+- **Next release:** bumping the version also bumps `cli`'s platform
+  `optionalDependencies`, which CI's `pnpm install --frozen-lockfile` rejects
+  until the lockfile is updated — and pnpm resolves them only once they are
+  published. Run `pnpm install` after publishing and commit the lockfile.
 - **Before publishing (resolved):** `@reactogenic/core` (and `vite`, `cli`) ship TypeScript
   source that imports with `.ts` extensions — a consumer's `tsc` rejects that
   without `allowImportingTsExtensions` (found checking the docs). Add a build

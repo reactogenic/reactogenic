@@ -166,3 +166,9 @@ over prose. Every desugaring as before/after `.rtsx` → `.tsx`. Open questions
 inline as `> OPEN:`; rejected ideas as **Rejected:** with the reason. Do not
 invent extensions beyond the lists above. Commit and
 push only when asked.
+
+`main` is protected (ruleset `main`): changes land through pull requests —
+no approvals required, squash merge only, and CI's `go`, `js` and `vendor`
+must pass on a branch up to date with `main`; no force pushes or deletion.
+Repository admins can bypass. Work on a branch per task (`rgp1-xxx-…`),
+commit there, and open the PR when asked to push.
