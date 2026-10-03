@@ -770,7 +770,12 @@ arg and slot-attribute names; a built-in sibling winning the import; a
 fail keeps the text before it (`transpiler.TestStoppedKeepsPreviousPass`),
 and a panic is caught at the mapper boundary. The typing test runs over the
 conformance corpus with signature help — 15,020 requests — tolerating one
-upstream panic (go/patches/README.md, *Known upstream defects*).
+upstream panic (go/patches/README.md, *Known upstream defects*). Run over
+the transform branch's new fixtures it met a second one, which is patched:
+completion in a file that is only comments (or comments under an import the
+transform drops) was an error — upstream computes an auto-import's edit for
+every item of a mapped file, and indexed past a text with no statement
+(`ls/change/tracker.go`).
 - Folding and selection ranges from the source tree; closing-tag insertion
   (*Tags*); workspace symbols and file rename as in ide.md's table;
   `reactogenic --version`, the same string in `serverInfo` and in the

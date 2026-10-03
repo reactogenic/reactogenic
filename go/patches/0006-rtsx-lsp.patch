@@ -16,6 +16,21 @@ index 46423f3..a44903e 100644
  			if moduleSymbol := v.checker.GetSymbolAtLocation(moduleSpecifier); moduleSymbol != nil {
  				if moduleID, _, ok := tryGetModuleIDAndFileNameOfModuleSymbol(moduleSymbol); ok {
  					result.Add(moduleID, existingImport{node: node, moduleSpecifier: moduleSpecifier.Text(), index: i})
+diff --git a/internal/ls/change/tracker.go b/internal/ls/change/tracker.go
+index 47543d2..f3c7a1f 100644
+--- a/internal/ls/change/tracker.go
++++ b/internal/ls/change/tracker.go
+@@ -565,7 +565,9 @@ func (t *Tracker) InsertAtTopOfFile(sourceFile *ast.SourceFile, insert []*ast.St
+ 	if originalPos != 0 {
+ 		options.Prefix = t.newLine
+ 	}
+-	if len(sourceFile.Text()) == 0 || !stringutil.IsLineBreak(rune(sourceFile.Text()[pos])) {
++	// rtsx: `pos` is the end of a text that is only comments (upstream indexes past it — and for a
++	// content-mapped file does so on every completion request, which computes these edits).
++	if pos >= len(sourceFile.Text()) || !stringutil.IsLineBreak(rune(sourceFile.Text()[pos])) {
+ 		options.Suffix = t.newLine
+ 	}
+ 	if blankLineBetween {
 diff --git a/internal/ls/codeactions.go b/internal/ls/codeactions.go
 index a95b8bb..84532fa 100644
 --- a/internal/ls/codeactions.go

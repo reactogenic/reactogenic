@@ -391,6 +391,7 @@ server only after migrating `check` — a bare server now comes first.
 | `ls/symbols.go` | workspace symbols collected from the embedder's files only, before the cut to 256; slot params are not document symbols |
 | `ls/file_rename.go` | which edits of a file rename are made, per import (`FileRenameEdits`); specifiers written for the files as they will be after the rename; a generated import left out |
 | `ls/autoimport/fix.go` | a generated import is no existing import: a name from its module gets a declaration of its own |
+| `ls/change/tracker.go` | an import inserted at the top of a text that is only comments: no index past its end (an upstream panic; in a mapped file, on every completion) |
 | `ls/inlay_hints.go` | each hint once; none on a generated call |
 | `ls/codeactions.go` | no organize-imports action without an edit in a mapped file |
 | `ls/definition.go` | a mapped module reached by a non-relative specifier: the file's start |

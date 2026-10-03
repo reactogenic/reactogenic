@@ -565,7 +565,9 @@ func (t *Tracker) InsertAtTopOfFile(sourceFile *ast.SourceFile, insert []*ast.St
 	if originalPos != 0 {
 		options.Prefix = t.newLine
 	}
-	if len(sourceFile.Text()) == 0 || !stringutil.IsLineBreak(rune(sourceFile.Text()[pos])) {
+	// rtsx: `pos` is the end of a text that is only comments (upstream indexes past it — and for a
+	// content-mapped file does so on every completion request, which computes these edits).
+	if pos >= len(sourceFile.Text()) || !stringutil.IsLineBreak(rune(sourceFile.Text()[pos])) {
 		options.Suffix = t.newLine
 	}
 	if blankLineBetween {

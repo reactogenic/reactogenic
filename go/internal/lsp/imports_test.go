@@ -389,6 +389,43 @@ func TestAutoImportBesideGeneratedImport(t *testing.T) {
 	}
 }
 
+// A file that is only comments — a new file under its header, or one whose
+// only import the transform takes out (`Switch`, `Match`): completion at its
+// end answers, auto-imports included. (For a content-mapped file upstream
+// computes each item's import edit while it completes, and it indexed past a
+// text with no statement: every completion there was an error.)
+func TestCompletionInAFileOfComments(t *testing.T) {
+	const page = "src/page.rtsx"
+	for name, text := range map[string]string{
+		"a line comment":                    "// A page.\n",
+		"a block comment":                   "/* A page. */\n",
+		"an import that is dropped, a note": "import { Switch, Match } from \"@reactogenic/core\";\n// A page.\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := start(t, lsptest.With(lsptest.Core, map[string]string{
+				"src/util.ts": "export const twice = (n: number) => n * 2;\n",
+				page:          text,
+			}))
+			c.Open(page)
+			var items []lsptest.CompletionItem
+			for _, item := range c.Completion(page, lsptest.PositionAt(text, len(text))) {
+				if item.Label == "twice" {
+					items = append(items, item)
+				}
+			}
+			if len(items) != 1 {
+				t.Fatalf("%d items for `twice` at the end of the file", len(items))
+			}
+			// Accepted: the import, and the name where the cursor was.
+			c.ApplyTo(page, c.Resolve(items[0]).AdditionalTextEdits)
+			c.Change(page, c.Text(page)+"\nexport const two = twice(1);\n")
+			if got := lsptest.Lines(c.Diagnostics(page)); len(got) != 0 || !strings.Contains(c.Text(page), `import { twice } from "./util";`) {
+				t.Errorf("with twice accepted: %q\n%s", got, c.Text(page))
+			}
+		})
+	}
+}
+
 // ide.md, *A generated import is not one to add to*: a name that a generated
 // import's own module exports — `Each` or the type `Slot` in a container, a
 // named export of a mounted module. TypeScript would add the name to the
