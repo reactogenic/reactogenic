@@ -961,11 +961,39 @@ every item of a mapped file, and indexed past a text with no statement
   without `.rtsx` spawns nothing.
 - Depends on: 104, 110.
 
-### RGP1-112 — Stock content mapper · S
+### RGP1-112 — Stock content mapper · S · done
+`internal/stockmapper`: the protocol on the standard library; the built-in
+transform plus a post-pass that writes `.rtsx` into extensionless imports
+and module augmentations (relative and `paths`; an alias that cannot carry
+the extension becomes a relative path) and `export {}` into a file that is
+not a module; 28 numbered codes below 1000 (a syntax error keeps TS's number,
+and is sent only when the virtual text parses: while it does not, TypeScript
+reports the mistake itself); a `.tsx` / `.ts` segment import written without
+its extension; two ignore directives. Measured with
+`typescript@7.1.0-dev.20261003.1` (`scripts/e2e-stock-mapper.sh`, twelve
+`tsc --runExternalCode` runs, each with exactly its expected errors): a clean
+project with a `.tsx` segment, three kinds of alias and an augmentation exits
+0; type errors at `page.rtsx(11,15)`, `(16,14)` and `button.rtsx(15,7)`;
+`reactogenic101` at `(16,7)` hides the type error next to it; TS2306 for a
+`.ts` segment that is not a module; 0.044 s to start through the Node
+launcher, 0.003 s for four transforms. By hand, the same project in
+`tsc --lsp`: hover, definition, references, and completion after `status.`,
+at source positions.
+Reviewed and fixed (2026-10-03): a syntax error was reported twice, by
+TypeScript and by the mapper at another place (4,296 of 17,640 broken
+mutants; now none, by a test); exact aliases, directory aliases and patterns
+with a suffix stayed unresolved; the segment directive hid TS2306;
+`reactogenic check` reported TS18068 on the documented tsconfig — it now
+drops it, ahead of 106.
+Left: Windows and VS Code's own client were not run; in the stock server,
+go to definition on a `paths` specifier of a mapped file returns nothing —
+also for one written in a `.tsx` file; on that project `check` prints
+TS5097 under `page.rtsx.tsx` (the overlay's alias of a module a `.tsx` file
+imports by its full name — gone with 106).
 - `reactogenic content-mapper` and the manifest in `@reactogenic/cli`
   (ide.md, *Stock TypeScript 7.1*): numeric codes for transpiler
-  diagnostics, `recover` around every transform, an ignore directive on the
-  specifier of a generated segment import. Experimental.
+  diagnostics, `recover` around every transform, a generated segment import
+  that raises no TS5097. Experimental.
 - **Done when:** `typescript@next`'s `tsc --runExternalCode` checks a project
   with `.rtsx` files and reports at `.rtsx` positions.
 - Depends on: 104.

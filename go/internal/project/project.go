@@ -6,6 +6,7 @@ package project
 
 import (
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -189,9 +190,18 @@ func (p *Project) Outputs() map[string]transpiler.Output {
 
 // Diagnostics returns what `tsc --noEmit` reports on the program, with
 // positions in the virtual .tsx files (RGP1-071 maps them back).
+//
+// But for one: a tsconfig `contentMappers` entry is ignored (ide.md, *The
+// engine*) — it is there for stock TypeScript (*Stock TypeScript 7.1*).
+// Nothing here runs a mapper, so nothing asks for `--runExternalCode`.
 func (p *Project) Diagnostics() []*rtsx.Diagnostic {
-	if p.Program == nil {
-		return p.ConfigDiagnostics
+	all := slices.Clone(p.ConfigDiagnostics)
+	if p.Program != nil {
+		all = append(all, rtsx.AllDiagnostics(p.Program)...)
 	}
-	return append(p.ConfigDiagnostics, rtsx.AllDiagnostics(p.Program)...)
+	return slices.DeleteFunc(all, func(d *rtsx.Diagnostic) bool { return d.Code() == contentMappersNeedFlag })
 }
+
+// contentMappersNeedFlag is TS18068: "Content mappers require the
+// '--runExternalCode' command line flag to be enabled."
+const contentMappersNeedFlag = 18068

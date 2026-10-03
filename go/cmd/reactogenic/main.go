@@ -1,6 +1,7 @@
 // Command reactogenic is the phase 1 CLI: `reactogenic check` (RGP1-070),
-// the language server (RGP1-103) and the stdio server driven by the Vite
-// plugin (RGP1-053).
+// the language server (RGP1-103), the stdio server driven by the Vite
+// plugin (RGP1-053) and the content mapper for stock TypeScript 7.1
+// (RGP1-112).
 package main
 
 import (
@@ -14,6 +15,7 @@ import (
 	"github.com/reactogenic/reactogenic/go/internal/check"
 	"github.com/reactogenic/reactogenic/go/internal/lsp"
 	"github.com/reactogenic/reactogenic/go/internal/server"
+	"github.com/reactogenic/reactogenic/go/internal/stockmapper"
 )
 
 // version is stamped by the release build (scripts/build-binaries.sh).
@@ -22,6 +24,7 @@ var version = "0.0.0-dev"
 const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]
        reactogenic lsp --stdio [--clientProcessId pid]
        reactogenic serve
+       reactogenic content-mapper
        reactogenic --version
 
   check   type-check the project, with .rtsx transpiled; errors are reported
@@ -30,7 +33,12 @@ const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] 
           client's process: --clientProcessId, else the one named in initialize
           (exit status 0 after shutdown and exit, 1 otherwise)
   serve   transform .rtsx for the Vite plugin: JSON requests on stdin, one
-          response per line on stdout`
+          response per line on stdout
+  content-mapper
+          experimental: .rtsx for stock TypeScript 7.1. 'tsc --runExternalCode'
+          and its language server start it for a tsconfig that lists
+          @reactogenic/cli in "contentMappers"; it speaks the content-mapper
+          protocol on stdin and stdout`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -47,6 +55,13 @@ func main() {
 		}
 	case "lsp":
 		os.Exit(runLSP(os.Args[2:]))
+	case "content-mapper":
+		// stdout is the protocol's: everything else goes to stderr, which
+		// the host shows under TS_CONTENT_MAPPER_DEBUG.
+		if err := stockmapper.Serve(os.Stdin, os.Stdout, stockmapper.Options{Log: os.Stderr}); err != nil {
+			fmt.Fprintln(os.Stderr, "reactogenic content-mapper:", err)
+			os.Exit(1)
+		}
 	case "-v", "--version", "version":
 		fmt.Println(version)
 	case "-h", "--help", "help":
