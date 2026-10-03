@@ -227,7 +227,8 @@ change to any file the server asks the client to pull again.
 Project-wide errors stay with `reactogenic check`. The extension contributes
 the task *reactogenic: check* — the binary the server runs, `check
 --pretty=false` — with the problem matcher `$reactogenic`, applied to closed
-documents only (an open document's problems come from the server).
+documents only (an open document's problems come from the server, and
+replace the task's for that file: one owner).
 
 ### Slots
 
@@ -284,9 +285,11 @@ new name captured it).
 
 ### Commands
 
-`reactogenic/transpiled` (custom request): the emitted TSX of a document and
-the tolerance step that produced it. *Show transpiled TSX* opens it read-only
-beside the source and refreshes it on every edit.
+`reactogenic/transpiled` (custom request, `{ textDocument: { uri } }` →
+`{ text, step }`): the emitted TSX of a document and the tolerance step that
+produced it. *Show transpiled TSX* opens it read-only beside the source and
+refreshes it on every edit; with a server that does not have the request, it
+says the server is too old.
 
 ### Not in the first release
 
@@ -374,7 +377,9 @@ published to npm.
   `unbalancedBracketScopes`, `tokenTypes`, `semanticTokenScopes`);
   breakpoints for `rtsx`; TSX's snippets; Emmet as for TSX; a Markdown fence
   injection (` ```rtsx `); the commands *Restart server* and *Show
-  transpiled TSX*; the *reactogenic: check* task and `$reactogenic` matcher.
+  transpiled TSX*; the *reactogenic: check* task and `$reactogenic` matcher;
+  the settings `reactogenic.server.path`, `reactogenic.autoClosingTags`
+  (*Tags*; on) and `reactogenic.trace.server`.
 - **Client**: `vscode-languageclient` over stdio; selector language `rtsx`,
   schemes `file` and `untitled` (not `git:` — the left side of a diff).
 - **Which binary runs**, first match:
@@ -383,7 +388,7 @@ published to npm.
   | --- | --- |
   | 1 | the setting `reactogenic.server.path` |
   | 2 | `$REACTOGENIC_BINARY` |
-  | 3 | the workspace's `@reactogenic/cli`, found by walking up from the folder of the first `.rtsx` document opened — if its version is ≥ the extension's minimum (the first version with `lsp`; pre-release tags compared numerically) |
+  | 3 | the workspace's `@reactogenic/cli` — the nearest one, found by walking up from the folder of the first `.rtsx` document opened — if its version is ≥ the extension's minimum (the first version with `lsp`; pre-release tags compared numerically) and its platform package is installed |
   | 4 | the binary bundled in the `.vsix` |
 
   The workspace's own CLI comes first so the editor and `reactogenic check`
@@ -391,7 +396,8 @@ published to npm.
   and where it was found, and warns when the workspace CLI was skipped as too
   old — the editor then runs a newer transpiler than that project's `check`.
   A path from row 1 or 2 that does not exist is an error, not a
-  fall-through. The server restarts when a lockfile or a `reactogenic.server.*`
+  fall-through; so is a chosen binary that does not start (one from before
+  `lsp`). The server restarts when a lockfile or a `reactogenic.server.*`
   setting changes, and when the workspace becomes trusted. On Windows a
   workspace binary runs from a copy, so `pnpm install` can replace it.
 - **Trust**: an untrusted workspace gets highlighting only — the server reads
@@ -469,5 +475,5 @@ deferred tree-sitter grammar (JetBrains takes the TextMate one).
 | server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus one smoke scenario through the built binary. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events; it fails the test on a server request it did not answer |
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
-| extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result |
+| extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result; a second, untrusted window: no server process. The suite also runs against a packaged `.vsix` and its bundled binary |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |

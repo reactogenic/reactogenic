@@ -787,7 +787,54 @@ Enter. `.vscodeignore` and the manifest's commands, task and matcher are
   nothing.
 - Depends on: 100.
 
-### RGP1-110 — VS Code extension · L
+### RGP1-110 — VS Code extension · L · done (the slot-term diagnostic test waits for 107; *Show transpiled TSX* for 108)
+Built ahead of 107 and 108, against the server of 105. `src/` (eight files,
+one 450 KiB CommonJS bundle): the client over stdio, attached to `rtsx` on
+`file` and `untitled`; the resolver of ide.md's table, without a `vscode`
+import; the status item; restarts; closing tags; the two commands; the
+`check` task and `$reactogenic`. The server's pull diagnostics and the
+matcher share one owner, so an opened document's diagnostics replace what
+the task left for it. No binary found (the universal `.vsix` in a project
+without the CLI) is a quiet state — the status item says so, no notification
+— and was not run in the editor.
+*Unit tests* (61, in `pnpm test`): the order of the table; a missing explicit
+path is an error; the walk up through npm's and pnpm's layouts and this
+repository's own install; the version gate (`alpha.10` > `alpha.9`, 19
+pairs); trust; the Windows copy (platform injected, on macOS); the matcher
+against the output of `reactogenic check --pretty=false` on `test/fixture`,
+built from the checkout. Eight mutants of the resolver: all killed.
+*Editor suite* (`pnpm test:editor`; VS Code 1.140.0, macOS arm64, isolated
+profile, two windows, about 10 s): trusted — 13 pass, 1 skipped: language id;
+one server process (counted with `ps`), named by the status item; exactly one
+hover and one definition at `<$Icon`; `>` after `<$Icon { size }` inserts
+`</$Icon>` with the cursor between; nothing with the setting off; Toggle Line
+Comment writes `{/* some text */}`; the task reports `undeclared-slot` at 9:10
+of a closed document; TS2322 from the server at its `.rtsx` position; a
+setting change, a lockfile change and the command each restart; a missing
+path, and a binary without `lsp`, are errors. Untrusted — 3 pass: restricted
+mode, language id `rtsx`, no server process, also after *Restart Server*.
+The same suite passes against the packaged darwin-arm64 `.vsix` with its
+bundled binary.
+*Packaging* (`pnpm package`): built and inspected for darwin-arm64 (9.5 MB;
+the binary 28.3 MB, executable bit kept, `TargetPlatform` set) and universal
+(135 KB, no binary); each staged in a clean folder with `LICENSE`, the
+grammar's and the bundle's notices (nine npm packages), and — with a binary —
+tsgo's `LICENSE` and `NOTICE`.
+*Found on the way*: the fork answers an unknown method with InvalidRequest
+(-32600), not MethodNotFound — the client reads both as "too old";
+`@vscode/test-electron`'s runner always disables workspace trust, so the
+suite launches VS Code itself; after a snippet inserted at the cursor,
+`editor.selection` in the extension host lags, so the test types the next
+character instead.
+*Left*: the skipped test `TODO(RGP1-107)` (the server reports TS2322 at
+`$Badge` today, not `undeclared-slot`); the "shown" branch of *Show
+transpiled TSX*, never run (108); the `vscode` CI job and Linux under `xvfb`
+were never run — nothing is pushed; the other five platform `.vsix` were not
+built; the Windows copy was not run on Windows; the restart on a trust grant
+is wired and not tested (no API grants trust); `MIN_CLI_VERSION` is
+`0.1.0-alpha.1`, to be the first release with `lsp` (113); the Go modules'
+notices are missing from the binary's licences, as in the npm packages; the
+Marketplace page (README for users, icon, changelog) is 113's.
 - `packages/vscode`: manifest (ide.md, *Contributes*), client, binary
   resolution, status item, restart triggers, commands, closing-tag
   insertion, the `check` task and matcher, packaging per platform plus
