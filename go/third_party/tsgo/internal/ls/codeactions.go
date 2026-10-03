@@ -86,6 +86,9 @@ func (l *LanguageService) ProvideCodeActions(ctx context.Context, params *lsprot
 			matchingKinds := getOrganizeImportsActionsForKind(kind)
 			for _, matchingKind := range matchingKinds {
 				organizeAction := l.createOrganizeImportsAction(ctx, program, file, matchingKind)
+				if organizeAction == nil { // rtsx
+					continue
+				}
 				actions = append(actions, *organizeAction)
 			}
 
@@ -354,6 +357,12 @@ func (l *LanguageService) createOrganizeImportsAction(
 		kind,
 	)
 	if len(changes) == 0 {
+		// rtsx: in a content-mapped file no edits means edits that could not be written back
+		// (OrganizeImports) — an import the mapper generated stands in the import block. An action
+		// that would silently do nothing is not offered.
+		if file.SpanMap() != nil {
+			return nil
+		}
 		return &lsproto.CommandOrCodeAction{
 			CodeAction: &lsproto.CodeAction{
 				Title: title,

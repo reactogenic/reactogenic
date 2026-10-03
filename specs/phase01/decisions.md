@@ -374,7 +374,8 @@ when the element is emitted self-closing — tags are paired on the source
 tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
 server only after migrating `check` — a bare server now comes first.
 
-**Patched upstream files** (about 130 lines; all in fast-moving packages):
+**Patched upstream files** (about 130 lines planned; 265 after the review of
+102–105, with 106–108 still to add theirs; all in fast-moving packages):
 
 | File | Change |
 | --- | --- |
@@ -386,10 +387,17 @@ server only after migrating `check` — a bare server now comes first.
 | `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
 | `ls/diagnostics.go` | the reporting hook |
 | `ls/rename.go` | rename locations before write-back |
-| `ls/syntactic.go` (new) | folding, selection ranges, closing tags on a source file |
-| `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files |
-| `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly |
-| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info |
+| `ls/syntactic.go` (new) | document symbols, folding, selection ranges, closing tags on a source file |
+| `ls/symbols.go` | workspace symbols collected from the embedder's files only, before the cut to 256; slot params are not document symbols |
+| `ls/file_rename.go` | which edits of a file rename are made, per import (`FileRenameEdits`); specifiers written for the files as they will be after the rename; a generated import left out |
+| `ls/autoimport/fix.go` | a generated import is no existing import: a name from its module gets a declaration of its own |
+| `ls/change/tracker.go` | an import inserted at the top of a text that is only comments: no index past its end (an upstream panic; in a mapped file, on every completion) |
+| `ls/inlay_hints.go` | each hint once; none on a generated call |
+| `ls/codeactions.go` | no organize-imports action without an edit in a mapped file |
+| `ls/definition.go` | a mapped module reached by a non-relative specifier: the file's start |
+| `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files; the extension kept next to a built-in sibling, decided on the module's absolute path |
+| `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly; in generated text before the whole source, one that the mapper names (where a statement can go) is the source's start |
+| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename |
 
 **Cost accepted:** the stripped binary grows about 45% with the language
 service linked in (19 → 28 MB, darwin-arm64); the patches above must be

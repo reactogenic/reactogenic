@@ -1760,7 +1760,9 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
 	}
 	s.session.InitializeWithUserConfig(userPreferences)
 
-	_, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
+	if s.embedder != nil { // rtsx: only where the client supports it, and without waiting
+		s.embedder.watchConfiguration(s)
+	} else if _, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
 		Registrations: []*lsproto.Registration{
 			{
 				Id: "typescript-config-watch-id",
@@ -1773,8 +1775,7 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
 				},
 			},
 		},
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("failed to register configuration change watcher: %w", err)
 	}
 
@@ -1997,7 +1998,7 @@ func (s *Server) handleWillRenameFilesWorker(ctx context.Context, params *lsprot
 
 	for _, languageService := range services {
 		for _, file := range params.Files {
-			changes := languageService.GetEditsForFileRename(ctx, file.OldUri, file.NewUri)
+			changes := languageService.GetEditsForFileRename(ctx, file.OldUri, file.NewUri, s.embedder.renameEdits(sendRenameFile)) // rtsx
 			for _, change := range changes {
 				if change.RenameFile != nil {
 					if !seenRenames[change.RenameFile.OldUri] {
@@ -2170,6 +2171,7 @@ func (s *Server) handleWorkspaceSymbol(ctx context.Context, params *lsproto.Work
 			snapshot.Converters(),
 			snapshot.UserPreferences(),
 			params.Query,
+			s.embedder.symbolFiles(), // rtsx
 		)
 	}
 	if params.TextDocument != nil && s.session.Config().WorkspaceSymbolsScope == lsutil.WorkspaceSymbolsScopeCurrentProject {

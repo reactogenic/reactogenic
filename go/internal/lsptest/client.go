@@ -1,8 +1,13 @@
 // Package lsptest is an LSP client for tests (specs/phase01/ide.md,
 // *Testing*): it runs a server in-process over a pipe — so the race
 // detector sees it — and behaves as VS Code does: UTF-16 positions, pull
-// diagnostics with refresh, watched-file events it sends itself. A server
-// request it does not know fails the test.
+// diagnostics with refresh, watched-file events it sends itself, the
+// capabilities that change a server's answers (hierarchical symbols, line
+// folding, resolved completion items, code action literals, document
+// changes), the user's settings on workspace/configuration, and `exit` with
+// the pipes still open. A server request it does not know fails the test.
+// A change on disk is reported only where the server watches: a watcher it
+// registered matches the path.
 package lsptest
 
 import (
@@ -11,8 +16,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,8 +44,13 @@ type Client struct {
 	pending       map[int]chan response
 	docs          map[string]string // open documents, by path relative to Root
 	versions      map[string]int
-	Registrations []string // methods the server registered dynamically
-	Refreshes     int      // workspace/diagnostic/refresh requests received
+	options       Options
+	registrations []string                    // what the server registered dynamically: `method id`
+	watches       bool                        // the client takes file watchers (workspace.didChangeWatchedFiles)
+	watchers      map[string][]*regexp.Regexp // the globs of each registered file watcher, by registration id
+	asked         []string                    // the methods of the server's requests
+	logs          []string                    // the server's window/logMessage texts
+	Refreshes     int                         // workspace/diagnostic/refresh requests received
 	// Initialized is the server's answer to initialize.
 	Initialized struct {
 		ServerInfo struct {
@@ -58,12 +70,32 @@ type response struct {
 	}
 }
 
+// Options vary a session from VS Code's.
+type Options struct {
+	// Settings are the user's settings, by section ("typescript", "editor",
+	// …): the answers to workspace/configuration.
+	Settings map[string]any
+	// Capabilities edits the client capabilities before initialize: another
+	// editor.
+	Capabilities func(capabilities map[string]any)
+	// Silent names the server requests this client never answers.
+	Silent func(method string) bool
+	// ProcessID is the client's process id in initialize; 0 is null.
+	ProcessID int
+}
+
 // Start runs serve on root and performs the initialize handshake.
 func Start(t *testing.T, root string, serve Serve) *Client {
 	t.Helper()
+	return StartWith(t, root, serve, Options{})
+}
+
+// StartWith is Start for a client that differs from VS Code.
+func StartWith(t *testing.T, root string, serve Serve, options Options) *Client {
+	t.Helper()
 	toServer, clientW := io.Pipe()
 	clientR, fromServer := io.Pipe()
-	c := &Client{t: t, Root: filepath.ToSlash(root), w: clientW, pending: map[int]chan response{}, docs: map[string]string{}, versions: map[string]int{}, done: make(chan error, 1)}
+	c := &Client{t: t, Root: filepath.ToSlash(root), w: clientW, pending: map[int]chan response{}, docs: map[string]string{}, versions: map[string]int{}, watchers: map[string][]*regexp.Regexp{}, options: options, done: make(chan error, 1)}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		c.done <- serve(ctx, toServer, fromServer, io.Discard, c.Root)
@@ -71,50 +103,109 @@ func Start(t *testing.T, root string, serve Serve) *Client {
 	}()
 	go c.read(bufio.NewReader(clientR))
 	t.Cleanup(func() {
-		c.Request("shutdown", nil, nil)
+		// As an editor stops a server: shutdown, exit, and only then — the
+		// server gone — the pipes.
+		if err := c.Try("shutdown", nil, nil); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
 		c.Notify("exit", nil)
-		clientW.Close()
 		select {
-		case <-c.done:
+		case err := <-c.done:
+			if err != nil {
+				t.Errorf("the server ended with %v", err)
+			}
 		case <-time.After(10 * time.Second):
 			t.Error("the server did not stop after exit")
 		}
+		clientW.Close()
 		cancel()
 	})
 
-	c.Request("initialize", map[string]any{
-		"processId":        nil,
-		"rootUri":          c.URI(""),
-		"workspaceFolders": []any{map[string]any{"uri": c.URI(""), "name": "test"}},
-		"capabilities": map[string]any{
-			"general": map[string]any{"positionEncodings": []string{"utf-16"}},
-			"window":  map[string]any{"workDoneProgress": true},
-			"workspace": map[string]any{
-				"configuration":         true,
-				"workspaceFolders":      true,
-				"didChangeWatchedFiles": map[string]any{"dynamicRegistration": true},
-				"diagnostics":           map[string]any{"refreshSupport": true},
-			},
-			"textDocument": map[string]any{
-				"synchronization": map[string]any{"dynamicRegistration": true},
-				"diagnostic":      map[string]any{"dynamicRegistration": true},
-				"hover":           map[string]any{"dynamicRegistration": true, "contentFormat": []string{"markdown", "plaintext"}},
-				"completion":      map[string]any{"dynamicRegistration": true},
-				"definition":      map[string]any{"dynamicRegistration": true, "linkSupport": true},
-				"rename":          map[string]any{"dynamicRegistration": true, "prepareSupport": true},
-				"foldingRange":    map[string]any{"dynamicRegistration": true},
-				"semanticTokens": map[string]any{
-					"dynamicRegistration": true,
-					"requests":            map[string]any{"full": true, "range": true},
-					"formats":             []string{"relative"},
-					"tokenTypes":          []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
-					"tokenModifiers":      []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
-				},
+	capabilities := map[string]any{
+		"general": map[string]any{"positionEncodings": []string{"utf-16"}},
+		"window":  map[string]any{"workDoneProgress": true},
+		"workspace": map[string]any{
+			"configuration":          true,
+			"workspaceFolders":       true,
+			"didChangeConfiguration": map[string]any{"dynamicRegistration": true},
+			"didChangeWatchedFiles":  map[string]any{"dynamicRegistration": true},
+			"diagnostics":            map[string]any{"refreshSupport": true},
+			"workspaceEdit":          map[string]any{"documentChanges": true},
+		},
+		"textDocument": map[string]any{
+			"synchronization": map[string]any{"dynamicRegistration": true},
+			"diagnostic":      map[string]any{"dynamicRegistration": true},
+			"hover":           map[string]any{"dynamicRegistration": true, "contentFormat": []string{"markdown", "plaintext"}},
+			"completion": map[string]any{"dynamicRegistration": true, "completionItem": map[string]any{
+				"resolveSupport": map[string]any{"properties": []string{"documentation", "detail", "additionalTextEdits"}},
+			}},
+			"definition":     map[string]any{"dynamicRegistration": true, "linkSupport": true},
+			"rename":         map[string]any{"dynamicRegistration": true, "prepareSupport": true},
+			"documentSymbol": map[string]any{"dynamicRegistration": true, "hierarchicalDocumentSymbolSupport": true},
+			"foldingRange":   map[string]any{"dynamicRegistration": true, "lineFoldingOnly": true},
+			"codeAction": map[string]any{"dynamicRegistration": true, "codeActionLiteralSupport": map[string]any{"codeActionKind": map[string]any{
+				"valueSet": []string{"", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"},
+			}}},
+			"semanticTokens": map[string]any{
+				"dynamicRegistration": true,
+				"requests":            map[string]any{"full": true, "range": true},
+				"formats":             []string{"relative"},
+				"tokenTypes":          []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
+				"tokenModifiers":      []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
 			},
 		},
+	}
+	if options.Capabilities != nil {
+		options.Capabilities(capabilities)
+	}
+	if workspace, ok := capabilities["workspace"].(map[string]any); ok {
+		watched, _ := workspace["didChangeWatchedFiles"].(map[string]any)
+		c.watches, _ = watched["dynamicRegistration"].(bool)
+	}
+	var processID any
+	if options.ProcessID != 0 {
+		processID = options.ProcessID
+	}
+	c.Request("initialize", map[string]any{
+		"processId":        processID,
+		"rootUri":          c.URI(""),
+		"workspaceFolders": []any{map[string]any{"uri": c.URI(""), "name": "test"}},
+		"capabilities":     capabilities,
 	}, &c.Initialized)
 	c.Notify("initialized", map[string]any{})
 	return c
+}
+
+// Registrations is what the server has registered dynamically so far, as
+// `method id`.
+func (c *Client) Registrations() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.registrations...)
+}
+
+// Asked is the methods of the requests the server has sent so far.
+func (c *Client) Asked() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.asked...)
+}
+
+// Logs is what the server has logged so far (window/logMessage): the output
+// panel of the editor.
+func (c *Client) Logs() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.logs...)
+}
+
+// Configure changes the user's settings, as the editor does: the server is
+// told, and asks again.
+func (c *Client) Configure(settings map[string]any) {
+	c.mu.Lock()
+	c.options.Settings = settings
+	c.mu.Unlock()
+	c.Notify("workspace/didChangeConfiguration", map[string]any{"settings": settings})
 }
 
 func (c *Client) read(r *bufio.Reader) {
@@ -156,8 +247,16 @@ func (c *Client) read(r *bufio.Reader) {
 		switch {
 		case msg.Method != "" && msg.ID != nil:
 			c.serverRequest(*msg.ID, msg.Method, msg.Params)
+		case msg.Method == "window/logMessage":
+			var p struct {
+				Message string `json:"message"`
+			}
+			json.Unmarshal(msg.Params, &p)
+			c.mu.Lock()
+			c.logs = append(c.logs, p.Message)
+			c.mu.Unlock()
 		case msg.Method != "":
-			// A notification: logs, telemetry, progress.
+			// A notification: telemetry, progress.
 		case msg.ID != nil:
 			var id int
 			json.Unmarshal(*msg.ID, &id)
@@ -174,28 +273,67 @@ func (c *Client) read(r *bufio.Reader) {
 
 // serverRequest answers what a server may ask of a client.
 func (c *Client) serverRequest(id json.RawMessage, method string, params json.RawMessage) {
+	c.mu.Lock()
+	c.asked = append(c.asked, method)
+	c.mu.Unlock()
+	if c.options.Silent != nil && c.options.Silent(method) {
+		return
+	}
 	var result any
 	switch method {
 	case "workspace/configuration":
 		var p struct {
-			Items []json.RawMessage `json:"items"`
+			Items []struct {
+				Section string `json:"section"`
+			} `json:"items"`
 		}
 		json.Unmarshal(params, &p)
-		result = make([]any, len(p.Items))
+		sections := make([]any, len(p.Items))
+		c.mu.Lock()
+		for i, item := range p.Items {
+			sections[i] = c.options.Settings[item.Section] // nil: the section is not set
+		}
+		c.mu.Unlock()
+		result = sections
 	case "client/registerCapability":
 		var p struct {
 			Registrations []struct {
-				ID     string `json:"id"`
-				Method string `json:"method"`
+				ID      string `json:"id"`
+				Method  string `json:"method"`
+				Options struct {
+					Watchers []struct {
+						GlobPattern json.RawMessage `json:"globPattern"`
+					} `json:"watchers"`
+				} `json:"registerOptions"`
 			} `json:"registrations"`
 		}
 		json.Unmarshal(params, &p)
 		c.mu.Lock()
 		for _, r := range p.Registrations {
-			c.Registrations = append(c.Registrations, r.Method+" "+r.ID)
+			c.registrations = append(c.registrations, r.Method+" "+r.ID)
+			if r.Method != "workspace/didChangeWatchedFiles" {
+				continue
+			}
+			globs := []*regexp.Regexp{}
+			for _, w := range r.Options.Watchers {
+				globs = append(globs, globRegexp(globPattern(w.GlobPattern)))
+			}
+			c.watchers[r.ID] = globs
 		}
 		c.mu.Unlock()
-	case "client/unregisterCapability", "window/workDoneProgress/create",
+	case "client/unregisterCapability":
+		var p struct {
+			Unregistrations []struct {
+				ID string `json:"id"`
+			} `json:"unregisterations"` // as the protocol spells it
+		}
+		json.Unmarshal(params, &p)
+		c.mu.Lock()
+		for _, r := range p.Unregistrations {
+			delete(c.watchers, r.ID)
+		}
+		c.mu.Unlock()
+	case "window/workDoneProgress/create",
 		"workspace/inlayHint/refresh", "workspace/semanticTokens/refresh", "workspace/codeLens/refresh":
 	case "workspace/diagnostic/refresh":
 		c.mu.Lock()
@@ -248,15 +386,32 @@ func (c *Client) Request(method string, params, result any) {
 // Try is Request, returning the server's error.
 func (c *Client) Try(method string, params, result any) error {
 	c.t.Helper()
+	return c.Start(method, params).Wait(result)
+}
+
+// Pending is a request that is sent and not yet answered.
+type Pending struct {
+	ID     int
+	answer chan response
+}
+
+// Start sends a request without waiting for its answer: what follows may
+// cancel it, or overtake it.
+func (c *Client) Start(method string, params any) *Pending {
 	c.mu.Lock()
 	c.next++
-	id := c.next
-	ch := make(chan response, 1)
-	c.pending[id] = ch
+	p := &Pending{ID: c.next, answer: make(chan response, 1)}
+	c.pending[p.ID] = p.answer
 	c.mu.Unlock()
-	c.send(message(&id, method, params))
+	c.send(message(&p.ID, method, params))
+	return p
+}
+
+// Wait decodes the answer's result into result (may be nil), or returns the
+// server's error.
+func (p *Pending) Wait(result any) error {
 	select {
-	case r, ok := <-ch:
+	case r, ok := <-p.answer:
 		if !ok {
 			return fmt.Errorf("the server closed the connection")
 		}
@@ -280,9 +435,16 @@ func (c *Client) URI(rel string) string {
 	return "file://" + c.Root + "/" + rel
 }
 
-// Rel is the path relative to the root of a file URI.
+// Rel is the path relative to the root of a file URI — of its path, not of
+// its spelling: a server writes `,` as `%2C`, as VS Code does. A URI that is
+// not under the root is returned as it is.
 func (c *Client) Rel(uri string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(uri, "file://"+c.Root), "/")
+	if u, err := url.Parse(uri); err == nil && u.Scheme == "file" {
+		if rel, ok := strings.CutPrefix(u.Path, c.Root); ok && (rel == "" || rel[0] == '/') {
+			return strings.TrimPrefix(rel, "/")
+		}
+	}
+	return uri
 }
 
 func languageID(rel string) string {
@@ -339,8 +501,103 @@ func (c *Client) Change(rel, text string) {
 	})
 }
 
-// WriteFile writes a file on disk and tells the server, as a file watcher
-// does. kind: 1 created, 2 changed.
+// globPattern is the glob of a file watcher as one string: a pattern, or a
+// pattern relative to a base URI (or to a workspace folder's).
+func globPattern(raw json.RawMessage) string {
+	var pattern string
+	if json.Unmarshal(raw, &pattern) == nil {
+		return pattern
+	}
+	var relative struct {
+		BaseURI json.RawMessage `json:"baseUri"`
+		Pattern string          `json:"pattern"`
+	}
+	json.Unmarshal(raw, &relative)
+	var base string
+	if json.Unmarshal(relative.BaseURI, &base) != nil {
+		var folder struct {
+			URI string `json:"uri"`
+		}
+		json.Unmarshal(relative.BaseURI, &folder)
+		base = folder.URI
+	}
+	return strings.TrimSuffix(base, "/") + "/" + relative.Pattern
+}
+
+// globRegexp compiles an LSP glob — `*`, `?`, `**`, `{a,b}`, `[a-z]` — over
+// a path; a glob that is a file URI is one over its path.
+func globRegexp(glob string) *regexp.Regexp {
+	if u, err := url.Parse(glob); err == nil && u.Scheme == "file" {
+		glob = u.Path
+	}
+	var re strings.Builder
+	re.WriteString("^")
+	braces := 0
+	for i := 0; i < len(glob); i++ {
+		switch ch := glob[i]; {
+		case strings.HasPrefix(glob[i:], "**/"):
+			re.WriteString("(?:.*/)?")
+			i += 2
+		case strings.HasPrefix(glob[i:], "**"):
+			re.WriteString(".*")
+			i++
+		case ch == '*':
+			re.WriteString("[^/]*")
+		case ch == '?':
+			re.WriteString("[^/]")
+		case ch == '{':
+			re.WriteString("(?:")
+			braces++
+		case ch == '}' && braces > 0:
+			re.WriteString(")")
+			braces--
+		case ch == ',' && braces > 0:
+			re.WriteString("|")
+		case ch == '[' && strings.IndexByte(glob[i:], ']') > 1:
+			end := i + strings.IndexByte(glob[i:], ']')
+			re.WriteString("[" + strings.Replace(glob[i+1:end], "!", "^", 1) + "]")
+			i = end
+		default:
+			re.WriteString(regexp.QuoteMeta(string(ch)))
+		}
+	}
+	re.WriteString("$")
+	compiled, err := regexp.Compile(re.String())
+	if err != nil {
+		return regexp.MustCompile(`a^`) // matches nothing
+	}
+	return compiled
+}
+
+// watchedFile tells the server of a change on disk, as the editor's file
+// watcher does: when a watcher the server registered matches the path, and
+// not otherwise (kind: 1 created, 2 changed, 3 deleted). The server registers
+// its watchers in the background, so a client that takes watchers waits for
+// one that matches.
+func (c *Client) watchedFile(rel string, kind int) {
+	path := c.Root + "/" + rel
+	watched := func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for _, globs := range c.watchers {
+			for _, glob := range globs {
+				if glob.MatchString(path) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for deadline := time.Now().Add(10 * time.Second); !watched(); time.Sleep(5 * time.Millisecond) {
+		if !c.watches || time.Now().After(deadline) {
+			return // nobody watches this file: the server is not told
+		}
+	}
+	c.Notify("workspace/didChangeWatchedFiles", map[string]any{"changes": []any{map[string]any{"uri": c.URI(rel), "type": kind}}})
+}
+
+// WriteFile writes a file on disk; the server is told as a file watcher
+// tells it (watchedFile).
 func (c *Client) WriteFile(rel, text string) {
 	p := filepath.Join(c.Root, rel)
 	kind := 2
@@ -351,15 +608,15 @@ func (c *Client) WriteFile(rel, text string) {
 	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 		c.t.Fatal(err)
 	}
-	c.Notify("workspace/didChangeWatchedFiles", map[string]any{"changes": []any{map[string]any{"uri": c.URI(rel), "type": kind}}})
+	c.watchedFile(rel, kind)
 }
 
-// RemoveFile deletes a file on disk and tells the server.
+// RemoveFile deletes a file on disk; the server is told as WriteFile tells it.
 func (c *Client) RemoveFile(rel string) {
 	if err := os.Remove(filepath.Join(c.Root, rel)); err != nil {
 		c.t.Fatal(err)
 	}
-	c.Notify("workspace/didChangeWatchedFiles", map[string]any{"changes": []any{map[string]any{"uri": c.URI(rel), "type": 3}}})
+	c.watchedFile(rel, 3)
 }
 
 // Position is an LSP position: zero-based line, UTF-16 character.

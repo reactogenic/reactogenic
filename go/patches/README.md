@@ -10,11 +10,11 @@ every change we make to it.
 | --- | --- |
 | `0001-rtsx-bridge.patch` | adds `rtsx/`, the public bridge our module imports tsgo's `internal/` packages through (decisions.md, RGP1-003) |
 | `0002-rtsx-parser.patch` | slot params `{ size }` in JSX attribute position, under the parse option `RTSX` (decisions.md, RGP1-020) |
-| `0003-rtsx-program.patch` | adds `rtsx/program.go`: the program, file-system overlay and checker bridge (RGP1-050/051) |
-| `0004-rtsx-mapper.patch` | a content mapper built into the binary (`contentmapper/builtin.go`, `rtsx/mapper.go`, `rtsx/spanmap.go`): tsconfig parsing, the session and inferred projects use it without `runExternalCode`; its file system, per-file identity and `Extra`; a position at the end of verbatim text maps back exactly (specs/phase01/ide.md, *The engine*; RGP1-102/103/105) |
+| `0003-rtsx-program.patch` | adds `rtsx/program.go`: the program — a referenced project's modules read from source, as in the server — the file-system overlay and checker bridge (RGP1-050/051) |
+| `0004-rtsx-mapper.patch` | a content mapper built into the binary (`contentmapper/builtin.go`, `rtsx/mapper.go`, `rtsx/spanmap.go`): tsconfig parsing, the session and inferred projects use it without `runExternalCode`; its file system, per-file identity and `Extra`; the registered mapper is one value (a project compares mappers by identity); a position at the end of verbatim text maps back exactly, and, in generated text that precedes the whole source, one that the mapper names (`MapperResult.StatementStarts`: where a statement can be inserted) is the source's start (specs/phase01/ide.md, *The engine*; RGP1-102/103/105) |
 | `0005-rtsx-resolver.patch` | an extensionless import finds a content-mapped file, after every built-in extension |
-| `0006-rtsx-lsp.patch` | `lsp.Embedder` and `rtsx/server`: the language server for a host with a built-in mapper — static capabilities, no formatting, its own server info (RGP1-103); `ls/syntactic.go`: folding, selection ranges and closing tags on a source tree that is in no program (RGP1-105) |
-| `0007-rtsx-specifiers.patch` | the minimal module-specifier ending drops a content-mapped extension (`./button`), as the resolver finds the file without it |
+| `0006-rtsx-lsp.patch` | `lsp.Embedder` and `rtsx/server`: the language server for a host with a built-in mapper — static capabilities (the configuration watcher only for a client that declares it, not awaited), no formatting, code lens or upstream-extension requests, its own server info, the parent-process hook (RGP1-103); `ls/syntactic.go`: document symbols, folding, selection ranges and closing tags on a source tree that is in no program; `ApplyChange`: a ranged document change as the server applies it; `Embedder.Owns`: workspace symbols (`ls/symbols.go`) and file-rename edits (`ls/file_rename.go`) narrowed to the host's files inside the server, and `.rtsx` and folders in the rename filters; a file rename's specifiers written for the files as they will be, a generated import left out of it; a generated import is no existing import to an import fix (`ls/autoimport/fix.go`); an import inserted at the top of a text that is only comments (`ls/change/tracker.go`: upstream indexes past the text — for a mapped file on every completion request); inlay hints once each and none on a generated call (`ls/inlay_hints.go`); no organize-imports action with nothing in it (`ls/codeactions.go`); definition on a non-relative specifier of a mapped module (`ls/definition.go`) (RGP1-105) |
+| `0007-rtsx-specifiers.patch` | the minimal module-specifier ending drops a content-mapped extension (`./button`), as the resolver finds the file without it — unless a built-in sibling of the module (looked up by its absolute path) would win the import |
 
 ## Changing tsgo
 
@@ -59,3 +59,12 @@ and regenerate it as in step 2, after committing the re-vendored tree.
 Tests (`*_test.go`), `testdata/` and test-only packages are not vendored
 (`go/scripts/tsgo-exclude.txt`): upstream's CI runs them. Our changes are
 covered by our own tests.
+
+## Known upstream defects
+
+Defects of the pinned upstream commit that our tests meet and do not patch.
+RGP1-114 (re-vendor) re-checks each: when one is gone, its tolerance goes.
+
+| Defect | Seen | Tolerated by |
+| --- | --- | --- |
+| `textDocument/signatureHelp` panics — `Debug failure. False expression: Not a subspan. Child: KindLessThanEqualsToken, parent: KindJsxSelfClosingElement` — right after a `<` typed behind a JSX attribute name (`<Action variant<="solid">`; `<` is a signature-help trigger character). The request is answered with an InternalError; the server goes on | the same in a plain `.tsx` file: not ours | `TestTypingNeverFails` (exactly this message, on signature help only); pinned by `TestUpstreamSignatureHelpPanic` (`go/internal/lsp/features_test.go`) |

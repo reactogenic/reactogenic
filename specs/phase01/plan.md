@@ -680,6 +680,19 @@ gathers mappers: tsconfig parsing, the session's host, inferred projects.
 `lsp.Embedder` gives the server static capabilities and our server info. All
 three project shapes passed on the first run. `GOWORK=off` builds (CI checks
 it); the binary is 39.6 MB unstripped. Patches 0004–0006.
+Review (4.8, 4.9, 3.6, 3.12): the ends of the process are the front's —
+`exit` in any state, LSP's exit statuses, input that is not LSP reported, a
+watchdog on the client's process (`--clientProcessId`), no goroutine left
+behind. The configuration watcher is registered only with a client that
+declares it, and never awaited. Code lens, `_vs_references` and
+`experimental` are taken out in the bridge; a test holds the capability
+keys to ide.md's table. The test client is VS Code's in what changes a
+server's answers, and a bare connection drives the bad endings.
+Second pass: stopped by the watchdog, the server gives its output queue one
+second and ends — a killed editor's unread answers kept it alive for good
+when another process held the pipe. The test client reports a change on
+disk only where a watcher the server registered matches the path, and
+compares URIs as paths (a server writes `,` as `%2C`).
 The least-proven bet first: the built-in mapper inside the fork's project
 system.
 - Patches (decisions.md, *Patched upstream files*): built-in mappers in
@@ -780,6 +793,72 @@ OPENs of ide.md are settled by patches: specifiers are extensionless
 (0007), and a cursor at the end of copied text maps back exactly, which
 restores auto-import where identifiers are typed. 1,308 requests over typing
 mutants: none fails.
+Review (4.1, 4.2, 4.6, 4.7): the front's parse takes no file name — a
+document's URI is not one, and `untitled:new.rtsx` killed the server — and
+a panic in the front is an error answer. `untitled:` leaves the client's
+selector. An awaited request is forgotten on any answer. A ranged change
+goes through `rtsx/server.ApplyChange`, the server's own line map; one with
+a position no document has is dropped before the server (upstream dies of a
+line beyond int32). Implementation, call hierarchy and linked editing have
+rows in ide.md's table, and scenarios.
+Review, the fork (1.3–1.8, 3.1–3.5, 3.10, 4.3–4.5):
+- *Specifiers*: the sibling guard probed a relative path against the
+  server's directory, so `./button` was written next to `button.ts`. It is
+  decided on the module's absolute path now, for every kind of specifier.
+- *Auto-import beside a generated import*: the import lands on line 1 in a
+  mounter or container without imports. The first fix mapped every position
+  in generated text before the source to the source's start — so a name
+  that TS adds *into* the generated import (`Each`, `Slot`, a mounted
+  module's export) was written as `, Each` at 1:1. Now the mapper names the
+  positions where a statement can go (the line starts there,
+  `MapperResult.StatementStarts`); any other stays an atom. And a generated
+  import is no existing import to TS's import fixes (`ls/autoimport/fix.go`):
+  such a name gets a declaration of its own — also in a container with
+  imports of its own, where it was never offered.
+- *Document symbols* moved to the source tree, with folding: on the virtual
+  text a declaration that holds any rtsx construct had its name as its
+  range, and generated object keys were symbols.
+- *Inlay hints*: once each (a range maps to many copied runs; each run gave
+  the enclosing function's hints again); none on a generated call.
+- *Organize imports* is not offered next to a generated import, instead of
+  an action with no edit. Deferred — ide.md, *Not in the first release*:
+  making it work needs the generated import on a line of its own
+  (transpiler).
+- *Definition* on a `paths` specifier of an `.rtsx` module.
+- *Workspace symbols and file rename* are narrowed in the fork
+  (`Embedder.Owns`): symbols before the cut to 256; rename per import, so a
+  mixed batch and a folder are right, and the client is asked about folders.
+  The front's two rewrites are gone; `textDocument/rename` on a specifier
+  (a client without `willRenameFiles`) stays whole.
+- *File rename, second pass*: specifiers are written for the files as they
+  will be (`renamedHost`). `util.ts` → `util.rtsx` was its own sibling —
+  still on disk when the server is asked — and every importer got
+  `./util.rtsx`; a folder renamed with `button.rtsx` and `button.ts` in it
+  got `./kit/button`, the sibling's. A generated import is left out of the
+  rewrite: it made every edit of a moved mounter unmappable, so its own
+  imports did not follow it.
+- `BuiltInMappers` is one slice per registration: the inferred project was
+  rebuilt on every open and close. `rtsx.NewProgram` reads a referenced
+  project from source.
+- Deferred — ide.md, *Not in the first release*: auto-import of a
+  dependency's `.rtsx` exports (TS's dependency index has its own host and
+  resolver).
+Review, the missing tests (3.8, 3.11, 3.13, 3.15): project shapes (a
+`contentMappers` entry, `.rtsx` only, `paths`, two projects, composite
+references, `extends`, a loose file) and text shapes (CRLF, a BOM,
+non-ASCII and astral characters, a utf-8 client) as tables; semantic tokens
+by type and none on copied names; a shorthand answering as both symbols;
+arg and slot-attribute names; a built-in sibling winning the import; a
+`.ts` change on disk; a segment file's rename (no edit); a pass made to
+fail keeps the text before it (`transpiler.TestStoppedKeepsPreviousPass`),
+and a panic is caught at the mapper boundary. The typing test runs over the
+conformance corpus with signature help — 15,020 requests — tolerating one
+upstream panic (go/patches/README.md, *Known upstream defects*). Run over
+the transform branch's new fixtures it met a second one, which is patched:
+completion in a file that is only comments (or comments under an import the
+transform drops) was an error — upstream computes an auto-import's edit for
+every item of a mapped file, and indexed past a text with no statement
+(`ls/change/tracker.go`).
 - Folding and selection ranges from the source tree; closing-tag insertion
   (*Tags*); workspace symbols and file rename as in ide.md's table;
   `reactogenic --version`, the same string in `serverInfo` and in the
@@ -833,6 +912,11 @@ mutants: none fails.
 - Slot-name completion; requests on any element of a slot group; `#name`
   definition and completion; the *Rename* table and its post-check;
   `reactogenic/transpiled`.
+- A request on the closing tag name of a component emitted self-closing
+  (all its children are slots: there is no closing name to copy) is answered
+  at its opening tag name, the answer's range set back — the pairing on the
+  source tree that rename needs anyway. Today `</Card>` there answers
+  nothing: pinned by `TestClosingTagOfComponent` (review 3.13).
 - **Done when:** `<$` inside `<Button>` lists exactly its `$` props, also
   after a keyed slot's first entry; hover and rename work from the second
   `<$Column key=…>` and from `</$X>`; definition on `#intro` returns

@@ -3,8 +3,10 @@ package lsp
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,25 +17,36 @@ import (
 // front sits between the client and the fork's server, in this process. It
 // answers what TypeScript cannot answer from the virtual text — the
 // syntactic features, from the .rtsx source tree (ide.md, *Span map*) — and
-// narrows what the server says about files that are not ours: the client
-// attaches it to .rtsx documents only, but workspace-wide answers ignore
-// that (ide.md, *reactogenic lsp*).
+// for that keeps the text of each open .rtsx document. It also ends the
+// session: `exit` is its own, so that it works whatever state the server is
+// in. (What the server says about files that are not ours is narrowed in
+// the server itself: lsp.Embedder.Owns.)
 type front struct {
 	// outgoing queues the messages for the client. Nothing here may block on
 	// writing to the client: the client may itself be blocked writing to us,
 	// and each side would wait for the other to read.
 	outgoing *queue
+	log      io.Writer
 
 	mu              sync.Mutex
 	docs            map[string]string  // open .rtsx documents, by URI
 	pending         map[string]request // forwarded requests whose answers we rewrite, by id
 	encoding        string             // position encoding, from the initialize result
 	lineFoldingOnly bool
+	symbolTree      bool  // the client takes document symbols as a tree
+	shutdown        bool  // the client asked for shutdown
+	ended           error // why fromClient returned: nil (its input ended), errExit, or a framing error
 }
+
+// errExit is the client's `exit` notification.
+var errExit = errors.New("exit")
+
+// newSyntactic parses a document for the features answered here (a variable
+// for the tests of the recover in clientMessage).
+var newSyntactic = server.NewSyntactic
 
 type request struct {
 	Method string
-	Params json.RawMessage
 }
 
 type message struct {
@@ -45,8 +58,8 @@ type message struct {
 	Error   *json.RawMessage `json:"error,omitempty"`
 }
 
-func newFront() *front {
-	return &front{outgoing: newQueue(), docs: map[string]string{}, pending: map[string]request{}, encoding: "utf-16"}
+func newFront(log io.Writer) *front {
+	return &front{outgoing: newQueue(), log: log, docs: map[string]string{}, pending: map[string]request{}, encoding: "utf-16"}
 }
 
 // queue is an unbounded FIFO of message bodies.
@@ -99,11 +112,15 @@ func (q *queue) drain(w io.Writer) error {
 
 func isRTSX(uri string) bool { return strings.HasSuffix(uri, ".rtsx") }
 
-// readFrame reads one LSP message body.
+// readFrame reads one LSP message body. Its error is io.EOF only when the
+// input ends between two messages.
 func readFrame(r *bufio.Reader) ([]byte, error) {
 	length := -1
-	for {
+	for first := true; ; first = false {
 		line, err := r.ReadString('\n')
+		if err == io.EOF && (!first || line != "") {
+			return nil, fmt.Errorf("the input ends inside a message header")
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -111,18 +128,20 @@ func readFrame(r *bufio.Reader) ([]byte, error) {
 		if line == "" {
 			break
 		}
-		if v, ok := strings.CutPrefix(line, "Content-Length:"); ok {
-			if length, err = strconv.Atoi(strings.TrimSpace(v)); err != nil {
-				return nil, err
+		if name, v, ok := strings.Cut(line, ":"); ok && strings.EqualFold(name, "Content-Length") {
+			if length, err = strconv.Atoi(strings.TrimSpace(v)); err != nil || length < 0 {
+				return nil, fmt.Errorf("bad Content-Length %q", strings.TrimSpace(v))
 			}
 		}
 	}
 	if length < 0 {
-		return nil, fmt.Errorf("lsp: message without Content-Length")
+		return nil, fmt.Errorf("a message header without Content-Length")
 	}
 	body := make([]byte, length)
-	_, err := io.ReadFull(r, body)
-	return body, err
+	if _, err := io.ReadFull(r, body); err != nil {
+		return nil, fmt.Errorf("the input ends inside a message body (%d bytes announced)", length)
+	}
+	return body, nil
 }
 
 func writeFrame(w io.Writer, body []byte) error {
@@ -148,28 +167,51 @@ func (f *front) reply(id json.RawMessage, result any) error {
 	return f.toClient(body)
 }
 
+// replyError answers a request with an error.
+func (f *front) replyError(id json.RawMessage, code int, text string) {
+	raw, _ := json.Marshal(map[string]any{"code": code, "message": text})
+	r := json.RawMessage(raw)
+	if body, err := json.Marshal(message{JSONRPC: "2.0", ID: &id, Error: &r}); err == nil {
+		f.toClient(body)
+	}
+}
+
 // fromClient reads the client's messages; those it does not answer itself
-// go on to the server.
-func (f *front) fromClient(in io.Reader, toServer io.WriteCloser) error {
-	defer toServer.Close()
+// go on to the server. It returns at `exit` (errExit), when the input ends
+// (nil) or cannot be read as LSP messages; what it returns is recorded as
+// f.ended before the server's input is closed, so that whoever sees the
+// server stop for that reason finds it there.
+func (f *front) fromClient(in io.Reader, toServer io.WriteCloser) {
+	err := f.readClient(in, toServer)
+	f.mu.Lock()
+	f.ended = err
+	f.mu.Unlock()
+	toServer.Close()
+}
+
+func (f *front) readClient(in io.Reader, toServer io.Writer) error {
 	r := bufio.NewReader(in)
 	for {
 		body, err := readFrame(r)
+		if err == io.EOF {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
 		var msg message
 		if json.Unmarshal(body, &msg) == nil && msg.Method != "" {
-			handled, err := f.clientMessage(msg)
-			if err != nil {
-				return err
+			if msg.Method == "exit" {
+				// Ours: the server takes `exit` only once it is initialized,
+				// and ends when its input does.
+				return errExit
 			}
-			if handled {
+			if f.clientMessage(msg) {
 				continue
 			}
 		}
 		if err := writeFrame(toServer, body); err != nil {
-			return err
+			return nil // the server is gone: Serve is returning
 		}
 	}
 }
@@ -182,14 +224,24 @@ type textDocument struct {
 }
 
 // clientMessage tracks the open .rtsx documents and answers the syntactic
-// requests for them.
-func (f *front) clientMessage(msg message) (handled bool, err error) {
+// requests for them; handled means the message does not go on to the server.
+// A panic here must not end the process, which is the whole server: the
+// request is answered with an InternalError, a notification goes on.
+func (f *front) clientMessage(msg message) (handled bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(f.log, "reactogenic lsp: panic handling %s: %v\n%s\n", msg.Method, r, debug.Stack())
+			if handled = msg.ID != nil; handled {
+				f.replyError(*msg.ID, -32603, fmt.Sprintf("InternalError: panic handling request %s: %v", msg.Method, r))
+			}
+		}
+	}()
 	var doc textDocument
 	json.Unmarshal(msg.Params, &doc)
 	uri := doc.TextDocument.URI
 	f.mu.Lock()
 	text, open := f.docs[uri]
-	encoding, lineFoldingOnly := f.encoding, f.lineFoldingOnly
+	encoding, lineFoldingOnly, symbolTree := f.encoding, f.lineFoldingOnly, f.symbolTree
 	f.mu.Unlock()
 
 	switch msg.Method {
@@ -200,16 +252,22 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 					FoldingRange struct {
 						LineFoldingOnly bool `json:"lineFoldingOnly"`
 					} `json:"foldingRange"`
+					DocumentSymbol struct {
+						Hierarchical bool `json:"hierarchicalDocumentSymbolSupport"`
+					} `json:"documentSymbol"`
 				} `json:"textDocument"`
 			} `json:"capabilities"`
 		}
 		json.Unmarshal(msg.Params, &p)
 		f.mu.Lock()
 		f.lineFoldingOnly = p.Capabilities.TextDocument.FoldingRange.LineFoldingOnly
+		f.symbolTree = p.Capabilities.TextDocument.DocumentSymbol.Hierarchical
 		f.mu.Unlock()
 		f.await(msg)
-	case "workspace/symbol", "workspace/willRenameFiles":
-		f.await(msg)
+	case "shutdown":
+		f.mu.Lock()
+		f.shutdown = true
+		f.mu.Unlock()
 	case "textDocument/didOpen":
 		if isRTSX(uri) {
 			f.mu.Lock()
@@ -217,23 +275,32 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 			f.mu.Unlock()
 		}
 	case "textDocument/didChange":
+		var p struct {
+			ContentChanges []struct {
+				Range json.RawMessage `json:"range"`
+				Text  string          `json:"text"`
+			} `json:"contentChanges"`
+		}
+		json.Unmarshal(msg.Params, &p)
+		for _, change := range p.ContentChanges {
+			if len(change.Range) == 0 || string(change.Range) == "null" {
+				text = change.Text // the sync kind we advertise: the whole document
+				continue
+			}
+			// Not what we advertise, but the server takes a ranged change,
+			// so this copy must: with the server's own line map.
+			changed, err := server.ApplyChange(text, encoding, change.Range, change.Text)
+			if err != nil {
+				// A range no document has (a negative position, one beyond
+				// int32). The server would refuse the notification, or die
+				// of it: it goes no further, for any document, and both
+				// copies stay as they were.
+				fmt.Fprintf(f.log, "reactogenic lsp: textDocument/didChange for %s dropped: %v\n", uri, err)
+				return true
+			}
+			text = changed
+		}
 		if open {
-			var p struct {
-				ContentChanges []struct {
-					Range *struct{ Start, End struct{ Line, Character int } } `json:"range"`
-					Text  string                                              `json:"text"`
-				} `json:"contentChanges"`
-			}
-			json.Unmarshal(msg.Params, &p)
-			for _, change := range p.ContentChanges {
-				if change.Range == nil {
-					text = change.Text // the sync kind we advertise: the whole document
-					continue
-				}
-				start := offsetAt(text, change.Range.Start.Line, change.Range.Start.Character, encoding)
-				end := offsetAt(text, change.Range.End.Line, change.Range.End.Character, encoding)
-				text = text[:start] + change.Text + text[end:]
-			}
 			f.mu.Lock()
 			f.docs[uri] = text
 			f.mu.Unlock()
@@ -244,11 +311,19 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 		f.mu.Unlock()
 	case "textDocument/foldingRange":
 		if open && msg.ID != nil {
-			result, err := server.NewSyntactic(uri, text, encoding).FoldingRanges(lineFoldingOnly)
+			result, err := newSyntactic(text, encoding).FoldingRanges(lineFoldingOnly)
 			if err != nil {
-				return false, nil
+				return false
 			}
-			return true, f.reply(*msg.ID, json.RawMessage(result))
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil
+		}
+	case "textDocument/documentSymbol":
+		if open && msg.ID != nil {
+			result, err := newSyntactic(text, encoding).DocumentSymbols(uri, symbolTree)
+			if err != nil {
+				return false
+			}
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil
 		}
 	case "textDocument/selectionRange":
 		if open && msg.ID != nil {
@@ -256,37 +331,40 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 				Positions json.RawMessage `json:"positions"`
 			}
 			json.Unmarshal(msg.Params, &p)
-			result, err := server.NewSyntactic(uri, text, encoding).SelectionRanges(p.Positions)
+			result, err := newSyntactic(text, encoding).SelectionRanges(p.Positions)
 			if err != nil {
-				return false, nil
+				return false // the server says what is wrong with the request
 			}
-			return true, f.reply(*msg.ID, json.RawMessage(result))
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil
 		}
 	case "textDocument/_vs_onAutoInsert":
 		var p struct {
 			Doc struct {
 				URI string `json:"uri"`
 			} `json:"_vs_textDocument"`
-			Position struct{ Line, Character int } `json:"_vs_position"`
-			Ch       string                        `json:"_vs_ch"`
+			Position json.RawMessage `json:"_vs_position"`
+			Ch       string          `json:"_vs_ch"`
 		}
 		json.Unmarshal(msg.Params, &p)
 		f.mu.Lock()
 		text, open = f.docs[p.Doc.URI]
 		f.mu.Unlock()
 		if open && msg.ID != nil {
+			closing, err := newSyntactic(text, encoding).ClosingTag(p.Position)
+			if err != nil {
+				return false
+			}
 			var result any
-			if closing := server.NewSyntactic(p.Doc.URI, text, encoding).ClosingTag(p.Position.Line, p.Position.Character); p.Ch == ">" && closing != "" {
-				at := map[string]int{"line": p.Position.Line, "character": p.Position.Character}
+			if p.Ch == ">" && closing != "" {
 				result = map[string]any{
 					"_vs_textEditFormat": 2, // a snippet: `$0` keeps the cursor before the tag
-					"_vs_textEdit":       map[string]any{"range": map[string]any{"start": at, "end": at}, "newText": "$0" + snippetText(closing)},
+					"_vs_textEdit":       map[string]any{"range": map[string]any{"start": p.Position, "end": p.Position}, "newText": "$0" + snippetText(closing)},
 				}
 			}
-			return true, f.reply(*msg.ID, result)
+			return f.reply(*msg.ID, result) == nil
 		}
 	}
-	return false, nil
+	return false
 }
 
 // await remembers a forwarded request whose answer is rewritten.
@@ -295,7 +373,7 @@ func (f *front) await(msg message) {
 		return
 	}
 	f.mu.Lock()
-	f.pending[string(*msg.ID)] = request{Method: msg.Method, Params: msg.Params}
+	f.pending[string(*msg.ID)] = request{Method: msg.Method}
 	f.mu.Unlock()
 }
 
@@ -309,12 +387,15 @@ func (f *front) fromServer(out io.Reader) error {
 			return err
 		}
 		var msg message
-		if json.Unmarshal(body, &msg) == nil && msg.Method == "" && msg.ID != nil && msg.Result != nil {
+		if json.Unmarshal(body, &msg) == nil && msg.Method == "" && msg.ID != nil {
+			// Whatever the answer — a result, null, an error — the request is
+			// no longer awaited. The server answers every request, a cancelled
+			// one too, so nothing stays here.
 			f.mu.Lock()
 			req, ok := f.pending[string(*msg.ID)]
 			delete(f.pending, string(*msg.ID))
 			f.mu.Unlock()
-			if ok {
+			if ok && msg.Result != nil {
 				if result, changed := f.answer(req, *msg.Result); changed {
 					msg.Result = &result
 					if rewritten, err := json.Marshal(msg); err == nil {
@@ -347,96 +428,11 @@ func (f *front) answer(req request, result json.RawMessage) (json.RawMessage, bo
 		if sync, ok := caps["textDocumentSync"].(map[string]any); ok {
 			sync["change"] = 1
 		}
-		// File rename: .rtsx too — no other server knows these modules.
-		caps["workspace"] = map[string]any{"fileOperations": map[string]any{"willRename": map[string]any{"filters": []any{
-			map[string]any{"scheme": "file", "pattern": map[string]any{"glob": "**/*.{ts,tsx,js,jsx,cts,cjs,mts,mjs,json,rtsx}"}},
-		}}}}
 		r["capabilities"], _ = json.Marshal(caps)
 		out, err := json.Marshal(r)
 		return out, err == nil
-	case "workspace/symbol":
-		// Symbols declared in .rtsx files; the rest is the user's TypeScript's.
-		var symbols []json.RawMessage
-		if json.Unmarshal(result, &symbols) != nil {
-			return nil, false
-		}
-		kept := []json.RawMessage{}
-		for _, s := range symbols {
-			var symbol struct {
-				Location struct {
-					URI string `json:"uri"`
-				} `json:"location"`
-			}
-			if json.Unmarshal(s, &symbol) == nil && isRTSX(symbol.Location.URI) {
-				kept = append(kept, s)
-			}
-		}
-		out, err := json.Marshal(kept)
-		return out, err == nil
-	case "workspace/willRenameFiles":
-		// A renamed .rtsx: every importer. A renamed .ts/.tsx: the .rtsx
-		// importers only — the user's TypeScript updates the rest.
-		var p struct {
-			Files []struct {
-				OldURI string `json:"oldUri"`
-			} `json:"files"`
-		}
-		json.Unmarshal(req.Params, &p)
-		for _, file := range p.Files {
-			if isRTSX(file.OldURI) {
-				return nil, false
-			}
-		}
-		var edit struct {
-			Changes         map[string]json.RawMessage `json:"changes,omitempty"`
-			DocumentChanges []json.RawMessage          `json:"documentChanges,omitempty"`
-		}
-		if json.Unmarshal(result, &edit) != nil {
-			return nil, false
-		}
-		for uri := range edit.Changes {
-			if !isRTSX(uri) {
-				delete(edit.Changes, uri)
-			}
-		}
-		var kept []json.RawMessage
-		for _, change := range edit.DocumentChanges {
-			var doc textDocument
-			if json.Unmarshal(change, &doc) == nil && isRTSX(doc.TextDocument.URI) {
-				kept = append(kept, change)
-			}
-		}
-		edit.DocumentChanges = kept
-		out, err := json.Marshal(edit)
-		return out, err == nil
 	}
 	return nil, false
-}
-
-// offsetAt is the byte offset of an LSP position in text.
-func offsetAt(text string, line, character int, encoding string) int {
-	offset := 0
-	for ; line > 0; line-- {
-		i := strings.IndexByte(text[offset:], '\n')
-		if i < 0 {
-			return len(text)
-		}
-		offset += i + 1
-	}
-	if encoding == "utf-8" {
-		return min(offset+character, len(text))
-	}
-	units := 0
-	for i, r := range text[offset:] {
-		if units >= character || r == '\n' {
-			return offset + i
-		}
-		units++
-		if r > 0xFFFF {
-			units++
-		}
-	}
-	return len(text)
 }
 
 // snippetText escapes text for an LSP snippet: tag names may hold `$`.

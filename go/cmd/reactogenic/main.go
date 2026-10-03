@@ -20,13 +20,15 @@ import (
 var version = "0.0.0-dev"
 
 const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]
-       reactogenic lsp --stdio
+       reactogenic lsp --stdio [--clientProcessId pid]
        reactogenic serve
        reactogenic --version
 
   check   type-check the project, with .rtsx transpiled; errors are reported
           on the .rtsx files (exit status 1 when there are errors)
-  lsp     the language server for editors (LSP over stdio)
+  lsp     the language server for editors (LSP over stdio); it ends with the
+          client's process: --clientProcessId, else the one named in initialize
+          (exit status 0 after shutdown and exit, 1 otherwise)
   serve   transform .rtsx for the Vite plugin: JSON requests on stdin, one
           response per line on stdout`
 
@@ -58,6 +60,7 @@ func main() {
 func runLSP(args []string) int {
 	flags := flag.NewFlagSet("lsp", flag.ContinueOnError)
 	stdio := flags.Bool("stdio", false, "speak LSP on stdin and stdout")
+	clientProcessID := flags.Int("clientProcessId", 0, "the editor's process: the server ends when it is gone")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -70,7 +73,10 @@ func runLSP(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	if err := lsp.Serve(context.Background(), os.Stdin, os.Stdout, os.Stderr, filepath.ToSlash(cwd), version); err != nil {
+	err = lsp.Serve(context.Background(), os.Stdin, os.Stdout, lsp.Options{Log: os.Stderr, Cwd: filepath.ToSlash(cwd), Version: version, ClientProcessID: *clientProcessID})
+	if err != nil {
+		// LSP: 1 for an exit without shutdown; and for input that is not LSP,
+		// or a client that is gone.
 		fmt.Fprintln(os.Stderr, "reactogenic lsp:", err)
 		return 1
 	}
