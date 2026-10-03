@@ -1,6 +1,7 @@
 package transpiler
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/reactogenic/reactogenic/go/internal/emit"
@@ -101,5 +102,64 @@ func TestReadFile(t *testing.T) {
 	out, err := Transpile(Input{Files: map[string]string{"input.rtsx": "export const a = <section #intro />;\n"}, Entry: "input.rtsx", ReadFile: read})
 	if err != nil || len(out.Diagnostics) != 0 {
 		t.Errorf("got %v %+v", err, out.Diagnostics)
+	}
+}
+
+// ide.md, *Span map* (RGP1-102): names are copied, a shorthand's two copies
+// are listed, and every tag of a slot's elements is in its group.
+func TestEditorExports(t *testing.T) {
+	src := `const size = "lg", v = 1;
+export const a = (
+  <Button size>
+    <$Icon>x</$Icon>
+    <$Icon className="i" />
+  </Button>
+);
+export const b = <i slot={$Icon} &size &&v />;
+`
+	out, err := Transpile(Input{Files: map[string]string{"a.rtsx": src}, Entry: "a.rtsx"})
+	if err != nil || len(out.Diagnostics) > 0 {
+		t.Fatalf("%v %+v", err, out.Diagnostics)
+	}
+	text := func(s emit.Span) string { return src[s.Pos:s.End] }
+
+	var shorthands []string
+	for _, s := range out.Shorthands {
+		shorthands = append(shorthands, s.Kind+" "+text(s.Name))
+	}
+	if got := strings.Join(shorthands, ", "); got != "attr size, arg size, arg-prop v" {
+		t.Errorf("shorthands: %s", got)
+	}
+
+	if len(out.SlotGroups) != 1 {
+		t.Fatalf("slot groups: %+v", out.SlotGroups)
+	}
+	g := out.SlotGroups[0]
+	if g.Name != "$Icon" || len(g.Tags) != 3 || text(g.Owner) != "<Button size>" {
+		t.Errorf("group: %+v", g)
+	}
+	for _, tag := range g.Tags {
+		if text(tag) != "$Icon" {
+			t.Errorf("group tag %q", text(tag))
+		}
+	}
+
+	// The prop name `$Icon=` is the first tag's name, copied; the object key
+	// `className` is the attribute's name, copied.
+	for _, name := range []emit.Span{g.Tags[0], {Pos: strings.Index(src, "className"), End: strings.Index(src, "className") + len("className")}} {
+		pos, ok := out.Map.Output(name.Pos)
+		if !ok || !strings.HasPrefix(out.TSX[pos:], text(name)) {
+			t.Errorf("%q is not copied into the output", text(name))
+		}
+	}
+	// The two copies of the shorthand `size` answer different features.
+	var masks []emit.Features
+	for _, s := range out.Map.Segments {
+		if s.Copied && s.In == out.Shorthands[0].Name {
+			masks = append(masks, emit.AllFeatures&^s.Without)
+		}
+	}
+	if len(masks) != 2 || masks[0]&emit.FeatureCompletion == 0 || masks[0]&emit.FeatureRename != 0 || masks[1]&emit.FeatureRename == 0 || masks[1]&emit.FeatureCompletion != 0 {
+		t.Errorf("shorthand copies answer %b", masks)
 	}
 }

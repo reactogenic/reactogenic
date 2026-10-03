@@ -608,10 +608,18 @@ were built for patches that add files.
   refused or succeeds without loss; `pnpm vendor:check` is green.
 - Depends on: 100.
 
-### RGP1-102 — The transform as a content mapper · M
+### RGP1-102 — The transform as a content mapper · M · done
+Three `check` expectations moved by one column, as predicted; the emitted
+text of all 67 conformance cases is byte-identical. Over the corpus (3,439
+virtual nodes) the span map validates and agrees with `emit.Map`, except two
+spans that run backwards in the source: a conditional slot's whole prop,
+whose name is copied from after its origin — TS reports on the name or the
+value, never on that span. Whitespace is not copied (it would change the
+emitted text): prop completion on an empty position is in ide.md's *Not in
+the first release*. `oneCopyAnswers` marks later copies per construct.
 - Copy names instead of synthesizing them (ide.md, *Span map*): slot tag
   names, attribute names of slot elements, arg keys, closing tag names where
-  one is emitted, whitespace before an attribute. The emitted text does not
+  one is emitted. The emitted text does not
   change. Three `check` expectations move by one column, from `<` / `&` to
   the name (`undeclared-slot`, `slot-type`, `slot-no-args`); diagnostics.md
   *Mapping* and *Rewrites* follow.

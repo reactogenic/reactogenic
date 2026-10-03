@@ -38,7 +38,7 @@ func segments(c *passContext) []emit.Edit {
 		if opening.Kind == rtsx.KindJsxSelfClosingElement {
 			end := emit.Span{Pos: opening.End() - 2, End: opening.End()} // `/>`
 			edits = append(edits, emit.Edit{Span: end, Pieces: []emit.Piece{
-				emit.Synth(">", origin), mount, emit.Synth("</", origin), c.copy(opening.TagName()), emit.Synth(">", origin),
+				emit.Synth(">", origin), mount, emit.Synth("</", origin), c.copy(opening.TagName()).Lacking(emit.AllFeatures), emit.Synth(">", origin),
 			}})
 		} else {
 			edits = append(edits, emit.Edit{Span: c.childrenSpan(opening.Parent), Pieces: []emit.Piece{mount}})

@@ -108,7 +108,6 @@ of editor features it may answer.
   | attribute names of a slot element | the object keys | hover, completion of slot props |
   | arg names `&size`, `&&value` | the arg keys | hover, definition |
   | closing tag name `</Button>` | the rebuilt closing tag, when one is emitted | hover, definition there |
-  | whitespace before an attribute or `>` of a rebuilt tag or slot tag | the same position in the emitted tag | prop completion on an empty position |
 
   These copies carry no semantic tokens: tag and attribute names keep the
   grammar's colours with or without a server. The emitted text is unchanged;
@@ -116,7 +115,7 @@ of editor features it may answer.
 - **Several copies of one token.**
   - *Identical copies* — an attachment emitted in both branches of its
     ternary, the `$X` of `slot={$X}`, a `Switch` subject repeated per case:
-    the first copy in virtual order has the features; the others have none.
+    the first copy has the features; the others have none.
   - *Shorthand* — `<Input value />`, `&size`, a slot's bare attribute — where
     the two copies are different symbols (the prop and the binding): both
     answer, as TS does on `{ value }`.
@@ -296,6 +295,7 @@ beside the source and refreshes it on every edit.
 | quick fix for `segment-not-found` | create the file with an empty default component |
 | hover docs on `Switch` / `Match` / `$Case` | they are lowered away; static text |
 | param completion in `{ }` of a slot without a body | needs params emitted without a body, which changes diagnostics |
+| prop completion on an empty position of a rebuilt tag or slot tag | `<$Icon ▮>`: the whitespace there is generated. Completion works once a letter is typed |
 | Problems for closed files | open documents only; run the *reactogenic: check* task. A background `--watch` matcher comes later |
 | push diagnostics | for clients without pull support |
 | a server per workspace folder or CLI version | one server per window |

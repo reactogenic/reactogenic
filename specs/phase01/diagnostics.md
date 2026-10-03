@@ -74,6 +74,11 @@ was **copied** from, or the construct it was **synthesized** for (its
 | inside copied code — a user expression, a body, an attribute value | the exact `.rtsx` span | TS's, unchanged |
 | inside synthesized code | the origin | rewritten if a rule below matches; else TS's, unchanged |
 
+**Names are copied**: a slot's prop name is its tag name (`<$Icon` →
+`$Icon=`), a slot object's keys are the attribute names, an arg key is the
+arg's name. An error on one of them is reported at the name the author wrote
+([ide.md](ide.md), *Span map*).
+
 Origins of synthesized code:
 
 | Emitted | Origin |

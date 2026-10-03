@@ -157,7 +157,7 @@ export function Button({ size, $Icon, $Label, $List }: ButtonProps) {
 `})
 	want := []string{
 		"src/button.rtsx:13:7 slot-args-missing", // a function slot without its args: `$Icon` needs `&size`
-		"src/button.rtsx:15:27 slot-no-args",     // an arg to a slot whose body is not a function
+		"src/button.rtsx:15:28 slot-no-args",     // an arg to a slot whose body is not a function
 		"src/button.rtsx:16:7 slot-list",         // a slot typed as an array
 	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {

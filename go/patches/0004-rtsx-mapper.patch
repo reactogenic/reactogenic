@@ -1,0 +1,68 @@
+diff --git a/rtsx/spanmap.go b/rtsx/spanmap.go
+new file mode 100644
+index 0000000..029d7b2
+--- /dev/null
++++ b/rtsx/spanmap.go
+@@ -0,0 +1,62 @@
++package rtsx
++
++import (
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++)
++
++// SpanMap maps a mapped file's virtual text back to its source: the content
++// mapper's position model (specs/phase01/ide.md, *Span map*).
++type SpanMap = spanmap.SpanMap
++
++// Feature bits and segment kinds of the span map; our emit package mirrors
++// them as plain integers.
++const (
++	SpanFeatureHover      = int32(spanmap.FeatureHover)
++	SpanFeatureCompletion = int32(spanmap.FeatureCompletion)
++	SpanFeatureRename     = int32(spanmap.FeatureRename)
++	SpanFeatureFormatting = int32(spanmap.FeatureFormatting)
++	SpanFeatureCodeLens   = int32(spanmap.FeatureCodeLens)
++	SpanFeatureAll        = int32(spanmap.FeatureAll)
++	SpanKindVerbatim      = int32(spanmap.KindVerbatim)
++	SpanKindAtom          = int32(spanmap.KindAtom)
++)
++
++// NewSpanMap builds a span map from tuples [virtualStart, virtualLength,
++// originalStart, originalLength, kind, features], in byte offsets.
++func NewSpanMap(tuples [][6]int32) *SpanMap {
++	segments := make([]spanmap.Segment, len(tuples))
++	for i, t := range tuples {
++		segments[i] = spanmap.Segment{
++			VirtualStart:  core.TextPos(t[0]),
++			VirtualEnd:    core.TextPos(t[0] + t[1]),
++			OriginalStart: core.TextPos(t[2]),
++			OriginalEnd:   core.TextPos(t[2] + t[3]),
++			Kind:          spanmap.Kind(t[4]),
++			Features:      spanmap.Feature(t[5]),
++		}
++	}
++	return spanmap.New(segments)
++}
++
++// ValidateSpanMap checks m against the virtual and the original text as the
++// compiler does before it accepts a mapper's result.
++func ValidateSpanMap(m *SpanMap, virtual, original string) error {
++	if problem := m.Validate(virtual, original); problem != nil {
++		return problem
++	}
++	return nil
++}
++
++// SpanSource maps a virtual range to the original; exact reports whether it
++// lies in one verbatim segment.
++func SpanSource(m *SpanMap, pos, end int) (srcPos, srcEnd int, exact bool) {
++	r, fidelity := m.VirtualToOriginalSpan(core.NewTextRange(pos, end))
++	return r.Pos(), r.End(), fidelity.IsExact()
++}
++
++// SpanProjections counts the virtual positions that answer feature for an
++// original position.
++func SpanProjections(m *SpanMap, pos int, feature int32) int {
++	return len(m.OriginalToVirtualPositions(core.TextPos(pos), spanmap.Feature(feature)))
++}

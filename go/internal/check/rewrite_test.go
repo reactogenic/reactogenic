@@ -50,11 +50,11 @@ export const p11 = <Input value />;
 		}
 	}
 	want := []string{
-		"4:25 undeclared-slot: `$Nope` is not declared in `Card`",
+		"4:26 undeclared-slot: `$Nope` is not declared in `Card`",
 		"5:20 missing-slot: `Must` requires `$Title`",
 		"6:35 no-values: `$Title` provides no values",
 		"7:41 content-not-allowed: `$Box` takes no body",
-		"8:25 slot-type: `$Label` does not match its declaration in `Card`: Type '{}' is not assignable to type 'Slot<{ children: ReactNode; }> | undefined'.",
+		"8:26 slot-type: `$Label` does not match its declaration in `Card`: Type '{}' is not assignable to type 'Slot<{ children: ReactNode; }> | undefined'.",
 		"9:32 params-required: `$Icon` requires params: its body is a function of the attachment's args",
 		"10:19 switch-missing-case: Missing `\"b\"`, `\"c\"`",
 		"11:24 segment-not-component: The segment `num` has no default component",

@@ -53,6 +53,7 @@ type Diagnostic struct {
 	File     string
 	Line     int
 	Col      int
+	Span     emit.Span // in the source
 	Severity Severity
 	Code     string // e.g. "orphan-slot"; "TS1005" for a TypeScript syntax error
 	Message  string
@@ -70,6 +71,27 @@ type Output struct {
 	// Generated maps each generated name to what the author wrote:
 	// `_Div_num` → `#num`, `_on` → `getStatus()`.
 	Generated map[string]string
+	// Shorthands are the bare names that stand for `name={name}`: one source
+	// token, emitted twice — as the prop (or arg key) and as the binding.
+	// A rename through one must expand it (ide.md, *Rename*).
+	Shorthands []Shorthand
+	// SlotGroups: per owner and slot name, the tag names of every slot
+	// element that fills it. Only the first is copied into the emitted prop
+	// name, so only it answers the editor directly (ide.md, *Span map*).
+	SlotGroups []SlotGroup
+}
+
+// Shorthand is a bare name with two meanings.
+type Shorthand struct {
+	Name emit.Span // in the source
+	Kind string    // attr: `<Input value />`; arg: `&size`; arg-prop: `&&size`
+}
+
+// SlotGroup lists the slot elements of one name under one owner.
+type SlotGroup struct {
+	Name  string
+	Owner emit.Span   // the owner's opening tag, in the source
+	Tags  []emit.Span // tag names, opening and closing, in source order; Tags[0] is the copied one
 }
 
 // Note marks a source span: what was synthesized for it.
@@ -151,6 +173,16 @@ func Transpile(in Input) (Output, error) {
 			noteTag: func(s, tag emit.Span, kind, name string) {
 				out.Notes = append(out.Notes, Note{Span: toSource.Source(s), Kind: kind, Name: name, Tag: toSource.Source(tag)})
 			},
+			shorthandSite: func(name emit.Span, kind string) {
+				out.Shorthands = append(out.Shorthands, Shorthand{Name: toSource.Source(name), Kind: kind})
+			},
+			slotGroup: func(name string, owner emit.Span, tags []emit.Span) {
+				g := SlotGroup{Name: name, Owner: toSource.Source(owner)}
+				for _, t := range tags {
+					g.Tags = append(g.Tags, toSource.Source(t))
+				}
+				out.SlotGroups = append(out.SlotGroups, g)
+			},
 			generated: func(local, written string) {
 				if out.Generated == nil {
 					out.Generated = map[string]string{}
@@ -160,6 +192,9 @@ func Transpile(in Input) (Output, error) {
 		edits := p.run(c)
 		if len(edits) == 0 {
 			continue
+		}
+		for i := range edits {
+			oneCopyAnswers(edits[i].Pieces)
 		}
 		next, m, err := emit.Apply(text, edits)
 		if err != nil {
@@ -179,7 +214,33 @@ func Transpile(in Input) (Output, error) {
 
 func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg string) {
 	line, col := emit.LineCol(src, s.Pos)
-	o.Diagnostics = append(o.Diagnostics, Diagnostic{File: file, Line: line, Col: col, Severity: sev, Code: code, Message: msg})
+	o.Diagnostics = append(o.Diagnostics, Diagnostic{File: file, Line: line, Col: col, Span: s, Severity: sev, Code: code, Message: msg})
+}
+
+// oneCopyAnswers: text copied several times into one construct (an attachment
+// emitted in both branches of its ternary, a Switch subject per case) is
+// checked in each place but answers the editor from the first only (ide.md,
+// *Span map*). Copies with a mask of their own — the two copies of a
+// shorthand — are different symbols and both answer.
+func oneCopyAnswers(pieces []emit.Piece) {
+	var seen []emit.Span
+	for i, p := range pieces {
+		if !p.Copied || p.Without != 0 {
+			continue
+		}
+		again := false
+		for _, s := range seen {
+			if p.From.Pos < s.End && s.Pos < p.From.End {
+				again = true
+				break
+			}
+		}
+		if again {
+			pieces[i] = p.Lacking(emit.AllFeatures)
+		} else {
+			seen = append(seen, p.From)
+		}
+	}
 }
 
 // checks is pass 0: errors reported against what the author wrote.

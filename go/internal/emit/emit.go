@@ -27,6 +27,15 @@ type Piece struct {
 	Text   string
 	Copied bool
 	From   Span // copied: where Text comes from; synthesized: its origin
+	// Without: the editor features this copy does not answer (ide.md, *Span
+	// map*). Zero: all of them. Synthesized text answers none.
+	Without Features
+}
+
+// Lacking returns the copy without the features f.
+func (p Piece) Lacking(f Features) Piece {
+	p.Without |= f
+	return p
 }
 
 // Copy takes input[s] unchanged.
@@ -51,6 +60,8 @@ type Segment struct {
 	Out    Span
 	Copied bool
 	In     Span // copied: same length as Out; synthesized: the origin
+	// Without: for a copied segment, the features it does not answer.
+	Without Features
 }
 
 // Map maps output positions to input positions. Its segments cover the
@@ -100,7 +111,11 @@ func Apply(input string, edits []Edit) (string, *Map, error) {
 			if p.Text == "" {
 				continue
 			}
-			m.add(Segment{Out: Span{out.Len(), out.Len() + len(p.Text)}, Copied: p.Copied, In: p.From})
+			seg := Segment{Out: Span{out.Len(), out.Len() + len(p.Text)}, Copied: p.Copied, In: p.From}
+			if p.Copied {
+				seg.Without = p.Without
+			}
+			m.add(seg)
 			out.WriteString(p.Text)
 		}
 		pos = e.Span.End
@@ -114,7 +129,7 @@ func Apply(input string, edits []Edit) (string, *Map, error) {
 func (m *Map) add(s Segment) {
 	if n := len(m.Segments); n > 0 {
 		last := &m.Segments[n-1]
-		if last.Out.End == s.Out.Pos && last.Copied == s.Copied &&
+		if last.Out.End == s.Out.Pos && last.Copied == s.Copied && last.Without == s.Without &&
 			(s.Copied && last.In.End == s.In.Pos || !s.Copied && last.In == s.In) {
 			last.Out.End = s.Out.End
 			if s.Copied {
@@ -192,7 +207,7 @@ func (m *Map) Then(prev *Map) *Map {
 			o := Span{s.Out.Pos + pos - s.In.Pos, s.Out.Pos + end - s.In.Pos}
 			if ps.Copied {
 				off := ps.In.Pos - ps.Out.Pos
-				out.add(Segment{Out: o, Copied: true, In: Span{pos + off, end + off}})
+				out.add(Segment{Out: o, Copied: true, In: Span{pos + off, end + off}, Without: s.Without | ps.Without})
 			} else {
 				out.add(Segment{Out: o, In: ps.In})
 			}

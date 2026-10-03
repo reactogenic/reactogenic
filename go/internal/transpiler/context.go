@@ -17,9 +17,12 @@ type passContext struct {
 	text   string
 	report func(s emit.Span, severity Severity, code, message string)
 	// note and generated record Output.Notes and Output.Generated.
-	note      func(s emit.Span, kind, name, detail string)
-	noteTag   func(s, tag emit.Span, kind, name string)
-	generated func(local, written string)
+	note    func(s emit.Span, kind, name, detail string)
+	noteTag func(s, tag emit.Span, kind, name string)
+	// shorthandSite and slotGroup record Output.Shorthands and SlotGroups.
+	shorthandSite func(name emit.Span, kind string)
+	slotGroup     func(name string, owner emit.Span, tags []emit.Span)
+	generated     func(local, written string)
 	// names holds every identifier of the original source, so generated
 	// names can never capture or shadow the author's.
 	names map[string]bool
@@ -41,6 +44,35 @@ func (c *passContext) span(n *rtsx.Node) emit.Span {
 
 func (c *passContext) copy(n *rtsx.Node) emit.Piece {
 	return emit.Copy(c.text, c.span(n))
+}
+
+// The two copies of a shorthand (`value` → `value={value}`) are different
+// symbols — the prop and the binding — and answer different features, as TS
+// does on `{ value }` (ide.md, *Span map*). The masks are what each lacks.
+const (
+	nameCopyHas  = emit.FeatureHover | emit.FeatureCompletion | emit.FeatureDefinition | emit.FeatureTypeDefinition | emit.FeatureReferences | emit.FeatureDocumentHighlights
+	valueCopyHas = emit.FeatureHover | emit.FeatureDefinition | emit.FeatureReferences | emit.FeatureDocumentHighlights | emit.FeatureRename | emit.FeatureSemanticTokens | emit.FeatureInlayHints
+	nameCopy     = emit.AllFeatures &^ nameCopyHas
+	valueCopy    = emit.AllFeatures &^ valueCopyHas
+)
+
+// copyName copies a name the author wrote — a slot tag, a slot attribute,
+// an arg — to where it is a prop name or an object key, so TS's features
+// reach it. It keeps the grammar's colour: no semantic tokens.
+func (c *passContext) copyName(s emit.Span) emit.Piece {
+	return emit.Copy(c.text, s).Lacking(emit.FeatureSemanticTokens)
+}
+
+// closingName is the name for a rebuilt closing tag: the closing tag the
+// author wrote, or — the element was self-closing — one more copy of the
+// opening name.
+func (c *passContext) closingName(el, opening *rtsx.Node) emit.Piece {
+	if el.Kind == rtsx.KindJsxElement {
+		if closing := el.AsJsxElement().ClosingElement; closing != nil && closing.TagName().End() > closing.TagName().Pos() {
+			return c.copy(closing.TagName())
+		}
+	}
+	return c.copy(opening.TagName()).Lacking(emit.AllFeatures)
 }
 
 // copyChild copies a JSX child. JSX text starts at its first byte: its
