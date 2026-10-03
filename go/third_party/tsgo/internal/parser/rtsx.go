@@ -6,13 +6,14 @@ package parser
 import (
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
-	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
-// isRTSX reports whether the file being parsed is .rtsx. Only .rtsx gets the
-// extensions; .tsx keeps TypeScript's grammar.
+// isRTSX reports whether the text is parsed with the .rtsx extensions: a
+// parse option, set only by the transpiler's source parse. The extension
+// cannot be the test — a mapped file's virtual TSX is parsed under its
+// .rtsx name — and everything else keeps TypeScript's grammar.
 func (p *Parser) isRTSX() bool {
-	return tspath.FileExtensionIs(p.opts.FileName, ".rtsx")
+	return p.opts.RTSX
 }
 
 func (p *Parser) nextTokenIsDotDotDot() bool {

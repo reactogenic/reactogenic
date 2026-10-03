@@ -125,6 +125,9 @@ func (c *compilerHost) GetContentMappedSourceFiles(parseOptions ast.SourceFilePa
 	if err != nil {
 		return contentmapper.SourceFiles{}, contentmapper.NewTransformError(contentmapper.TransformErrorKindProject, err)
 	}
+	if perFile, ok := project.(contentmapper.FileIdentifier); ok { // rtsx: sibling names
+		identity += perFile.FileIdentity(parseOptions.FileName, fh.Content())
+	}
 	transformIdentity := xxh3.Hash128([]byte(identity))
 	key := contentMappedParseCacheKey(parseOptions, fh.Hash(), transformIdentity, diagnosticLocale)
 	files, err := c.builder.contentMappedParseCache.AcquireOrError(key, func() (contentmapper.SourceFiles, error) {
@@ -163,6 +166,7 @@ func (c *compilerHost) ContentMapperProject() contentmapper.Project {
 			ConfigFileName:  commandLine.ConfigName(),
 			Mappers:         commandLine.ContentMappers(),
 			CompilerOptions: commandLine.CompilerOptions(),
+			FS:              c.FS(), // rtsx
 		})
 	})
 	return c.contentMapperProject

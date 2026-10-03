@@ -8,6 +8,7 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/locale"
 	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
+	"github.com/microsoft/TypeScript/tsc/internal/vfs"
 )
 
 // TransformErrorKind identifies the stage at which a content mapper transform failed.
@@ -178,6 +179,11 @@ type Result struct {
 	DiagnosticDirectives []ast.MappedDiagnosticDirective
 	// Supplemental contains additional unnamed outputs associated with the canonical result.
 	Supplemental []MappedResult
+	// Extra travels with the parsed file (rtsx: the transpiler's notes), read through
+	// ast.SourceFile.ContentMapperExtra.
+	Extra any
+	// Module forces the virtual text to be parsed as a module (rtsx).
+	Module bool
 }
 
 // MappedResult is one virtual source file and its mapping to the original input.
@@ -204,6 +210,8 @@ type ProjectSpec struct {
 	Mappers []*Mapper
 	// CompilerOptions are the project's effective compiler options.
 	CompilerOptions *core.CompilerOptions
+	// FS is the file system the project reads through (rtsx: for built-in mappers).
+	FS vfs.FS
 }
 
 type OptionPathSegment struct {

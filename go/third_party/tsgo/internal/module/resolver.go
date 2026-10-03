@@ -1543,6 +1543,15 @@ func (r *resolutionState) tryAddingExtensions(extensionless string, extensions e
 				return resolved
 			}
 		}
+		if originalExtension == "" && !r.isConfigLookup {
+			// rtsx: `./page` finds a content-mapped page.rtsx, after every built-in extension.
+			for _, extra := range r.resolver.extraExtensions {
+				if resolved := r.tryExtension(extra, extensionless, false); !resolved.shouldContinueSearching() {
+					resolved.resolvedUsingExtraExtensions = true
+					return resolved
+				}
+			}
+		}
 		return continueSearching()
 	default:
 		if slices.Contains(r.resolver.extraExtensions, originalExtension) {

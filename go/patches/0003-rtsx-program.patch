@@ -1,9 +1,9 @@
 diff --git a/rtsx/program.go b/rtsx/program.go
 new file mode 100644
-index 0000000..342b134
+index 0000000..a17d7e8
 --- /dev/null
 +++ b/rtsx/program.go
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,104 @@
 +// Reactogenic's bridge to tsgo's program, file system and checker.
 +// Not part of upstream: added by go/patches/0003-rtsx-program.patch.
 +// Keep it thin — aliases and short wrappers only.
@@ -48,7 +48,8 @@ index 0000000..342b134
 +// program, with TypeScript's lib files bundled. It also returns the config's
 +// parsing diagnostics; the program is nil when the config cannot be read.
 +func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
-+	host := compiler.NewCompilerHost(cwd, bundled.WrapFS(fs), bundled.LibPath(), nil, nil, nil)
++	wrapped := bundled.WrapFS(fs)
++	host := compiler.NewCompilerHost(cwd, wrapped, bundled.LibPath(), nil, nil, builtInProject(wrapped))
 +	config, diags := tsoptions.GetParsedCommandLineOfConfigFile(configPath, nil, nil, host, nil)
 +	if config == nil {
 +		return nil, diags

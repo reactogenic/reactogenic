@@ -71,14 +71,14 @@ func ParseTSX(fileName string, text string) *SourceFile {
 }
 
 // ParseRTSX parses text as an .rtsx file: TSX plus the attribute forms of
-// go/patches/0002-rtsx-parser.patch. fileName must end in .rtsx; the parser
-// enables the extensions by extension. An .rtsx file is always a module, as
+// go/patches/0002-rtsx-parser.patch. An .rtsx file is always a module, as
 // under Vite, so its top-level declarations are module scope, not globals.
 func ParseRTSX(fileName string, text string) *SourceFile {
 	opts := ast.SourceFileParseOptions{
 		FileName:                       fileName,
 		Path:                           tspath.Path(fileName),
 		ExternalModuleIndicatorOptions: ast.ExternalModuleIndicatorOptions{Force: true},
+		RTSX:                           true,
 	}
 	return parser.ParseSourceFile(opts, text, core.ScriptKindTSX)
 }

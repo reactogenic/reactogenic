@@ -42,7 +42,8 @@ func WrapFS(fs FS, r FSReplacements) FS {
 // program, with TypeScript's lib files bundled. It also returns the config's
 // parsing diagnostics; the program is nil when the config cannot be read.
 func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
-	host := compiler.NewCompilerHost(cwd, bundled.WrapFS(fs), bundled.LibPath(), nil, nil, nil)
+	wrapped := bundled.WrapFS(fs)
+	host := compiler.NewCompilerHost(cwd, wrapped, bundled.LibPath(), nil, nil, builtInProject(wrapped))
 	config, diags := tsoptions.GetParsedCommandLineOfConfigFile(configPath, nil, nil, host, nil)
 	if config == nil {
 		return nil, diags

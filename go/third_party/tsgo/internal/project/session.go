@@ -197,6 +197,9 @@ type Session struct {
 // a spawner is available; otherwise it returns nil, and configured content mappers are rejected by the
 // config-file gate.
 func newContentMapperHost(init *SessionInit) contentmapper.Host {
+	if builtIn, _ := contentmapper.BuiltInMappers(); builtIn != nil { // rtsx
+		return contentmapper.NewBuiltInHost()
+	}
 	if !init.Options.RunExternalCode || init.Spawner == nil {
 		return nil
 	}

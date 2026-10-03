@@ -58,7 +58,7 @@ func ParseResult(parseOptions ast.SourceFileParseOptions, content string, mapper
 	baseParseOptions := parseOptions
 	virtualFileName := baseParseOptions.FileName + virtualExtension
 	parseOptions = baseParseOptions
-	if isModuleVirtualExtension(virtualExtension) {
+	if isModuleVirtualExtension(virtualExtension) || result.Module {
 		parseOptions.ExternalModuleIndicatorOptions.Force = true
 	}
 	sourceFile := parser.ParseSourceFile(parseOptions, result.Text, core.GetScriptKindFromFileName(virtualFileName))
@@ -103,6 +103,7 @@ func ParseResult(parseOptions ast.SourceFileParseOptions, content string, mapper
 		SpanMap:                 result.Mappings,
 		DiagnosticDirectives:    result.DiagnosticDirectives,
 		SupplementalSourceFiles: files.Supplemental,
+		Extra:                   result.Extra,
 	})
 	for i, file := range files.Supplemental {
 		supplemental := result.Supplemental[i]

@@ -125,7 +125,7 @@ func (c *passContext) checkAmbiguousModule() {
 }
 
 // checkSegmentFiles reports segment-not-found (no file of the name next to
-// the entry, see segmentExtensions) and segment-self (a segment that mounts
+// the entry, see SegmentExtensions) and segment-self (a segment that mounts
 // itself, directly or through other segments).
 func (c *passContext) checkSegmentFiles() {
 	dir := path.Dir(c.entry)
@@ -142,12 +142,12 @@ func (c *passContext) checkSegmentFiles() {
 	}
 }
 
-// segmentExtensions is the lookup order of `#name` (syntax.md, *Segment
+// SegmentExtensions is the lookup order of `#name` (syntax.md, *Segment
 // files*): the first `name<ext>` next to the file is the segment.
-var segmentExtensions = []string{".rtsx", ".tsx", ".jsx", ".ts", ".js"}
+var SegmentExtensions = []string{".rtsx", ".tsx", ".jsx", ".ts", ".js"}
 
 func (c *passContext) segmentFile(dir, name string) (string, bool) {
-	for _, ext := range segmentExtensions {
+	for _, ext := range SegmentExtensions {
 		p := path.Join(dir, name+ext)
 		if _, ok := c.readFile(p); ok {
 			return p, true

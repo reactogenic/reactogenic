@@ -1,3 +1,16 @@
+diff --git a/internal/ast/parseoptions.go b/internal/ast/parseoptions.go
+index 1647dc8..0ad9cde 100644
+--- a/internal/ast/parseoptions.go
++++ b/internal/ast/parseoptions.go
+@@ -9,6 +9,8 @@ type SourceFileParseOptions struct {
+ 	FileName                       string
+ 	Path                           tspath.Path
+ 	ExternalModuleIndicatorOptions ExternalModuleIndicatorOptions
++	// RTSX enables the .rtsx attribute grammar (go/patches/0002-rtsx-parser.patch).
++	RTSX bool
+ }
+ 
+ type ExternalModuleIndicatorOptions struct {
 diff --git a/internal/parser/parser.go b/internal/parser/parser.go
 index f54b4bc..535bfd4 100644
 --- a/internal/parser/parser.go
@@ -28,10 +41,10 @@ index f54b4bc..535bfd4 100644
  }
 diff --git a/internal/parser/rtsx.go b/internal/parser/rtsx.go
 new file mode 100644
-index 0000000..8bfdd2d
+index 0000000..31b3e60
 --- /dev/null
 +++ b/internal/parser/rtsx.go
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,62 @@
 +// Reactogenic: the .rtsx extensions to JSX attribute parsing.
 +// Not part of upstream: added by go/patches/0002-rtsx-parser.patch.
 +
@@ -40,13 +53,14 @@ index 0000000..8bfdd2d
 +import (
 +	"github.com/microsoft/TypeScript/tsc/internal/ast"
 +	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
-+	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 +)
 +
-+// isRTSX reports whether the file being parsed is .rtsx. Only .rtsx gets the
-+// extensions; .tsx keeps TypeScript's grammar.
++// isRTSX reports whether the text is parsed with the .rtsx extensions: a
++// parse option, set only by the transpiler's source parse. The extension
++// cannot be the test — a mapped file's virtual TSX is parsed under its
++// .rtsx name — and everything else keeps TypeScript's grammar.
 +func (p *Parser) isRTSX() bool {
-+	return tspath.FileExtensionIs(p.opts.FileName, ".rtsx")
++	return p.opts.RTSX
 +}
 +
 +func (p *Parser) nextTokenIsDotDotDot() bool {
