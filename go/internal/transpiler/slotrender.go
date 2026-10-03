@@ -82,6 +82,9 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 			props = append(props, []emit.Piece{c.copy(attr)})
 			continue
 		}
+		if name == "" {
+			continue // a sigil without its name yet: `&` just typed
+		}
 		argKey := name
 		if !identifierName.MatchString(name) {
 			argKey = `"` + name + `"`

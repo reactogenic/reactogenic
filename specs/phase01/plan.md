@@ -665,7 +665,11 @@ system.
   `client/registerCapability` for `.rtsx`.
 - Depends on: 102.
 
-### RGP1-104 — Tolerant transform · M
+### RGP1-104 — Tolerant transform · M · done
+25,640 typing-like mutants of the corpus (17,640 with syntax errors): no
+panic, no hang, a valid map every time, and — after a guard in the segment
+pass and skipping a nameless `&` — not one stopped pass. The mapper is
+tolerant and recovers from a panic.
 - `Input.Tolerant` (ide.md, *Tolerance*): passes on the recovered tree,
   per-pass fallback and the *stopped* mark, suppression under a broken JSX
   element, identity as the last resort, `recover` at the mapper boundary.

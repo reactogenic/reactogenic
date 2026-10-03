@@ -83,6 +83,12 @@ func ParseRTSX(fileName string, text string) *SourceFile {
 	return parser.ParseSourceFile(opts, text, core.ScriptKindTSX)
 }
 
+// HasParseError reports whether n or a node under it was created by parser
+// recovery. The flag is set by Bind.
+func HasParseError(n *Node) bool {
+	return n.Flags&ast.NodeFlagsThisNodeOrAnySubNodesHasError != 0
+}
+
 // TokenStart returns where n's first token starts, after leading trivia.
 func TokenStart(file *SourceFile, n *Node) int {
 	return scanner.GetTokenPosOfNode(n, file, false)

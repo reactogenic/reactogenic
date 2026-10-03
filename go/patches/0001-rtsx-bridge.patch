@@ -1,9 +1,9 @@
 diff --git a/rtsx/rtsx.go b/rtsx/rtsx.go
 new file mode 100644
-index 0000000..1986d24
+index 0000000..15b30a6
 --- /dev/null
 +++ b/rtsx/rtsx.go
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,170 @@
 +// Package rtsx is Reactogenic's bridge into tsgo's internal packages.
 +//
 +// Go allows internal/ to be imported only from inside this module, so
@@ -87,6 +87,12 @@ index 0000000..1986d24
 +		RTSX:                           true,
 +	}
 +	return parser.ParseSourceFile(opts, text, core.ScriptKindTSX)
++}
++
++// HasParseError reports whether n or a node under it was created by parser
++// recovery. The flag is set by Bind.
++func HasParseError(n *Node) bool {
++	return n.Flags&ast.NodeFlagsThisNodeOrAnySubNodesHasError != 0
 +}
 +
 +// TokenStart returns where n's first token starts, after leading trivia.

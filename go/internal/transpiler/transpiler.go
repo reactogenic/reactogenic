@@ -20,6 +20,11 @@ type Input struct {
 	// ReadFile reads a file that is not in Files — segments next to the
 	// entry. nil: only Files exist.
 	ReadFile func(path string) (string, bool)
+	// Tolerant is for the editor (ide.md, *Tolerance*): the passes run on
+	// the parser's recovered tree instead of stopping at a syntax error, and
+	// a pass that fails keeps the previous pass's text (Output.Stopped). The
+	// builds — Vite, `reactogenic check` — are strict.
+	Tolerant bool
 }
 
 // readFile looks in Files, then ReadFile.
@@ -79,6 +84,10 @@ type Output struct {
 	// element that fills it. Only the first is copied into the emitted prop
 	// name, so only it answers the editor directly (ide.md, *Span map*).
 	SlotGroups []SlotGroup
+	// Stopped, in tolerant mode: why the passes ended early. TSX is then the
+	// last good text — up to the source itself — and still holds unlowered
+	// constructs, so TS's diagnostics for it mean nothing.
+	Stopped string
 }
 
 // Shorthand is a bare name with two meanings.
@@ -140,7 +149,14 @@ func Transpile(in Input) (Output, error) {
 		toSource = emit.Identity(len(src))
 		names    map[string]bool
 		runs     int
+		broken   bool // tolerant: the source has syntax errors
 	)
+	// stop ends a tolerant run early, keeping the last good text.
+	stop := func(p pass, why any) (Output, error) {
+		out.TSX, out.Map = text, toSource
+		out.Stopped = fmt.Sprintf("pass %d (%s): %v", p.n, p.name, why)
+		return out, nil
+	}
 	for i := 0; i < len(passes); i++ {
 		p := passes[i]
 		if in.UntilPass > 0 && p.n > in.UntilPass {
@@ -148,13 +164,21 @@ func Transpile(in Input) (Output, error) {
 		}
 		file := rtsx.ParseRTSX("/"+in.Entry, text)
 		if parseErrors := file.Diagnostics(); len(parseErrors) > 0 {
-			if p.n > 0 {
+			// Emitted text that does not parse is our bug only when the
+			// source did: a broken source may stay broken through a pass.
+			if p.n > 0 && !broken {
 				return Output{}, fmt.Errorf("transpiler: pass %d (%s) produced code that does not parse: %s", p.n-1, passes[p.n-1].name, rtsx.Message(parseErrors[0]))
 			}
-			for _, d := range parseErrors {
-				out.add(in.Entry, src, emit.Span{Pos: rtsx.SkipTrivia(src, d.Pos()), End: d.End()}, Error, fmt.Sprintf("TS%d", d.Code()), rtsx.Message(d))
+			if p.n == 0 {
+				// Syntax errors are the source parse's, only.
+				for _, d := range parseErrors {
+					out.add(in.Entry, src, emit.Span{Pos: rtsx.SkipTrivia(src, d.Pos()), End: d.End()}, Error, fmt.Sprintf("TS%d", d.Code()), rtsx.Message(d))
+				}
+				if !in.Tolerant {
+					return out, nil
+				}
+				broken = true
 			}
-			return out, nil
 		}
 		if names == nil {
 			names = identifiers(file)
@@ -165,6 +189,9 @@ func Transpile(in Input) (Output, error) {
 		rtsx.Bind(file)
 		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, entry: in.Entry, readFile: in.readFile,
 			report: func(s emit.Span, sev Severity, code, msg string) {
+				if broken && underParseError(file, s) {
+					return // a half-typed construct: its errors are the parser's
+				}
 				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
 			},
 			note: func(s emit.Span, kind, name, detail string) {
@@ -189,7 +216,21 @@ func Transpile(in Input) (Output, error) {
 				}
 				out.Generated[local] = written
 			}}
-		edits := p.run(c)
+		var edits []emit.Edit
+		if broken {
+			// On a recovered tree a pass may meet shapes it never sees in
+			// valid code; whatever happens, the file keeps a virtual text.
+			var panicked any
+			func() {
+				defer func() { panicked = recover() }()
+				edits = p.run(c)
+			}()
+			if panicked != nil {
+				return stop(p, panicked)
+			}
+		} else {
+			edits = p.run(c)
+		}
 		if len(edits) == 0 {
 			continue
 		}
@@ -197,12 +238,18 @@ func Transpile(in Input) (Output, error) {
 			oneCopyAnswers(edits[i].Pieces)
 		}
 		next, m, err := emit.Apply(text, edits)
+		if err != nil && broken {
+			return stop(p, err)
+		}
 		if err != nil {
 			return Output{}, fmt.Errorf("transpiler: pass %d (%s): %w", p.n, p.name, err)
 		}
 		text, toSource = next, m.Then(toSource)
 		if p.repeat {
-			if runs++; runs > maxRuns {
+			if runs++; runs > maxRuns && broken {
+				return stop(p, "does not settle")
+			}
+			if runs > maxRuns {
 				return Output{}, fmt.Errorf("transpiler: pass %d (%s) does not settle", p.n, p.name)
 			}
 			i-- // run it again on its own output
@@ -215,6 +262,29 @@ func Transpile(in Input) (Output, error) {
 func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg string) {
 	line, col := emit.LineCol(src, s.Pos)
 	o.Diagnostics = append(o.Diagnostics, Diagnostic{File: file, Line: line, Col: col, Span: s, Severity: sev, Code: code, Message: msg})
+}
+
+// underParseError: the node at s, or the nearest JSX element or fragment
+// around it, holds a parse error (ide.md, *Tolerance*). Recovery re-parents
+// what follows a half-typed attribute, so the unit of trust is the element.
+// The file must be bound: the binder sets the flag.
+func underParseError(file *rtsx.SourceFile, s emit.Span) bool {
+	n := rtsx.TokenAt(file, s.Pos)
+	for n != nil && (n.End() < s.End || rtsx.TokenStart(file, n) > s.Pos) {
+		n = n.Parent
+	}
+	for node := n; n != nil; n = n.Parent {
+		if rtsx.HasParseError(n) {
+			return true
+		}
+		if n != node {
+			switch n.Kind {
+			case rtsx.KindJsxElement, rtsx.KindJsxSelfClosingElement, rtsx.KindJsxFragment:
+				return false
+			}
+		}
+	}
+	return false
 }
 
 // oneCopyAnswers: text copied several times into one construct (an attachment

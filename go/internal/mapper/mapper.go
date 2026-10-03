@@ -5,6 +5,7 @@
 package mapper
 
 import (
+	"fmt"
 	"path"
 	"regexp"
 
@@ -41,25 +42,37 @@ func Register(version string) {
 	rtsx.RegisterMapper(&rtsx.Mapper{Name: "reactogenic", Version: version, Extension: ".rtsx", Transform: transform, Depends: depends})
 }
 
-func transform(req rtsx.MapperRequest) rtsx.MapperResult {
-	out, err := transpiler.Transpile(transpiler.Input{
-		Files:    map[string]string{req.FileName: req.Content},
-		Entry:    req.FileName,
-		ReadFile: req.ReadFile,
-	})
-	if err != nil || out.Map == nil {
-		// Nothing usable: the source as virtual text, mapped 1:1.
+// transform never fails (ide.md, *Tolerance*): a file being typed gets the
+// passes on its recovered tree; one that stops a pass keeps the last good
+// text; a failure of the transpiler itself — a panic included — leaves the
+// source as its own virtual text, mapped 1:1.
+func transform(req rtsx.MapperRequest) (result rtsx.MapperResult) {
+	identity := func(out transpiler.Output, err error) rtsx.MapperResult {
 		var spans [][6]int32
 		if len(req.Content) > 0 {
 			spans = [][6]int32{{0, int32(len(req.Content)), 0, int32(len(req.Content)), 0, int32(identityFeatures)}}
 		}
 		return rtsx.MapperResult{Text: req.Content, Spans: spans, Extra: &File{Output: out, Stopped: true, Err: err}}
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			result = identity(transpiler.Output{}, fmt.Errorf("transpiler: %v", r))
+		}
+	}()
+	out, err := transpiler.Transpile(transpiler.Input{
+		Files:    map[string]string{req.FileName: req.Content},
+		Entry:    req.FileName,
+		ReadFile: req.ReadFile,
+		Tolerant: true,
+	})
+	if err != nil || out.Map == nil {
+		return identity(out, err)
+	}
 	spans := make([][6]int32, 0, len(out.Map.Segments))
 	for _, s := range out.Map.Spans() {
 		spans = append(spans, s)
 	}
-	return rtsx.MapperResult{Text: out.TSX, Spans: spans, Extra: &File{Output: out}}
+	return rtsx.MapperResult{Text: out.TSX, Spans: spans, Extra: &File{Output: out, Stopped: out.Stopped != ""}}
 }
 
 // identityFeatures: what the source answers when it stands in as its own

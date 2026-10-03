@@ -163,3 +163,39 @@ export const b = <i slot={$Icon} &size &&v />;
 		t.Errorf("shorthand copies answer %b", masks)
 	}
 }
+
+// ide.md, *Tolerance* (RGP1-104): a half-typed file keeps a virtual text the
+// editor can work with, and reports only the parser's errors.
+func TestTolerant(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"a slot name being typed is a prop name", "const a = <Button><$Ic</Button>;\n", "$Ic={{}}"},
+		{"member access keeps its tree", "const a = <Button><$Icon>{iconSize.}</$Icon></Button>;\n", "children: iconSize."},
+		{"a sigil without a name", "const a = <span slot={$Icon} &></span>;\n", "_renderSlot($Icon, {})"},
+		// Recovery re-parents `<$Icon>` out of `Button`: orphan-slot would be
+		// reported on an element the author placed correctly.
+		{"no transpiler error under a broken element", "const a = <Button size={><$Icon>x</$Icon></Button>;\n", ""},
+		{"nor on a half-typed case", "const a = <Switch on={x}><$Case is=</Switch>;\n", ""},
+	} {
+		out, err := Transpile(Input{Files: map[string]string{"a.rtsx": c.src}, Entry: "a.rtsx", Tolerant: true})
+		if err != nil || out.Map == nil || out.Stopped != "" {
+			t.Errorf("%s: err %v, stopped %q", c.name, err, out.Stopped)
+			continue
+		}
+		if !strings.Contains(out.TSX, c.want) {
+			t.Errorf("%s: output %q lacks %q", c.name, out.TSX, c.want)
+		}
+		if len(out.Diagnostics) == 0 {
+			t.Errorf("%s: no syntax error reported", c.name)
+		}
+		for _, d := range out.Diagnostics {
+			if !strings.HasPrefix(d.Code, "TS") {
+				t.Errorf("%s: transpiler diagnostic %s on a half-typed construct", c.name, d.Code)
+			}
+		}
+	}
+	// Strict mode is unchanged: a syntax error, and no output.
+	out, _ := Transpile(Input{Files: map[string]string{"a.rtsx": "const a = <Button><$Ic</Button>;\n"}, Entry: "a.rtsx"})
+	if out.TSX != "" || out.Map != nil || len(out.Diagnostics) == 0 {
+		t.Errorf("strict: %+v", out)
+	}
+}

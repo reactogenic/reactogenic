@@ -35,7 +35,9 @@ func segments(c *passContext) []emit.Edit {
 
 		edits = append(edits, emit.Edit{Span: origin, Pieces: []emit.Piece{emit.Synth(fmt.Sprintf("id=%q", name), origin)}})
 		mount := emit.Synth("<"+local+" />", origin)
-		if opening.Kind == rtsx.KindJsxSelfClosingElement {
+		if opening.Kind == rtsx.KindJsxSelfClosingElement && !strings.HasSuffix(c.text[:opening.End()], "/>") {
+			// A recovered element still missing its `/>`: only the id.
+		} else if opening.Kind == rtsx.KindJsxSelfClosingElement {
 			end := emit.Span{Pos: opening.End() - 2, End: opening.End()} // `/>`
 			edits = append(edits, emit.Edit{Span: end, Pieces: []emit.Piece{
 				emit.Synth(">", origin), mount, emit.Synth("</", origin), c.copy(opening.TagName()).Lacking(emit.AllFeatures), emit.Synth(">", origin),
