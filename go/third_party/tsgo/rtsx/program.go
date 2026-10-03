@@ -41,6 +41,10 @@ func WrapFS(fs FS, r FSReplacements) FS {
 // NewProgram reads the tsconfig at configPath through fs and builds its
 // program, with TypeScript's lib files bundled. It also returns the config's
 // parsing diagnostics; the program is nil when the config cannot be read.
+//
+// A module of a referenced project is read from its source, as the language
+// server reads it, not from the output a build would have left: a
+// content-mapped file has no output to leave, and the two would disagree.
 func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
 	wrapped := bundled.WrapFS(fs)
 	host := compiler.NewCompilerHost(cwd, wrapped, bundled.LibPath(), nil, nil, builtInProject(wrapped))
@@ -48,7 +52,7 @@ func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
 	if config == nil {
 		return nil, diags
 	}
-	program := compiler.NewProgram(compiler.ProgramOptions{Host: host, Config: config})
+	program := compiler.NewProgram(compiler.ProgramOptions{Host: host, Config: config, UseSourceOfProjectReference: true})
 	return program, diags
 }
 

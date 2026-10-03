@@ -4,6 +4,8 @@
 package lsp
 
 import (
+	"github.com/microsoft/TypeScript/tsc/internal/ast"
+	"github.com/microsoft/TypeScript/tsc/internal/ls"
 	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
 )
 
@@ -17,6 +19,37 @@ type Embedder struct {
 	Name, Version string
 	// Capabilities may edit the static capabilities before they are sent.
 	Capabilities func(*lsproto.ServerCapabilities)
+	// Owns reports whether a file is the host's: a content-mapped one. The
+	// client attaches this server to those documents only, and another
+	// server — which does not know them — to the rest of the project. With
+	// Owns set, the workspace-wide answers are narrowed to what no other
+	// server gives:
+	//   - workspace symbols: those declared in the host's files, chosen
+	//     before the best matches are cut to 256;
+	//   - file rename: the edits in the host's files, and the edits of
+	//     imports that resolve to the host's files — decided per import, so
+	//     a request that renames several files, or a folder, is answered
+	//     right for each.
+	Owns func(fileName string) bool
+}
+
+// symbolFiles is the files workspace symbols are collected from; nil: all.
+func (e *Embedder) symbolFiles() func(*ast.SourceFile) bool {
+	if e == nil || e.Owns == nil {
+		return nil
+	}
+	return func(file *ast.SourceFile) bool { return e.Owns(file.OriginalFileName()) }
+}
+
+// renameEdits is the edits of a file rename to keep (ls.FileRenameEdits);
+// nil: all. Everything is kept when the rename is this server's own answer
+// to textDocument/rename on a module specifier (complete), for a client
+// without willRenameFiles: no other server is asked then.
+func (e *Embedder) renameEdits(complete bool) ls.FileRenameEdits {
+	if e == nil || e.Owns == nil || complete {
+		return nil
+	}
+	return func(importer, imported string) bool { return e.Owns(importer) || e.Owns(imported) }
 }
 
 func (e *Embedder) initializeResult(result *lsproto.InitializeResult) {

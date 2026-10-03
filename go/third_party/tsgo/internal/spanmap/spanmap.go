@@ -322,7 +322,24 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
 	if seg.Kind == KindVerbatim {
 		return clamp(seg.OriginalStart+(pos-seg.VirtualStart), seg.OriginalStart, seg.OriginalEnd), FidelityExact
 	}
+	if m.beforeOriginalText(idx) {
+		return 0, FidelityExact
+	}
 	return seg.OriginalStart, FidelityAtom
+}
+
+// beforeOriginalText reports whether segment idx is generated text that precedes the whole original
+// text: no verbatim segment before it, and the first one starts at original offset 0. (rtsx: an
+// import the mapper generates in a file that has none. A position in it — where an edit inserts the
+// file's first import of its own — is the start of the original text, exactly; a range, a
+// diagnostic's, still maps to the segment's origin.)
+func (m *SpanMap) beforeOriginalText(idx int) bool {
+	for i, s := range m.segments {
+		if s.Kind == KindVerbatim {
+			return idx < i && s.OriginalStart == 0
+		}
+	}
+	return false
 }
 
 // positionSegmentAt is segmentIndexAt for a position, as opposed to a range boundary: a position at

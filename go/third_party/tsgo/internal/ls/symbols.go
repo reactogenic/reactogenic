@@ -193,6 +193,12 @@ func (l *LanguageService) getDocumentSymbolsForChildren(ctx context.Context, nod
 			}
 		case ast.KindSpreadAssignment:
 			addSymbolForNode(node, node.Expression(), nil /*children*/)
+		case ast.KindJsxSpreadAttribute:
+			// rtsx: slot params `{ size }` (a source tree only: ls/syntactic.go) are parameters — not
+			// listed, as a function's are not.
+			if !ast.IsObjectBindingPattern(node.Expression()) {
+				node.ForEachChild(visit)
+			}
 		case ast.KindMethodSignature, ast.KindPropertySignature, ast.KindCallSignature, ast.KindConstructSignature, ast.KindIndexSignature,
 			ast.KindEnumMember, ast.KindShorthandPropertyAssignment, ast.KindTypeAliasDeclaration, ast.KindImportEqualsDeclaration, ast.KindExportSpecifier:
 			addSymbolForNode(node, nil /*name*/, nil /*children*/)
@@ -549,6 +555,7 @@ func ProvideWorkspaceSymbols(
 	converters *lsconv.Converters,
 	preferences lsutil.UserPreferences,
 	query string,
+	include func(*ast.SourceFile) bool, // rtsx: the files to collect from (lsp.Embedder); nil: all
 ) (lsproto.WorkspaceSymbolResponse, error) {
 	excludeLibrarySymbols := preferences.ExcludeLibrarySymbolsInNavTo.IsTrue()
 	// Obtain set of non-declaration source files from all active programs.
@@ -556,7 +563,7 @@ func ProvideWorkspaceSymbols(
 	for _, program := range programs {
 		for _, sourceFile := range program.SourceFiles() {
 			if (program.HasTSFile() || !sourceFile.IsDeclarationFile) &&
-				!shouldExcludeFile(sourceFile, program, excludeLibrarySymbols) {
+				!shouldExcludeFile(sourceFile, program, excludeLibrarySymbols) && (include == nil || include(sourceFile)) {
 				sourceFiles[sourceFile.Path()] = sourceFile
 			}
 		}

@@ -374,7 +374,8 @@ when the element is emitted self-closing — tags are paired on the source
 tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
 server only after migrating `check` — a bare server now comes first.
 
-**Patched upstream files** (about 130 lines; all in fast-moving packages):
+**Patched upstream files** (about 130 lines planned; 220 after the review of
+102–105, with 106–108 still to add theirs; all in fast-moving packages):
 
 | File | Change |
 | --- | --- |
@@ -386,10 +387,15 @@ server only after migrating `check` — a bare server now comes first.
 | `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
 | `ls/diagnostics.go` | the reporting hook |
 | `ls/rename.go` | rename locations before write-back |
-| `ls/syntactic.go` (new) | folding, selection ranges, closing tags on a source file |
-| `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files |
-| `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly |
-| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info |
+| `ls/syntactic.go` (new) | document symbols, folding, selection ranges, closing tags on a source file |
+| `ls/symbols.go` | workspace symbols collected from the embedder's files only, before the cut to 256; slot params are not document symbols |
+| `ls/file_rename.go` | which edits of a file rename are made, per import (`FileRenameEdits`) |
+| `ls/inlay_hints.go` | each hint once; none on a generated call |
+| `ls/codeactions.go` | no organize-imports action without an edit in a mapped file |
+| `ls/definition.go` | a mapped module reached by a non-relative specifier: the file's start |
+| `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files; the extension kept next to a built-in sibling, decided on the module's absolute path |
+| `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly; one in generated text before the whole source is the source's start |
+| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename |
 
 **Cost accepted:** the stripped binary grows about 45% with the language
 service linked in (19 → 28 MB, darwin-arm64); the patches above must be

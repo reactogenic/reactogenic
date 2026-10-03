@@ -31,7 +31,17 @@ type movedFile struct {
 	newFileName string
 }
 
-func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lsproto.DocumentUri, newURI lsproto.DocumentUri) []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile {
+// FileRenameEdits decides which edits of a file rename are made (rtsx: lsp.Embedder — a server
+// that shares the project with another one makes only its own). importer is the file edited;
+// imported is what the rewritten path names: the module an import resolves to, the file a
+// reference or a tsconfig entry names, or "" when it is not known. nil keeps every edit.
+type FileRenameEdits func(importer, imported string) bool
+
+func (keep FileRenameEdits) wants(importer, imported string) bool {
+	return keep == nil || keep(importer, imported)
+}
+
+func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lsproto.DocumentUri, newURI lsproto.DocumentUri, keep FileRenameEdits) []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile {
 	program := l.GetProgram()
 	oldPath := oldURI.FileName()
 	newPath := newURI.FileName()
@@ -39,8 +49,10 @@ func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lspr
 	oldToNew := l.createPathUpdater(oldPath, newPath)
 
 	changeTracker := change.NewTracker(ctx, program.Options(), l.FormatOptions(), l.converters)
-	l.updateTsconfigFiles(program, changeTracker, oldToNew, oldPath, newPath)
-	l.updateImportsForFileRename(program, changeTracker, oldToNew)
+	if keep.wants("", oldPath) { // rtsx: a tsconfig is no one's file; its entry names the renamed path
+		l.updateTsconfigFiles(program, changeTracker, oldToNew, oldPath, newPath)
+	}
+	l.updateImportsForFileRename(program, changeTracker, oldToNew, keep)
 
 	var documentChanges []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile
 
@@ -214,7 +226,7 @@ func (l *LanguageService) updateRelativePath(oldToNew pathUpdater, oldImportFrom
 	return relativeImportPathFromDirectory(tspath.GetDirectoryPath(newImportFromPath), newAbsolute, l.UseCaseSensitiveFileNames())
 }
 
-func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater) {
+func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater, keep FileRenameEdits) {
 	allFiles := program.GetSourceFiles()
 	checker, done := program.GetTypeChecker(context.Background())
 	defer done()
@@ -240,18 +252,26 @@ func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, 
 				continue
 			}
 			updated := l.updateRelativePath(oldToNew, oldFileName, newImportFromPath, ref.FileName)
-			if updated != ref.FileName {
+			if updated != ref.FileName && keep.wants(oldFileName, tspath.ResolvePath(tspath.GetDirectoryPath(oldFileName), ref.FileName)) {
 				changeTracker.ReplaceTextRangeWithText(sourceFile, ref.TextRange, updated)
 			}
 		}
 
 		for _, importStringLiteral := range sourceFile.Imports() {
 			updated := l.getUpdatedImportSpecifier(program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
-			if updated != "" && updated != importStringLiteral.Text() {
+			if updated != "" && updated != importStringLiteral.Text() && keep.wants(oldFileName, resolvedImport(program, sourceFile, importStringLiteral)) {
 				changeTracker.ReplaceTextRangeWithText(sourceFile, createStringTextRange(sourceFile, importStringLiteral), updated)
 			}
 		}
 	}
+}
+
+// rtsx: the file an import resolves to, for FileRenameEdits; "" when it does not resolve.
+func resolvedImport(program *compiler.Program, sourceFile *ast.SourceFile, importLiteral *ast.StringLiteralLike) string {
+	if resolved := program.GetResolvedModuleFromModuleSpecifier(sourceFile, importLiteral); resolved != nil {
+		return resolved.ResolvedFileName
+	}
+	return ""
 }
 
 // We assume the source file did not move to a different program.

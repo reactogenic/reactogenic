@@ -17,10 +17,10 @@ import (
 // front sits between the client and the fork's server, in this process. It
 // answers what TypeScript cannot answer from the virtual text — the
 // syntactic features, from the .rtsx source tree (ide.md, *Span map*) — and
-// narrows what the server says about files that are not ours: the client
-// attaches it to .rtsx documents only, but workspace-wide answers ignore
-// that (ide.md, *reactogenic lsp*). It also ends the session: `exit` is its
-// own, so that it works whatever state the server is in.
+// for that keeps the text of each open .rtsx document. It also ends the
+// session: `exit` is its own, so that it works whatever state the server is
+// in. (What the server says about files that are not ours is narrowed in
+// the server itself: lsp.Embedder.Owns.)
 type front struct {
 	// outgoing queues the messages for the client. Nothing here may block on
 	// writing to the client: the client may itself be blocked writing to us,
@@ -33,6 +33,7 @@ type front struct {
 	pending         map[string]request // forwarded requests whose answers we rewrite, by id
 	encoding        string             // position encoding, from the initialize result
 	lineFoldingOnly bool
+	symbolTree      bool  // the client takes document symbols as a tree
 	shutdown        bool  // the client asked for shutdown
 	ended           error // why fromClient returned: nil (its input ended), errExit, or a framing error
 }
@@ -46,7 +47,6 @@ var newSyntactic = server.NewSyntactic
 
 type request struct {
 	Method string
-	Params json.RawMessage
 }
 
 type message struct {
@@ -241,7 +241,7 @@ func (f *front) clientMessage(msg message) (handled bool) {
 	uri := doc.TextDocument.URI
 	f.mu.Lock()
 	text, open := f.docs[uri]
-	encoding, lineFoldingOnly := f.encoding, f.lineFoldingOnly
+	encoding, lineFoldingOnly, symbolTree := f.encoding, f.lineFoldingOnly, f.symbolTree
 	f.mu.Unlock()
 
 	switch msg.Method {
@@ -252,15 +252,17 @@ func (f *front) clientMessage(msg message) (handled bool) {
 					FoldingRange struct {
 						LineFoldingOnly bool `json:"lineFoldingOnly"`
 					} `json:"foldingRange"`
+					DocumentSymbol struct {
+						Hierarchical bool `json:"hierarchicalDocumentSymbolSupport"`
+					} `json:"documentSymbol"`
 				} `json:"textDocument"`
 			} `json:"capabilities"`
 		}
 		json.Unmarshal(msg.Params, &p)
 		f.mu.Lock()
 		f.lineFoldingOnly = p.Capabilities.TextDocument.FoldingRange.LineFoldingOnly
+		f.symbolTree = p.Capabilities.TextDocument.DocumentSymbol.Hierarchical
 		f.mu.Unlock()
-		f.await(msg)
-	case "workspace/symbol", "workspace/willRenameFiles":
 		f.await(msg)
 	case "shutdown":
 		f.mu.Lock()
@@ -315,6 +317,14 @@ func (f *front) clientMessage(msg message) (handled bool) {
 			}
 			return f.reply(*msg.ID, json.RawMessage(result)) == nil
 		}
+	case "textDocument/documentSymbol":
+		if open && msg.ID != nil {
+			result, err := newSyntactic(text, encoding).DocumentSymbols(uri, symbolTree)
+			if err != nil {
+				return false
+			}
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil
+		}
 	case "textDocument/selectionRange":
 		if open && msg.ID != nil {
 			var p struct {
@@ -363,7 +373,7 @@ func (f *front) await(msg message) {
 		return
 	}
 	f.mu.Lock()
-	f.pending[string(*msg.ID)] = request{Method: msg.Method, Params: msg.Params}
+	f.pending[string(*msg.ID)] = request{Method: msg.Method}
 	f.mu.Unlock()
 }
 
@@ -418,67 +428,8 @@ func (f *front) answer(req request, result json.RawMessage) (json.RawMessage, bo
 		if sync, ok := caps["textDocumentSync"].(map[string]any); ok {
 			sync["change"] = 1
 		}
-		// File rename: .rtsx too — no other server knows these modules.
-		caps["workspace"] = map[string]any{"fileOperations": map[string]any{"willRename": map[string]any{"filters": []any{
-			map[string]any{"scheme": "file", "pattern": map[string]any{"glob": "**/*.{ts,tsx,js,jsx,cts,cjs,mts,mjs,json,rtsx}"}},
-		}}}}
 		r["capabilities"], _ = json.Marshal(caps)
 		out, err := json.Marshal(r)
-		return out, err == nil
-	case "workspace/symbol":
-		// Symbols declared in .rtsx files; the rest is the user's TypeScript's.
-		var symbols []json.RawMessage
-		if json.Unmarshal(result, &symbols) != nil {
-			return nil, false
-		}
-		kept := []json.RawMessage{}
-		for _, s := range symbols {
-			var symbol struct {
-				Location struct {
-					URI string `json:"uri"`
-				} `json:"location"`
-			}
-			if json.Unmarshal(s, &symbol) == nil && isRTSX(symbol.Location.URI) {
-				kept = append(kept, s)
-			}
-		}
-		out, err := json.Marshal(kept)
-		return out, err == nil
-	case "workspace/willRenameFiles":
-		// A renamed .rtsx: every importer. A renamed .ts/.tsx: the .rtsx
-		// importers only — the user's TypeScript updates the rest.
-		var p struct {
-			Files []struct {
-				OldURI string `json:"oldUri"`
-			} `json:"files"`
-		}
-		json.Unmarshal(req.Params, &p)
-		for _, file := range p.Files {
-			if isRTSX(file.OldURI) {
-				return nil, false
-			}
-		}
-		var edit struct {
-			Changes         map[string]json.RawMessage `json:"changes,omitempty"`
-			DocumentChanges []json.RawMessage          `json:"documentChanges,omitempty"`
-		}
-		if json.Unmarshal(result, &edit) != nil {
-			return nil, false
-		}
-		for uri := range edit.Changes {
-			if !isRTSX(uri) {
-				delete(edit.Changes, uri)
-			}
-		}
-		var kept []json.RawMessage
-		for _, change := range edit.DocumentChanges {
-			var doc textDocument
-			if json.Unmarshal(change, &doc) == nil && isRTSX(doc.TextDocument.URI) {
-				kept = append(kept, change)
-			}
-		}
-		edit.DocumentChanges = kept
-		out, err := json.Marshal(edit)
 		return out, err == nil
 	}
 	return nil, false

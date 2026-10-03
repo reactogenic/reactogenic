@@ -9,6 +9,7 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/astnav"
 	"github.com/microsoft/TypeScript/tsc/internal/checker"
+	"github.com/microsoft/TypeScript/tsc/internal/collections"
 	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/debug"
 	"github.com/microsoft/TypeScript/tsc/internal/evaluator"
@@ -53,7 +54,42 @@ func (l *LanguageService) ProvideInlayHint(
 		inlayHintState.visit(projection.AsNode())
 		result = append(result, inlayHintState.result...)
 	}
+	result = uniqueInlayHints(result) // rtsx
 	return lsproto.InlayHintsOrNull{InlayHints: &result}, nil
+}
+
+// rtsx: a node that holds generated code is visited once per run of copied text the requested range
+// maps to, and gives its hints each time: each hint once. (Upstream answers a range with every hint
+// of a node that intersects it.)
+func uniqueInlayHints(hints []*lsproto.InlayHint) []*lsproto.InlayHint {
+	type key struct {
+		position lsproto.Position
+		label    string
+	}
+	var seen collections.Set[key]
+	return slices.DeleteFunc(hints, func(hint *lsproto.InlayHint) bool {
+		var label strings.Builder
+		if hint.Label.String != nil {
+			label.WriteString(*hint.Label.String)
+		} else if hint.Label.InlayHintLabelParts != nil {
+			for _, part := range *hint.Label.InlayHintLabelParts {
+				label.WriteString(part.Value)
+			}
+		}
+		return !seen.AddIfAbsent(key{hint.Position, label.String()})
+	})
+}
+
+// rtsx: a call the content mapper generated — its callee is not source text — has no argument to
+// name, though an argument may be copied from the source (the `$X` of `slot={$X}`).
+func isGeneratedCall(file *ast.SourceFile, expr *ast.CallOrNewExpression) bool {
+	spans := file.SpanMap()
+	if spans == nil {
+		return false
+	}
+	callee := expr.Expression()
+	_, fidelity := spans.VirtualToOriginalSpan(core.NewTextRange(callee.End()-1, callee.End()))
+	return !fidelity.IsExact()
 }
 
 type inlayHintState struct {
@@ -148,7 +184,7 @@ func (s *inlayHintState) visitFunctionDeclarationLikeForReturnType(decl *ast.Fun
 
 func (s *inlayHintState) visitCallOrNewExpression(expr *ast.CallOrNewExpression) {
 	args := expr.Arguments()
-	if len(args) == 0 {
+	if len(args) == 0 || isGeneratedCall(s.file, expr) { // rtsx
 		return
 	}
 

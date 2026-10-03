@@ -22,6 +22,11 @@ type BuiltIn struct {
 	// FileIdentity is what a file's transform depends on besides its own
 	// text (the names of its siblings); it becomes part of the cache key.
 	FileIdentity func(BuiltInRequest) string
+
+	// mappers is the registration as config-level mappers: made once, since
+	// a project compares its mappers with a snapshot's by identity — a new
+	// one for every snapshot would rebuild the inferred project each time.
+	mappers []*Mapper
 }
 
 // BuiltInRequest is a file to transform and the file system to read its
@@ -37,20 +42,25 @@ var builtIn atomic.Pointer[BuiltIn]
 
 // RegisterBuiltIn installs b for the process; call it before any program is
 // built. nil removes it.
-func RegisterBuiltIn(b *BuiltIn) { builtIn.Store(b) }
+func RegisterBuiltIn(b *BuiltIn) {
+	if b != nil {
+		b.mappers = []*Mapper{{
+			Definition: Definition{Package: b.Name, Extensions: b.Extensions},
+			Manifest:   Manifest{Name: b.Name, Version: b.Version},
+		}}
+	}
+	builtIn.Store(b)
+}
 
 // BuiltInMappers returns the registered mapper as config-level mappers, with
-// its extensions; nil when none is registered.
+// its extensions; nil when none is registered. The same slice every time: it
+// is not to be changed.
 func BuiltInMappers() ([]*Mapper, []string) {
 	b := builtIn.Load()
 	if b == nil {
 		return nil, nil
 	}
-	mapper := &Mapper{
-		Definition: Definition{Package: b.Name, Extensions: b.Extensions},
-		Manifest:   Manifest{Name: b.Name, Version: b.Version},
-	}
-	return []*Mapper{mapper}, b.Extensions
+	return b.mappers, b.Extensions
 }
 
 // FileIdentifier is implemented by a Project whose transforms depend on

@@ -43,6 +43,7 @@ type Client struct {
 	options       Options
 	registrations []string // what the server registered dynamically: `method id`
 	asked         []string // the methods of the server's requests
+	logs          []string // the server's window/logMessage texts
 	Refreshes     int      // workspace/diagnostic/refresh requests received
 	// Initialized is the server's answer to initialize.
 	Initialized struct {
@@ -180,6 +181,14 @@ func (c *Client) Asked() []string {
 	return append([]string(nil), c.asked...)
 }
 
+// Logs is what the server has logged so far (window/logMessage): the output
+// panel of the editor.
+func (c *Client) Logs() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.logs...)
+}
+
 // Configure changes the user's settings, as the editor does: the server is
 // told, and asks again.
 func (c *Client) Configure(settings map[string]any) {
@@ -228,8 +237,16 @@ func (c *Client) read(r *bufio.Reader) {
 		switch {
 		case msg.Method != "" && msg.ID != nil:
 			c.serverRequest(*msg.ID, msg.Method, msg.Params)
+		case msg.Method == "window/logMessage":
+			var p struct {
+				Message string `json:"message"`
+			}
+			json.Unmarshal(msg.Params, &p)
+			c.mu.Lock()
+			c.logs = append(c.logs, p.Message)
+			c.mu.Unlock()
 		case msg.Method != "":
-			// A notification: logs, telemetry, progress.
+			// A notification: telemetry, progress.
 		case msg.ID != nil:
 			var id int
 			json.Unmarshal(*msg.ID, &id)

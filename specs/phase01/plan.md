@@ -713,6 +713,34 @@ goes through `rtsx/server.ApplyChange`, the server's own line map; one with
 a position no document has is dropped before the server (upstream dies of a
 line beyond int32). Implementation, call hierarchy and linked editing have
 rows in ide.md's table, and scenarios.
+Review, the fork (1.3–1.8, 3.1–3.5, 3.10, 4.3–4.5):
+- *Specifiers*: the sibling guard probed a relative path against the
+  server's directory, so `./button` was written next to `button.ts`. It is
+  decided on the module's absolute path now, for every kind of specifier.
+- *Auto-import beside a generated import*: a position in generated text that
+  precedes the whole source is the source's start — the import lands on
+  line 1 in a mounter or container without imports.
+- *Document symbols* moved to the source tree, with folding: on the virtual
+  text a declaration that holds any rtsx construct had its name as its
+  range, and generated object keys were symbols.
+- *Inlay hints*: once each (a range maps to many copied runs; each run gave
+  the enclosing function's hints again); none on a generated call.
+- *Organize imports* is not offered next to a generated import, instead of
+  an action with no edit. Deferred — ide.md, *Not in the first release*:
+  making it work needs the generated import on a line of its own
+  (transpiler).
+- *Definition* on a `paths` specifier of an `.rtsx` module.
+- *Workspace symbols and file rename* are narrowed in the fork
+  (`Embedder.Owns`): symbols before the cut to 256; rename per import, so a
+  mixed batch and a folder are right, and the client is asked about folders.
+  The front's two rewrites are gone; `textDocument/rename` on a specifier
+  (a client without `willRenameFiles`) stays whole.
+- `BuiltInMappers` is one slice per registration: the inferred project was
+  rebuilt on every open and close. `rtsx.NewProgram` reads a referenced
+  project from source.
+- Deferred — ide.md, *Not in the first release*: auto-import of a
+  dependency's `.rtsx` exports (TS's dependency index has its own host and
+  resolver).
 - Folding and selection ranges from the source tree; closing-tag insertion
   (*Tags*); workspace symbols and file rename as in ide.md's table;
   `reactogenic --version`, the same string in `serverInfo` and in the

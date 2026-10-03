@@ -52,6 +52,15 @@ func (s *Syntactic) SelectionRanges(positions []byte) ([]byte, error) {
 	return json.Marshal(s.s.SelectionRanges(at))
 }
 
+// DocumentSymbols is the result of textDocument/documentSymbol: a tree for a
+// client that supports one (hierarchical), else flat, located in uri.
+func (s *Syntactic) DocumentSymbols(uri string, hierarchical bool) ([]byte, error) {
+	if hierarchical {
+		return json.Marshal(s.s.DocumentSymbols(context.Background()))
+	}
+	return json.Marshal(s.s.SymbolInformations(context.Background(), lsproto.DocumentUri(uri)))
+}
+
 // ClosingTag is the closing tag to insert after a `>` just typed at the
 // request's `position` (JSON), or "".
 func (s *Syntactic) ClosingTag(position []byte) (string, error) {

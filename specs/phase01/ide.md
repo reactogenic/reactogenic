@@ -176,10 +176,14 @@ A **front** in the same process sits between the client and the fork's
 server. It keeps the text of each open `.rtsx` document (the server asks for
 whole documents on change; a client that sends a range anyway is served — the
 change is applied as the server applies it, and one with a position no
-document has goes no further), answers the source-tree features itself, and
-narrows the workspace-wide answers to what is ours. It never blocks on
-writing to the client: the client may be blocked writing to it. A failure
-inside the front answers that request with an error; the process goes on.
+document has goes no further) and answers the source-tree features itself.
+It never blocks on writing to the client: the client may be blocked writing
+to it. A failure inside the front answers that request with an error; the
+process goes on.
+
+The workspace-wide answers are narrowed to what is ours **in the server**
+(the fork's `Embedder.Owns`), where the choice is still per symbol and per
+import — not on the finished answer.
 
 **How the process ends** — the front's too, so that it holds in any state
 of the server:
@@ -196,17 +200,19 @@ of the server:
 | --- | --- | --- |
 | diagnostics | **the same as `reactogenic check`** | *Diagnostics* |
 | hover, signature help | ✓ | TS on virtual text, mapped back |
-| go to definition, type definition, implementation, references, highlights | ✓ | TS; `#name` → *Segments* |
+| go to definition, type definition, implementation, references, highlights | ✓ — on a module specifier: the module's file, a `paths` alias included | TS; `#name` → *Segments* |
 | call hierarchy | ✓ — a call in a slot body is the enclosing component's; generated calls are not listed | TS |
-| completion, auto-import | ✓ | TS; slot names → *Slots* |
+| completion, auto-import | ✓ — also in a file whose only import is generated (*Specifiers the server writes*) | TS; slot names → *Slots* |
 | rename | correct or refused | *Rename* |
-| document symbols, semantic tokens, inlay hints | ✓ | TS |
-| folding, selection ranges | ✓ | the source tree |
+| semantic tokens | ✓ | TS |
+| inlay hints | ✓ — each once; none on a generated call (`slot:` before the `$X` of `slot={$X}`); a slot's params get their type | TS |
+| document symbols, folding, selection ranges | ✓ — a declaration's range is its own, whatever it holds; slot attributes, args and params are not symbols | the source tree |
 | closing-tag insertion | ✓, `$` tags included | *Tags* |
 | linked editing | plain tag pairs; none — rather than a wrong pair — on a tag that has slots, or on a slot tag | TS; *Not in the first release* |
-| code actions, organize imports | only when every edit maps exactly | TS drops the rest |
-| workspace symbols | symbols declared in `.rtsx` files | the rest is the user's TypeScript's |
-| file rename | a renamed `.rtsx`: edits in every importer; a renamed `.ts` / `.tsx`: edits in `.rtsx` importers only | no other server knows `.rtsx` modules |
+| code actions | quick fixes: only when every edit maps exactly | TS drops the rest |
+| organize / sort / remove unused imports | where every import is the author's (a file that only fills slots). **Not offered** in a file with a generated import — never an action with no edit | TS; *Not in the first release* |
+| workspace symbols | symbols declared in `.rtsx` files — chosen before TS cuts to its best 256 | the rest is the user's TypeScript's |
+| file rename | per import: an edit in an `.rtsx` document, or of an import of an `.rtsx` module, is ours. So: a renamed `.rtsx` — every importer; a renamed `.ts` / `.tsx` — its `.rtsx` importers; several files, or a folder — each import by that rule | no other server knows `.rtsx` modules |
 | formatting | ✗ — not advertised | *Not in the first release* |
 
 `.ts` and `.tsx` files of the same project are in the server's program (for
@@ -317,6 +323,8 @@ beside the source and refreshes it on every edit.
 | unsaved new files | an `untitled:` document is not attached — highlighting only until it is saved. The server knows a document by its file name (the mapper, the project, the directory its imports resolve from). One sent anyway ends nothing: it is answered by the name in its URI — as plain TypeScript when that does not end in `.rtsx` |
 | linked editing of slot tag pairs, and of a tag that has slots | plain pairs work; `editor.linkedEditing` is off by default |
 | code lens (references, implementations) | not advertised: a lens's range is wrong on a declaration that holds rtsx constructs, and its command is filled in by the TypeScript extension's own client. Off by default in VS Code |
+| organize imports next to a generated import | a segment mounter, a container (`slot={$X}`), an exhaustive `Switch`: the generated import sits on the last import's line end, so the edit of that line has no source range. Needs the generated import on a line of its own (a transpiler change); until then the three import actions are not offered there |
+| auto-import of a dependency's `.rtsx` exports | a package under `node_modules` that ships `.rtsx` modules imports and checks, but its exports are not offered before the first import: TS's index of dependencies parses their files itself, with its own resolver and host — the mapper would have to be built into that index too |
 | shorthand inlay hint | `disabled`⟨`={disabled}`⟩ on every bound bare attribute (syntax.md, *Silent flip*) |
 | quick fix for `segment-not-found` | create the file with an empty default component |
 | hover docs on `Switch` / `Match` / `$Case` | they are lowered away; static text |
@@ -329,9 +337,16 @@ beside the source and refreshes it on every edit.
 
 **Specifiers the server writes** (auto-import, file rename) are extensionless
 for an `.rtsx` module — `./button`, as the convention is — unless a built-in
-sibling would win the import. One exception: in a file that mounts a segment,
-auto-import follows that file's existing imports, and the generated segment
-import is explicit (`./intro.rtsx`); both forms are valid everywhere.
+sibling would win the import: next to `button.ts` or `button.d.ts` the
+specifier is `./button.rtsx`, decided on the module's own path (relative,
+`paths` and package specifiers alike). One exception: in a file that mounts a
+segment, auto-import follows that file's existing imports, and the generated
+segment import is explicit (`./intro.rtsx`); both forms are valid everywhere.
+
+**In a file whose only import is generated** (a segment mounter or a
+container without imports of its own) a new import goes to line 1 — where the
+transform puts its own, above a leading comment or directive — whichever way
+its module sorts against the generated one.
 
 **A cursor at the end of a copied expression** (`on={getSta▮}`, an identifier
 being typed in a slot body) is that expression's end, though generated text

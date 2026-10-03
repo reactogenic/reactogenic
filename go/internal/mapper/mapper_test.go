@@ -117,3 +117,44 @@ export const app = [<Page />, <P2 />];
 		}
 	}
 }
+
+// A module of a referenced composite project is read from its source, as in
+// the language server: an .rtsx file has no output a build could leave for
+// the importer, so without that its import can never check.
+func TestMappedProgramAcrossReference(t *testing.T) {
+	Register("test")
+	defer rtsx.RegisterMapper(nil)
+
+	options := `"strict": true, "jsx": "preserve", "module": "esnext", "moduleResolution": "bundler", "target": "es2022", "lib": ["es2022"], "types": []`
+	dir := writeProject(t, map[string]string{
+		"lib/tsconfig.json": `{ "compilerOptions": { ` + options + `, "composite": true, "outDir": "out", "rootDir": "." }, "include": ["."] }`,
+		"lib/jsx.d.ts":      jsxTypes,
+		"lib/button.rtsx":   "export function Button({ size }: { size: number }) {\n  return <button>{size}</button>;\n}\n",
+		"lib/util.ts":       "export const twice = (n: number) => n * 2;\n",
+		"app/tsconfig.json": `{ "compilerOptions": { ` + options + `, "noEmit": true }, "include": ["src"], "references": [{ "path": "../lib" }] }`,
+		"app/src/jsx.d.ts":  jsxTypes,
+		"app/src/page.rtsx": `import { Button } from "../../lib/button";
+import { twice } from "../../lib/util";
+export function Page() {
+  return <main><Button size={twice("1")} /><Button size="lg" /></main>;
+}
+`,
+	})
+	program, configDiagnostics := rtsx.NewProgram(dir+"/app/tsconfig.json", dir+"/app", rtsx.OSFS())
+	for _, d := range configDiagnostics {
+		t.Errorf("config: %s", rtsx.Message(d))
+	}
+	// The two mistakes of page.rtsx, typed by lib's sources — and nothing
+	// about a missing declaration file or an output that was not built.
+	var got []string
+	for _, d := range rtsx.AllDiagnostics(program) {
+		name := "(no file)"
+		if d.File() != nil {
+			name = filepath.Base(d.File().FileName())
+		}
+		got = append(got, fmt.Sprintf("%s TS%d", name, d.Code()))
+	}
+	if strings.Join(got, "|") != "page.rtsx TS2345|page.rtsx TS2322" {
+		t.Errorf("diagnostics: %q", got)
+	}
+}

@@ -51,6 +51,27 @@ func (s *Syntactic) SelectionRanges(positions []lsproto.Position) []*lsproto.Sel
 	return results
 }
 
+// DocumentSymbols are TypeScript's document symbols of the file, as a tree.
+// On the source tree a declaration's range is its own, whatever constructs it
+// holds, and there is no generated declaration (the keys of the objects a
+// mapper builds) to list.
+func (s *Syntactic) DocumentSymbols(ctx context.Context) []*lsproto.DocumentSymbol {
+	symbols := s.l.getDocumentSymbolsForChildren(ctx, s.file.AsNode(), s.file)
+	if symbols == nil {
+		symbols = []*lsproto.DocumentSymbol{}
+	}
+	return symbols
+}
+
+// SymbolInformations are DocumentSymbols for a client that takes no tree.
+func (s *Syntactic) SymbolInformations(ctx context.Context, uri lsproto.DocumentUri) []lsproto.SymbolInformation {
+	infos := flattenDocumentSymbols(s.DocumentSymbols(ctx), uri)
+	if infos == nil {
+		infos = []lsproto.SymbolInformation{}
+	}
+	return infos
+}
+
 // ClosingTag is the closing tag to insert after a `>` just typed at
 // position: `</name>` for an opening tag that has none, as TypeScript
 // decides it (ProvideOnAutoInsert).

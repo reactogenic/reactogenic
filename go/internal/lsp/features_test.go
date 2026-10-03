@@ -227,6 +227,7 @@ func TestFeatures(t *testing.T) {
 		// A tree, as the editor asks for it: the outline.
 		var symbols []struct {
 			Name           string        `json:"name"`
+			Range          lsptest.Range `json:"range"`
 			SelectionRange lsptest.Range `json:"selectionRange"`
 			Children       []struct {
 				Name string `json:"name"`
@@ -240,7 +241,9 @@ func TestFeatures(t *testing.T) {
 				for _, child := range s.Children {
 					children += child.Name + " "
 				}
-				found = s.SelectionRange.String() == "5:17-5:21" && strings.HasPrefix(children, "size count options ")
+				// The whole declaration, slots and Switch included, and nothing
+				// generated under it: TestDocumentSymbols.
+				found = s.Range.String() == "5:1-30:2" && s.SelectionRange.String() == "5:17-5:21" && children == "size count options "
 			}
 		}
 		if !found {
@@ -257,9 +260,10 @@ func TestFeatures(t *testing.T) {
 		}
 	})
 	t.Run("inlay hints", func(t *testing.T) {
-		var hints []json.RawMessage
-		whole := map[string]any{"textDocument": doc, "range": map[string]any{"start": lsptest.Position{}, "end": lsptest.Position{Line: 40}}}
-		c.Request("textDocument/inlayHint", whole, &hints)
+		// Off unless the user's settings turn them on: TestInlayHints.
+		if got := inlayHints(c, page, 0, 40); len(got) != 0 {
+			t.Errorf("with no setting: %q", got)
+		}
 	})
 	t.Run("folding", func(t *testing.T) {
 		var ranges []struct {
@@ -517,32 +521,80 @@ func TestSettings(t *testing.T) {
 	c := lsptest.StartWith(t, lsptest.Project(t, app), serve, lsptest.Options{Settings: returnTypes(true)})
 	const intro = "src/intro.rtsx"
 	c.Open(intro)
-	hints := func() string {
-		var hints []struct {
-			Position lsptest.Position `json:"position"`
-			Label    json.RawMessage  `json:"label"`
-		}
-		whole := map[string]any{"textDocument": map[string]any{"uri": c.URI(intro)}, "range": map[string]any{"start": lsptest.Position{}, "end": lsptest.Position{Line: 3}}}
-		c.Request("textDocument/inlayHint", whole, &hints)
-		out := ""
-		for _, h := range hints {
-			var parts []struct {
-				Value string `json:"value"`
-			}
-			json.Unmarshal(h.Label, &parts)
-			out += fmt.Sprintf("%d:%d", h.Position.Line+1, h.Position.Character+1)
-			for _, part := range parts {
-				out += part.Value
-			}
-			out += "; "
-		}
-		return out
-	}
-	if got := hints(); got != "1:32: Element; " {
+	hints := func() string { return strings.Join(inlayHints(c, intro, 0, 3), "; ") }
+	if got := hints(); got != "1:32 : Element" {
 		t.Errorf("hints with return types on: %s", got)
 	}
 	c.Configure(returnTypes(false))
 	if got := hints(); got != "" {
 		t.Errorf("hints with return types off: %s", got)
+	}
+}
+
+// inlayHints are the inlay hints of lines [from, to) of a document (zero-based,
+// as the editor asks for the visible range), as `line:col label`, in order.
+func inlayHints(c *lsptest.Client, rel string, from, to int) []string {
+	var hints []struct {
+		Position lsptest.Position `json:"position"`
+		Label    json.RawMessage  `json:"label"`
+	}
+	visible := map[string]any{"start": lsptest.Position{Line: from}, "end": lsptest.Position{Line: to}}
+	c.Request("textDocument/inlayHint", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}, "range": visible}, &hints)
+	out := []string{}
+	for _, h := range hints {
+		var parts []struct {
+			Value string `json:"value"`
+		}
+		var label string
+		if json.Unmarshal(h.Label, &parts) != nil {
+			json.Unmarshal(h.Label, &label)
+		}
+		for _, part := range parts {
+			label += part.Value
+		}
+		out = append(out, fmt.Sprintf("%d:%d %s", h.Position.Line+1, h.Position.Character+1, label))
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		var a, b [2]int
+		fmt.Sscanf(out[i], "%d:%d", &a[0], &a[1])
+		fmt.Sscanf(out[j], "%d:%d", &b[0], &b[1])
+		return a[0] < b[0] || a[0] == b[0] && a[1] < b[1]
+	})
+	return out
+}
+
+// ide.md, the feature table: inlay hints. Each hint once — a declaration
+// that holds rtsx constructs is many runs of copied text — and none on
+// generated code: a generated call's parameter names in front of the copied
+// argument, a generated function's return type.
+func TestInlayHints(t *testing.T) {
+	on := map[string]any{"enabled": true}
+	settings := map[string]any{"typescript": map[string]any{"inlayHints": map[string]any{
+		"parameterNames": map[string]any{"enabled": "all"}, "parameterTypes": on, "variableTypes": on,
+		"propertyDeclarationTypes": on, "functionLikeReturnTypes": on, "enumMemberValues": on,
+	}}}
+	c := lsptest.StartWith(t, lsptest.Project(t, app), serve, lsptest.Options{Settings: settings})
+	for rel, want := range map[string][]string{
+		// Page's return type, `count`, twice's parameter, and the type of a
+		// slot's params — the user's, though the function is generated.
+		"src/page.rtsx": {"5:66 : Element", "7:14 : number", "7:23 n:", "13:45 : { iconSize: Size }"},
+		// Button's return type — not `slot:` in front of `$Icon` and `$Label`,
+		// whose calls are generated.
+		"src/button.rtsx": {"9:61 : Element"},
+	} {
+		c.Open(rel)
+		lines := strings.Count(c.Text(rel), "\n") + 1
+		if got := inlayHints(c, rel, 0, lines); strings.Join(got, "; ") != strings.Join(want, "; ") {
+			t.Errorf("%s: %q, want %q", rel, got, want)
+		}
+		// The visible range, as the editor asks: of a declaration that
+		// reaches into it, the hints as well — each once.
+		visible := want[:1]
+		if len(want) > 1 {
+			visible = []string{want[0], want[len(want)-1]}
+		}
+		if got := inlayHints(c, rel, 9, 16); strings.Join(got, "; ") != strings.Join(visible, "; ") {
+			t.Errorf("%s, lines 10-16: %q, want %q", rel, got, visible)
+		}
 	}
 }
