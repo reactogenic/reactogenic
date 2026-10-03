@@ -1,13 +1,14 @@
 // The editor suite (`pnpm test:editor`): the extension in a real VS Code with
-// an isolated profile, against a copy of test/fixture. Four windows, one after
+// an isolated profile, against a copy of test/fixture. Five windows, one after
 // the other:
 //
 //   trusted     test/editor/trusted.ts     the server and the client's features
 //   untrusted   test/editor/untrusted.ts   highlighting only, no server process
 //   monorepo    test/editor/monorepo.ts    the workspace's own CLI: which one, and its lockfile
 //   transpiled  test/editor/transpiled.ts  Show Transpiled TSX, against test/editor/fake-server.mjs
+//   typescript  test/editor/typescript.ts  the TS server plugin in VS Code's own TypeScript
 //
-//   node scripts/test-editor.mjs [--vsix file.vsix] [trusted|untrusted|monorepo|transpiled ...]
+//   node scripts/test-editor.mjs [--vsix file.vsix] [trusted|untrusted|monorepo|transpiled|typescript ...]
 //
 // Without --vsix it tests this checkout: the extension from this folder, and
 // $REACTOGENIC_BINARY — unset: built from ../../go. With --vsix it tests a
@@ -26,7 +27,7 @@ import path from "node:path";
 import { downloadAndUnzipVSCode } from "@vscode/test-electron";
 import { build, root } from "./build.mjs";
 
-const SUITES = ["trusted", "untrusted", "monorepo", "transpiled"];
+const SUITES = ["trusted", "untrusted", "monorepo", "transpiled", "typescript"];
 const args = process.argv.slice(2);
 const vsix = args.includes("--vsix") ? path.resolve(args.splice(args.indexOf("--vsix"), 2)[1]) : undefined;
 const suites = args.length ? args : SUITES;

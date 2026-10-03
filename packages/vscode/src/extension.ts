@@ -6,6 +6,7 @@ import { LOCKFILES } from "./resolve";
 import { Server, type ServerState } from "./server";
 import { registerCheckTask } from "./task";
 import { Transpiled } from "./transpiled";
+import { configureTsPlugin } from "./tsPlugin";
 
 /** What `activate` returns: the editor suite reads it. */
 export interface Api {
@@ -38,15 +39,22 @@ export function activate(context: vscode.ExtensionContext): Api {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("reactogenic.server")) {
         void running.restart("reactogenic.server.* changed");
+        void configureTsPlugin(output);
       }
     }),
     // Untrusted: highlighting only. The server starts when trust is granted.
-    vscode.workspace.onDidGrantWorkspaceTrust(() => void running.restart("workspace trusted")),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      void running.restart("workspace trusted");
+      void configureTsPlugin(output);
+    }),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => void configureTsPlugin(output)),
     vscode.workspace.onDidOpenTextDocument((document) => running.opened(document)),
     registerCheckTask(running),
   );
 
   void running.restart("activated");
+  // The `.ts` side: VS Code's TypeScript runs the plugin; it learns the setting and the trust from here.
+  void configureTsPlugin(output);
   return { ready: () => running.ready().then(() => running.state()) };
 }
 

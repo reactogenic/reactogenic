@@ -11,10 +11,11 @@
 // Output: dist/vsix/rtsx-<target>-<version>.vsix; vsce lists its files.
 //
 // Run it on macOS or Linux: a .vsix made on Windows loses the executable bit.
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createVSIX } from "@vscode/vsce";
-import { build, root } from "./build.mjs";
+import { build, PLUGIN, root } from "./build.mjs";
 
 export const PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "win32-arm64", "win32-x64"];
 const repo = path.resolve(root, "../..");
@@ -30,6 +31,8 @@ const FILES = [
   "snippets/typescript.code-snippets",
   "dist/extension.js",
 ];
+/** The TS server plugin's package (scripts/build.mjs), under node_modules/<its name> in both. */
+const PLUGIN_FILES = ["package.json", "index.js"];
 
 const args = process.argv.slice(2);
 const preRelease = args.includes("--pre-release");
@@ -59,7 +62,19 @@ for (const target of targets.length ? targets : [...PLATFORMS, "universal"]) {
   // Ours (MIT); the grammar's and the bundle's (dist/ThirdPartyNotices.txt).
   copy(path.join(repo, "LICENSE"), path.join(stage, "LICENSE"));
   copy(path.join(root, "dist/ThirdPartyNotices.txt"), path.join(stage, "ThirdPartyNotices.txt"));
-  const shipped = { ...manifest, license: "MIT", files: [...FILES, "LICENSE", "ThirdPartyNotices.txt"] };
+  // The TS server plugin, where tsserver looks for it by name: a package in
+  // the extension's node_modules. It is the one dependency of the shipped
+  // manifest, which is how vsce takes a folder under node_modules.
+  const plugin = `node_modules/${PLUGIN}`;
+  for (const file of PLUGIN_FILES) {
+    copy(path.join(root, plugin, file), path.join(stage, plugin, file));
+  }
+  const shipped = {
+    ...manifest,
+    license: "MIT",
+    files: [...FILES, "LICENSE", "ThirdPartyNotices.txt", ...PLUGIN_FILES.map((file) => `${plugin}/${file}`)],
+    dependencies: { [PLUGIN]: manifest.version },
+  };
   delete shipped["//"];
   delete shipped.scripts; // nothing to run at package time
   delete shipped.devDependencies; // all of it is in the bundle
@@ -85,8 +100,17 @@ for (const target of targets.length ? targets : [...PLATFORMS, "universal"]) {
     packagePath,
     target: target === "universal" ? undefined : target,
     preRelease,
-    dependencies: false, // the bundle has them
+    // The extension's own dependencies are in its bundle; the staged manifest
+    // names the plugin alone, and `npm list` in the stage finds its folder.
+    dependencies: true,
+    useYarn: false,
   });
+  const listed = execFileSync("unzip", ["-Z1", packagePath], { encoding: "utf8" }).split("\n");
+  for (const file of PLUGIN_FILES) {
+    if (!listed.includes(`extension/${plugin}/${file}`)) {
+      throw new Error(`${packagePath} does not hold ${plugin}/${file}: tsserver would not find the plugin`);
+    }
+  }
   made.push(`${path.relative(repo, packagePath)}  ${(fs.statSync(packagePath).size / 1024 / 1024).toFixed(2)} MB${preRelease ? "  pre-release" : ""}`);
 }
 console.log(`\n${made.join("\n")}`);
