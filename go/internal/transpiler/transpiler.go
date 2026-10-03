@@ -91,9 +91,11 @@ type Output struct {
 	Stopped string
 	// Dropped: code the author wrote is not in TSX — a `Switch` or `Match`
 	// that cannot be lowered and an orphaned slot element are replaced by
-	// `null`; a half-typed `$Case` with a body is left out. What TS says
-	// about the file is then not about the author's code: names used only
-	// there read as unused (ide.md, *Tolerance*).
+	// `null`; a half-typed `$Case` with a body, a conditional child that
+	// mixes slot elements with anything else, and a `children` attribute next
+	// to a body are left out. What TS says about the file is then not about
+	// the author's code: names used only there read as unused (ide.md,
+	// *Tolerance*).
 	Dropped bool
 }
 
@@ -321,8 +323,9 @@ func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg stri
 // the range of a parse error (errs) lies within it: an unclosed tag leaves
 // no flag — recovery rebuilds the element — only its error. Nothing above
 // the nearest element counts: a syntax error elsewhere in the file hides
-// nothing here, and a diagnostic on the file as a whole (the zero span) has
-// no node to be broken.
+// nothing here. A node with no element around it answers for its statement
+// instead, and a diagnostic on the file as a whole (the zero span) has no
+// node to be broken.
 //
 // The file must be bound: the binder sets the flag.
 func underParseError(file *rtsx.SourceFile, errs []emit.Span, s emit.Span) bool {
@@ -360,6 +363,25 @@ func underParseError(file *rtsx.SourceFile, errs []emit.Span, s emit.Span) bool 
 		if isJSXElement(p) {
 			return holds(p)
 		}
+	}
+	// No element around it: the statement it is written in. Recovery makes
+	// the children of an owner whose opening tag is half-typed
+	// (`<Button variant=>`) top-level expressions of that statement.
+	for p := n; p.Parent != nil; p = p.Parent {
+		if p.Parent.Kind != rtsx.KindBlock && p.Parent != file.AsNode() {
+			continue
+		}
+		if rtsx.HasParseError(p) {
+			return true
+		}
+		for _, e := range errs {
+			// From its first token: an error at the end of the statement
+			// before (an unterminated string) is where this one's trivia starts.
+			if rtsx.TokenStart(file, p) <= e.Pos && e.End <= p.End() {
+				return true
+			}
+		}
+		return false
 	}
 	return false
 }

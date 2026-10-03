@@ -77,6 +77,58 @@ func TestSyntaxErrorSpans(t *testing.T) {
 	}
 }
 
+// An error on whitespace text — content, not formatting: no line break — is
+// on the text itself, not an empty span at the token after it.
+func TestErrorOnWhitespaceText(t *testing.T) {
+	src := "import { Switch } from \"@reactogenic/core\";\nexport const a = (s: string) => <Switch on={s}> <$Case is=\"a\">A</$Case></Switch>;\n"
+	out := transpile(t, src)
+	if len(out.Diagnostics) != 1 {
+		t.Fatalf("want 1 diagnostic, got %+v", out.Diagnostics)
+	}
+	space := strings.Index(src, "}> <$Case") + 2
+	if d := out.Diagnostics[0]; d.Code != "switch-children" || d.Span != (emit.Span{Pos: space, End: space + 1}) || d.Line != 2 || d.Col != 48 {
+		t.Errorf("got %+v, want switch-children on the space at 2:48 [%d,%d)", d, space, space+1)
+	}
+}
+
+// ide.md, *Span map*, *Attribute strings*: a string attribute that reads the
+// same as a JS string is copied where its value moves to a JS position — a
+// slot prop, a key, `is=`, an arg — so hover and completion answer inside
+// it. One that does not is an atom: the JS literal of its value.
+func TestAttributeStringsAreCopied(t *testing.T) {
+	src := `import { Switch } from "@reactogenic/core";
+export const a = (
+  <Table>
+    <$Column key="email" title="plain" alt="Tom &amp; Jerry" />
+  </Table>
+);
+export const b = (s: string) => <Switch on={s}><$Case is="loading">A</$Case></Switch>;
+export const c = ($Icon: any) => <i slot={$Icon} &size="lg" />;
+`
+	out := transpile(t, src)
+	if len(out.Diagnostics) > 0 {
+		t.Fatalf("%+v", out.Diagnostics)
+	}
+	for _, lit := range []string{`"email"`, `"plain"`, `"loading"`, `"lg"`} {
+		in := emit.Span{Pos: strings.Index(src, lit), End: strings.Index(src, lit) + len(lit)}
+		copied := false
+		for _, s := range out.Map.Segments {
+			if s.Copied && s.In.Pos <= in.Pos && in.End <= s.In.End {
+				at := s.Out.Pos + in.Pos - s.In.Pos
+				copied = out.TSX[at:at+len(lit)] == lit && s.Without&(emit.FeatureHover|emit.FeatureCompletion) == 0
+				break
+			}
+		}
+		if !copied {
+			t.Errorf("%s is not copied with hover and completion", lit)
+		}
+	}
+	entity := strings.Index(src, `"Tom &amp; Jerry"`)
+	if _, ok := out.Map.Output(entity + 1); ok || !strings.Contains(out.TSX, `alt: "Tom & Jerry"`) {
+		t.Errorf("a string with a character reference is copied:\n%s", out.TSX)
+	}
+}
+
 // Pass 0 errors come out with source positions, and output is still produced.
 func TestCheckErrorsAreDiagnostics(t *testing.T) {
 	src := "export const x = (\n  <div { size }>body</div>\n);\n"
@@ -199,6 +251,10 @@ func TestTolerant(t *testing.T) {
 		// reported on an element the author placed correctly.
 		{"no transpiler error under a broken element", "const a = <Button size={><$Icon>x</$Icon></Button>;\n", ""},
 		{"nor on a half-typed case", "const a = <Switch on={x}><$Case is=</Switch>;\n", ""},
+		// After recovery the parser's flag no longer calls the line breaks
+		// around `<$Icn>…</$Icon>` formatting: `$Action` would get
+		// `children: ""`, and TS an error that is not the author's.
+		{"whitespace after a mismatched closing tag is formatting", "const a = (\n  <Dialog>\n    <$Action>\n      <$Icn>x</$Icon>\n    </$Action>\n  </Dialog>\n);\n", `$Action={{ $Icn: { children: "x" } }}`},
 	} {
 		out, err := Transpile(Input{Files: map[string]string{"a.rtsx": c.src}, Entry: "a.rtsx", Tolerant: true})
 		if err != nil || out.Map == nil || out.Stopped != "" {

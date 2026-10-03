@@ -19,6 +19,10 @@ func TestCheck(t *testing.T) {
 		{`<Icons.Plus { size } />`, nil},
 		{`<section #about-us className="band" />`, nil},
 		{`<section {...p} />`, nil},
+		// A `$` tag is a slot whatever follows the `$`: a hyphen does not make
+		// it an HTML element.
+		{`<$sub-item { size }>b</$sub-item>`, nil},
+		{`<$icon-start { a } { b } />`, []string{"duplicate-params@{ b }"}},
 		// params-on-html
 		{`<div { size }>b</div>`, []string{"params-on-html@{ size }"}},
 		{`<my-element { size } />`, []string{"params-on-html@{ size }"}},

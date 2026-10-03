@@ -10,3 +10,12 @@ export const a = (
     </$Icon>
   </Button>
 );
+// It takes params like any slot element.
+export const b = (
+  <Button>
+    <$icon-start { size }>start {size}</$icon-start>
+    <$Icon>
+      <$sub-item { size }>text {size}</$sub-item>
+    </$Icon>
+  </Button>
+);

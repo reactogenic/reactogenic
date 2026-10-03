@@ -330,7 +330,11 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 			values[name] = c.slotObject(ch)
 		case slotConditional(ch) != nil:
 			cond := slotConditional(ch)
-			if name, ok := c.conditionalSlotName(cond); ok {
+			if name, ok := c.conditionalSlotName(cond); !ok {
+				// Neither a slot's value nor a child: the conditional — its
+				// test, its branches — is not in the output.
+				c.leftOut(ch)
+			} else {
 				prev := previous(name)
 				if _, ok := first[name]; !ok {
 					first[name] = c.span(ch)
@@ -644,6 +648,7 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 				continue
 			case name == "children" && len(body) > 0:
 				c.errorAt(attr, "slot-children-conflict", "`children` is given twice: as an attribute and as the body")
+				c.leftOut(attr) // the body wins
 				continue
 			}
 		}

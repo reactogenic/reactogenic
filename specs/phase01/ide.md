@@ -168,9 +168,14 @@ A file being typed rarely parses. The transform never fails on user input:
    - Decided on the **source** parse: a diagnostic of a later pass is judged
      where the author wrote the construct. That pass's own parse can only
      add to it — recovery may re-parent lowered text differently.
-   - Nothing above that element counts. A syntax error elsewhere in the file
-     hides nothing; a diagnostic with no element around it (a root element,
-     `ambiguous-module`) is dropped only for an error inside its own node.
+   - Nothing above that element counts: a syntax error elsewhere in the file
+     hides nothing.
+   - A node with no element around it (a root element) is judged by the
+     **statement** it is written in: recovery turns the children of an owner
+     whose opening tag is half-typed (`<Button variant=>`, a deleted `>`)
+     into top-level expressions of that statement. An error in another
+     statement or another function hides nothing. A file-level diagnostic
+     (`ambiguous-module`) is never dropped.
    - What the dropped error was about is left out, and the construct is
      lowered around it: a `$Case` being typed does not take its `Switch` —
      the subject, the other cases — out of the virtual text.
@@ -178,10 +183,13 @@ A file being typed rarely parses. The transform never fails on user input:
    mapped 1:1 — every TS diagnostic of the file is dropped (unlowered
    constructs would produce false ones). The same when code was **left
    out**: a `Switch` or `Match` that cannot be lowered and an orphaned slot
-   element become `null`, a half-typed `$Case` with a body is skipped —
-   whether their error was shown or dropped, every name used only there
-   would read as unused. Source parse errors and transpiler diagnostics of
-   the completed passes remain; hover and completion keep working.
+   element become `null`; a half-typed `$Case` with a body, a conditional
+   child that mixes slot elements with anything else, and a `children`
+   attribute next to a body are skipped — whether their error was shown or
+   dropped, every name used only there would read as unused. (The children
+   of a segment root are overwritten by design, with a warning: the file is
+   not marked.) Source parse errors and transpiler diagnostics of the
+   completed passes remain; hover and completion keep working.
 5. A panic inside a pass is caught there, whether the source parses or not:
    step 4 from the last good text, plus one `internal` diagnostic on the
    first line naming the pass. A panic anywhere else in the transform is

@@ -49,8 +49,17 @@ func TestTolerantRule3(t *testing.T) {
 		{"a slot after an unclosed div", inReturn("    <Button>\n      <div>\n      <$Icon className=\"i\" />\n    </Button>"), ""},
 		{"`<` typed before the cases", inReturn("    <Switch on={s}>\n      <\n      <$Case is=\"a\">A</$Case>\n      <$Case is=\"b\">B</$Case>\n    </Switch>"), ""},
 		{"`<$` typed before the cases", inReturn("    <Switch on={s}>\n      <$\n      <$Case is=\"a\">A</$Case>\n      <$Case is=\"b\">B</$Case>\n    </Switch>"), ""},
+		// Dropped: the owner's opening tag is half-typed, and recovery leaves
+		// its children with no element around them — the statement answers.
+		{"an attribute being typed on the owner", inReturn("    <Button variant=>\n      <$Icon className=\"i\" />\n      <$Label>{s}</$Label>\n      <$Hint>h</$Hint>\n    </Button>"), ""},
+		{"the same on a keyed owner", inReturn("    <Table rows={s} data=>\n      <$Column key=\"email\" />\n      <$Column key=\"name\" width={2}>Name</$Column>\n    </Table>"), ""},
+		{"the subject of a Switch being retyped", inReturn("    <Switch on=>\n      <$Case is=\"a\">A</$Case>\n      <$Case is=\"b\">B</$Case>\n      <$Case is=\"c\">C</$Case>\n    </Switch>"), ""},
+		{"the owner's `>` deleted", inReturn("    <Button variant=\"x\"\n      <$Icon className=\"i\" />\n      <$Label>{s}</$Label>\n    </Button>"), ""},
+		{"an orphan and the error in one statement", "export const a = <$Orphan />, b = ;\n", ""},
 		// Kept: the syntax error is in another statement or another function.
 		{"a root element, error in the statement before", tolerantHead + "  const y = s.;\n  return (<Switch><$Case is=\"a\">A</$Case></Switch>);\n}\n", "4:11 flow-no-subject"},
+		{"a root element, an unterminated string on the line before", tolerantHead + "  const y = \"abc\n  return (<Switch><$Case is=\"a\">A</$Case></Switch>);\n}\n", "4:11 flow-no-subject"},
+		{"a root element in a block, error after the block", tolerantHead + "  if (ok) {\n    return (<Switch><$Case is=\"a\">A</$Case></Switch>);\n  }\n  const y = ;\n}\n", "4:13 flow-no-subject"},
 		{"the same under a div", tolerantHead + "  const y = s.;\n  return (<div><Switch><$Case is=\"a\">A</$Case></Switch></div>);\n}\n", "4:16 flow-no-subject"},
 		{"a root element, error in another function", "export function B() {\n  const y = ;\n}\n" + inReturn("    <Switch><$Case is=\"a\">A</$Case></Switch>"), "7:5 flow-no-subject"},
 		{"an orphan at the top level", "export const a = <$Orphan />;\nexport function B() {\n  const y = ;\n}\n", "1:18 orphan-slot"},
@@ -106,8 +115,9 @@ func TestTolerantSwitchKept(t *testing.T) {
 	}
 }
 
-// A construct replaced by `null` — its error reported or not — marks the
-// file when it held code: TS no longer sees what the author wrote there.
+// A construct replaced by `null` or left out — its error reported or not —
+// marks the file when it held code: TS no longer sees what the author wrote
+// there.
 func TestDropped(t *testing.T) {
 	for _, c := range []struct {
 		name, jsx string
@@ -117,6 +127,13 @@ func TestDropped(t *testing.T) {
 		{"a Match without a subject", "<Match>{x}</Match>", true},
 		{"an orphaned slot with a body", "<div><$Icon>{x}</$Icon></div>", true},
 		{"an orphaned slot without code", "<div><$Icon className=\"i\" /></div>", false},
+		// A conditional child that is neither a slot's value nor a child.
+		{"a mixed conditional slot", "<Button>{ok ? <$Icon className=\"i\" /> : <b>{x}</b>}</Button>", true},
+		{"a conditional of two slots", "<Button>{ok ? <$Icon className=\"i\" /> : <$Label>t</$Label>}</Button>", true},
+		{"a conditional slot", "<Button>{ok ? <$Icon className=\"i\" /> : null}</Button>", false},
+		// The body wins over a `children` attribute.
+		{"children given twice", "<Button><$Icon children={x}>body</$Icon></Button>", true},
+		{"children given twice, a string", "<Button><$Icon children=\"x\">body</$Icon></Button>", false},
 		{"nothing wrong", "<Switch on={s}><$Case is=\"a\">{x}</$Case></Switch>", false},
 	} {
 		for _, tolerant := range []bool{false, true} {
@@ -125,6 +142,14 @@ func TestDropped(t *testing.T) {
 				t.Errorf("%s (tolerant %v): err %v, dropped %v, want %v\n%s", c.name, tolerant, err, out.Dropped, c.dropped, out.TSX)
 			}
 		}
+	}
+	// The same where the error is dropped: a `Match` not closed yet, above a
+	// slot element and a child, lowers to a mixed conditional. `x` is in the
+	// source and no longer in the output.
+	src := inReturn("    <Button>\n      <Match on={ok}>\n      <$Icon className=\"i\" />\n      {x}\n    </Button>")
+	codes, out := tolerantCodes(t, map[string]string{"a.rtsx": src}, "a.rtsx")
+	if codes != "" || !out.Dropped || !strings.Contains(out.TSX, "<Button />") {
+		t.Errorf("an unclosed Match above a slot: diagnostics %q, dropped %v\n%s", codes, out.Dropped, out.TSX)
 	}
 }
 

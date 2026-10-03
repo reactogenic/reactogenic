@@ -635,9 +635,12 @@ Revised after review (findings 2.3–2.10, 3.14):
   TypeScript and esbuild do (Babel folds them into a space). Fixture
   `slots/attribute-strings`.
 - A slot tag that is not an identifier (`<$sub-item>`) is a slot — the `$`
-  decides, as syntax.md's grammar table and pass 0 already had it. On a
-  component it was a valid attribute name; inside a slot it is now a quoted
-  key, the name still copied. Fixture `slots/hyphen-names`.
+  decides, as syntax.md's grammar table has it. On a component it was a
+  valid attribute name; inside a slot it is now a quoted key, the name still
+  copied. Pass 0 did not have it for params: the hyphen made the tag
+  intrinsic, and `<$sub-item { size }>` was `params-on-html` next to correct
+  output. It takes params like any slot element. Fixture
+  `slots/hyphen-names`.
 - A masked copy emitted twice answers once (a slot's previous value under
   two null branches; fixture `slots/conditional-previous`). The corpus test
   checks each shorthand for exactly its two copies with the table's
@@ -730,6 +733,32 @@ test now types Enter too, fails on every error and checks every span:
   — what its cache key covers. `segment-self` through another file is
   therefore not reported by the mapped transform (a direct self-mount still
   is); RGP1-106 reports it as a cross-file rule. `check` is unchanged.
+
+Revised again after the fixes were verified (2.1, 2.5):
+- Rule 3 over-corrected: a node with no element around it was judged alone,
+  and recovery puts the children of an owner whose opening tag is half-typed
+  (`<Button variant=>`, `<Switch on=>`, a deleted `>`) at the top of their
+  statement — `orphan-slot` on untouched lines. Such a node is now judged
+  by its statement. Exhaustive mutants (341,956; 250,901 with syntax
+  errors), diagnostics with a code the unmutated case lacks: `orphan-slot`
+  15,799 → 314, `flow-as-value` 941 → 0, `flow-no-subject` 60 → 1. What
+  remains has no owner tag left (its `<` deleted or misread).
+- `Output.Dropped` was not set for a conditional child of an owner that is
+  neither a slot's value nor a child — `mixed-conditional-slot`, reported or
+  dropped (an unclosed `Match` above a slot element and a child) — nor for a
+  `children` attribute that loses to a body.
+- Known, not marked: the children of a segment root (overwritten by design);
+  an earlier `<$X>` that a later one replaces (last wins); the subject of a
+  `Switch` on a reference with no tested case (`<Switch on={s}>` whose first
+  `<$Case` is being typed emits `null`).
+  > OPEN: emit the subject of such a `Switch` (hover and completion in
+  > `on={…}` of an empty `Switch` have nothing to answer). It changes emitted
+  > code for valid input, so it is not done here.
+- Three pieces of the first revision had no test that failed without them;
+  each has one now: `syntax.BlankText` (whitespace after a mismatched closing
+  tag gave the slot around it `children: ""`), the span of an error on
+  whitespace text, and a plain attribute string staying a copy (hover and
+  completion inside `is="loading"`).
 - `Input.Tolerant` (ide.md, *Tolerance*): passes on the recovered tree,
   per-pass fallback and the *stopped* mark, suppression under a broken JSX
   element, identity as the last resort, `recover` at the mapper boundary.
