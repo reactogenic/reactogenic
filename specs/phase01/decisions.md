@@ -386,7 +386,9 @@ server only after migrating `check` — a bare server now comes first.
 | `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
 | `ls/diagnostics.go` | the reporting hook |
 | `ls/rename.go` | rename locations before write-back |
-| `ls/folding.go`, `ls/selectionranges.go` | entry points on a source file |
+| `ls/syntactic.go` (new) | folding, selection ranges, closing tags on a source file |
+| `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files |
+| `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly |
 | `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info |
 
 **Cost accepted:** the stripped binary grows about 45% with the language

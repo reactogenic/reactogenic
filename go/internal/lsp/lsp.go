@@ -16,5 +16,17 @@ import (
 // version is the binary's: the server info, and part of every cache key.
 func Serve(ctx context.Context, in io.Reader, out, log io.Writer, cwd, version string) error {
 	mapper.Register(version)
-	return server.Run(ctx, server.Options{In: in, Out: out, Err: log, Cwd: cwd, Name: "reactogenic", Version: version})
+	f := newFront()
+	serverIn, toServer := io.Pipe()
+	fromServer, serverOut := io.Pipe()
+	go f.fromClient(in, toServer)
+	relayed, written := make(chan error, 1), make(chan error, 1)
+	go func() { relayed <- f.fromServer(fromServer) }()
+	go func() { written <- f.outgoing.drain(out) }()
+	err := server.Run(ctx, server.Options{In: serverIn, Out: serverOut, Err: log, Cwd: cwd, Name: "reactogenic", Version: version})
+	serverOut.Close()
+	<-relayed // everything the server wrote is queued for the client
+	f.outgoing.close()
+	<-written
+	return err
 }

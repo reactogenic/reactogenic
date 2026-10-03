@@ -237,6 +237,49 @@ index 6040a63..8719176 100644
  	baseFS := store.fs
  	if change.fs != nil {
  		baseFS = change.fs
+diff --git a/internal/spanmap/spanmap.go b/internal/spanmap/spanmap.go
+index 465fa24..f64f133 100644
+--- a/internal/spanmap/spanmap.go
++++ b/internal/spanmap/spanmap.go
+@@ -314,7 +314,7 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
+ 	if m == nil {
+ 		return pos, FidelityExact
+ 	}
+-	idx, in := m.segmentIndexAt(pos)
++	idx, in := m.positionSegmentAt(pos)
+ 	if !in {
+ 		return m.insertionPoint(idx), FidelityNone
+ 	}
+@@ -325,6 +325,20 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
+ 	return seg.OriginalStart, FidelityAtom
+ }
+ 
++// positionSegmentAt is segmentIndexAt for a position, as opposed to a range boundary: a position at
++// the end of verbatim text belongs to that text when what follows is not verbatim. (rtsx: a cursor
++// after an identifier being typed — `{getSta|}` — is the identifier's end, though generated text
++// starts there; without this, completion there has no exact position to write back to.)
++func (m *SpanMap) positionSegmentAt(pos core.TextPos) (int, bool) {
++	idx, in := m.segmentIndexAt(pos)
++	if in && idx > 0 && m.segments[idx].Kind != KindVerbatim && m.segments[idx].VirtualStart == pos {
++		if previous := m.segments[idx-1]; previous.Kind == KindVerbatim && previous.VirtualEnd == pos {
++			return idx - 1, true
++		}
++	}
++	return idx, in
++}
++
+ // VirtualToOriginalPositionExact maps a position only when it is unambiguously in verbatim content.
+ // A boundary touching an atom is rejected because the same virtual position can describe either side.
+ func (m *SpanMap) VirtualToOriginalPositionExact(pos core.TextPos) (core.TextPos, bool) {
+@@ -352,7 +366,7 @@ func (m *SpanMap) VirtualToOriginalPositionForFeature(pos core.TextPos, feature
+ 	if m == nil {
+ 		return mapped, fidelity
+ 	}
+-	index, inside := m.segmentIndexAt(pos)
++	index, inside := m.positionSegmentAt(pos) // rtsx
+ 	if !inside || !supportsFeature(m.segments[index], feature) {
+ 		return mapped, FidelityNone
+ 	}
 diff --git a/internal/tsoptions/tsconfigparsing.go b/internal/tsoptions/tsconfigparsing.go
 index 8f50493..c999a99 100644
 --- a/internal/tsoptions/tsconfigparsing.go

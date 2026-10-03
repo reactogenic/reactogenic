@@ -681,7 +681,16 @@ tolerant and recovers from a panic.
   `<Button size={>` is suppressed.
 - Depends on: 102.
 
-### RGP1-105 — Server features · M
+### RGP1-105 — Server features · M · done
+A front in the server's process (`internal/lsp/front.go`) answers folding,
+selection ranges and closing tags from the source tree — through
+`ls.Syntactic`, a new file in the fork — and narrows workspace symbols and
+file-rename edits. Its first version deadlocked with the test client (each
+blocked writing to the other): writes to the client are now queued. Both
+OPENs of ide.md are settled by patches: specifiers are extensionless
+(0007), and a cursor at the end of copied text maps back exactly, which
+restores auto-import where identifiers are typed. 1,308 requests over typing
+mutants: none fails.
 - Folding and selection ranges from the source tree; closing-tag insertion
   (*Tags*); workspace symbols and file rename as in ide.md's table;
   `reactogenic --version`, the same string in `serverInfo` and in the

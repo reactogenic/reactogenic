@@ -11,9 +11,10 @@ every change we make to it.
 | `0001-rtsx-bridge.patch` | adds `rtsx/`, the public bridge our module imports tsgo's `internal/` packages through (decisions.md, RGP1-003) |
 | `0002-rtsx-parser.patch` | slot params `{ size }` in JSX attribute position, under the parse option `RTSX` (decisions.md, RGP1-020) |
 | `0003-rtsx-program.patch` | adds `rtsx/program.go`: the program, file-system overlay and checker bridge (RGP1-050/051) |
-| `0004-rtsx-mapper.patch` | a content mapper built into the binary (`contentmapper/builtin.go`, `rtsx/mapper.go`, `rtsx/spanmap.go`): tsconfig parsing, the session and inferred projects use it without `runExternalCode`; its file system, per-file identity and `Extra` (specs/phase01/ide.md, *The engine*; RGP1-102/103) |
+| `0004-rtsx-mapper.patch` | a content mapper built into the binary (`contentmapper/builtin.go`, `rtsx/mapper.go`, `rtsx/spanmap.go`): tsconfig parsing, the session and inferred projects use it without `runExternalCode`; its file system, per-file identity and `Extra`; a position at the end of verbatim text maps back exactly (specs/phase01/ide.md, *The engine*; RGP1-102/103/105) |
 | `0005-rtsx-resolver.patch` | an extensionless import finds a content-mapped file, after every built-in extension |
-| `0006-rtsx-lsp.patch` | `lsp.Embedder` and `rtsx/server`: the language server for a host with a built-in mapper — static capabilities, no formatting, its own server info (RGP1-103) |
+| `0006-rtsx-lsp.patch` | `lsp.Embedder` and `rtsx/server`: the language server for a host with a built-in mapper — static capabilities, no formatting, its own server info (RGP1-103); `ls/syntactic.go`: folding, selection ranges and closing tags on a source tree that is in no program (RGP1-105) |
+| `0007-rtsx-specifiers.patch` | the minimal module-specifier ending drops a content-mapped extension (`./button`), as the resolver finds the file without it |
 
 ## Changing tsgo
 

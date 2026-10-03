@@ -103,6 +103,13 @@ func Start(t *testing.T, root string, serve Serve) *Client {
 				"definition":      map[string]any{"dynamicRegistration": true, "linkSupport": true},
 				"rename":          map[string]any{"dynamicRegistration": true, "prepareSupport": true},
 				"foldingRange":    map[string]any{"dynamicRegistration": true},
+				"semanticTokens": map[string]any{
+					"dynamicRegistration": true,
+					"requests":            map[string]any{"full": true, "range": true},
+					"formats":             []string{"relative"},
+					"tokenTypes":          []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
+					"tokenModifiers":      []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
+				},
 			},
 		},
 	}, &c.Initialized)
@@ -196,10 +203,11 @@ func (c *Client) serverRequest(id json.RawMessage, method string, params json.Ra
 		c.mu.Unlock()
 	default:
 		c.t.Errorf("lsptest: the server sent a request this client does not answer: %s", method)
-		c.send(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": -32601, "message": "not supported by the test client"}})
+		go c.send(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": -32601, "message": "not supported by the test client"}})
 		return
 	}
-	c.send(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
+	// Not from the read loop: an editor keeps reading while it writes.
+	go c.send(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 }
 
 func (c *Client) send(msg any) {
@@ -233,7 +241,7 @@ func message(id *int, method string, params any) map[string]any {
 func (c *Client) Request(method string, params, result any) {
 	c.t.Helper()
 	if err := c.Try(method, params, result); err != nil {
-		c.t.Fatalf("%s: %v", method, err)
+		c.t.Errorf("%s: %v", method, err) // not Fatal: subtests share the client
 	}
 }
 
@@ -260,8 +268,7 @@ func (c *Client) Try(method string, params, result any) error {
 		}
 		return nil
 	case <-time.After(60 * time.Second):
-		c.t.Fatalf("%s: no response in 60s", method)
-		return nil
+		return fmt.Errorf("no response in 60s")
 	}
 }
 
@@ -382,6 +389,9 @@ func (c *Client) At(rel, needle string, n, offset int) Position {
 	}
 	return position(text, i+offset)
 }
+
+// PositionAt is the LSP position of a byte offset in text.
+func PositionAt(text string, offset int) Position { return position(text, offset) }
 
 func position(text string, offset int) Position {
 	line := strings.Count(text[:offset], "\n")

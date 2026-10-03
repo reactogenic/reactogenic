@@ -170,6 +170,12 @@ built in. Standard LSP with **static capabilities only** — nothing is
 registered dynamically — so any client that attaches it to `*.rtsx` works.
 It advertises what this table lists, and no formatting.
 
+A **front** in the same process sits between the client and the fork's
+server. It keeps the text of each open `.rtsx` document (the server asks for
+whole documents on change), answers the source-tree features itself, and
+narrows the workspace-wide answers to what is ours. It never blocks on
+writing to the client: the client may be blocked writing to it.
+
 | Feature | `.rtsx` support | How |
 | --- | --- | --- |
 | diagnostics | **the same as `reactogenic check`** | *Diagnostics* |
@@ -301,13 +307,16 @@ beside the source and refreshes it on every edit.
 | a server per workspace folder or CLI version | one server per window |
 | extensions keyed on `typescriptreact` | e.g. Tailwind CSS IntelliSense needs `"tailwindCSS.includeLanguages": { "rtsx": "typescriptreact" }`; `[typescriptreact]` settings must be repeated for `[rtsx]` |
 
-> OPEN: auto-import writes `./button.rtsx` (TS's specifier for a mapped
-> file). Valid everywhere; the convention is extensionless. Strip it?
+**Specifiers the server writes** (auto-import, file rename) are extensionless
+for an `.rtsx` module — `./button`, as the convention is — unless a built-in
+sibling would win the import. One exception: in a file that mounts a segment,
+auto-import follows that file's existing imports, and the generated segment
+import is explicit (`./intro.rtsx`); both forms are valid everywhere.
 
-> OPEN: at the end of a copied expression followed by generated text
-> (`on={getSta|}`) the position maps forward but not back exactly, so
-> auto-import items are missing there. A small patch to the span map's
-> position lookup; decide by a test in RGP1-105.
+**A cursor at the end of a copied expression** (`on={getSta▮}`, an identifier
+being typed in a slot body) is that expression's end, though generated text
+starts there: the span map's position lookup prefers the copied text, so
+completion — auto-import included — works at the normal typing position.
 
 ## Syntax highlighting
 

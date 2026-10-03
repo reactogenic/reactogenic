@@ -86,10 +86,10 @@ index 1d32d1e..87b57b6 100644
  
 diff --git a/rtsx/server/server.go b/rtsx/server/server.go
 new file mode 100644
-index 0000000..9bb30df
+index 0000000..7928a8f
 --- /dev/null
 +++ b/rtsx/server/server.go
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,52 @@
 +// Package server runs the language server with whatever content mapper is
 +// registered (rtsx.RegisterMapper) built in (specs/phase01/ide.md,
 +// *reactogenic lsp*). It is its own package so that only a binary that
@@ -134,5 +134,11 @@ index 0000000..9bb30df
 +		ProgressDelay: 250 * time.Millisecond,
 +		Embedder:      &lsp.Embedder{Name: o.Name, Version: o.Version},
 +	})
-+	return s.Run(ctx)
++	err := s.Run(ctx)
++	if errors.Is(err, context.Canceled) && ctx.Err() == nil {
++		// The client's exit: the server's loops stop each other through a
++		// context of their own, and one of them reports that.
++		return nil
++	}
++	return err
 +}

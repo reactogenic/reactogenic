@@ -650,6 +650,15 @@ func processEnding(
 
 	noExtension := tspath.RemoveFileExtension(fileName)
 	if fileName == noExtension {
+		// rtsx: an import finds a content-mapped file without its extension (the resolver, after every
+		// built-in extension), so the minimal ending drops it — unless a built-in sibling would win.
+		if host != nil && len(allowedEndings) > 0 && allowedEndings[0] == ModuleSpecifierEndingMinimal {
+			for _, ext := range host.ContentMapperExtensions() {
+				if bare := strings.TrimSuffix(fileName, ext); bare != fileName && !tryGetAnyFileFromPath(host, bare) {
+					return bare
+				}
+			}
+		}
 		return fileName
 	}
 

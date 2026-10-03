@@ -314,7 +314,7 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
 	if m == nil {
 		return pos, FidelityExact
 	}
-	idx, in := m.segmentIndexAt(pos)
+	idx, in := m.positionSegmentAt(pos)
 	if !in {
 		return m.insertionPoint(idx), FidelityNone
 	}
@@ -323,6 +323,20 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
 		return clamp(seg.OriginalStart+(pos-seg.VirtualStart), seg.OriginalStart, seg.OriginalEnd), FidelityExact
 	}
 	return seg.OriginalStart, FidelityAtom
+}
+
+// positionSegmentAt is segmentIndexAt for a position, as opposed to a range boundary: a position at
+// the end of verbatim text belongs to that text when what follows is not verbatim. (rtsx: a cursor
+// after an identifier being typed — `{getSta|}` — is the identifier's end, though generated text
+// starts there; without this, completion there has no exact position to write back to.)
+func (m *SpanMap) positionSegmentAt(pos core.TextPos) (int, bool) {
+	idx, in := m.segmentIndexAt(pos)
+	if in && idx > 0 && m.segments[idx].Kind != KindVerbatim && m.segments[idx].VirtualStart == pos {
+		if previous := m.segments[idx-1]; previous.Kind == KindVerbatim && previous.VirtualEnd == pos {
+			return idx - 1, true
+		}
+	}
+	return idx, in
 }
 
 // VirtualToOriginalPositionExact maps a position only when it is unambiguously in verbatim content.
@@ -352,7 +366,7 @@ func (m *SpanMap) VirtualToOriginalPositionForFeature(pos core.TextPos, feature 
 	if m == nil {
 		return mapped, fidelity
 	}
-	index, inside := m.segmentIndexAt(pos)
+	index, inside := m.positionSegmentAt(pos) // rtsx
 	if !inside || !supportsFeature(m.segments[index], feature) {
 		return mapped, FidelityNone
 	}

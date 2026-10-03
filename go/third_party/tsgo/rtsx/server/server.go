@@ -42,5 +42,11 @@ func Run(ctx context.Context, o Options) error {
 		ProgressDelay: 250 * time.Millisecond,
 		Embedder:      &lsp.Embedder{Name: o.Name, Version: o.Version},
 	})
-	return s.Run(ctx)
+	err := s.Run(ctx)
+	if errors.Is(err, context.Canceled) && ctx.Err() == nil {
+		// The client's exit: the server's loops stop each other through a
+		// context of their own, and one of them reports that.
+		return nil
+	}
+	return err
 }
