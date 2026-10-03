@@ -54,3 +54,36 @@ func TestInternalDiagnostic(t *testing.T) {
 		t.Errorf("its importer: %s", got)
 	}
 }
+
+// ide.md, *Commands*: the step of `reactogenic/transpiled` names the
+// tolerance step that produced the text — the last pass that held, or the
+// source standing in. (`lowered`, and the text itself: TestTranspiled.) The
+// transform is made to stop for two files.
+func TestTranspiledSteps(t *testing.T) {
+	register := registerMapper
+	defer func() { registerMapper = register }()
+	registerMapper = func(version string) {
+		rtsx.RegisterMapper(&rtsx.Mapper{Name: "reactogenic", Version: version, Extension: ".rtsx", Transform: func(req rtsx.MapperRequest) rtsx.MapperResult {
+			n := int32(len(req.Content))
+			file := &mapper.File{Stopped: true}
+			if strings.HasSuffix(req.FileName, "/stopped.rtsx") {
+				file.Output.Map, file.Output.Stopped = emit.Identity(len(req.Content)), "pass 3 (slot hoisting): does not settle"
+			} else {
+				file.Err = errors.New("transpiler: boom")
+			}
+			return rtsx.MapperResult{Text: req.Content, Spans: [][6]int32{{0, n, 0, n, 0, int32(emit.AllFeatures)}}, Extra: file}
+		}})
+	}
+	c, _ := startFront(t, map[string]string{
+		"src/stopped.rtsx": "export const a = 1;\n",
+		"src/failing.rtsx": "export const b = 2;\n",
+	}, lsptest.Options{})
+	for rel, want := range map[string]string{"src/stopped.rtsx": "stopped: pass 3 (slot hoisting)", "src/failing.rtsx": "source"} {
+		c.Open(rel)
+		var result struct{ Text, Step string }
+		c.Request("reactogenic/transpiled", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}}, &result)
+		if result.Step != want || result.Text != c.Text(rel) {
+			t.Errorf("%s: step %q, text %q; want %q and the source", rel, result.Step, result.Text, want)
+		}
+	}
+}

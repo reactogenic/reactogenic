@@ -150,3 +150,27 @@ func (c *Client) Resolve(item CompletionItem) CompletionItem {
 	json.Unmarshal(raw, &resolved)
 	return resolved
 }
+
+// Rename asks for the rename of the name at a position: the edit, or the
+// server's refusal. A name that cannot be renamed at all is an empty edit.
+func (c *Client) Rename(rel string, at Position, newName string) (WorkspaceEdit, error) {
+	c.t.Helper()
+	var edit WorkspaceEdit
+	params := c.doc(rel, at)
+	params["newName"] = newName
+	err := c.Try("textDocument/rename", params, &edit)
+	return edit, err
+}
+
+// PrepareRename asks whether the name at a position can be renamed, as the
+// editor does before it asks for the new name: the range and the text it
+// would show, or the server's refusal.
+func (c *Client) PrepareRename(rel string, at Position) (Range, string, error) {
+	c.t.Helper()
+	var result struct {
+		Range       Range  `json:"range"`
+		Placeholder string `json:"placeholder"`
+	}
+	err := c.Try("textDocument/prepareRename", c.doc(rel, at), &result)
+	return result.Range, result.Placeholder, err
+}

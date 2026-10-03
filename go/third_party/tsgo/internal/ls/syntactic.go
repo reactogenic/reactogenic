@@ -9,6 +9,7 @@ import (
 
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/astnav"
+	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
 	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
 	"github.com/microsoft/TypeScript/tsc/internal/scanner"
@@ -107,4 +108,16 @@ func (s *Syntactic) offset(position lsproto.Position) int {
 		return 0
 	}
 	return int(positions[0].Position)
+}
+
+// File is the tree the features are answered from.
+func (s *Syntactic) File() *ast.SourceFile { return s.file }
+
+// Offset is the byte offset of position in the text.
+func (s *Syntactic) Offset(position lsproto.Position) int { return s.offset(position) }
+
+// Range is the span pos..end of the text as an LSP range.
+func (s *Syntactic) Range(pos, end int) lsproto.Range {
+	lspRange, _ := s.l.converters.ToLSPRange(s.file, core.NewTextRange(pos, end))
+	return lspRange
 }

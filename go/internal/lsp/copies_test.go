@@ -201,12 +201,9 @@ func TestCopiedNames(t *testing.T) {
 
 // ide.md, *Span map*, the names table: a closing tag name answers where a
 // closing tag is emitted. A component whose children are all slots is
-// emitted self-closing — there is no closing name to copy — so its `</Card>`
-// answers nothing.
-//
-// RGP1-108 (plan.md): the request hook answers a closing tag of such an
-// element at its opening tag. This test pins today's behaviour; when the
-// hook is there, the second case expects what the other two do.
+// emitted self-closing — there is no closing name to copy — and its
+// `</Card>` is answered at its opening tag, the answer's range set back to
+// the closing name (RGP1-108: the front pairs the tags on the source tree).
 func TestClosingTagOfComponent(t *testing.T) {
 	const rel = "src/x.rtsx"
 	c := start(t, lsptest.With(lsptest.Core, map[string]string{
@@ -234,21 +231,34 @@ export const c = (
 	if got := lsptest.Lines(c.Diagnostics(rel)); len(got) != 0 {
 		t.Fatalf("the fixture has errors: %q", got)
 	}
-	for n, tc := range []struct {
-		name    string
-		answers bool // the closing tag
-	}{
-		{"slots and children: the closing tag is rebuilt", true},
-		{"slots only: emitted self-closing", false}, // RGP1-108
-		{"no slots: copied as written", true},
+	for n, name := range []string{
+		"slots and children: the closing tag is rebuilt",
+		"slots only: emitted self-closing",
+		"no slots: copied as written",
 	} {
 		opening, closing := c.At(rel, "<Card", n+1, 2), c.At(rel, "</Card", n+1, 3)
 		if hover, def := c.Hover(rel, opening), c.Definition(rel, opening); !strings.Contains(hover, "function Card") || len(def) != 1 || def[0] != "src/card.tsx 2:17" {
-			t.Errorf("%s: the opening tag: hover %q, definition %q", tc.name, hover, def)
+			t.Errorf("%s: the opening tag: hover %q, definition %q", name, hover, def)
 		}
-		hover, def := c.Hover(rel, closing), c.Definition(rel, closing)
-		if answered := strings.Contains(hover, "function Card") && len(def) == 1 && def[0] == "src/card.tsx 2:17"; answered != tc.answers || (!tc.answers && (hover != "" || len(def) != 0)) {
-			t.Errorf("%s: the closing tag: hover %q, definition %q", tc.name, hover, def)
+		var hover struct {
+			Contents struct{ Value string }
+			Range    lsptest.Range
+		}
+		c.Request("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}, "position": closing}, &hover)
+		if def := c.Definition(rel, closing); !strings.Contains(hover.Contents.Value, "function Card") || c.RangeText(rel, hover.Range) != "Card" || hover.Range.Start.Line != closing.Line || len(def) != 1 || def[0] != "src/card.tsx 2:17" {
+			t.Errorf("%s: the closing tag: hover %q at %s, definition %q", name, hover.Contents.Value, hover.Range, def)
+		}
+		// Both names of the element, from either: highlights.
+		for _, at := range []lsptest.Position{opening, closing} {
+			var highlights []struct{ Range lsptest.Range }
+			c.Request("textDocument/documentHighlight", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}, "position": at}, &highlights)
+			lines := map[int]bool{}
+			for _, h := range highlights {
+				lines[h.Range.Start.Line] = true
+			}
+			if !lines[opening.Line] || !lines[closing.Line] {
+				t.Errorf("%s: highlights from line %d: %+v", name, at.Line+1, highlights)
+			}
 		}
 	}
 }

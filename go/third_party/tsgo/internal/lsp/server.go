@@ -1147,6 +1147,9 @@ func (s *Server) send(msg *lsproto.Message) error {
 func (s *Server) handleRequestOrNotification(ctx context.Context, req *lsproto.RequestMessage) (func() error, error) {
 	ctx = lsproto.WithClientCapabilities(ctx, &s.clientCapabilities)
 
+	if handler := s.embedder.hostRequest(req.Method); handler != nil { // rtsx: the host's own methods
+		return s.handleHostRequest(ctx, req, handler)
+	}
 	if handler := handlers()[req.Method]; handler != nil {
 		start := time.Now()
 		doAsyncWork, err := handler(s, ctx, req)
@@ -1925,6 +1928,9 @@ func (s *Server) handlePrepareRename(ctx context.Context, languageService *ls.La
 	if !info.CanRename {
 		return lsproto.PrepareRenameResponse{}, userFacingRequestFailedError(info.LocalizedErrorMessage)
 	}
+	if err := s.embedder.checkRename(ctx, languageService, params); err != nil { // rtsx: refused where the rename would be
+		return lsproto.PrepareRenameResponse{}, err
+	}
 	return lsproto.PrepareRenameResponse{
 		PrepareRenamePlaceholder: &lsproto.PrepareRenamePlaceholder{
 			Range:       info.TriggerSpan,
@@ -1967,6 +1973,9 @@ func (s *Server) handleRename(ctx context.Context, params *lsproto.RenameParams,
 		return s.handleWillRenameFilesWorker(ctx, renameFilesParams, req, true /*sendRenameFile*/)
 	}
 
+	if response, handled, err := s.embedder.rename(ctx, defaultLs, params, orchestrator); handled { // rtsx: written back by the host
+		return response, err
+	}
 	return defaultLs.ProvideRename(ctx, params, orchestrator)
 }
 

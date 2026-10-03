@@ -32,11 +32,13 @@ type front struct {
 	names aliases
 
 	mu              sync.Mutex
-	docs            map[string]string  // open .rtsx documents, by URI
-	pending         map[string]request // forwarded requests whose answers we rewrite, by id
-	encoding        string             // position encoding, from the initialize result
+	docs            map[string]string      // open .rtsx documents, by URI
+	sources         map[string]*sourceTree // what was read off their texts, as far as asked for
+	pending         map[string]request     // forwarded requests whose answers we rewrite, by id
+	encoding        string                 // position encoding, from the initialize result
 	lineFoldingOnly bool
 	symbolTree      bool  // the client takes document symbols as a tree
+	definitionLinks bool  // and definitions as links
 	shutdown        bool  // the client asked for shutdown
 	ended           error // why fromClient returned: nil (its input ended), errExit, or a framing error
 }
@@ -48,10 +50,6 @@ var errExit = errors.New("exit")
 // for the tests of the recover in clientMessage).
 var newSyntactic = server.NewSyntactic
 
-type request struct {
-	Method string
-}
-
 type message struct {
 	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id,omitempty"`
@@ -62,7 +60,7 @@ type message struct {
 }
 
 func newFront(log io.Writer) *front {
-	return &front{outgoing: newQueue(), log: log, docs: map[string]string{}, pending: map[string]request{}, encoding: "utf-16"}
+	return &front{outgoing: newQueue(), log: log, docs: map[string]string{}, sources: map[string]*sourceTree{}, pending: map[string]request{}, encoding: "utf-16"}
 }
 
 // queue is an unbounded FIFO of message bodies.
@@ -210,8 +208,12 @@ func (f *front) readClient(in io.Reader, toServer io.Writer) error {
 				// and ends when its input does.
 				return errExit
 			}
-			if f.clientMessage(msg) {
+			handled, forward := f.clientMessage(msg)
+			if handled {
 				continue
+			}
+			if forward != nil {
+				body = forward
 			}
 		}
 		if err := writeFrame(toServer, body); err != nil {
@@ -228,13 +230,15 @@ type textDocument struct {
 }
 
 // clientMessage tracks the open .rtsx documents and answers the syntactic
-// requests for them; handled means the message does not go on to the server.
+// requests for them; handled means the message does not go on to the server,
+// and forward, when not nil, is what goes on in its place.
 // A panic here must not end the process, which is the whole server: the
 // request is answered with an InternalError, a notification goes on.
-func (f *front) clientMessage(msg message) (handled bool) {
+func (f *front) clientMessage(msg message) (handled bool, forward []byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintf(f.log, "reactogenic lsp: panic handling %s: %v\n%s\n", msg.Method, r, debug.Stack())
+			forward = nil
 			if handled = msg.ID != nil; handled {
 				f.replyError(*msg.ID, -32603, fmt.Sprintf("InternalError: panic handling request %s: %v", msg.Method, r))
 			}
@@ -259,6 +263,9 @@ func (f *front) clientMessage(msg message) (handled bool) {
 					DocumentSymbol struct {
 						Hierarchical bool `json:"hierarchicalDocumentSymbolSupport"`
 					} `json:"documentSymbol"`
+					Definition struct {
+						LinkSupport bool `json:"linkSupport"`
+					} `json:"definition"`
 				} `json:"textDocument"`
 			} `json:"capabilities"`
 		}
@@ -266,6 +273,7 @@ func (f *front) clientMessage(msg message) (handled bool) {
 		f.mu.Lock()
 		f.lineFoldingOnly = p.Capabilities.TextDocument.FoldingRange.LineFoldingOnly
 		f.symbolTree = p.Capabilities.TextDocument.DocumentSymbol.Hierarchical
+		f.definitionLinks = p.Capabilities.TextDocument.Definition.LinkSupport
 		f.mu.Unlock()
 		f.await(msg)
 	case "shutdown":
@@ -300,7 +308,7 @@ func (f *front) clientMessage(msg message) (handled bool) {
 				// of it: it goes no further, for any document, and both
 				// copies stay as they were.
 				fmt.Fprintf(f.log, "reactogenic lsp: textDocument/didChange for %s dropped: %v\n", uri, err)
-				return true
+				return true, nil
 			}
 			text = changed
 		}
@@ -312,22 +320,23 @@ func (f *front) clientMessage(msg message) (handled bool) {
 	case "textDocument/didClose":
 		f.mu.Lock()
 		delete(f.docs, uri)
+		delete(f.sources, uri)
 		f.mu.Unlock()
 	case "textDocument/foldingRange":
 		if open && msg.ID != nil {
 			result, err := newSyntactic(text, encoding).FoldingRanges(lineFoldingOnly)
 			if err != nil {
-				return false
+				return false, nil
 			}
-			return f.reply(*msg.ID, json.RawMessage(result)) == nil
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil, nil
 		}
 	case "textDocument/documentSymbol":
 		if open && msg.ID != nil {
 			result, err := newSyntactic(text, encoding).DocumentSymbols(uri, symbolTree)
 			if err != nil {
-				return false
+				return false, nil
 			}
-			return f.reply(*msg.ID, json.RawMessage(result)) == nil
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil, nil
 		}
 	case "textDocument/selectionRange":
 		if open && msg.ID != nil {
@@ -337,9 +346,9 @@ func (f *front) clientMessage(msg message) (handled bool) {
 			json.Unmarshal(msg.Params, &p)
 			result, err := newSyntactic(text, encoding).SelectionRanges(p.Positions)
 			if err != nil {
-				return false // the server says what is wrong with the request
+				return false, nil // the server says what is wrong with the request
 			}
-			return f.reply(*msg.ID, json.RawMessage(result)) == nil
+			return f.reply(*msg.ID, json.RawMessage(result)) == nil, nil
 		}
 	case "textDocument/_vs_onAutoInsert":
 		var p struct {
@@ -356,7 +365,7 @@ func (f *front) clientMessage(msg message) (handled bool) {
 		if open && msg.ID != nil {
 			closing, err := newSyntactic(text, encoding).ClosingTag(p.Position)
 			if err != nil {
-				return false
+				return false, nil
 			}
 			var result any
 			if p.Ch == ">" && closing != "" {
@@ -365,10 +374,19 @@ func (f *front) clientMessage(msg message) (handled bool) {
 					"_vs_textEdit":       map[string]any{"range": map[string]any{"start": p.Position, "end": p.Position}, "newText": "$0" + snippetText(closing)},
 				}
 			}
-			return f.reply(*msg.ID, result) == nil
+			return f.reply(*msg.ID, result) == nil, nil
+		}
+	case "completionItem/resolve":
+		// An item the front made has nothing more to it.
+		if msg.ID != nil && isOurs(msg.Params) {
+			return f.reply(*msg.ID, msg.Params) == nil, nil
+		}
+	default:
+		if positional[msg.Method] && open && msg.ID != nil {
+			return f.position(msg, uri, text, encoding)
 		}
 	}
-	return false
+	return false, nil
 }
 
 // await remembers a forwarded request whose answer is rewritten.
@@ -400,10 +418,14 @@ func (f *front) fromServer(out io.Reader) error {
 			req, ok := f.pending[string(*msg.ID)]
 			delete(f.pending, string(*msg.ID))
 			f.mu.Unlock()
-			if ok && msg.Result != nil {
-				if result, changed := f.answer(req, *msg.Result); changed {
+			if ok && msg.Error == nil {
+				result := json.RawMessage("null")
+				if msg.Result != nil {
+					result = *msg.Result
+				}
+				if result, changed := f.answer(req, result); changed {
 					msg.Result = &result
-					if rewritten, err := json.Marshal(msg); err == nil {
+					if rewritten, err := marshal(msg); err == nil {
 						body = rewritten
 					}
 				}
@@ -436,6 +458,9 @@ func (f *front) answer(req request, result json.RawMessage) (json.RawMessage, bo
 		r["capabilities"], _ = json.Marshal(caps)
 		out, err := json.Marshal(r)
 		return out, err == nil
+	}
+	if req.src != nil {
+		return f.sourceAnswer(req, result)
 	}
 	return nil, false
 }

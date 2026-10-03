@@ -61,6 +61,8 @@ func (f *front) serve(ctx context.Context, in io.Reader, out io.Writer, o Option
 		In: serverIn, Out: serverOut, Err: o.Log, Cwd: o.Cwd, Name: "reactogenic", Version: o.Version,
 		SetParentProcessID: parentWatchdog(ctx, stop, o.ClientProcessID),
 		Diagnostics:        diagnostics,
+		Rename:             renameEdits,
+		Requests:           requests,
 	})
 	f.mu.Lock()
 	ended, shutdown := f.ended, f.shutdown

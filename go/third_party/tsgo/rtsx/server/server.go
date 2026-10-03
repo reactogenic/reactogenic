@@ -41,6 +41,33 @@ type Options struct {
 	// structured where it takes them. nil: the compiler's, mapped back by
 	// position.
 	Diagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []Diagnostic
+	// Rename writes a rename's occurrences in mapped files back (ide.md,
+	// *Rename*): it is given each occurrence as the language service found
+	// it in the virtual text — before anything is mapped back — and returns
+	// the complete edits of the mapped files, or the error that refuses the
+	// whole rename. nil: each occurrence mapped back by position, or
+	// dropped.
+	Rename func(ctx context.Context, request RenameRequest) ([]RenameEdit, error)
+	// Requests are the host's own methods, by name (`reactogenic/…`): each
+	// is given the program and the file of the document its params name, and
+	// the params as JSON.
+	Requests map[string]func(ctx context.Context, program *compiler.Program, file *ast.SourceFile, params []byte) (any, error)
+}
+
+type (
+	// RenameRequest is a rename to write back: its occurrences in mapped
+	// files, and the mapped files of the program it started in.
+	RenameRequest = ls.HostRenameRequest
+	// RenameOccurrence is one occurrence, in a virtual text.
+	RenameOccurrence = ls.HostRenameOccurrence
+	// RenameEdit is one edit of a mapped file's source.
+	RenameEdit = ls.HostRenameEdit
+)
+
+// FileNames are the names of the files in directory dir as program's file
+// system has them — the server's, unsaved buffers included.
+func FileNames(program *compiler.Program, dir string) []string {
+	return program.Host().FS().GetAccessibleEntries(dir).Files
 }
 
 type (
@@ -66,6 +93,13 @@ const (
 // Run serves LSP until the client exits, In ends or ctx is done. Nothing
 // external runs: no content mapper process, no automatic type acquisition.
 func Run(ctx context.Context, o Options) error {
+	embedder := &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns, Diagnostics: o.Diagnostics, Rename: o.Rename}
+	if len(o.Requests) > 0 {
+		embedder.Requests = make(map[string]lsp.HostRequest, len(o.Requests))
+		for method, handler := range o.Requests {
+			embedder.Requests[method] = handler
+		}
+	}
 	s := lsp.NewServer(&lsp.ServerOptions{
 		In:                 lsp.ToReader(o.In),
 		Out:                lsp.ToWriter(o.Out),
@@ -79,7 +113,7 @@ func Run(ctx context.Context, o Options) error {
 		},
 		ProgressDelay:      250 * time.Millisecond,
 		SetParentProcessID: o.SetParentProcessID,
-		Embedder:           &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns, Diagnostics: o.Diagnostics},
+		Embedder:           embedder,
 	})
 	err := s.Run(ctx)
 	if errors.Is(err, context.Canceled) && ctx.Err() == nil {

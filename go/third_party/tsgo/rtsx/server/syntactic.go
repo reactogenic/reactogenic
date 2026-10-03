@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/json"
 	"github.com/microsoft/TypeScript/tsc/internal/ls"
@@ -73,6 +74,27 @@ func (s *Syntactic) ClosingTag(position []byte) (string, error) {
 	}
 	return s.s.ClosingTag(at), nil
 }
+
+// File is the parsed text: the .rtsx source tree.
+func (s *Syntactic) File() *ast.SourceFile { return s.s.File() }
+
+// Offset is the byte offset in the text of an LSP `position` (JSON).
+func (s *Syntactic) Offset(position []byte) (int, error) {
+	var at lsproto.Position
+	if err := json.Unmarshal(position, &at); err != nil {
+		return 0, err
+	}
+	if err := inRange(at); err != nil {
+		return 0, err
+	}
+	return s.s.Offset(at), nil
+}
+
+// Range is the LSP range of the span pos..end of the text.
+func (s *Syntactic) Range(pos, end int) Range { return s.s.Range(pos, end) }
+
+// Range is an LSP range; it marshals as one.
+type Range = lsproto.Range
 
 // inRange refuses a position the server's converters cannot take: they hold
 // lines and characters as int32, and one beyond that would index the line

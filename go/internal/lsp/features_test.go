@@ -194,9 +194,11 @@ func TestFeatures(t *testing.T) {
 		if got := labels(at("iconSize.", 1, len("iconSize."))); !has(got, "toUpperCase") || !has(got, "length") {
 			t.Errorf("members in a half-typed file: %d items", len(got))
 		}
-		// A slot name being typed completes to the container's slots.
+		// A slot name being typed completes to the container's slots, and to
+		// nothing else: the one not written yet, then the one that is
+		// (TestSlotCompletion).
 		c.Change(page, strings.Replace(app[page], "<$Label>\n          Save\n        </$Label>", "<$La", 1))
-		if got := labels(at("<$La", 1, 4)); !has(got, "$Label?") && !has(got, "$Label") {
+		if got := labels(at("<$La", 1, 4)); strings.Join(got, " ") != "$Label? $Icon" {
 			t.Errorf("slot names: %q", got)
 		}
 		c.Change(page, app[page])
