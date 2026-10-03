@@ -129,6 +129,9 @@ type MappedSpan struct {
 type SpanMap struct {
 	segments []Segment
 
+	// rtsx: SetLeadingStatementStarts. Sorted.
+	leadingStatementStarts []core.TextPos
+
 	// origOnce guards lazy construction of the interval index used for original-to-virtual lookups.
 	origOnce      sync.Once
 	originalIndex *originalIndex
@@ -322,17 +325,25 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
 	if seg.Kind == KindVerbatim {
 		return clamp(seg.OriginalStart+(pos-seg.VirtualStart), seg.OriginalStart, seg.OriginalEnd), FidelityExact
 	}
-	if m.beforeOriginalText(idx) {
+	if _, starts := slices.BinarySearch(m.leadingStatementStarts, pos); starts && m.beforeOriginalText(idx) {
 		return 0, FidelityExact
 	}
 	return seg.OriginalStart, FidelityAtom
 }
 
+// SetLeadingStatementStarts names the virtual offsets, in generated text that precedes the whole
+// original text, where a statement starts or the text after the last one begins. (rtsx: an import
+// the mapper generates in a file that has none. A position at one of these — where an edit inserts
+// the file's first import of its own, before or after the generated one — is the start of the
+// original text, exactly. Any other position in that text is the generated statement's own — an
+// edit there, a name added to the generated import, has nowhere to go — and a range, a
+// diagnostic's, maps to the segment's origin as ever.)
+func (m *SpanMap) SetLeadingStatementStarts(starts []core.TextPos) {
+	m.leadingStatementStarts = slices.Sorted(slices.Values(starts))
+}
+
 // beforeOriginalText reports whether segment idx is generated text that precedes the whole original
-// text: no verbatim segment before it, and the first one starts at original offset 0. (rtsx: an
-// import the mapper generates in a file that has none. A position in it — where an edit inserts the
-// file's first import of its own — is the start of the original text, exactly; a range, a
-// diagnostic's, still maps to the segment's origin.)
+// text: no verbatim segment before it, and the first one starts at original offset 0.
 func (m *SpanMap) beforeOriginalText(idx int) bool {
 	for i, s := range m.segments {
 		if s.Kind == KindVerbatim {

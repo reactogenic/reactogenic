@@ -1,3 +1,21 @@
+diff --git a/internal/ls/autoimport/fix.go b/internal/ls/autoimport/fix.go
+index 46423f3..a44903e 100644
+--- a/internal/ls/autoimport/fix.go
++++ b/internal/ls/autoimport/fix.go
+@@ -861,6 +861,13 @@ func (v *View) getExistingImports() *collections.MultiMap[ModuleID, existingImpo
+ 				}
+ 			}
+ 		} else if node.Kind == ast.KindImportDeclaration || node.Kind == ast.KindImportEqualsDeclaration || node.Kind == ast.KindJSDocImportTag {
++			// rtsx: an import the content mapper generated is not in the original text: a name cannot be
++			// added to it, so it is no existing import — the name gets a declaration of its own.
++			if spans := v.importingFile.SpanMap(); spans != nil {
++				if _, fidelity := spans.VirtualToOriginalSpan(moduleSpecifier.Loc); !fidelity.IsExact() {
++					continue
++				}
++			}
+ 			if moduleSymbol := v.checker.GetSymbolAtLocation(moduleSpecifier); moduleSymbol != nil {
+ 				if moduleID, _, ok := tryGetModuleIDAndFileNameOfModuleSymbol(moduleSymbol); ok {
+ 					result.Add(moduleID, existingImport{node: node, moduleSpecifier: moduleSpecifier.Text(), index: i})
 diff --git a/internal/ls/codeactions.go b/internal/ls/codeactions.go
 index a95b8bb..84532fa 100644
 --- a/internal/ls/codeactions.go
@@ -52,7 +70,7 @@ index c1d3d4b..1592eda 100644
  		var nameRange core.TextRange
  		if name.Kind == ast.KindEmptyStatement {
 diff --git a/internal/ls/file_rename.go b/internal/ls/file_rename.go
-index 1c43709..5f04450 100644
+index 1c43709..bd9fbdd 100644
 --- a/internal/ls/file_rename.go
 +++ b/internal/ls/file_rename.go
 @@ -31,7 +31,17 @@ type movedFile struct {
@@ -83,7 +101,7 @@ index 1c43709..5f04450 100644
 +	if keep.wants("", oldPath) { // rtsx: a tsconfig is no one's file; its entry names the renamed path
 +		l.updateTsconfigFiles(program, changeTracker, oldToNew, oldPath, newPath)
 +	}
-+	l.updateImportsForFileRename(program, changeTracker, oldToNew, keep)
++	l.updateImportsForFileRename(renamedHost{program, oldToNew, l.createPathUpdater(newPath, oldPath)}, program, changeTracker, oldToNew, keep)
  
  	var documentChanges []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile
  
@@ -92,11 +110,11 @@ index 1c43709..5f04450 100644
  }
  
 -func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater) {
-+func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater, keep FileRenameEdits) {
++func (l *LanguageService) updateImportsForFileRename(renamed renamedHost, program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater, keep FileRenameEdits) {
  	allFiles := program.GetSourceFiles()
  	checker, done := program.GetTypeChecker(context.Background())
  	defer done()
-@@ -240,20 +252,28 @@ func (l *LanguageService) updateImportsForFileRename(program *compiler.Program,
+@@ -240,22 +252,58 @@ func (l *LanguageService) updateImportsForFileRename(program *compiler.Program,
  				continue
  			}
  			updated := l.updateRelativePath(oldToNew, oldFileName, newImportFromPath, ref.FileName)
@@ -107,8 +125,16 @@ index 1c43709..5f04450 100644
  		}
  
  		for _, importStringLiteral := range sourceFile.Imports() {
- 			updated := l.getUpdatedImportSpecifier(program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
+-			updated := l.getUpdatedImportSpecifier(program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
 -			if updated != "" && updated != importStringLiteral.Text() {
++			// rtsx: an import the content mapper generated has no source text to rewrite. Left out, it
++			// does not keep the file's own imports from following the file when it moves.
++			if spans := sourceFile.SpanMap(); spans != nil {
++				if _, fidelity := spans.VirtualToOriginalSpan(importStringLiteral.Loc); !fidelity.IsExact() {
++					continue
++				}
++			}
++			updated := l.getUpdatedImportSpecifier(renamed, program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
 +			if updated != "" && updated != importStringLiteral.Text() && keep.wants(oldFileName, resolvedImport(program, sourceFile, importStringLiteral)) {
  				changeTracker.ReplaceTextRangeWithText(sourceFile, createStringTextRange(sourceFile, importStringLiteral), updated)
  			}
@@ -116,6 +142,26 @@ index 1c43709..5f04450 100644
  	}
  }
  
++// rtsx: the host for the specifiers written for after the rename — its files are those that will
++// be there: a path renamed away is no file, a path renamed to is one. (The specifier of a
++// content-mapped module keeps its extension next to a built-in sibling. `util.ts` renamed to
++// `util.rtsx` is still on disk when the edits are asked for, and is not that sibling; `button.ts`
++// in a renamed folder is not yet where it will be, and is.)
++type renamedHost struct {
++	modulespecifiers.ModuleSpecifierGenerationHost
++	oldToNew, newToOld pathUpdater
++}
++
++func (h renamedHost) FileExists(path string) bool {
++	if _, renamed := h.oldToNew(path); renamed {
++		return false
++	}
++	if old, renamed := h.newToOld(path); renamed {
++		path = old
++	}
++	return h.ModuleSpecifierGenerationHost.FileExists(path)
++}
++
 +// rtsx: the file an import resolves to, for FileRenameEdits; "" when it does not resolve.
 +func resolvedImport(program *compiler.Program, sourceFile *ast.SourceFile, importLiteral *ast.StringLiteralLike) string {
 +	if resolved := program.GetResolvedModuleFromModuleSpecifier(sourceFile, importLiteral); resolved != nil {
@@ -126,7 +172,19 @@ index 1c43709..5f04450 100644
 +
  // We assume the source file did not move to a different program.
  func (l *LanguageService) getUpdatedImportSpecifier(
++	renamed renamedHost, // rtsx
  	program *compiler.Program,
+ 	checker *checker.Checker,
+ 	sourceFile *ast.SourceFile, // old importing source file
+@@ -292,7 +340,7 @@ func (l *LanguageService) getUpdatedImportSpecifier(
+ 
+ 	updated := modulespecifiers.UpdateModuleSpecifier(
+ 		program.Options(),
+-		program,
++		renamed, // rtsx
+ 		sourceFile,
+ 		newImportFromPath,
+ 		importLiteral.Text(),
 diff --git a/internal/ls/inlay_hints.go b/internal/ls/inlay_hints.go
 index 0864f8d..5697fb0 100644
 --- a/internal/ls/inlay_hints.go

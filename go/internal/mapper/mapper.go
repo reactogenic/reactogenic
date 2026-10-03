@@ -39,7 +39,34 @@ func Of(file *rtsx.SourceFile) (*File, bool) {
 // Register installs the transform for the process. version is part of every
 // cache key: a new binary never reuses an old result.
 func Register(version string) {
-	rtsx.RegisterMapper(&rtsx.Mapper{Name: "reactogenic", Version: version, Extension: ".rtsx", Transform: transform, Depends: depends})
+	mapped := func(req rtsx.MapperRequest) rtsx.MapperResult {
+		result := transform(req)
+		result.StatementStarts = statementStarts(result.Text, result.Spans)
+		return result
+	}
+	rtsx.RegisterMapper(&rtsx.Mapper{Name: "reactogenic", Version: version, Extension: ".rtsx", Transform: mapped, Depends: depends})
+}
+
+// statementStarts are the line starts of the generated text that precedes
+// the whole source — the imports the transform adds to a file that has none
+// (a segment's, the core's), each on a line of its own. An import that
+// TypeScript inserts there, before or after them, goes to the start of the
+// source (ide.md, *In a file whose only import is generated*); any other
+// position there is inside a generated import, and no edit goes to it.
+func statementStarts(text string, spans [][6]int32) []int32 {
+	for _, s := range spans {
+		if s[4] != emit.KindVerbatim {
+			continue
+		}
+		var starts []int32
+		for at := int32(0); s[2] == 0 && at < s[0]; at++ { // generated text, then the source from its first byte
+			if at == 0 || text[at-1] == '\n' {
+				starts = append(starts, at)
+			}
+		}
+		return starts
+	}
+	return nil
 }
 
 // transform never fails (ide.md, *Tolerance*): a file being typed gets the

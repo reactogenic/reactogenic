@@ -126,6 +126,42 @@ func TestSpecifierNextToSibling(t *testing.T) {
 			}
 		}
 	})
+	// A file converted in place — util.ts becomes util.rtsx — is not its own
+	// sibling: the file renamed away is still on disk when the server is
+	// asked, and is gone when the edits apply. `./util` goes on resolving,
+	// so nothing is edited; and back.
+	t.Run("a file renamed onto its own name", func(t *testing.T) {
+		c := start(t, map[string]string{
+			"src/util.ts":   "export const twice = (n: number) => n * 2;\n",
+			"src/card.rtsx": "import { twice } from \"./util\";\nexport function Card() {\n  return <div>{twice(1)}</div>;\n}\n",
+			"src/main.tsx":  "import { twice } from \"./util\";\nimport { Card } from \"./card\";\nexport const m = [twice, Card];\n",
+		})
+		c.Open("src/card.rtsx")
+		for _, pair := range [][2]string{{"src/util.ts", "src/util.rtsx"}, {"src/card.rtsx", "src/card.tsx"}} {
+			if got := renameFiles(c, pair[0], pair[1]); got != "" {
+				t.Errorf("%s → %s edits %s", pair[0], pair[1], got)
+			}
+		}
+		// Moved as well as converted: its .rtsx importer follows, without an
+		// extension (main.tsx is the user's TypeScript's to edit).
+		if got, want := renameFiles(c, "src/util.ts", "src/lib/util.rtsx"), `src/card.rtsx 1:24-1:30 "./lib/util"`; got != want {
+			t.Errorf("util.ts → lib/util.rtsx edits %s, want %s", got, want)
+		}
+	})
+	// A folder renamed with a module and its sibling in it: they move
+	// together, and the sibling still wins the extensionless import.
+	t.Run("a folder with a sibling pair", func(t *testing.T) {
+		c := start(t, map[string]string{
+			"src/ui/button.rtsx": knob,
+			"src/ui/button.ts":   "export const NotTheButton = 1;\n",
+			"src/ui/knob.rtsx":   knob,
+			"src/page.rtsx":      "import { Button } from \"./ui/button.rtsx\";\nimport { Button as Knob } from \"./ui/knob\";\nexport const page = [Button, Knob];\n",
+		})
+		c.Open("src/page.rtsx")
+		if got, want := renameFiles(c, "src/ui", "src/kit"), `src/page.rtsx 1:25-1:41 "./kit/button.rtsx", src/page.rtsx 2:33-2:42 "./kit/knob"`; got != want {
+			t.Errorf("ui → kit edits %s, want %s", got, want)
+		}
+	})
 }
 
 // ide.md, *Not in the first release*: auto-import of a dependency's .rtsx
@@ -348,6 +384,71 @@ func TestAutoImportBesideGeneratedImport(t *testing.T) {
 				if got := lsptest.Lines(c.Diagnostics(page)); len(got) != 1 || !strings.HasSuffix(got[0], "TS2304") { // Button: still not imported
 					t.Errorf("with %s imported: %q\n%s", name, got, c.Text(page))
 				}
+			}
+		})
+	}
+}
+
+// ide.md, *A generated import is not one to add to*: a name that a generated
+// import's own module exports — `Each` or the type `Slot` in a container, a
+// named export of a mounted module. TypeScript would add the name to the
+// import that is there, which has no source text to add to: the name gets an
+// import declaration of its own — never a piece of one (`, Each`) written
+// into the source. Applied, the file checks.
+func TestAutoImportFromGeneratedImportsModule(t *testing.T) {
+	base := lsptest.With(lsptest.Core, map[string]string{
+		"src/intro.rtsx":                "export default function Intro() {\n  return <p>intro</p>;\n}\nexport const introTitle = \"t\";\n",
+		"src/util.ts":                   "export const twice = (n: number) => n * 2;\n",
+		"node_modules/aaa/package.json": `{ "name": "aaa", "types": "index.d.ts" }`,
+		"node_modules/aaa/index.d.ts":   "export declare const aaa: string;\n",
+	})
+	const container = "export function Card({ $Title }: { $Title?: { children?: string } }) {\n  return <div><h1 slot={$Title} />{Eac}</div>;\n}\n"
+	const core = "@reactogenic/core"
+	for _, tc := range []struct {
+		name, text   string
+		typed, label string
+		from         string
+		line         int // where the import goes
+	}{
+		{"a container, a component of the core", container, "{Eac", "Each", core, 1},
+		{"a container, the type of its own slot", "export function Card({ $Title }: { $Title?: Slo<{ children?: string }> }) {\n  return <div><h1 slot={$Title} /></div>;\n}\n", "Slo", "Slot", core, 1},
+		{"a container that mounts a segment: two generated imports", strings.Replace(container, "{Eac}", "<section #intro />{Eac}", 1), "{Eac", "Each", core, 1},
+		{"a container that mounts a segment, the mounted module", strings.Replace(container, "{Eac}", "<section #intro />{introTitl}", 1), "{introTitl", "introTitle", "./intro.rtsx", 1},
+		{"a mounter, a named export of the mounted module", "export function Page() {\n  return <main><section #intro />{introTitl}</main>;\n}\n", "{introTitl", "introTitle", "./intro.rtsx", 1},
+		{"a mounter after a comment, the core", "// The page.\nexport function Page() {\n  return <main><section #intro />{Eac}</main>;\n}\n", "{Eac", "Each", core, 1},
+		// With imports of its own, the generated import follows them: the new
+		// one goes where it sorts among the author's.
+		{"a container with a relative import of its own", "import { twice } from \"./util\";\n" + strings.Replace(container, "{Eac}", "{twice(1)}{Eac}", 1), "{Eac", "Each", core, 1},
+		{"a container with a package import of its own", "import { aaa } from \"aaa\";\n" + strings.Replace(container, "{Eac}", "{aaa}{Eac}", 1), "{Eac", "Each", core, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const page = "src/page.rtsx"
+			c := start(t, lsptest.With(base, map[string]string{page: tc.text}))
+			c.Open(page)
+			at := fmt.Sprintf("%d:1-%d:1", tc.line, tc.line)
+			line := fmt.Sprintf("import { %s } from %q;\n", tc.label, tc.from)
+			if got := autoImport(t, c, page, tc.typed, tc.label); got != fmt.Sprintf("%s %q", at, line) {
+				t.Errorf("auto-import of %s: %s", tc.label, got)
+			}
+			// The name written out, and not imported: the quick fix.
+			end := strings.Index(tc.text, tc.typed) + len(tc.typed)
+			typed, next := strings.TrimPrefix(tc.typed, "{"), tc.text[end:end+1]
+			written := func(text string) string { return strings.Replace(text, typed+next, tc.label+next, 1) }
+			c.Change(page, written(tc.text))
+			if got := quickFixes(t, c, page); len(got) != 1 || got[0] != fmt.Sprintf("Add import from %q: %s %s %q", tc.from, page, at, line) {
+				t.Errorf("quick fixes: %q", got)
+			}
+			// The completion item accepted: the file checks.
+			c.Change(page, tc.text)
+			for _, item := range c.Completion(page, c.At(page, tc.typed, 1, len(tc.typed))) {
+				if edits := c.Resolve(item).AdditionalTextEdits; item.Label == tc.label && len(edits) > 0 {
+					c.ApplyTo(page, edits)
+					break
+				}
+			}
+			c.Change(page, written(c.Text(page)))
+			if got := lsptest.Lines(c.Diagnostics(page)); len(got) != 0 || !strings.Contains(c.Text(page), line) {
+				t.Errorf("with %s accepted: %q\n%s", tc.label, got, c.Text(page))
 			}
 		})
 	}

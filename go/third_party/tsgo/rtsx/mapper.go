@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
+	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/vfs"
 	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
 )
@@ -40,7 +41,14 @@ type MapperRequest struct {
 type MapperResult struct {
 	Text  string
 	Spans [][6]int32
-	Extra any
+	// StatementStarts are the offsets in Text, within generated text that
+	// precedes the whole source, where a statement starts or the text after
+	// the last one begins. An edit that inserts a statement at one of them
+	// (the file's first import of its own, next to a generated one) is
+	// written at the start of the source; any other edit in generated text
+	// is dropped.
+	StatementStarts []int32
+	Extra           any
 }
 
 // RegisterMapper installs m for the process; call it before any program is
@@ -63,10 +71,16 @@ func RegisterMapper(m *Mapper) {
 		Extensions: []string{m.Extension},
 		Transform: func(r contentmapper.BuiltInRequest) contentmapper.Result {
 			result := m.Transform(request(r))
+			mappings := NewSpanMap(result.Spans)
+			starts := make([]core.TextPos, len(result.StatementStarts))
+			for i, start := range result.StatementStarts {
+				starts[i] = core.TextPos(start)
+			}
+			mappings.SetLeadingStatementStarts(starts)
 			return contentmapper.Result{
 				Text:             result.Text,
 				VirtualExtension: ".tsx",
-				Mappings:         NewSpanMap(result.Spans),
+				Mappings:         mappings,
 				Extra:            result.Extra,
 				Module:           true,
 			}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx/server"
 
@@ -28,6 +29,10 @@ type Options struct {
 // ErrNoShutdown is Serve's result for an `exit` that no `shutdown` preceded:
 // exit status 1, as LSP has it.
 var ErrNoShutdown = errors.New("exit without shutdown")
+
+// drainTimeout is how long a server that was stopped from outside waits for
+// the client to take what is queued for it.
+var drainTimeout = time.Second
 
 // Serve runs the server on in and out until the client's `exit`, the end of
 // in, or the end of the client's process. Its result is nil after shutdown
@@ -61,7 +66,17 @@ func (f *front) serve(ctx context.Context, in io.Reader, out io.Writer, o Option
 	serverOut.Close()
 	<-relayed // everything the server wrote is queued for the client
 	f.outgoing.close()
-	<-written
+	if ctx.Err() == nil {
+		<-written
+	} else {
+		// Stopped from outside — the watchdog: the client's process is gone.
+		// Whoever still holds its end of the pipe does not read, so the
+		// queue may never drain: what is left of it gets a moment, not more.
+		select {
+		case <-written:
+		case <-time.After(drainTimeout):
+		}
+	}
 	switch {
 	case ended == errExit && shutdown:
 		return nil

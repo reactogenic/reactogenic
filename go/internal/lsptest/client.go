@@ -6,6 +6,8 @@
 // folding, resolved completion items, code action literals, document
 // changes), the user's settings on workspace/configuration, and `exit` with
 // the pipes still open. A server request it does not know fails the test.
+// A change on disk is reported only where the server watches: a watcher it
+// registered matches the path.
 package lsptest
 
 import (
@@ -14,8 +16,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,10 +45,12 @@ type Client struct {
 	docs          map[string]string // open documents, by path relative to Root
 	versions      map[string]int
 	options       Options
-	registrations []string // what the server registered dynamically: `method id`
-	asked         []string // the methods of the server's requests
-	logs          []string // the server's window/logMessage texts
-	Refreshes     int      // workspace/diagnostic/refresh requests received
+	registrations []string                    // what the server registered dynamically: `method id`
+	watches       bool                        // the client takes file watchers (workspace.didChangeWatchedFiles)
+	watchers      map[string][]*regexp.Regexp // the globs of each registered file watcher, by registration id
+	asked         []string                    // the methods of the server's requests
+	logs          []string                    // the server's window/logMessage texts
+	Refreshes     int                         // workspace/diagnostic/refresh requests received
 	// Initialized is the server's answer to initialize.
 	Initialized struct {
 		ServerInfo struct {
@@ -89,7 +95,7 @@ func StartWith(t *testing.T, root string, serve Serve, options Options) *Client 
 	t.Helper()
 	toServer, clientW := io.Pipe()
 	clientR, fromServer := io.Pipe()
-	c := &Client{t: t, Root: filepath.ToSlash(root), w: clientW, pending: map[int]chan response{}, docs: map[string]string{}, versions: map[string]int{}, options: options, done: make(chan error, 1)}
+	c := &Client{t: t, Root: filepath.ToSlash(root), w: clientW, pending: map[int]chan response{}, docs: map[string]string{}, versions: map[string]int{}, watchers: map[string][]*regexp.Regexp{}, options: options, done: make(chan error, 1)}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		c.done <- serve(ctx, toServer, fromServer, io.Discard, c.Root)
@@ -151,6 +157,10 @@ func StartWith(t *testing.T, root string, serve Serve, options Options) *Client 
 	}
 	if options.Capabilities != nil {
 		options.Capabilities(capabilities)
+	}
+	if workspace, ok := capabilities["workspace"].(map[string]any); ok {
+		watched, _ := workspace["didChangeWatchedFiles"].(map[string]any)
+		c.watches, _ = watched["dynamicRegistration"].(bool)
 	}
 	var processID any
 	if options.ProcessID != 0 {
@@ -288,17 +298,42 @@ func (c *Client) serverRequest(id json.RawMessage, method string, params json.Ra
 	case "client/registerCapability":
 		var p struct {
 			Registrations []struct {
-				ID     string `json:"id"`
-				Method string `json:"method"`
+				ID      string `json:"id"`
+				Method  string `json:"method"`
+				Options struct {
+					Watchers []struct {
+						GlobPattern json.RawMessage `json:"globPattern"`
+					} `json:"watchers"`
+				} `json:"registerOptions"`
 			} `json:"registrations"`
 		}
 		json.Unmarshal(params, &p)
 		c.mu.Lock()
 		for _, r := range p.Registrations {
 			c.registrations = append(c.registrations, r.Method+" "+r.ID)
+			if r.Method != "workspace/didChangeWatchedFiles" {
+				continue
+			}
+			globs := []*regexp.Regexp{}
+			for _, w := range r.Options.Watchers {
+				globs = append(globs, globRegexp(globPattern(w.GlobPattern)))
+			}
+			c.watchers[r.ID] = globs
 		}
 		c.mu.Unlock()
-	case "client/unregisterCapability", "window/workDoneProgress/create",
+	case "client/unregisterCapability":
+		var p struct {
+			Unregistrations []struct {
+				ID string `json:"id"`
+			} `json:"unregisterations"` // as the protocol spells it
+		}
+		json.Unmarshal(params, &p)
+		c.mu.Lock()
+		for _, r := range p.Unregistrations {
+			delete(c.watchers, r.ID)
+		}
+		c.mu.Unlock()
+	case "window/workDoneProgress/create",
 		"workspace/inlayHint/refresh", "workspace/semanticTokens/refresh", "workspace/codeLens/refresh":
 	case "workspace/diagnostic/refresh":
 		c.mu.Lock()
@@ -400,9 +435,16 @@ func (c *Client) URI(rel string) string {
 	return "file://" + c.Root + "/" + rel
 }
 
-// Rel is the path relative to the root of a file URI.
+// Rel is the path relative to the root of a file URI — of its path, not of
+// its spelling: a server writes `,` as `%2C`, as VS Code does. A URI that is
+// not under the root is returned as it is.
 func (c *Client) Rel(uri string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(uri, "file://"+c.Root), "/")
+	if u, err := url.Parse(uri); err == nil && u.Scheme == "file" {
+		if rel, ok := strings.CutPrefix(u.Path, c.Root); ok && (rel == "" || rel[0] == '/') {
+			return strings.TrimPrefix(rel, "/")
+		}
+	}
+	return uri
 }
 
 func languageID(rel string) string {
@@ -459,8 +501,103 @@ func (c *Client) Change(rel, text string) {
 	})
 }
 
-// WriteFile writes a file on disk and tells the server, as a file watcher
-// does. kind: 1 created, 2 changed.
+// globPattern is the glob of a file watcher as one string: a pattern, or a
+// pattern relative to a base URI (or to a workspace folder's).
+func globPattern(raw json.RawMessage) string {
+	var pattern string
+	if json.Unmarshal(raw, &pattern) == nil {
+		return pattern
+	}
+	var relative struct {
+		BaseURI json.RawMessage `json:"baseUri"`
+		Pattern string          `json:"pattern"`
+	}
+	json.Unmarshal(raw, &relative)
+	var base string
+	if json.Unmarshal(relative.BaseURI, &base) != nil {
+		var folder struct {
+			URI string `json:"uri"`
+		}
+		json.Unmarshal(relative.BaseURI, &folder)
+		base = folder.URI
+	}
+	return strings.TrimSuffix(base, "/") + "/" + relative.Pattern
+}
+
+// globRegexp compiles an LSP glob — `*`, `?`, `**`, `{a,b}`, `[a-z]` — over
+// a path; a glob that is a file URI is one over its path.
+func globRegexp(glob string) *regexp.Regexp {
+	if u, err := url.Parse(glob); err == nil && u.Scheme == "file" {
+		glob = u.Path
+	}
+	var re strings.Builder
+	re.WriteString("^")
+	braces := 0
+	for i := 0; i < len(glob); i++ {
+		switch ch := glob[i]; {
+		case strings.HasPrefix(glob[i:], "**/"):
+			re.WriteString("(?:.*/)?")
+			i += 2
+		case strings.HasPrefix(glob[i:], "**"):
+			re.WriteString(".*")
+			i++
+		case ch == '*':
+			re.WriteString("[^/]*")
+		case ch == '?':
+			re.WriteString("[^/]")
+		case ch == '{':
+			re.WriteString("(?:")
+			braces++
+		case ch == '}' && braces > 0:
+			re.WriteString(")")
+			braces--
+		case ch == ',' && braces > 0:
+			re.WriteString("|")
+		case ch == '[' && strings.IndexByte(glob[i:], ']') > 1:
+			end := i + strings.IndexByte(glob[i:], ']')
+			re.WriteString("[" + strings.Replace(glob[i+1:end], "!", "^", 1) + "]")
+			i = end
+		default:
+			re.WriteString(regexp.QuoteMeta(string(ch)))
+		}
+	}
+	re.WriteString("$")
+	compiled, err := regexp.Compile(re.String())
+	if err != nil {
+		return regexp.MustCompile(`a^`) // matches nothing
+	}
+	return compiled
+}
+
+// watchedFile tells the server of a change on disk, as the editor's file
+// watcher does: when a watcher the server registered matches the path, and
+// not otherwise (kind: 1 created, 2 changed, 3 deleted). The server registers
+// its watchers in the background, so a client that takes watchers waits for
+// one that matches.
+func (c *Client) watchedFile(rel string, kind int) {
+	path := c.Root + "/" + rel
+	watched := func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for _, globs := range c.watchers {
+			for _, glob := range globs {
+				if glob.MatchString(path) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for deadline := time.Now().Add(10 * time.Second); !watched(); time.Sleep(5 * time.Millisecond) {
+		if !c.watches || time.Now().After(deadline) {
+			return // nobody watches this file: the server is not told
+		}
+	}
+	c.Notify("workspace/didChangeWatchedFiles", map[string]any{"changes": []any{map[string]any{"uri": c.URI(rel), "type": kind}}})
+}
+
+// WriteFile writes a file on disk; the server is told as a file watcher
+// tells it (watchedFile).
 func (c *Client) WriteFile(rel, text string) {
 	p := filepath.Join(c.Root, rel)
 	kind := 2
@@ -471,15 +608,15 @@ func (c *Client) WriteFile(rel, text string) {
 	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 		c.t.Fatal(err)
 	}
-	c.Notify("workspace/didChangeWatchedFiles", map[string]any{"changes": []any{map[string]any{"uri": c.URI(rel), "type": kind}}})
+	c.watchedFile(rel, kind)
 }
 
-// RemoveFile deletes a file on disk and tells the server.
+// RemoveFile deletes a file on disk; the server is told as WriteFile tells it.
 func (c *Client) RemoveFile(rel string) {
 	if err := os.Remove(filepath.Join(c.Root, rel)); err != nil {
 		c.t.Fatal(err)
 	}
-	c.Notify("workspace/didChangeWatchedFiles", map[string]any{"changes": []any{map[string]any{"uri": c.URI(rel), "type": 3}}})
+	c.watchedFile(rel, 3)
 }
 
 // Position is an LSP position: zero-based line, UTF-16 character.

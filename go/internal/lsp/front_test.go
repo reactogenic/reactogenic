@@ -51,7 +51,39 @@ func (f *front) awaited() int {
 }
 
 // A request whose answer the front rewrites is forgotten when the answer
-// comes, whatever it is: an error, null, the answer to a cancelled request.
+// comes, whatever it is: a result, an error, null. (`initialize` is the one
+// request awaited today, and a server answers it with a result — so the
+// answers are fed to the front here.)
+func TestAwaitedRequestIsForgotten(t *testing.T) {
+	for name, answer := range map[string]string{
+		"a result": `{"jsonrpc":"2.0","id":7,"result":{"capabilities":{"textDocumentSync":{"change":2}}}}`,
+		"an error": `{"jsonrpc":"2.0","id":7,"error":{"code":-32800,"message":"cancelled"}}`,
+		"null":     `{"jsonrpc":"2.0","id":7,"result":null}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFront(io.Discard)
+			id := json.RawMessage("7")
+			f.await(message{ID: &id, Method: "initialize"})
+			if n := f.awaited(); n != 1 {
+				t.Fatalf("%d requests awaited after one was forwarded", n)
+			}
+			f.fromServer(strings.NewReader(fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(answer), answer)))
+			if n := f.awaited(); n != 0 {
+				t.Errorf("%d requests still awaited after the answer", n)
+			}
+			// The answer went on to the client: rewritten if it is a result.
+			f.outgoing.close()
+			var sent strings.Builder
+			f.outgoing.drain(&sent)
+			if got := sent.String(); !strings.Contains(got, `"id":7`) || (name == "a result") != strings.Contains(got, `"change":1`) || (name == "an error") != strings.Contains(got, "-32800") {
+				t.Errorf("sent to the client: %q", got)
+			}
+		})
+	}
+}
+
+// Over a session — errors, null results, cancelled requests — nothing stays
+// awaited.
 func TestNoRequestStaysAwaited(t *testing.T) {
 	c, f := startFront(t, frontApp, lsptest.Options{})
 	c.Open("src/page.rtsx")
@@ -133,10 +165,27 @@ func TestRangedChange(t *testing.T) {
 			change(3, 1, 13, 14, "bee")
 			// Far past the end of line 2 (`  x`, then \r\n): clamped by the
 			// server to the start of the next line, so by the front.
-			change(4, 2, 99, 99, "<i />")
-			want := "const s = \"\U0001F600\"; const ac = 1;\rexport const bee = <div>\r\n  x\r\n<i /></div>;\r\n"
+			change(4, 2, 99, 99, "{s}")
+			want := "const s = \"\U0001F600\"; const ac = 1;\rexport const bee = <div>\r\n  x\r\n{s}</div>;\r\n"
 
-			// The server's copy: its symbols, and the text it parses.
+			// The server's copy: what TypeScript finds at each edited place —
+			// a line or a character off, and it is another token, or none.
+			for _, probe := range []struct {
+				line, character int
+				hover           string
+			}{
+				{0, character, "const ac: 1"},
+				{1, 14, "const bee:"},
+				{3, 1, "const s:"}, // after the line break, not before it
+			} {
+				if hover := c.Hover(page, lsptest.Position{Line: probe.line, Character: probe.character}); !strings.Contains(hover, probe.hover) {
+					t.Errorf("the server's copy: hover at %d:%d is %q, want %q", probe.line+1, probe.character+1, hover, probe.hover)
+				}
+			}
+			if got := lsptest.Lines(c.Diagnostics(page)); len(got) != 0 {
+				t.Errorf("the server's diagnostics after the changes: %q", got)
+			}
+			// The front's copy: its own answer, the symbols, and the text.
 			var symbols []struct {
 				Name string `json:"name"`
 			}
@@ -146,10 +195,7 @@ func TestRangedChange(t *testing.T) {
 				names += s.Name + " "
 			}
 			if names != "s ac bee " {
-				t.Errorf("the server's symbols after the changes: %q", names)
-			}
-			if got := lsptest.Lines(c.Diagnostics(page)); len(got) != 0 {
-				t.Errorf("the server's diagnostics after the changes: %q", got)
+				t.Errorf("the front's symbols after the changes: %q", names)
 			}
 			f.mu.Lock()
 			got := f.docs[uri]
@@ -233,6 +279,63 @@ func TestParentWatchdog(t *testing.T) {
 				t.Errorf("Serve returned %v", err)
 			}
 		})
+	}
+}
+
+// The editor is killed with answers it has not read, and whoever holds its
+// end of the pipes neither reads nor closes them. The watchdog still ends
+// the server: it does not wait for a queue that cannot drain.
+func TestParentWatchdogWithUnreadAnswers(t *testing.T) {
+	if !processAliveSupported {
+		t.Skip("no process probing on this platform")
+	}
+	interval, drain := watchdogInterval, drainTimeout
+	watchdogInterval, drainTimeout = 20*time.Millisecond, 100*time.Millisecond
+	defer func() { watchdogInterval, drainTimeout = interval, drain }()
+	root := lsptest.Project(t, frontApp)
+	editor := exec.Command("sleep", "60")
+	if err := editor.Start(); err != nil {
+		t.Skip(err)
+	}
+	defer editor.Process.Kill()
+	pid := editor.Process.Pid
+
+	in, client := io.Pipe()
+	answers, out := io.Pipe() // never read: a pipe that is full from the first byte
+	done := make(chan error, 1)
+	go func() {
+		done <- Serve(context.Background(), in, out, Options{Log: io.Discard, Cwd: root, Version: "0.0.0-test"})
+	}()
+	defer func() { // only now does the pipe's holder let go
+		client.Close()
+		answers.Close()
+	}()
+	send := func(message string) {
+		fmt.Fprintf(client, "Content-Length: %d\r\n\r\n%s", len(message), message)
+	}
+	uri := "file://" + root + "/src/page.rtsx"
+	text, _ := json.Marshal(frontApp["src/page.rtsx"])
+	send(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":%d,"rootUri":"file://%s","capabilities":{}}}`, pid, root))
+	send(`{"jsonrpc":"2.0","method":"initialized","params":{}}`)
+	send(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"` + uri + `","languageId":"rtsx","version":1,"text":` + string(text) + `}}}`)
+	for id := 2; id < 5; id++ {
+		send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"%s"}}}`, id, uri))
+	}
+	time.Sleep(5 * watchdogInterval) // the watchdog is running, the answers queued
+	select {
+	case err := <-done:
+		t.Fatalf("with the editor alive, Serve returned %v", err)
+	default:
+	}
+	editor.Process.Kill()
+	editor.Wait()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("client process %d has exited", pid)) {
+			t.Errorf("Serve returned %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the server is still running 10s after the editor's process was killed")
 	}
 }
 

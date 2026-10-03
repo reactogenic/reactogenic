@@ -194,7 +194,7 @@ of the server:
 | `exit` without `shutdown` — also before `initialized`, or before `initialize` | 1 |
 | the input ends | 0 |
 | input that is not LSP (no `Content-Length`, a message cut short) | 1, the reason on stderr |
-| the client's process is gone: the `processId` of `initialize`, or `--clientProcessId <pid>`, probed every 5 s (a killed editor whose pipe another process still holds) | 1 |
+| the client's process is gone: the `processId` of `initialize`, or `--clientProcessId <pid>`, probed every 5 s (a killed editor whose pipe another process still holds); answers nobody reads are given one second, not waited for | 1 |
 
 | Feature | `.rtsx` support | How |
 | --- | --- | --- |
@@ -212,7 +212,7 @@ of the server:
 | code actions | quick fixes: only when every edit maps exactly | TS drops the rest |
 | organize / sort / remove unused imports | where every import is the author's (a file that only fills slots). **Not offered** in a file with a generated import — never an action with no edit | TS; *Not in the first release* |
 | workspace symbols | symbols declared in `.rtsx` files — chosen before TS cuts to its best 256 | the rest is the user's TypeScript's |
-| file rename | per import: an edit in an `.rtsx` document, or of an import of an `.rtsx` module, is ours. So: a renamed `.rtsx` — every importer; a renamed `.ts` / `.tsx` — its `.rtsx` importers; several files, or a folder — each import by that rule | no other server knows `.rtsx` modules |
+| file rename | per import: an edit in an `.rtsx` document, or of an import of an `.rtsx` module, is ours. So: a renamed `.rtsx` — every importer; a renamed `.ts` / `.tsx` — its `.rtsx` importers; several files, or a folder — each import by that rule; a moved `.rtsx` file's own imports follow it (not a generated one: *Not in the first release*, renaming a segment) | no other server knows `.rtsx` modules |
 | formatting | ✗ — not advertised | *Not in the first release* |
 
 `.ts` and `.tsx` files of the same project are in the server's program (for
@@ -318,7 +318,7 @@ beside the source and refreshes it on every edit.
 | --- | --- |
 | formatting | through the virtual text it re-indents moved slot bodies. Needs its own implementation; Prettier, Biome and ESLint do not parse `.rtsx`, so format-on-save leaves the file untouched |
 | rename from a `.ts` file into `.rtsx` | refused there (*The `.ts` side*); start it from the `.rtsx` file |
-| renaming a segment | `#about-us` has no virtual token and its import is generated: the `#name` rename is refused; renaming the file leaves `segment-not-found` on the mounter |
+| renaming a segment | `#about-us` has no virtual token and its import is generated: the `#name` rename is refused; renaming the file — or moving the mounter away from it — leaves `segment-not-found` on the mounter |
 | unsaved `.ts` edits | reach `.rtsx` files on save |
 | unsaved new files | an `untitled:` document is not attached — highlighting only until it is saved. The server knows a document by its file name (the mapper, the project, the directory its imports resolve from). One sent anyway ends nothing: it is answered by the name in its URI — as plain TypeScript when that does not end in `.rtsx` |
 | linked editing of slot tag pairs, and of a tag that has slots | plain pairs work; `editor.linkedEditing` is off by default |
@@ -339,14 +339,32 @@ beside the source and refreshes it on every edit.
 for an `.rtsx` module — `./button`, as the convention is — unless a built-in
 sibling would win the import: next to `button.ts` or `button.d.ts` the
 specifier is `./button.rtsx`, decided on the module's own path (relative,
-`paths` and package specifiers alike). One exception: in a file that mounts a
+`paths` and package specifiers alike) and, for a rename, on the files as
+they will be: `util.ts` renamed to `util.rtsx` is not its own sibling
+(`./util` stays); `button.ts` in a renamed folder still is one. One
+exception: in a file that mounts a
 segment, auto-import follows that file's existing imports, and the generated
 segment import is explicit (`./intro.rtsx`); both forms are valid everywhere.
 
 **In a file whose only import is generated** (a segment mounter or a
 container without imports of its own) a new import goes to line 1 — where the
 transform puts its own, above a leading comment or directive — whichever way
-its module sorts against the generated one.
+its module sorts against the generated one. The span map names the places
+before the source where a statement can go (the line starts of the generated
+text); any other position there is an atom, and an edit in it is dropped.
+
+**A generated import is not one to add to.** A name its module exports —
+`Each` or `Slot` in a container, a mounted module's export — gets an import
+declaration of its own, in any file: TS would add it to the generated
+import, which has no source text.
+
+```tsx
+// .rtsx — `Each` accepted from the completion list
+export function List({ $Row }: Props) { return <ul><li slot={$Row} />{Eac▮}</ul>; }
+
+// the edit: line 1, a whole declaration — never `, Each`
+import { Each } from "@reactogenic/core";
+```
 
 **A cursor at the end of a copied expression** (`on={getSta▮}`, an identifier
 being typed in a slot body) is that expression's end, though generated text
@@ -498,7 +516,7 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | Layer | Test |
 | --- | --- |
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
-| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent |
+| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent |
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences |
 | grammar | scope assertions per construct; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result |

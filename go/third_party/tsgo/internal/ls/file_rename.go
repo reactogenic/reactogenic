@@ -52,7 +52,7 @@ func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lspr
 	if keep.wants("", oldPath) { // rtsx: a tsconfig is no one's file; its entry names the renamed path
 		l.updateTsconfigFiles(program, changeTracker, oldToNew, oldPath, newPath)
 	}
-	l.updateImportsForFileRename(program, changeTracker, oldToNew, keep)
+	l.updateImportsForFileRename(renamedHost{program, oldToNew, l.createPathUpdater(newPath, oldPath)}, program, changeTracker, oldToNew, keep)
 
 	var documentChanges []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile
 
@@ -226,7 +226,7 @@ func (l *LanguageService) updateRelativePath(oldToNew pathUpdater, oldImportFrom
 	return relativeImportPathFromDirectory(tspath.GetDirectoryPath(newImportFromPath), newAbsolute, l.UseCaseSensitiveFileNames())
 }
 
-func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater, keep FileRenameEdits) {
+func (l *LanguageService) updateImportsForFileRename(renamed renamedHost, program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater, keep FileRenameEdits) {
 	allFiles := program.GetSourceFiles()
 	checker, done := program.GetTypeChecker(context.Background())
 	defer done()
@@ -258,12 +258,39 @@ func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, 
 		}
 
 		for _, importStringLiteral := range sourceFile.Imports() {
-			updated := l.getUpdatedImportSpecifier(program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
+			// rtsx: an import the content mapper generated has no source text to rewrite. Left out, it
+			// does not keep the file's own imports from following the file when it moves.
+			if spans := sourceFile.SpanMap(); spans != nil {
+				if _, fidelity := spans.VirtualToOriginalSpan(importStringLiteral.Loc); !fidelity.IsExact() {
+					continue
+				}
+			}
+			updated := l.getUpdatedImportSpecifier(renamed, program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
 			if updated != "" && updated != importStringLiteral.Text() && keep.wants(oldFileName, resolvedImport(program, sourceFile, importStringLiteral)) {
 				changeTracker.ReplaceTextRangeWithText(sourceFile, createStringTextRange(sourceFile, importStringLiteral), updated)
 			}
 		}
 	}
+}
+
+// rtsx: the host for the specifiers written for after the rename — its files are those that will
+// be there: a path renamed away is no file, a path renamed to is one. (The specifier of a
+// content-mapped module keeps its extension next to a built-in sibling. `util.ts` renamed to
+// `util.rtsx` is still on disk when the edits are asked for, and is not that sibling; `button.ts`
+// in a renamed folder is not yet where it will be, and is.)
+type renamedHost struct {
+	modulespecifiers.ModuleSpecifierGenerationHost
+	oldToNew, newToOld pathUpdater
+}
+
+func (h renamedHost) FileExists(path string) bool {
+	if _, renamed := h.oldToNew(path); renamed {
+		return false
+	}
+	if old, renamed := h.newToOld(path); renamed {
+		path = old
+	}
+	return h.ModuleSpecifierGenerationHost.FileExists(path)
 }
 
 // rtsx: the file an import resolves to, for FileRenameEdits; "" when it does not resolve.
@@ -276,6 +303,7 @@ func resolvedImport(program *compiler.Program, sourceFile *ast.SourceFile, impor
 
 // We assume the source file did not move to a different program.
 func (l *LanguageService) getUpdatedImportSpecifier(
+	renamed renamedHost, // rtsx
 	program *compiler.Program,
 	checker *checker.Checker,
 	sourceFile *ast.SourceFile, // old importing source file
@@ -312,7 +340,7 @@ func (l *LanguageService) getUpdatedImportSpecifier(
 
 	updated := modulespecifiers.UpdateModuleSpecifier(
 		program.Options(),
-		program,
+		renamed, // rtsx
 		sourceFile,
 		newImportFromPath,
 		importLiteral.Text(),

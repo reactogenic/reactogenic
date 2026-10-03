@@ -3,10 +3,12 @@ package lsp_test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/reactogenic/reactogenic/go/internal/conformance"
 	"github.com/reactogenic/reactogenic/go/internal/lsptest"
 )
 
@@ -443,44 +445,106 @@ func TestFeatures(t *testing.T) {
 	})
 }
 
+// A panic of upstream's own, the same in a plain .tsx file: signature help
+// right after a `<` typed behind an attribute name (`<` is one of its
+// trigger characters). go/patches/README.md, *Known upstream defects*;
+// RGP1-114 re-checks it.
+const upstreamSignatureHelpPanic = "Debug failure. False expression: Not a subspan. Child: KindLessThanEqualsToken, parent: KindJsxSelfClosingElement"
+
 // ide.md, *Tolerance*: while a file is being typed the server keeps
-// answering. Over typing-like mutants of the page — cut off, a character
-// deleted, a sigil typed — hover, completion and diagnostics at the edit
-// never fail (a panic in the checker on a recovered tree would).
+// answering. Over typing-like mutants of the fixture page and of the
+// conformance corpus (the mutants of RGP1-104: every construct of the
+// language) — cut off, a character deleted, a sigil typed — hover,
+// completion, definition, signature help and diagnostics at the edit never
+// fail (a panic in the checker on a recovered tree would), but for the one
+// upstream panic above.
 func TestTypingNeverFails(t *testing.T) {
+	type source struct {
+		id, text string
+		stride   int // 0: a share of the text
+	}
+	sources := []source{{id: "the fixture page", text: app["src/page.rtsx"], stride: 7}}
+	fixtures, err := conformance.LoadFixtures("../../../fixtures")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := os.ReadFile("../../../specs/phase01/syntax.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range append(conformance.ExtractSpec("syntax.md", string(spec)), fixtures...) {
+		sources = append(sources, source{id: c.ID, text: c.Files[c.Entry]})
+	}
+	if len(sources) < 40 {
+		t.Fatalf("only %d sources: the corpus is not found", len(sources))
+	}
+
 	c := start(t, app)
 	const page = "src/page.rtsx"
 	c.Open(page)
-	src := app[page]
+	doc := map[string]any{"uri": c.URI(page)}
 	typed := []string{"<", ">", "{", "}", "&", "#", "$", ".", "=", "/", "\"", "("}
-	requests := 0
-	try := func(text string, offset int) {
+	requests, known, failures := 0, 0, 0
+	try := func(id, text string, offset int) {
 		c.Change(page, text)
 		offset = min(offset, len(text))
-		at := map[string]any{"textDocument": map[string]any{"uri": c.URI(page)}, "position": lsptest.PositionAt(text, offset)}
-		for _, method := range []string{"textDocument/hover", "textDocument/completion", "textDocument/definition"} {
+		for offset > 0 && offset < len(text) && text[offset]&0xC0 == 0x80 {
+			offset-- // not inside a character
+		}
+		at := map[string]any{"textDocument": doc, "position": lsptest.PositionAt(text, offset)}
+		for method, params := range map[string]map[string]any{
+			"textDocument/hover": at, "textDocument/completion": at, "textDocument/definition": at, "textDocument/signatureHelp": at,
+			"textDocument/diagnostic": {"textDocument": doc},
+		} {
 			requests++
-			if err := c.Try(method, at, nil); err != nil {
-				t.Fatalf("%s failed at offset %d: %v\n--- text\n%s", method, offset, err, text)
+			err := c.Try(method, params, nil)
+			switch {
+			case err == nil:
+			case method == "textDocument/signatureHelp" && strings.Contains(err.Error(), upstreamSignatureHelpPanic):
+				known++
+			default:
+				if failures++; failures <= 10 {
+					t.Errorf("%s: %s failed at offset %d: %v\n--- text\n%s", id, method, offset, err, text)
+				}
 			}
 		}
-		requests++
-		if err := c.Try("textDocument/diagnostic", map[string]any{"textDocument": map[string]any{"uri": c.URI(page)}}, nil); err != nil {
-			t.Fatalf("diagnostics failed: %v\n--- text\n%s", err, text)
+	}
+	for _, s := range sources {
+		stride := s.stride
+		if stride == 0 {
+			stride = max(1, len(s.text)/12)
+		}
+		if testing.Short() {
+			stride *= 4
+		}
+		for i := 0; i <= len(s.text); i += stride {
+			try(s.id, s.text[:i], i)
+			if i < len(s.text) {
+				try(s.id, s.text[:i]+s.text[i+1:], i)
+			}
+			try(s.id, s.text[:i]+typed[(i/stride)%len(typed)]+s.text[i:], i+1)
 		}
 	}
-	stride := 7
-	if testing.Short() {
-		stride = 41
-	}
-	for i := 0; i <= len(src); i += stride {
-		try(src[:i], i)
-		if i < len(src) {
-			try(src[:i]+src[i+1:], i)
+	t.Logf("%d sources, %d requests, %d failures, %d times the upstream signature-help panic", len(sources), requests, failures, known)
+}
+
+// The upstream panic that TestTypingNeverFails tolerates, pinned: the same
+// message in a plain .tsx file and in an .rtsx one, and the server goes on.
+// When this fails upstream has fixed it (RGP1-114): take the tolerance and
+// the entry of go/patches/README.md out.
+func TestUpstreamSignatureHelpPanic(t *testing.T) {
+	const text = "export const a = <Dialog>\n  <Action variant<=\"solid\">\n    Close\n  </Action>\n</Dialog>;\n"
+	c := start(t, map[string]string{"src/a.tsx": text, "src/b.rtsx": text})
+	for _, rel := range []string{"src/a.tsx", "src/b.rtsx"} {
+		c.Open(rel)
+		at := map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}, "position": c.At(rel, "variant<", 1, len("variant<"))}
+		if err := c.Try("textDocument/signatureHelp", at, nil); err == nil || !strings.Contains(err.Error(), upstreamSignatureHelpPanic) {
+			t.Errorf("%s: signature help after `variant<`: %v; want the known upstream panic", rel, err)
 		}
-		try(src[:i]+typed[(i/stride)%len(typed)]+src[i:], i+1)
+		if err := c.Try("textDocument/hover", at, nil); err != nil {
+			t.Errorf("%s: hover after the panic: %v", rel, err)
+		}
 	}
-	t.Logf("%d requests", requests)
 }
 
 // ide.md, second OPEN of *Not in the first release*: at the end of a copied
