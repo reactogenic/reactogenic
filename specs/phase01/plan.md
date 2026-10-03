@@ -595,7 +595,7 @@ The fork's pin is frozen through M8 (RGP1-114 re-vendors). No release before
 ### RGP1-100 — Research and spec · M · done
 ide.md, this milestone, decisions.md.
 
-### RGP1-101 — Patch tooling · S
+### RGP1-101 — Patch tooling · S · done
 M8 raises the patched upstream files from one to about a dozen; the scripts
 were built for patches that add files.
 - `regen-patch.sh`: file list from the patch's own headers plus arguments;

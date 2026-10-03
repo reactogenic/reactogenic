@@ -15,23 +15,23 @@ every change we make to it.
 ## Changing tsgo
 
 1. Edit files under `go/third_party/tsgo`.
-2. Write the change as a new patch, paths relative to the vendored module:
+2. Write the patch from the working tree — offline; it never re-vendors:
 
    ```sh
-   git diff --relative=go/third_party/tsgo -- go/third_party/tsgo > go/patches/000N-short-name.patch
+   go/scripts/regen-patch.sh 0002-rtsx-parser.patch                      # its files changed
+   go/scripts/regen-patch.sh 0002-rtsx-parser.patch internal/ast/x.go    # it gains a file
+   go/scripts/regen-patch.sh 0004-resolver.patch internal/module/resolver.go   # a new patch
    ```
 
-   For a patch that adds one whole file, such as the bridge, regenerate it
-   from the file instead:
+   The script diffs the files against pristine upstream, which it rebuilds
+   from `HEAD` (the committed file minus the committed patch), and checks
+   that pristine plus the new patch is the working tree.
+3. Commit the tree and the patch together. CI's `vendor` job re-vendors and
+   compares (`pnpm vendor:check`, which fetches upstream).
 
-   ```sh
-   go/scripts/file-patch.sh rtsx/rtsx.go 0001-rtsx-bridge.patch
-   ```
-3. Check that the patches still reproduce the committed tree:
-
-   ```sh
-   go/scripts/sync-tsgo.sh && git status --short go/third_party/tsgo   # must print nothing
-   ```
+**One patch owns a given upstream file.** A change to a file that an existing
+patch touches is folded into that patch; the script refuses otherwise. (Two
+patches on one file cannot be regenerated independently.)
 
 Prefer new files over edits to upstream files; keep edits to upstream files
 to the few lines that call into them.
@@ -43,7 +43,7 @@ go/scripts/sync-tsgo.sh <commit>
 ```
 
 A patch that no longer applies stops the script; fix it against the new tree
-and regenerate it as in step 2.
+and regenerate it as in step 2, after committing the re-vendored tree.
 
 Tests (`*_test.go`), `testdata/` and test-only packages are not vendored
 (`go/scripts/tsgo-exclude.txt`): upstream's CI runs them. Our changes are
