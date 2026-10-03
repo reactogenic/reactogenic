@@ -1,0 +1,13 @@
+import { Button } from "./button";
+
+export function Broken() {
+  const count: number = "three";
+  return (
+    <main>
+      <section #intro>overwritten</section>
+      <Button size="md">
+        <$Badge />
+      </Button>
+    </main>
+  );
+}

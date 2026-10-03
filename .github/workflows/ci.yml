@@ -51,3 +51,27 @@ jobs:
         run: pnpm --filter rtsx generate:check
       - run: pnpm typecheck
       - run: pnpm test:js
+
+  vscode:
+    # The editor suite (RGP1-110): the extension and the binary of this commit
+    # in a real VS Code, isolated profile, a trusted and an untrusted window.
+    # Not a required check of the `main` ruleset.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the binary
+        run: go build -o "$RUNNER_TEMP/reactogenic" ./cmd/reactogenic
+        working-directory: go
+      - name: Editor suite
+        run: xvfb-run -a pnpm --filter rtsx test:editor # VS Code needs a display
+        env:
+          REACTOGENIC_BINARY: ${{ runner.temp }}/reactogenic

@@ -3,9 +3,9 @@
 Language support for Reactogenic's `.rtsx` files — extension id
 `reactogenic.rtsx`. Spec: [`specs/phase01/ide.md`](../../specs/phase01/ide.md).
 
-This package holds the declarative half (RGP1-109): the language `rtsx`, its
-TextMate grammar and its language configuration. The client that runs
-`reactogenic lsp` is RGP1-110.
+Two halves: the declarative one (RGP1-109) — the language `rtsx`, its
+TextMate grammar and its language configuration — and the client (RGP1-110)
+that runs `reactogenic lsp --stdio` for the window.
 
 The package is named `rtsx`, without the `@reactogenic` scope every other
 package of this repo has: `vsce` rejects scoped names, and the Marketplace id
@@ -21,6 +21,9 @@ VSX as a `.vsix`, never to npm.
 | grammar `source.tsx.rtsx` | VS Code's TSX grammar plus the `.rtsx` forms |
 | Markdown | ```` ```rtsx ```` fences |
 | as for TSX | snippets, breakpoints, Emmet, semantic-token fallback colours |
+| commands | *Reactogenic: Restart Server*, *Reactogenic: Show Transpiled TSX* |
+| task `reactogenic: check` | the server's binary, `check --pretty=false`; matcher `$reactogenic`, closed documents only |
+| settings | `reactogenic.server.path`, `reactogenic.autoClosingTags`, `reactogenic.trace.server` |
 
 Scopes of the `.rtsx` forms; everything else keeps its TSX scope, so themes
 apply unchanged:
@@ -33,6 +36,52 @@ apply unchanged:
 | params `{ size }` | `meta.slot-params.rtsx`, TSX's parameter scopes inside |
 | segment root `#about-us` | `support.class.component.segment.rtsx` |
 
+## The client
+
+`src/`, bundled by esbuild into one CommonJS file, `dist/extension.js`.
+
+| | |
+| --- | --- |
+| `resolve.ts` | which binary runs — ide.md's table: the setting, `$REACTOGENIC_BINARY`, the workspace's `@reactogenic/cli` (walking up from the first `.rtsx` document; version ≥ `MIN_CLI_VERSION`), the bundled one. No `vscode` import |
+| `server.ts` | the one server of the window, its restarts, the status item |
+| `autoInsert.ts` | `>` typed → `textDocument/_vs_onAutoInsert` → the closing tag as a snippet |
+| `transpiled.ts` | *Show Transpiled TSX*: `reactogenic/transpiled`, read-only beside the source |
+| `task.ts` | the `check` task |
+| `protocol.ts` | the requests beyond standard LSP. No `vscode` import |
+
+- An untrusted workspace gets highlighting only: no process is started.
+- The server restarts when a lockfile or `reactogenic.server.*` changes, when
+  the workspace becomes trusted, and on *Restart Server*.
+- The status item (the `{}` in the status bar, on an `.rtsx` document) names
+  the binary, its version and where it was found.
+- `MIN_CLI_VERSION` in `resolve.ts` is the first `@reactogenic/cli` with
+  `lsp`: an older workspace CLI is skipped for the bundled binary, with a
+  warning in the status item.
+
+```sh
+pnpm build            # dist/extension.js
+pnpm typecheck
+pnpm test             # unit tests: the grammar, binary resolution, the problem matcher
+pnpm test:editor      # the editor suite: opens two VS Code windows
+pnpm package          # dist/vsix/rtsx-<target>-<version>.vsix
+```
+
+**The editor suite** (`scripts/test-editor.mjs`, `test/editor/`) runs the
+extension in a real VS Code with its own profile, against a copy of
+`test/fixture`: once trusted, once untrusted. It tests this checkout with
+`$REACTOGENIC_BINARY` (unset: built from `go/`), or, with `--vsix file.vsix`,
+a package as it ships, with its bundled binary. `$VSCODE_EXECUTABLE` picks the
+VS Code; unset, one is downloaded into `.vscode-test/`. On Linux without a
+display: `xvfb-run -a pnpm test:editor` (CI's `vscode` job).
+
+**Packaging** (`scripts/package.mjs [--pre-release] [target ...]`): one
+`.vsix` per platform of `@reactogenic/cli`, each with the binary from
+`dist/npm/cli-<target>/bin` (`scripts/build-binaries.sh`) and the licences of
+what is in it — ours, tsgo's `LICENSE` and `NOTICE`, the grammar's and the
+bundled npm packages' (`ThirdPartyNotices.txt`) — plus `universal`, without a
+binary. Each is staged in `dist/stage/<target>`: what is there is what ships.
+Nothing is published.
+
 ## Generated files
 
 Everything below is written by `grammar/generate.mjs` from the unmodified
@@ -44,13 +93,13 @@ syntaxes/rtsx.markdown.tmLanguage.json   the Markdown fence injection
 language-configuration.json              rtsx
 tags-language-configuration.json         rtsx-tags
 snippets/typescript.code-snippets        TSX's snippets
-ThirdPartyNotices.txt                    upstream licences; ships in the .vsix
+ThirdPartyNotices.txt                    upstream licences; the .vsix ships it, with the bundle's appended
 ```
 
 ```sh
 pnpm generate         # write them
 pnpm generate:check   # fail if any is out of date (CI)
-pnpm test             # scopes, equality with source.tsx, the repo's .rtsx files
+pnpm test             # scopes, equality with source.tsx, the repo's .rtsx files, …
 ```
 
 The grammar is VS Code's TSX grammar with three patches: the attribute list
