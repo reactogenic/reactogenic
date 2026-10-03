@@ -343,14 +343,10 @@ export const run = runner(() => {
       }
     });
 
-    // The "shown" branch runs today against a stand-in server: test/editor/transpiled.ts.
-    it("Show Transpiled TSX: says the server is too old, or shows the TSX beside the source", async () => {
+    // The command's other answers, and the refresh: test/editor/transpiled.ts.
+    it("Show Transpiled TSX: shows the TSX beside the source", async () => {
       await open("src/page.rtsx");
-      const result = await vscode.commands.executeCommand<string>("reactogenic.showTranspiled");
-      if (result === "unsupported") {
-        return; // TODO(RGP1-108): the server gains `reactogenic/transpiled`; then the branch below runs
-      }
-      assert.equal(result, "shown");
+      assert.equal(await vscode.commands.executeCommand<string>("reactogenic.showTranspiled"), "shown");
       const tsx = await until("the transpiled document", () => vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === "reactogenic-transpiled"));
       // Language rtsx, a superset of TSX: no other extension reports on it.
       assert.equal(tsx.document.languageId, "rtsx");

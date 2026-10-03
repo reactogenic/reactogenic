@@ -227,6 +227,12 @@ func TestRenameTable(t *testing.T) {
 			lines: []string{`<UI.Panel wide>`, `</UI.Panel>`},
 		},
 		{
+			name: "a tag name with a closing tag: the object of `<UI.Box>`",
+			rel:  page, needle: "<UI.Box", n: 1, offset: 2, to: "Kit",
+			edits: []string{`src/page.rtsx 20:8-20:10 "Kit"`, `src/page.rtsx 22:9-22:11 "Kit"`, `src/page.rtsx 3:10-3:12 "UI as Kit"`},
+			lines: []string{`import { UI as Kit, Box } from "./ui";`, `<Kit.Box wide>`, `</Kit.Box>`},
+		},
+		{
 			name: "a tag name whose closing tag is not emitted: all its children are slots",
 			rel:  page, needle: "</Table", n: 1, offset: 3, to: "Grid",
 			edits: []string{`src/page.rtsx 14:8-14:13 "Grid"`, `src/page.rtsx 19:9-19:14 "Grid"`, `src/page.rtsx 2:10-2:15 "Table as Grid"`},
@@ -367,6 +373,59 @@ func TestRenameRefused(t *testing.T) {
 	}
 	if got := problems(c); len(got) != 0 {
 		t.Errorf("after the refusals: %q", got)
+	}
+}
+
+// ide.md, *Rename*, the row of `&&name`, on a component: the one token
+// names the binding, the arg of the slot and the prop of the element. The
+// binding renamed writes the value out; the arg or the prop renamed is
+// refused — the prop has no token at all: its name is generated.
+func TestRenameArgProp(t *testing.T) {
+	const row = "src/row.rtsx"
+	c := start(t, lsptest.With(lsptest.Core, map[string]string{
+		"src/jsx.d.ts": strings.Replace(renameApp["src/jsx.d.ts"], "interface IntrinsicElements", "interface IntrinsicAttributes { key?: unknown }\n  interface IntrinsicElements", 1),
+		row: `import type { Slot } from "@reactogenic/core";
+export function Cell(props: { wide?: boolean; className?: string; children?: unknown }) {
+  return <td />;
+}
+export function Row({ $Cell }: { $Cell?: Slot<{ className?: string }, { wide: boolean }> }) {
+  const wide = true;
+  return (
+    <tr>
+      <Cell slot={$Cell} &&wide />
+    </tr>
+  );
+}
+`,
+	}))
+	c.Open(row)
+	if got := lsptest.Lines(c.Diagnostics(row)); len(got) != 0 {
+		t.Fatalf("the fixture has errors: %q", got)
+	}
+	const refusal = "row.rtsx:9:28: `&&wide` names an arg and a prop at once; only the binding behind it can be renamed"
+	for name, needle := range map[string]string{"the prop": "wide?: boolean", "the arg": "wide: boolean"} {
+		at := c.At(row, needle, 1, 1)
+		if edit, err := c.Rename(row, at, "broad"); err == nil || !strings.Contains(err.Error(), refusal) {
+			t.Errorf("%s renamed: %v %q", name, err, c.Edits(edit))
+		}
+		if _, _, err := c.PrepareRename(row, at); err == nil || !strings.Contains(err.Error(), refusal) {
+			t.Errorf("%s: prepareRename: %v", name, err)
+		}
+	}
+	// The binding, from its declaration and from the `&&wide` itself.
+	for _, at := range []lsptest.Position{c.At(row, "wide = true", 1, 1), c.At(row, "&&wide", 1, 3)} {
+		edit, err := c.Rename(row, at, "broad")
+		if got := strings.Join(c.Edits(edit), ", "); err != nil || got != `src/row.rtsx 6:9-6:13 "broad", src/row.rtsx 9:28-9:32 "wide={broad}"` {
+			t.Fatalf("the binding renamed: %v %s", err, got)
+		}
+	}
+	edit, _ := c.Rename(row, c.At(row, "wide = true", 1, 1), "broad")
+	c.Apply(edit)
+	if text := c.Text(row); !strings.Contains(text, "<Cell slot={$Cell} &&wide={broad} />") {
+		t.Errorf("after the rename:\n%s", text)
+	}
+	if got := lsptest.Lines(c.Diagnostics(row)); len(got) != 0 {
+		t.Errorf("after the rename: %q", got)
 	}
 }
 

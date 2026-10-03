@@ -91,7 +91,7 @@ extension in a real VS Code with its own profile, against a copy of
 | `trusted` | the server and the client's features |
 | `untrusted` | highlighting only, no server process |
 | `monorepo` | the opened folder is a package: the CLI and its lockfile are above it; other CLIs in a nested package and outside the workspace |
-| `transpiled` | *Show Transpiled TSX* against `test/editor/fake-server.mjs`, a stand-in that has `reactogenic/transpiled` (the real server gains it with RGP1-108) |
+| `transpiled` | *Show Transpiled TSX*: the emitted TSX beside the source, refreshed on an edit; and `test/editor/old-server.mjs`, a stand-in from before `reactogenic/transpiled`: "too old" |
 
 It tests this checkout with `$REACTOGENIC_BINARY` (unset: built from `go/`),
 or, with `--vsix file.vsix`, a package as it ships, with its bundled binary.

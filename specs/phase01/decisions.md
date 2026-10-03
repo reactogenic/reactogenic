@@ -376,8 +376,9 @@ tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
 server only after migrating `check` — a bare server now comes first.
 
 **Patched upstream files** (about 130 lines planned; 265 after the review of
-102–105; RGP1-107 adds 18 lines in three of them, the rest in new files; 108
-still to add its own; all in fast-moving packages):
+102–105; RGP1-107 adds 18 lines in three of them, the rest in new files;
+RGP1-108 adds 9 lines in `lsp/server.go` and none elsewhere — its hooks are
+new files; all in fast-moving packages):
 
 | File | Change |
 | --- | --- |
@@ -390,7 +391,7 @@ still to add its own; all in fast-moving packages):
 | `contentmapper/transform.go`, `ast/ast.go` | `Extra` with the parsed file; module-ness |
 | `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
 | `ls/host_diagnostics.go` (new) | the reporting hook: a mapped document's diagnostics from the host — asked for the program and the file, in place of `ls/diagnostics.go`'s path, which is not edited — and the LSP diagnostic made of each |
-| `ls/rename.go` | rename locations before write-back |
+| `ls/host_rename.go` (new) | a rename's occurrences in mapped files handed to the host before write-back — file, virtual range, whether it lies in one verbatim span, new text, gathered across projects — and the edits it returns, or its refusal; `prepareRename` asks the same. `ls/rename.go` is not edited: its checks and its text for each occurrence are called |
 | `ls/syntactic.go` (new) | document symbols, folding, selection ranges, closing tags on a source file |
 | `ls/symbols.go` | workspace symbols collected from the embedder's files only, before the cut to 256; slot params are not document symbols |
 | `ls/file_rename.go` | which edits of a file rename are made, per import (`FileRenameEdits`); specifiers written for the files as they will be after the rename; a generated import left out |
@@ -401,7 +402,7 @@ still to add its own; all in fast-moving packages):
 | `ls/definition.go` | a mapped module reached by a non-relative specifier: the file's start |
 | `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files; the extension kept next to a built-in sibling, decided on the module's absolute path |
 | `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly; in generated text before the whole source, one that the mapper names (where a statement can go) is the source's start |
-| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename; `textDocument/diagnostic` of a mapped document answered by the embedder's `Diagnostics` |
+| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename; `textDocument/diagnostic` of a mapped document answered by the embedder's `Diagnostics`; the host's own methods dispatched first (`Embedder.Requests`); `rename` and `prepareRename` through the embedder's `Rename` |
 
 **Cost accepted:** the stripped binary grows about 45% with the language
 service linked in (19 → 28 MB, darwin-arm64); the patches above must be

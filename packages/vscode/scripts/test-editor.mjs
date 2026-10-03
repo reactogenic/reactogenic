@@ -5,7 +5,7 @@
 //   trusted     test/editor/trusted.ts     the server and the client's features
 //   untrusted   test/editor/untrusted.ts   highlighting only, no server process
 //   monorepo    test/editor/monorepo.ts    the workspace's own CLI: which one, and its lockfile
-//   transpiled  test/editor/transpiled.ts  Show Transpiled TSX, against test/editor/fake-server.mjs
+//   transpiled  test/editor/transpiled.ts  Show Transpiled TSX; and, with test/editor/old-server.mjs, a server without it
 //
 //   node scripts/test-editor.mjs [--vsix file.vsix] [trusted|untrusted|monorepo|transpiled ...]
 //
@@ -119,13 +119,13 @@ function prepare(suite, dir) {
   }
   const workspace = path.join(dir, "ws");
   fs.cpSync(fixture, workspace, { recursive: true });
-  if (suite === "transpiled") {
-    if (process.platform === "win32") {
-      return { skipped: "the stand-in server is started by a shell script" };
-    }
-    const fake = path.join(dir, "reactogenic");
-    fs.writeFileSync(fake, `#!/bin/sh\nexec "${process.execPath}" "${path.join(root, "test/editor/fake-server.mjs")}" "$@"\n`, { mode: 0o755 });
-    suiteEnv.REACTOGENIC_BINARY = fake;
+  if (suite === "transpiled" && process.platform !== "win32") {
+    // A server from before `reactogenic/transpiled`, for the suite to switch
+    // to (reactogenic.server.path). It is started by a shell script: on
+    // Windows the suite skips that test.
+    const old = path.join(dir, "old-reactogenic");
+    fs.writeFileSync(old, `#!/bin/sh\nexec "${process.execPath}" "${path.join(root, "test/editor/old-server.mjs")}" "$@"\n`, { mode: 0o755 });
+    suiteEnv.RTSX_OLD_SERVER = old;
   }
   return { workspace, suiteEnv };
 }

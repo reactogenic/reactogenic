@@ -1135,7 +1135,77 @@ errors. ide.md, *Diagnostics*, has the table of what a report becomes.
   pulled diagnostics with no edit to it.
 - Depends on: 106.
 
-### RGP1-108 — Slots, segments, rename · L
+### RGP1-108 — Slots, segments, rename · L · done (two renames are TypeScript's own: a string literal, the prop `children`)
+Two seams. The **front** reads an open document with the same transform
+(`internal/lsp/source.go`: slot groups, tag pairs, `#name`) and moves,
+filters or answers a request (`front_source.go`). The **fork** gained two
+hooks in files of its own (patch 0006; 9 lines in `lsp/server.go`):
+`Embedder.Requests`, the server's own methods, answered from a document's
+program; `Embedder.Rename` with `ls/host_rename.go`, which hands the
+occurrences over before write-back and takes the edits or the refusal.
+- *Any tag of a group, a closing tag without a copy*: hover, definition,
+  type definition, implementation, references, highlights, completion,
+  `prepareRename` and rename are moved to the copied tag, the answer's own
+  range set back. References and highlights list the other tags too. On a
+  rebuilt element TS's highlight of a tag is empty (it highlights whole
+  tags, and neither is source text): the front highlights the names.
+  `TestSlotGroupRequests`, `TestClosingTagOfComponent` (all three shapes
+  answer now).
+- *Slot names* (`TestSlotCompletion`): TS's completion at the copied name
+  already works in a file being typed; the front keeps the `$` names and
+  appends those written under the owner — which also serves the second tag
+  of a group, and `$Case` under a `Switch`. Its own items resolve to
+  themselves.
+- *Segments* (`TestSegments`): `#name` → the file of the lookup order;
+  after `#`, the siblings. The names come from the server's file system
+  (`reactogenic/siblings`): a buffer never saved is listed.
+- *Rename* (`internal/lsp/rename.go`; ide.md's table, two rows added while
+  building it): the `$` is kept on a tag and in `slot={…}`, both ways; a
+  reference in code that no virtual text holds is renamed by the source's
+  scopes, and a name there that is not a reference refuses; a stopped file
+  that holds the name refuses. The post-check transpiles the result, all
+  passes, and also refuses on a new transpiler error — `Table` renamed to
+  `table` (its slots become orphans) was caught by it, not by a rule.
+  `prepareRename` runs the rename with the name unchanged. `TestRenameTable`
+  (18 cases), `TestRenameShorthandBoth`, `TestRenameArgProp` (`&&name` on a
+  component: its prop has no token), `TestRenameRefused` and the three
+  tests of code that is left out.
+- *The generated test* (`TestRenameEveryName`): every word outside a string
+  in the `.ts`, `.tsx` and `.rtsx` files of two fixtures, renamed to a fresh
+  name, applied, all diagnostics pulled, put back. 367 names: 224 renamed
+  (587 edits) with no diagnostic left; the rest refused by `prepareRename`
+  — 124 not a name to TS, 8 a module (`from`: a file rename, which this
+  client does not take), 6 declared in a library, and the table's refusals:
+  `&&selected` from its arg, `children` of a slot from its body (2),
+  `#intro` (2). Under the race detector every fourth name.
+- *Found by it*, in the fork's rename, each the same in a plain `.tsx`:
+  - the prop of a generic component (`<Each items=…>`) passes upstream's
+    `node_modules` check and its declaration in `node_modules` is edited —
+    now refused (`host_rename.go`);
+  - an intrinsic tag is offered for renaming (placeholder `__index`) and
+    edits nothing — now not offered;
+  - a `Switch` or `Match` under another name has no token: not offered
+    (`TestRenameNotOffered`).
+- *TypeScript's own, left as they are* (`TestRenameIsTypeScripts`: the same
+  edits in a `.tsx` file): a string literal is renamed where TS matches it
+  and not in the type that declares it; the prop `children`, without the
+  element bodies that are its value. Both leave type errors. The generated
+  test leaves them out (words inside strings; `children` in `.tsx`).
+  **Rejected:** refusing a rename of `children` — it is the name of every
+  tree node's property too.
+- *`reactogenic/transpiled`* (`TestTranspiled`, `TestTranspiledSteps`): the
+  virtual text of the document's program and its step. The extension's
+  suite runs the command against the real server in both the `trusted` and
+  the `transpiled` window; the stand-in is now a server *without* the
+  request (`test/editor/old-server.mjs`: "too old"). The editor suite, once
+  (VS Code 1.140.0, darwin-arm64): trusted 22, untrusted 3, monorepo 6,
+  transpiled 5 — the last after one fix of the new test.
+- *Left*: prop completion in `<$Icon ▮>` (ide.md, *Not in the first
+  release*); a client is told why a rename of a lowered name is not offered
+  only in TS's words ("You cannot rename this element"); `prepareRename`
+  costs a find-all-references; the refusal for a stopped file looks at the
+  mapped files of the document's project only; the suite against a `.vsix`,
+  Linux and Windows were not run.
 - A request hook in the server's dispatch; rename locations exported from the
   fork before write-back.
 - Slot-name completion; requests on any element of a slot group; `#name`
@@ -1189,7 +1259,7 @@ Enter. `.vscodeignore` and the manifest's commands, task and matcher are
   nothing.
 - Depends on: 100.
 
-### RGP1-110 — VS Code extension · L · done (*Show transpiled TSX* waits for 108)
+### RGP1-110 — VS Code extension · L · done
 Built ahead of 107 and 108, against the server of 105. `src/` (eight files,
 one 450 KiB CommonJS bundle): the client over stdio, attached to `rtsx` on
 `file` and `untitled`; the resolver of ide.md's table, without a `vscode`
@@ -1230,7 +1300,7 @@ suite launches VS Code itself; after a snippet inserted at the cursor,
 character instead.
 *Left*: the skipped test `TODO(RGP1-107)` (the server reported TS2322 at
 `$Badge`, not `undeclared-slot` — it runs since 107); the "shown" branch of *Show
-transpiled TSX*, never run (108); the `vscode` CI job and Linux under `xvfb`
+transpiled TSX*, never run (it runs against the real server since 108); the `vscode` CI job and Linux under `xvfb`
 were never run — nothing is pushed; the other five platform `.vsix` were not
 built; the Windows copy was not run on Windows; the restart on a trust grant
 is wired and not tested (no API grants trust); `MIN_CLI_VERSION` is

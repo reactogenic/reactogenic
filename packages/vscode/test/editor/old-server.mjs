@@ -1,11 +1,10 @@
-// A stand-in for `reactogenic lsp --stdio` in the editor suite `fake`: a
-// language server with nothing but `reactogenic/transpiled`, which the real
-// server gains with RGP1-108. It answers as the real one does for a *stopped*
-// file (ide.md, *Tolerance*): the source itself, 1:1 — text that is not TSX.
+// A stand-in for `reactogenic lsp --stdio` in the editor suite `transpiled`:
+// a language server from before `reactogenic/transpiled` (RGP1-108) — it
+// starts, keeps the documents, and answers any other request with
+// MethodNotFound. *Show Transpiled TSX* then says that the server is too old.
 import fs from "node:fs";
 
 const documents = new Map();
-let asked = 0;
 
 function send(message) {
   const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", ...message }), "utf8");
@@ -17,7 +16,7 @@ function handle(message) {
   const { id, method, params } = message;
   switch (method) {
     case "initialize":
-      return send({ id, result: { capabilities: { textDocumentSync: 1 }, serverInfo: { name: "reactogenic", version: "0.0.0-fake" } } });
+      return send({ id, result: { capabilities: { textDocumentSync: 1 }, serverInfo: { name: "reactogenic", version: "0.0.0-old" } } });
     case "shutdown":
       return send({ id, result: null });
     case "exit":
@@ -28,14 +27,6 @@ function handle(message) {
       return void documents.set(params.textDocument.uri, params.contentChanges.at(-1).text);
     case "textDocument/didClose":
       return void documents.delete(params.textDocument.uri);
-    case "reactogenic/transpiled": {
-      const text = documents.get(params.textDocument.uri);
-      if (text === undefined) {
-        return send({ id, error: { code: -32602, message: `${params.textDocument.uri} is not open` } });
-      }
-      asked++;
-      return send({ id, result: { text: `// transpiled ${asked}\n${text}`, step: "stopped: slots" } });
-    }
     default:
       if (id !== undefined && method) {
         send({ id, error: { code: -32601, message: `no ${method}` } });
@@ -44,7 +35,7 @@ function handle(message) {
 }
 
 if (process.argv[2] !== "lsp") {
-  fs.writeSync(2, "the fake server has `lsp --stdio` only\n");
+  fs.writeSync(2, "the old server has `lsp --stdio` only\n");
   process.exit(2);
 }
 let buffer = Buffer.alloc(0);

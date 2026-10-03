@@ -156,14 +156,21 @@ func (r *renaming) set(at emit.Span, text string) error {
 	return nil
 }
 
+// argProp refuses the rename of the arg or the prop of `&&name`: the one
+// token is both, and the rename is of one.
+const argProp = "`&&%s` names an arg and a prop at once; only the binding behind it can be renamed. Write the arg and the prop apart first."
+
 func (r *renaming) occurrence(o server.RenameOccurrence) error {
 	at := emit.Span{Pos: o.OriginalPos, End: o.OriginalEnd}
 	if !o.Exact {
 		// Generated text: its origin is the construct that produced it.
-		construct := r.src.slice(emit.Span{Pos: at.Pos, End: min(at.End, len(r.src.text))})
-		if strings.HasPrefix(construct, "&&") {
-			return r.refuse(at.Pos, "`%s` names an arg and a prop at once; only the binding behind it can be renamed. Write the arg and the prop apart first.", firstLine(construct))
+		// The prop of `&&name` is such: its name is written for the attribute.
+		for _, a := range r.src.attrs {
+			if a.arg == syntax.ArgProp && rtsx.TokenStart(r.src.file, a.node) == at.Pos {
+				return r.refuse(a.name.Pos, argProp, r.src.slice(a.name))
+			}
 		}
+		construct := r.src.slice(emit.Span{Pos: at.Pos, End: min(at.End, len(r.src.text))})
 		return r.refuse(at.Pos, "`%s` is also written by the transform, for `%s`; that has no name in the source to rename.", r.request.Name, firstLine(construct))
 	}
 	r.found = append(r.found, at)
@@ -176,7 +183,7 @@ func (r *renaming) occurrence(o server.RenameOccurrence) error {
 		renamesName := o.Node == nil || !rtsx.IsValueReference(o.Node)
 		switch {
 		case a.arg == syntax.ArgProp && renamesName:
-			return r.refuse(at.Pos, "`&&%s` names an arg and a prop at once; only the binding behind it can be renamed. Write the arg and the prop apart first.", r.src.slice(at))
+			return r.refuse(at.Pos, argProp, r.src.slice(at))
 		case !a.bare:
 			return r.set(at, o.NewText)
 		}

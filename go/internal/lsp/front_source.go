@@ -160,6 +160,10 @@ func (f *front) sourceAnswer(req request, result json.RawMessage) (rewritten jso
 		if r := recover(); r != nil {
 			fmt.Fprintf(f.log, "reactogenic lsp: panic rewriting the answer to %s: %v\n%s\n", req.Method, r, debug.Stack())
 			rewritten, changed = nil, false
+			if req.segment.Len() > 0 {
+				// The server was asked something else: its answer is not one.
+				rewritten, changed = json.RawMessage("null"), true
+			}
 		}
 	}()
 	switch {

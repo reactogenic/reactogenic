@@ -1,29 +1,37 @@
-// The editor suite, fourth window: *Show Transpiled TSX* where the server has
-// `reactogenic/transpiled`. The real one gains it with RGP1-108; until then
-// $REACTOGENIC_BINARY is test/editor/fake-server.mjs, which answers as the
-// real one does for a stopped file — the source itself, which is not TSX.
+// The editor suite, fourth window: *Show Transpiled TSX* (ide.md,
+// *Commands*) — `reactogenic/transpiled` of the server under test, shown
+// read-only beside the source; and, against test/editor/old-server.mjs, a
+// server from before that request.
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { activate, code, file, open, runner, sleep, until } from "./harness";
+import type { Api } from "../../src/extension";
+import { activate, binary, code, file, open, runner, serverState, sleep, until } from "./harness";
 
 const SCHEME = "reactogenic-transpiled";
 const shown = () => vscode.window.visibleTextEditors.filter((e) => e.document.uri.scheme === SCHEME);
 
 export const run = runner(() => {
-  describe("reactogenic.rtsx, a server with reactogenic/transpiled", () => {
+  describe("reactogenic.rtsx, Show Transpiled TSX", () => {
+    let api: Api;
+
     before(async () => {
       await open("src/page.rtsx");
-      const api = await activate();
+      api = await activate();
       const state = await api.ready();
       assert.equal(state.error, undefined);
-      assert.equal(state.version, "0.0.0-fake", "the stand-in server runs");
+      assert.equal(state.binary?.path, binary().path, "the server under test runs");
     });
 
-    it("shows the transpiled text beside the source", async () => {
+    it("shows the emitted TSX beside the source", async () => {
       const page = await open("src/page.rtsx");
       assert.equal(await vscode.commands.executeCommand("reactogenic.showTranspiled"), "shown");
       const [tsx] = await until("the transpiled document", () => shown().length > 0 && shown());
-      assert.equal(tsx.document.getText(), `// transpiled 1\n${page.document.getText()}`);
+      const text = tsx.document.getText();
+      // The slots are props, the shorthand is written out, the rest is the source's.
+      assert.match(text, /<Button size=\{size\} \$Icon=\{\{ className: "icon", children: \(\{ size \}\) => /);
+      assert.match(text, /\$Label=\{\{ children: "Save" \}\} \/>/);
+      assert.doesNotMatch(text, /<\$Icon/);
+      assert.ok(text.startsWith('import { Button, type Size } from "./button";'), text);
       assert.notEqual(tsx.viewColumn, page.viewColumn);
       assert.equal(vscode.window.activeTextEditor?.document, page.document, "the focus stays in the source");
     });
@@ -46,15 +54,17 @@ export const run = runner(() => {
       assert.equal(tsx.document.uri.path.split("/").pop(), "page.transpiled.rtsx");
     });
 
-    it("an edit to the source refreshes it", async () => {
+    it("an edit to the source refreshes it: the unsaved buffer is what is transpiled", async () => {
       const page = await open("src/page.rtsx");
       const [tsx] = shown();
-      await page.edit((builder) => builder.insert(new vscode.Position(0, 0), "// edited\n"));
+      const label = page.document.getText().indexOf("<$Label>Save");
+      await page.edit((builder) => builder.replace(new vscode.Range(page.document.positionAt(label + 8), page.document.positionAt(label + 12)), "Store"));
       try {
-        await until("the refresh", () => tsx.document.getText().startsWith("// transpiled 2\n// edited\n"), 10_000);
+        await until("the refresh", () => tsx.document.getText().includes('$Label={{ children: "Store" }}'), 10_000);
       } finally {
         await vscode.commands.executeCommand("workbench.action.files.revert");
       }
+      await until("the refresh after the revert", () => tsx.document.getText().includes('$Label={{ children: "Save" }}'), 10_000);
     });
 
     it("the command in the transpiled document itself does nothing", async () => {
@@ -62,6 +72,32 @@ export const run = runner(() => {
       await vscode.window.showTextDocument(tsx.document, { viewColumn: tsx.viewColumn });
       assert.equal(await vscode.commands.executeCommand("reactogenic.showTranspiled"), "no-document");
       assert.equal(shown().length, 1);
+    });
+
+    it("a server without the request: the command says that it is too old", async function () {
+      const old = process.env.RTSX_OLD_SERVER;
+      if (!old) {
+        this.skip(); // Windows: the stand-in is started by a shell script
+      }
+      const settings = vscode.workspace.getConfiguration("reactogenic");
+      const before = await api.ready();
+      try {
+        await settings.update("server.path", old, vscode.ConfigurationTarget.Global);
+        const state = await serverState(api, "the old server", (s) => s.starts > before.starts && s.running);
+        assert.equal(state.version, "0.0.0-old", "the stand-in runs");
+        await open("src/button.rtsx");
+        assert.equal(await vscode.commands.executeCommand("reactogenic.showTranspiled"), "unsupported");
+        // Nothing is shown for it.
+        await sleep(500);
+        assert.deepEqual(
+          shown().filter((e) => e.document.uri.path.endsWith("button.transpiled.rtsx")),
+          [],
+        );
+      } finally {
+        await settings.update("server.path", undefined, vscode.ConfigurationTarget.Global);
+      }
+      const back = await serverState(api, "the server again", (s) => s.running && !s.error && s.version !== "0.0.0-old");
+      assert.equal(back.binary?.path, binary().path);
     });
   });
 });
