@@ -1,7 +1,6 @@
 // The VS Code extension `reactogenic.rtsx` (ide.md, *VS Code extension*): the
 // declarative half is package.json; this is the client that runs
 // `reactogenic lsp` for the window.
-import * as path from "node:path";
 import * as vscode from "vscode";
 import { LOCKFILES } from "./resolve";
 import { Server, type ServerState } from "./server";
@@ -22,15 +21,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   server = running;
   const transpiled = new Transpiled(running);
 
-  // A lockfile changes more than once during an install: restart when it settles.
-  let settle: ReturnType<typeof setTimeout> | undefined;
-  const lockfile = (uri: vscode.Uri) => {
-    if (uri.path.includes("/node_modules/")) {
-      return;
-    }
-    clearTimeout(settle);
-    settle = setTimeout(() => void running.restart(`${path.basename(uri.fsPath)} changed`), 1500);
-  };
+  // The lockfiles inside the workspace folders; those above them are the server's to watch.
+  const lockfile = (uri: vscode.Uri) => running.lockfile(uri);
   const lockfiles = vscode.workspace.createFileSystemWatcher(`**/{${LOCKFILES.join(",")}}`);
 
   context.subscriptions.push(
@@ -41,7 +33,6 @@ export function activate(context: vscode.ExtensionContext): Api {
     lockfiles.onDidChange(lockfile),
     lockfiles.onDidCreate(lockfile),
     lockfiles.onDidDelete(lockfile),
-    new vscode.Disposable(() => clearTimeout(settle)),
     vscode.commands.registerCommand("reactogenic.restartServer", () => running.restart("Restart Server")),
     vscode.commands.registerCommand("reactogenic.showTranspiled", () => transpiled.show()),
     vscode.workspace.onDidChangeConfiguration((e) => {

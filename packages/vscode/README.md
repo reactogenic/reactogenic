@@ -22,7 +22,7 @@ VSX as a `.vsix`, never to npm.
 | Markdown | ```` ```rtsx ```` fences |
 | as for TSX | snippets, breakpoints, Emmet, semantic-token fallback colours |
 | commands | *Reactogenic: Restart Server*, *Reactogenic: Show Transpiled TSX* |
-| task `reactogenic: check` | the server's binary, `check --pretty=false`; matcher `$reactogenic`, closed documents only |
+| task `reactogenic: check` | the server's binary, `check --pretty=false`; closed documents only. Two matchers: `$reactogenic` for `.rtsx` lines, `$reactogenic-ts` for the rest (owner `typescript`, as `$tsc`) — use both |
 | settings | `reactogenic.server.path`, `reactogenic.autoClosingTags`, `reactogenic.trace.server` |
 
 Scopes of the `.rtsx` forms; everything else keeps its TSX scope, so themes
@@ -42,18 +42,34 @@ apply unchanged:
 
 | | |
 | --- | --- |
-| `resolve.ts` | which binary runs — ide.md's table: the setting, `$REACTOGENIC_BINARY`, the workspace's `@reactogenic/cli` (walking up from the first `.rtsx` document; version ≥ `MIN_CLI_VERSION`), the bundled one. No `vscode` import |
-| `server.ts` | the one server of the window, its restarts, the status item |
-| `autoInsert.ts` | `>` typed → `textDocument/_vs_onAutoInsert` → the closing tag as a snippet |
-| `transpiled.ts` | *Show Transpiled TSX*: `reactogenic/transpiled`, read-only beside the source |
+| `resolve.ts` | which binary runs — ide.md's table: the setting, `$REACTOGENIC_BINARY`, the workspace's `@reactogenic/cli` (walking up from an `.rtsx` document of the workspace; version ≥ `MIN_CLI_VERSION`), the bundled one. No `vscode` import |
+| `server.ts` | the one server of the window — its process, its restarts, the status item |
+| `autoInsert.ts` | `>` typed → `textDocument/_vs_onAutoInsert`, once per cursor → each closing tag as a snippet |
+| `transpiled.ts` | *Show Transpiled TSX*: `reactogenic/transpiled`, read-only beside the source, as `page.transpiled.rtsx` |
 | `task.ts` | the `check` task |
 | `protocol.ts` | the requests beyond standard LSP. No `vscode` import |
 
 - An untrusted workspace gets highlighting only: no process is started.
 - The server restarts when a lockfile or `reactogenic.server.*` changes, when
-  the workspace becomes trusted, and on *Restart Server*.
+  the workspace becomes trusted, and on *Restart Server*. Lockfiles: those
+  inside the workspace folders, and — the opened folder may be a package of a
+  monorepo — those of the directory that holds the CLI's `node_modules` and
+  of the nearest directory above with a lockfile.
+- Each start chooses the workspace CLI again: the walk starts at the active
+  `.rtsx` document (else another open one) that lies inside a workspace
+  folder, else at the first folder. A document outside every folder never
+  chooses the binary of a window that has folders.
+- `server.ts` spawns the process itself and hands it to the language client,
+  so that it can stop it at any moment. A binary that has not answered
+  `initialize` within 10 s is an error and is killed; a restart gives up a
+  start still under way instead of waiting behind it.
 - The status item (the `{}` in the status bar, on an `.rtsx` document) names
-  the binary, its version and where it was found.
+  the binary, its version and where it was found — or says that the server
+  stopped, when it crashed too often for the client to restart it.
+- The server's diagnostics for open documents and the `$reactogenic` matcher
+  share the owner `reactogenic`: an opened document's problems replace the
+  task's. The collection lives as long as the window — disposing it at a
+  restart would clear the task's problems of closed documents too.
 - `MIN_CLI_VERSION` in `resolve.ts` is the first `@reactogenic/cli` with
   `lsp`: an older workspace CLI is skipped for the bundled binary, with a
   warning in the status item.
@@ -62,17 +78,27 @@ apply unchanged:
 pnpm build            # dist/extension.js
 pnpm typecheck
 pnpm test             # unit tests: the grammar, binary resolution, the problem matcher
-pnpm test:editor      # the editor suite: opens two VS Code windows
+pnpm test:editor      # the editor suite: opens four VS Code windows, one after the other
 pnpm package          # dist/vsix/rtsx-<target>-<version>.vsix
 ```
 
 **The editor suite** (`scripts/test-editor.mjs`, `test/editor/`) runs the
 extension in a real VS Code with its own profile, against a copy of
-`test/fixture`: once trusted, once untrusted. It tests this checkout with
-`$REACTOGENIC_BINARY` (unset: built from `go/`), or, with `--vsix file.vsix`,
-a package as it ships, with its bundled binary. `$VSCODE_EXECUTABLE` picks the
-VS Code; unset, one is downloaded into `.vscode-test/`. On Linux without a
-display: `xvfb-run -a pnpm test:editor` (CI's `vscode` job).
+`test/fixture`, one window per suite:
+
+| Suite | |
+| --- | --- |
+| `trusted` | the server and the client's features |
+| `untrusted` | highlighting only, no server process |
+| `monorepo` | the opened folder is a package: the CLI and its lockfile are above it; other CLIs in a nested package and outside the workspace |
+| `transpiled` | *Show Transpiled TSX* against `test/editor/fake-server.mjs`, a stand-in that has `reactogenic/transpiled` (the real server gains it with RGP1-108) |
+
+It tests this checkout with `$REACTOGENIC_BINARY` (unset: built from `go/`),
+or, with `--vsix file.vsix`, a package as it ships, with its bundled binary.
+Suite names as arguments run those only; `$EDITOR_TEST_GREP` runs the tests
+whose title matches. `$VSCODE_EXECUTABLE` picks the VS Code; unset, one is
+downloaded into `.vscode-test/`. On Linux without a display:
+`xvfb-run -a pnpm test:editor` (CI's `vscode` job).
 
 **Packaging** (`scripts/package.mjs [--pre-release] [target ...]`): one
 `.vsix` per platform of `@reactogenic/cli`, each with the binary from

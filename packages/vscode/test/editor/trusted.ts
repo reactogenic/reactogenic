@@ -7,10 +7,10 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { Api } from "../../src/extension";
 import type { ServerState } from "../../src/server";
-import { activate, at, binary, file, onlyServers, open, runner, sleep, until } from "./harness";
+import { activate, at, binary, code, file, onlyServers, open, processes, runner, runTask, serverState, sleep, until, where } from "./harness";
 
-const code = (d: vscode.Diagnostic) => (typeof d.code === "object" ? d.code.value : d.code);
-const where = (d: vscode.Diagnostic) => `${d.range.start.line}:${d.range.start.character}`;
+/** A problem as the Problems panel words it. */
+const problem = (d: vscode.Diagnostic) => `${where(d)} ${vscode.DiagnosticSeverity[d.severity]} ${d.source}(${code(d)}): ${d.message}`;
 
 export const run = runner(() => {
   describe("reactogenic.rtsx, trusted workspace", () => {
@@ -23,11 +23,21 @@ export const run = runner(() => {
     });
 
     /** The state once `is` holds: a restart is queued a moment after its cause. */
-    const state = (what: string, is: (s: ServerState) => unknown) =>
-      until<ServerState>(what, async () => {
-        const s = await api.ready();
-        return is(s) ? s : undefined;
-      });
+    const state = (what: string, is: (s: ServerState) => unknown, timeout?: number) => serverState(api, what, is, timeout);
+
+    /** Appends `lines` after the `<Button size>` line of page.rtsx, a cursor at the end of each, and types `text`. */
+    const typeAfter = async (lines: string[], text: string) => {
+      const editor = await open("src/page.rtsx");
+      const document = editor.document;
+      const after = document.lineAt(at(document, "<Button size>").line).range.end;
+      await editor.edit((builder) => builder.insert(after, lines.map((line) => `\n${line}`).join("")));
+      const numbers = lines.map((_, i) => after.line + 1 + i);
+      editor.selections = numbers.map((line) => new vscode.Selection(document.lineAt(line).range.end, document.lineAt(line).range.end));
+      await sleep(300);
+      await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+      await vscode.commands.executeCommand("type", { text });
+      return { document, text: () => numbers.map((line) => document.lineAt(line).text) };
+    };
 
     it("the document's language id is rtsx", () => {
       assert.equal(page.document.languageId, "rtsx");
@@ -45,6 +55,7 @@ export const run = runner(() => {
       assert.deepEqual(state.status, { text: `reactogenic ${state.version}`, detail: `${found}: ${expected.path}` });
       assert.equal(state.starts, 1);
       assert.ok(state.pid);
+      // One process, and its command line to the letter: `lsp --stdio`, once.
       await onlyServers([state.pid]);
     });
 
@@ -103,6 +114,32 @@ export const run = runner(() => {
       await vscode.commands.executeCommand("workbench.action.files.revert");
     });
 
+    it("typing > at two cursors closes each tag with its own name", async () => {
+      const typed = await typeAfter(["        <div", "        <$Label"], ">");
+      try {
+        await until("a closing tag", () => typed.text().every((line) => line.includes("</")), 10_000);
+        assert.deepEqual(typed.text(), ["        <div></div>", "        <$Label></$Label>"]);
+        // Both cursors stay between their tags.
+        await vscode.commands.executeCommand("type", { text: "x" });
+        await until("the next character", () => typed.text().every((line) => line.includes("x")), 10_000);
+        assert.deepEqual(typed.text(), ["        <div>x</div>", "        <$Label>x</$Label>"]);
+      } finally {
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+      }
+    });
+
+    it("typing > at two cursors in tags of one name closes both", async () => {
+      const typed = await typeAfter(["        <div", "        <div"], ">");
+      try {
+        await until("a closing tag", () => typed.text().every((line) => line.includes("</")), 10_000);
+        await vscode.commands.executeCommand("type", { text: "x" });
+        await until("the next character", () => typed.text().every((line) => line.includes("x")), 10_000);
+        assert.deepEqual(typed.text(), ["        <div>x</div>", "        <div>x</div>"]);
+      } finally {
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+      }
+    });
+
     it("typing > inserts nothing when reactogenic.autoClosingTags is off", async () => {
       const editor = await open("src/page.rtsx");
       const document = editor.document;
@@ -144,9 +181,50 @@ export const run = runner(() => {
       await vscode.commands.executeCommand("workbench.action.files.revert");
     });
 
-    it("the check task runs the server's binary and reports a closed document through $reactogenic", async () => {
+    it("an untitled rtsx document is served as .rtsx", async () => {
+      const text = "const n: number = 'x';\nexport const a = <div>{n}</div>;\nexport const b = <div><$Icon className=\"i\" { size }>{size}</$Icon></div>;\n";
+      const document = await vscode.workspace.openTextDocument({ language: "rtsx", content: text });
+      await vscode.window.showTextDocument(document, { preview: false });
+      try {
+        assert.equal(document.uri.scheme, "untitled");
+        assert.equal(document.languageId, "rtsx");
+        const diagnostics = await until("TS2322 from the server", () => {
+          const all = vscode.languages.getDiagnostics(document.uri);
+          return all.some((d) => code(d) === 2322) && all;
+        });
+        assert.equal(document.getText(diagnostics.find((d) => code(d) === 2322)?.range), "n");
+        // Mapped, not read as plain TypeScript: no syntax error (TS1xxx: the
+        // `>` of `</div>` as a regular expression), no element name as an
+        // identifier (TS2304), no "JSX without the option" (TS17004).
+        const foreign = diagnostics.filter((d) => {
+          const n = Number(code(d));
+          return (n >= 1000 && n < 2000) || n === 2304 || (n >= 17000 && n < 18000);
+        });
+        assert.deepEqual(foreign.map(problem), []);
+        const hovers = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", document.uri, new vscode.Position(1, 23));
+        assert.equal(hovers.length, 1);
+        assert.match(hovers[0].contents.map((c) => (typeof c === "string" ? c : c.value)).join("\n"), /const n: number/);
+        // A definition inside the document names it as VS Code does.
+        const definitions = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
+          "vscode.executeDefinitionProvider",
+          document.uri,
+          new vscode.Position(1, 23),
+        );
+        assert.deepEqual(
+          definitions.map((d) => ("targetUri" in d ? d.targetUri : d.uri).toString()),
+          [document.uri.toString()],
+        );
+      } finally {
+        await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+      }
+      assert.equal((await api.ready()).running, true);
+    });
+
+    it("the check task runs the server's binary and reports closed documents: .rtsx through $reactogenic, .ts as TypeScript's", async () => {
       const broken = file("src/broken.rtsx");
-      assert.ok(!vscode.workspace.textDocuments.some((d) => d.uri.toString() === broken.toString()), "broken.rtsx is closed");
+      const util = file("src/util.ts");
+      const closed = (uri: vscode.Uri) => !vscode.workspace.textDocuments.some((d) => d.uri.toString() === uri.toString());
+      assert.ok(closed(broken) && closed(util), "broken.rtsx and util.ts are closed");
       const tasks = await vscode.tasks.fetchTasks({ type: "reactogenic" });
       assert.deepEqual(
         tasks.map((t) => `${t.source}: ${t.name}`),
@@ -156,30 +234,46 @@ export const run = runner(() => {
       const execution = task.execution as vscode.ProcessExecution;
       assert.equal(execution.process, binary().path);
       assert.deepEqual(execution.args, ["check", "--pretty=false"]);
-      assert.deepEqual(task.problemMatchers, ["$reactogenic"]);
 
-      const ended = new Promise<number | undefined>((resolve) => {
-        const subscription = vscode.tasks.onDidEndTaskProcess((e) => {
-          if (e.execution.task.name === "check") {
-            subscription.dispose();
-            resolve(e.exitCode);
-          }
-        });
-      });
-      await vscode.tasks.executeTask(task);
-      assert.equal(await ended, 1);
+      assert.equal(await runTask(task), 1);
       const problems = await until("the task's problems", () => {
         const diagnostics = vscode.languages.getDiagnostics(broken);
         return diagnostics.length >= 3 && diagnostics;
       });
-      assert.deepEqual(
-        problems.map((d) => `${where(d)} ${vscode.DiagnosticSeverity[d.severity]} ${code(d)}: ${d.message}`).sort(),
-        [
-          "3:8 Error TS2322: Type 'string' is not assignable to type 'number'.",
-          "6:15 Warning segment-children: Contents will be overwritten by the segment `intro`",
-          "8:9 Error undeclared-slot: `$Badge` is not declared in `Button`",
-        ],
-      );
+      assert.deepEqual(problems.map(problem).sort(), [
+        "3:8 Error reactogenic(TS2322): Type 'string' is not assignable to type 'number'.",
+        "6:15 Warning reactogenic(segment-children): Contents will be overwritten by the segment `intro`",
+        "8:9 Error reactogenic(undeclared-slot): `$Badge` is not declared in `Button`",
+      ]);
+      // A .ts file's line is a problem of TypeScript's, as `$tsc` would make it.
+      const other = await until("the task's problem in util.ts", () => vscode.languages.getDiagnostics(util).length > 0 && vscode.languages.getDiagnostics(util), 10_000);
+      assert.deepEqual(other.map(problem), ["2:13 Error ts(2322): Type 'string' is not assignable to type 'number'."]);
+      assert.equal(typeof code(other[0]), "string", "the task's problem, not TypeScript's own: the file is closed");
+      assert.deepEqual(task.problemMatchers, ["$reactogenic", "$reactogenic-ts"]);
+    });
+
+    it("Restart Server keeps the task's problems of closed documents", async () => {
+      const broken = file("src/broken.rtsx");
+      assert.equal(vscode.languages.getDiagnostics(broken).length, 3);
+      const before = await api.ready();
+      await vscode.commands.executeCommand("reactogenic.restartServer");
+      await state("a restart", (s) => s.starts > before.starts && s.running);
+      await sleep(1000);
+      assert.equal(vscode.languages.getDiagnostics(broken).length, 3);
+    });
+
+    it("an opened .ts file has its problem once: VS Code's TypeScript replaces the task's", async function () {
+      this.timeout(120_000);
+      const util = file("src/util.ts");
+      await open("src/util.ts");
+      try {
+        // TypeScript's own diagnostic has the number as its code; the task's, the text.
+        await until("TypeScript's own TS2322", () => vscode.languages.getDiagnostics(util).some((d) => code(d) === 2322), 90_000);
+        await sleep(500);
+        assert.deepEqual(vscode.languages.getDiagnostics(util).map(problem), ["2:13 Error ts(2322): Type 'string' is not assignable to type 'number'."]);
+      } finally {
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+      }
     });
 
     it("an open document's problems come from the server, at .rtsx positions", async () => {
@@ -216,6 +310,7 @@ export const run = runner(() => {
       assert.equal(warning?.severity, vscode.DiagnosticSeverity.Warning);
     });
 
+    // The "shown" branch runs today against a stand-in server: test/editor/transpiled.ts.
     it("Show Transpiled TSX: says the server is too old, or shows the TSX beside the source", async () => {
       await open("src/page.rtsx");
       const result = await vscode.commands.executeCommand<string>("reactogenic.showTranspiled");
@@ -224,9 +319,12 @@ export const run = runner(() => {
       }
       assert.equal(result, "shown");
       const tsx = await until("the transpiled document", () => vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === "reactogenic-transpiled"));
-      assert.equal(tsx.document.languageId, "typescriptreact");
+      // Language rtsx, a superset of TSX: no other extension reports on it.
+      assert.equal(tsx.document.languageId, "rtsx");
       assert.match(tsx.document.getText(), /\$Icon=\{\{/);
       assert.notEqual(tsx.viewColumn, vscode.window.activeTextEditor?.viewColumn);
+      await sleep(2000);
+      assert.deepEqual(vscode.languages.getDiagnostics(tsx.document.uri), []);
     });
 
     it("a change of reactogenic.server.path restarts the server; a path that does not exist is an error", async () => {
@@ -268,6 +366,49 @@ export const run = runner(() => {
       assert.deepEqual(back.binary, expected);
     });
 
+    it("a binary that never answers: the next restart does not wait for it; left alone, it is an error", async function () {
+      if (process.platform === "win32") {
+        this.skip(); // the stand-in is a shell script
+      }
+      this.timeout(90_000);
+      const settings = vscode.workspace.getConfiguration("reactogenic");
+      const expected = binary();
+      // It starts, reads nothing and never exits.
+      const hanging = path.join(os.tmpdir(), `reactogenic-hangs-${process.pid}`);
+      const sleeper = `sleep ${600_000 + (process.pid % 100_000)}`;
+      const sleeping = () => processes(sleeper)?.length ?? 0;
+      fs.writeFileSync(hanging, `#!/bin/sh\nexec ${sleeper}\n`, { mode: 0o755 });
+      try {
+        await settings.update("server.path", hanging, vscode.ConfigurationTarget.Global);
+        await until("the hanging process", () => sleeping() === 1, 10_000);
+        // The setting is removed while that start is under way.
+        const removed = Date.now();
+        await settings.update("server.path", undefined, vscode.ConfigurationTarget.Global);
+        const back = await state("the server again", (s) => s.running && !s.error, 30_000);
+        assert.deepEqual(back.binary, expected);
+        assert.ok(Date.now() - removed < 8_000, `the restart waited ${Date.now() - removed} ms behind the hanging start`);
+        await until("the hanging process to be killed", () => sleeping() === 0, 10_000);
+
+        // Left alone, the start gives up after its time limit.
+        await settings.update("server.path", hanging, vscode.ConfigurationTarget.Global);
+        const failed = await state("the error", (s) => s.error, 40_000);
+        assert.equal(failed.running, false);
+        assert.match(failed.error ?? "", /lsp --stdio did not answer within \d+ s/);
+        assert.deepEqual(failed.status, { text: "reactogenic: no server", detail: failed.error });
+        await until("the hanging process to be killed", () => sleeping() === 0, 10_000);
+        // And Restart Server is not stuck behind it. (Not awaited: the command ends with the start.)
+        void vscode.commands.executeCommand("reactogenic.restartServer");
+        await until("the hanging process again", () => sleeping() === 1, 10_000);
+      } finally {
+        await settings.update("server.path", undefined, vscode.ConfigurationTarget.Global);
+        fs.rmSync(hanging, { force: true });
+      }
+      const back = await state("the server again", (s) => s.running && !s.error, 30_000);
+      assert.deepEqual(back.binary, expected);
+      await until("no hanging process", () => sleeping() === 0, 10_000);
+      await onlyServers([back.pid]);
+    });
+
     it("a lockfile change restarts the server", async () => {
       const before = await api.ready();
       await vscode.workspace.fs.writeFile(file("pnpm-lock.yaml"), Buffer.from("lockfileVersion: '9.0'\n"));
@@ -292,6 +433,41 @@ export const run = runner(() => {
         return result.length > 0 && result;
       });
       assert.equal(hovers.length, 1);
+    });
+
+    it("five Restart Server at once: each gives up the start before it, and one server is left", async () => {
+      const before = await api.ready();
+      await Promise.all(Array.from({ length: 5 }, () => vscode.commands.executeCommand("reactogenic.restartServer")));
+      const after = await state("the server", (s) => s.running && !s.error);
+      assert.equal(after.starts, before.starts + 5);
+      await onlyServers([after.pid]);
+    });
+
+    it("a server that keeps crashing: the status item says it stopped, and Restart Server brings it back", async function () {
+      if (process.platform === "win32") {
+        this.skip();
+      }
+      this.timeout(120_000);
+      // The language client restarts a crashed server four times, then gives up.
+      const first = await api.ready();
+      for (let crash = 1; crash <= 5; crash++) {
+        const { pid } = await api.ready();
+        assert.ok(pid, `a server to crash (${crash})`);
+        process.kill(pid, "SIGKILL");
+        if (crash < 5) {
+          const again = await state("the client's own restart", (s) => s.running && s.pid !== pid && !s.error);
+          assert.equal(again.status.text, first.status.text);
+        }
+      }
+      const stopped = await state("the stop", (s) => !s.running && s.error);
+      assert.match(stopped.error ?? "", /^The server stopped/);
+      assert.deepEqual(stopped.status, { text: "reactogenic: no server", detail: stopped.error });
+      await onlyServers([]);
+
+      await vscode.commands.executeCommand("reactogenic.restartServer");
+      const back = await state("the server again", (s) => s.running && !s.error);
+      assert.deepEqual(back.status, first.status);
+      await onlyServers([back.pid]);
     });
   });
 });

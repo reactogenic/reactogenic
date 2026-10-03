@@ -35,7 +35,7 @@ export async function build({ production = false, test = false } = {}) {
   if (test) {
     await esbuild.build({
       ...common,
-      entryPoints: ["test/editor/trusted.ts", "test/editor/untrusted.ts"],
+      entryPoints: ["trusted", "untrusted", "monorepo", "transpiled"].map((suite) => `test/editor/${suite}.ts`),
       outdir: "dist/test",
       external: ["vscode", "mocha"],
       sourcemap: "inline",

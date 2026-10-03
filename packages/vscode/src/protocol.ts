@@ -28,6 +28,24 @@ export interface AutoInsertCapabilities {
   _vs_onAutoInsertProvider?: { _vs_triggerCharacters?: string[] };
 }
 
+interface Position {
+  line: number;
+  character: number;
+}
+
+/**
+ * Where each typed character ends once the change is applied. `starts` are
+ * where one character was typed at each cursor, in the document before the
+ * change — as a change event gives them, in any order: a character typed
+ * earlier on the same line moves the later ones.
+ */
+export function typedEnds(starts: readonly Position[]): Position[] {
+  return starts.map((start) => ({
+    line: start.line,
+    character: start.character + 1 + starts.filter((other) => other.line === start.line && other.character < start.character).length,
+  }));
+}
+
 /**
  * Does this JSON-RPC error code mean "the server does not have the request"?
  * MethodNotFound (-32601) by the protocol; the fork's dispatcher answers an

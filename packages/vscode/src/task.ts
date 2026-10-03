@@ -1,9 +1,15 @@
 // The task *reactogenic: check* (ide.md, *Diagnostics*): project-wide errors,
-// from the binary the server runs, into Problems through `$reactogenic` —
-// for closed documents; an open document's problems come from the server.
+// from the binary the server runs, into Problems — for closed documents. An
+// open document's problems come from a server, and replace the task's for
+// that file: the owner of a line's problem is the owner of that server's.
+//
+//   $reactogenic      .rtsx files     owner `reactogenic`: our server (server.ts)
+//   $reactogenic-ts   every other     owner `typescript`, as `$tsc`: VS Code's TypeScript
 import * as vscode from "vscode";
 import { checkArgs, type CheckTask } from "./protocol";
 import type { Server } from "./server";
+
+export const MATCHERS = ["$reactogenic", "$reactogenic-ts"];
 
 export function registerCheckTask(server: Server): vscode.Disposable {
   const task = (folder: vscode.WorkspaceFolder, definition: CheckTask): vscode.Task | undefined => {
@@ -12,7 +18,7 @@ export function registerCheckTask(server: Server): vscode.Disposable {
       return undefined; // untrusted, or no binary: the status item says why
     }
     const execution = new vscode.ProcessExecution(command, checkArgs(definition), { cwd: folder.uri.fsPath });
-    const check = new vscode.Task(definition, folder, "check", "reactogenic", execution, "$reactogenic");
+    const check = new vscode.Task(definition, folder, "check", "reactogenic", execution, MATCHERS);
     check.group = vscode.TaskGroup.Build;
     check.detail = `reactogenic ${checkArgs(definition).join(" ")}`;
     check.presentationOptions = { clear: true, reveal: vscode.TaskRevealKind.Silent };

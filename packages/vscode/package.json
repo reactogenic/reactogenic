@@ -89,14 +89,14 @@
         "command": "reactogenic.showTranspiled",
         "title": "Show Transpiled TSX",
         "category": "Reactogenic",
-        "enablement": "editorLangId == rtsx"
+        "enablement": "editorLangId == rtsx && resourceScheme != reactogenic-transpiled"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "reactogenic.showTranspiled",
-          "when": "editorLangId == rtsx"
+          "when": "editorLangId == rtsx && resourceScheme != reactogenic-transpiled"
         }
       ]
     },
@@ -124,7 +124,17 @@
     "problemPatterns": [
       {
         "name": "reactogenic",
-        "regexp": "^(\\S.*?)\\((\\d+),(\\d+)\\): (error|warning) ([^\\s:]+): (.*)$",
+        "regexp": "^(\\S(?:(?!\\(\\d+,\\d+\\): (?:error|warning) ).)*(?<=\\.rtsx))\\((\\d+),(\\d+)\\): (error|warning) ([^\\s:]+): (.*)$",
+        "file": 1,
+        "line": 2,
+        "column": 3,
+        "severity": 4,
+        "code": 5,
+        "message": 6
+      },
+      {
+        "name": "reactogenic-ts",
+        "regexp": "^(\\S(?:(?!\\(\\d+,\\d+\\): (?:error|warning) ).)*(?<!\\.rtsx))\\((\\d+),(\\d+)\\): (error|warning) TS(\\d+): (.*)$",
         "file": 1,
         "line": 2,
         "column": 3,
@@ -136,7 +146,7 @@
     "problemMatchers": [
       {
         "name": "reactogenic",
-        "label": "reactogenic check",
+        "label": "reactogenic check: .rtsx files",
         "owner": "reactogenic",
         "source": "reactogenic",
         "applyTo": "closedDocuments",
@@ -145,6 +155,18 @@
           "${cwd}"
         ],
         "pattern": "$reactogenic"
+      },
+      {
+        "name": "reactogenic-ts",
+        "label": "reactogenic check: TypeScript files",
+        "owner": "typescript",
+        "source": "ts",
+        "applyTo": "closedDocuments",
+        "fileLocation": [
+          "autoDetect",
+          "${cwd}"
+        ],
+        "pattern": "$reactogenic-ts"
       }
     ],
     "languages": [

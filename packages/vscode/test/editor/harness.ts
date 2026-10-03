@@ -4,6 +4,7 @@ import * as path from "node:path";
 import Mocha from "mocha";
 import * as vscode from "vscode";
 import type { Api } from "../../src/extension";
+import type { ServerState } from "../../src/server";
 
 /**
  * The binary under test, and the row of ide.md's table that finds it:
@@ -22,6 +23,9 @@ export function binary(): { path: string; source: "env" | "bundled" } {
 export function runner(define: () => void): () => Promise<void> {
   return () => {
     const mocha = new Mocha({ ui: "bdd", timeout: 60_000, color: true, reporter: "spec" });
+    if (process.env.EDITOR_TEST_GREP) {
+      mocha.grep(new RegExp(process.env.EDITOR_TEST_GREP));
+    }
     mocha.suite.emit("pre-require", globalThis, "", mocha);
     define();
     return new Promise((resolve, reject) => {
@@ -45,6 +49,24 @@ export async function until<T>(what: string, read: () => T | undefined | null | 
     }
     await sleep(100);
   }
+}
+
+/**
+ * The server's state once `is` holds: a restart is queued a moment after its
+ * cause. A timeout says what the state was.
+ */
+export function serverState(api: Api, what: string, is: (s: ServerState) => unknown, timeout?: number): Promise<ServerState> {
+  let last: ServerState | undefined;
+  return until<ServerState>(
+    what,
+    async () => {
+      last = await api.ready();
+      return is(last) ? last : undefined;
+    },
+    timeout,
+  ).catch((error: Error) => {
+    throw new Error(`${error.message}; the state is ${JSON.stringify(last)}`);
+  });
 }
 
 export function file(name: string): vscode.Uri {
@@ -76,20 +98,60 @@ export function at(document: vscode.TextDocument, needle: string, offset = 0): v
   return document.positionAt(index + offset);
 }
 
-/** Waits until the OS shows exactly these server processes; nothing where there is no `ps`. */
-export async function onlyServers(pids: (number | undefined)[]): Promise<void> {
-  if (servers()) {
-    await until(`the server processes to be ${JSON.stringify(pids)}`, () => JSON.stringify(servers()) === JSON.stringify(pids));
+/**
+ * Waits until the OS shows exactly these processes of the binary, each run as
+ * `<binary> lsp --stdio` to the letter; nothing where there is no `ps`.
+ */
+export async function onlyServers(pids: (number | undefined)[], of: string = binary().path): Promise<void> {
+  if (!processes(of)) {
+    return;
+  }
+  const want = pids.map((pid) => `${pid} ${of} lsp --stdio`);
+  let seen: string[] = [];
+  try {
+    await until("the server processes", () => {
+      seen = (processes(of) ?? []).map((p) => `${p.pid} ${p.command}`);
+      return JSON.stringify(seen) === JSON.stringify(want);
+    });
+  } catch {
+    throw new Error(`the server processes are ${JSON.stringify(seen)}, not ${JSON.stringify(want)}`);
   }
 }
 
-/** The pids of the `lsp --stdio` processes of the binary, from the OS; undefined where there is no `ps`. */
-export function servers(): number[] | undefined {
+/** The processes whose command line starts with `command`, from the OS; undefined where there is no `ps`. */
+export function processes(command: string): { pid: number; command: string }[] | undefined {
   if (process.platform === "win32") {
     return undefined;
   }
   return execFileSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8" })
     .split("\n")
-    .filter((line) => line.includes(`${binary().path} lsp --stdio`))
-    .map((line) => Number(line.trim().split(/\s+/)[0]));
+    .flatMap((line) => {
+      const m = /^\s*(\d+)\s+(.*)$/.exec(line);
+      return m && (m[2] === command || m[2].startsWith(`${command} `)) ? [{ pid: Number(m[1]), command: m[2] }] : [];
+    });
+}
+
+/** The folder of this suite's window: its workspace is in it (scripts/test-editor.mjs). */
+export function suiteDir(): string {
+  if (!process.env.RTSX_TEST_DIR) {
+    throw new Error("$RTSX_TEST_DIR is not set: run the suite through scripts/test-editor.mjs");
+  }
+  return process.env.RTSX_TEST_DIR;
+}
+
+export const code = (d: vscode.Diagnostic) => (typeof d.code === "object" ? d.code.value : d.code);
+export const where = (d: vscode.Diagnostic) => `${d.range.start.line}:${d.range.start.character}`;
+
+/** Runs a task and returns its exit code. */
+export async function runTask(task: vscode.Task): Promise<number | undefined> {
+  const ended = new Promise<number | undefined>((resolve) => {
+    const subscription = vscode.tasks.onDidEndTaskProcess((e) => {
+      if (e.execution.task.name === task.name) {
+        subscription.dispose();
+        resolve(e.exitCode);
+      }
+    });
+  });
+  await vscode.tasks.executeTask(task);
+  return ended;
 }

@@ -835,6 +835,32 @@ is wired and not tested (no API grants trust); `MIN_CLI_VERSION` is
 `0.1.0-alpha.1`, to be the first release with `lsp` (113); the Go modules'
 notices are missing from the binary's licences, as in the npm packages; the
 Marketplace page (README for users, icon, changelog) is 113's.
+*After review* (one major, nine minor findings; each reproduced by a test
+that failed, then fixed): an untitled `rtsx` document was parsed as plain
+TypeScript — the server's front now serves a document that is `rtsx` by
+language id alone under a name ending in `.rtsx` (`internal/lsp/alias.go`,
+no patch to the fork); a restart cleared the task's problems of closed
+documents — the collection of the owner `reactogenic` now lives as long as
+the window; a `.ts` line of `check` showed twice once the file was open —
+a second matcher, `$reactogenic-ts`, owner `typescript`; a document outside
+the workspace chose the binary, for the *check* task too — only a document
+inside a workspace folder decides now, and each start decides again; a
+lockfile above the opened folder was not watched; a binary that never
+answers `initialize` blocked every later restart — the extension now starts
+the process itself, gives a start 10 s, and a restart gives up a start under
+way; the status item named a server that had crashed for good; `--stdio`
+was passed twice; several cursors got one cursor's closing tag — one
+request per cursor, inserted as snippet edits of one workspace edit; the
+transpiled document was TSX, so VS Code's TypeScript reported on it — it is
+`page.transpiled.rtsx`, language `rtsx`. The editor suite is four windows
+now (trusted 21 pass and 1 skipped, untrusted 3, `monorepo` 6, `transpiled`
+4 — the last against a stand-in server with `reactogenic/transpiled`), and
+passes against the packaged darwin-arm64 `.vsix`; 397 unit tests. *Still left*: an untitled document belongs to no project (TS7026,
+TS2875 on its JSX; relative imports do not resolve); the client's own
+"couldn't create connection" notification still shows beside ours when a
+start fails; a server that spawns children is killed without them; the
+no-folder window and the multi-root case have unit tests only; nothing ran
+on Linux or Windows.
 - `packages/vscode`: manifest (ide.md, *Contributes*), client, binary
   resolution, status item, restart triggers, commands, closing-tag
   insertion, the `check` task and matcher, packaging per platform plus

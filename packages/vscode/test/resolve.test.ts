@@ -6,7 +6,9 @@ import path from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import {
   compareVersions,
+  decidingDir,
   findWorkspaceCli,
+  lockfileDirs,
   MIN_CLI_VERSION,
   parseVersion,
   resolveServer,
@@ -179,6 +181,69 @@ describe("the workspace CLI", () => {
     if (fs.existsSync(platformPackage)) {
       expect(found?.binary).toBe(fs.realpathSync(path.join(platformPackage, "bin", process.platform === "win32" ? "reactogenic.exe" : "reactogenic")));
     }
+  });
+});
+
+describe("which document's folder the walk starts at", () => {
+  const ws = path.join(tmp, "window/ws");
+  const other = path.join(tmp, "window/other app");
+  const outside = path.join(tmp, "window/elsewhere/src/page.rtsx");
+
+  test("the first document inside a workspace folder; the active one is given first", () => {
+    expect(decidingDir([ws], [path.join(ws, "src/page.rtsx"), path.join(ws, "packages/app/src/a.rtsx")])).toBe(path.join(ws, "src"));
+    expect(decidingDir([ws, other], [path.join(other, "src/b.rtsx"), path.join(ws, "src/page.rtsx")])).toBe(path.join(other, "src"));
+  });
+  test("a document outside every folder does not decide: the next one that is inside does", () => {
+    expect(decidingDir([ws], [outside, path.join(ws, "src/page.rtsx")])).toBe(path.join(ws, "src"));
+  });
+  test("only outside documents, or none: undefined — the walk starts at the workspace folder", () => {
+    expect(decidingDir([ws], [outside])).toBeUndefined();
+    expect(decidingDir([ws], [])).toBeUndefined();
+    // Not inside: a sibling whose name starts with the folder's, and the folder's parent.
+    expect(decidingDir([ws], [path.join(tmp, "window/ws-old/src/page.rtsx"), path.join(tmp, "window/page.rtsx")])).toBeUndefined();
+  });
+  test("a window without folders: the first document decides", () => {
+    expect(decidingDir([], [outside, path.join(ws, "src/page.rtsx")])).toBe(path.dirname(outside));
+    expect(decidingDir([], [])).toBeUndefined();
+  });
+  test("what an outside document would have chosen is not chosen", () => {
+    const dir = tree({
+      "ws/src/page.rtsx": "",
+      "elsewhere/src/page.rtsx": "",
+      "elsewhere/node_modules/@reactogenic/cli/package.json": cli(MIN_CLI_VERSION),
+      "elsewhere/node_modules/@reactogenic/cli-darwin-arm64/bin/reactogenic": "another project's binary",
+      ...bundled,
+    });
+    const folder = path.join(dir, "ws");
+    const documentDir = decidingDir([folder], [path.join(dir, "elsewhere/src/page.rtsx")]) ?? folder;
+    expect(resolve(dir, { documentDir })).toMatchObject({ binary: { path: path.join(dir, "ext/server/reactogenic"), source: "bundled" } });
+  });
+});
+
+describe("the lockfiles that decide the workspace CLI", () => {
+  test("the directory that holds the CLI's node_modules, and the nearest one with a lockfile", () => {
+    // A pnpm workspace: the package's node_modules links to the store; the lockfile is at the root.
+    const store = "ws/node_modules/.pnpm/@reactogenic+cli@0.2.0/node_modules/@reactogenic";
+    const dir = tree({
+      "ws/pnpm-lock.yaml": "",
+      [`${store}/cli/package.json`]: cli("0.2.0"),
+      "ws/packages/app/node_modules/@reactogenic/cli": `->${store}/cli`,
+      "ws/packages/app/src/page.rtsx": "",
+      "ws/packages/other/src/page.rtsx": "",
+    });
+    expect(lockfileDirs(path.join(dir, "ws/packages/app/src"))).toEqual([path.join(dir, "ws/packages/app"), path.join(dir, "ws")]);
+    // Before the CLI is installed: where an install will write the lockfile.
+    expect(lockfileDirs(path.join(dir, "ws/packages/other/src"))).toEqual([path.join(dir, "ws")]);
+  });
+  test("npm's layout: one directory for both", () => {
+    const dir = tree({ ...npm(MIN_CLI_VERSION), "ws/package-lock.json": "", "ws/packages/app/src/page.rtsx": "" });
+    expect(lockfileDirs(path.join(dir, "ws/packages/app/src"))).toEqual([path.join(dir, "ws")]);
+    expect(findWorkspaceCli(path.join(dir, "ws/packages/app/src"), "darwin", "arm64")?.root).toBe(path.join(dir, "ws"));
+  });
+  test("the nearest lockfile, of any package manager", () => {
+    const dir = tree({ "ws/yarn.lock": "", "ws/packages/app/bun.lock": "", "ws/packages/app/src/page.rtsx": "", "ws/packages/lib/src/x.rtsx": "" });
+    expect(lockfileDirs(path.join(dir, "ws/packages/app/src"))).toEqual([path.join(dir, "ws/packages/app")]);
+    expect(lockfileDirs(path.join(dir, "ws/packages/lib/src"))).toEqual([path.join(dir, "ws")]);
   });
 });
 

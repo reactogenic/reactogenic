@@ -35,8 +35,8 @@ export class Transpiled implements vscode.TextDocumentContentProvider, vscode.Di
   /** The command. */
   async show(): Promise<Shown> {
     const source = vscode.window.activeTextEditor?.document;
-    if (source?.languageId !== "rtsx") {
-      return "no-document";
+    if (source?.languageId !== "rtsx" || source.uri.scheme === SCHEME) {
+      return "no-document"; // the transpiled document is rtsx too (`virtual`)
     }
     if (!this.server.client) {
       void vscode.window.showWarningMessage("Reactogenic: the language server is not running.");
@@ -121,7 +121,14 @@ export class Transpiled implements vscode.TextDocumentContentProvider, vscode.Di
   }
 }
 
-/** `page.rtsx` → `reactogenic-transpiled:…/page.rtsx.tsx`: the tab reads as TSX and is highlighted as TSX. */
+/**
+ * `page.rtsx` → `reactogenic-transpiled:…/page.transpiled.rtsx`. The name ends
+ * in `.rtsx`, so the document's language is rtsx: the grammar is a superset
+ * of TSX's, and no server reports on it — ours is not attached to this
+ * scheme. Under a `.tsx` name VS Code's own TypeScript would take the
+ * document and put its syntax errors into Problems whenever the text is not
+ * TSX, which is what a stopped file's is (ide.md, *Tolerance*).
+ */
 function virtual(source: vscode.Uri): vscode.Uri {
-  return vscode.Uri.from({ scheme: SCHEME, path: `${source.path}.tsx`, query: source.toString() });
+  return vscode.Uri.from({ scheme: SCHEME, path: `${source.path.replace(/\.rtsx$/, "")}.transpiled.rtsx`, query: source.toString() });
 }

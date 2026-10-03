@@ -44,7 +44,7 @@ export interface ResolveInput {
   settingPath?: string | null;
   /** Relative setting paths resolve against it. */
   workspaceFolder?: string;
-  /** The folder of the first `.rtsx` document opened: the walk to `node_modules` starts here. */
+  /** Where the walk to `node_modules` starts: `decidingDir`, else the workspace folder. */
   documentDir?: string;
   /** The extension's folder: the bundled binary is `server/reactogenic[.exe]` in it. */
   extensionPath: string;
@@ -115,7 +115,51 @@ export function resolveServer(input: ResolveInput): Resolution {
   };
 }
 
+/**
+ * Which document's folder the walk to the workspace's CLI starts at (ide.md,
+ * *Which binary runs*, row 3): the first of `documents` — the `.rtsx` files
+ * open in the window, the active one first — that lies inside a workspace
+ * folder. A document outside every folder does not choose the binary of the
+ * workspace, nor the one its `check` task runs: then the walk starts at the
+ * workspace folder (undefined here). In a window without folders the first
+ * document decides.
+ */
+export function decidingDir(folders: readonly string[], documents: readonly string[]): string | undefined {
+  const inside = (file: string) => folders.length === 0 || folders.some((folder) => contains(folder, file));
+  const document = documents.find(inside);
+  return document === undefined ? undefined : path.dirname(document);
+}
+
+function contains(folder: string, file: string): boolean {
+  const relative = path.relative(folder, file);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+/**
+ * The directories at or above `startDir` whose lockfile decides the
+ * workspace's CLI: the one whose `node_modules` holds `@reactogenic/cli`, and
+ * the nearest one with a lockfile — the root of a pnpm or npm workspace, where
+ * an install writes it, also before the CLI is there. The opened folder may be
+ * a package below both.
+ */
+export function lockfileDirs(startDir: string): string[] {
+  const dirs = new Set<string>();
+  const cli = findWorkspaceCli(startDir);
+  if (cli) {
+    dirs.add(cli.root);
+  }
+  for (const dir of ancestors(startDir)) {
+    if (LOCKFILES.some((name) => isFile(path.join(dir, name)))) {
+      dirs.add(dir);
+      break;
+    }
+  }
+  return [...dirs];
+}
+
 export interface WorkspaceCli {
+  /** The directory whose `node_modules` holds `@reactogenic/cli`. */
+  root: string;
   /** The real directory of `@reactogenic/cli`. */
   dir: string;
   version: string;
@@ -138,7 +182,7 @@ export function findWorkspaceCli(startDir: string, platform: string = process.pl
     } catch {
       continue;
     }
-    const cli: WorkspaceCli = { dir: fs.realpathSync(path.dirname(manifest)), version: typeof version === "string" ? version : "" };
+    const cli: WorkspaceCli = { root: dir, dir: fs.realpathSync(path.dirname(manifest)), version: typeof version === "string" ? version : "" };
     for (const from of ancestors(cli.dir)) {
       if (path.basename(from) === "node_modules") {
         continue;
