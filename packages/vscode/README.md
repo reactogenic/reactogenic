@@ -93,14 +93,19 @@ plugin by name from the extension's `node_modules`. ide.md, *The plugin*.
 | `service.ts` | the language service with every answer in source positions, or without it |
 
 `tsPlugin.ts` (the extension's side) sends `configurePlugin`: the setting
-`reactogenic.server.path` and whether the workspace is trusted. Until then —
-the plugin is loaded by VS Code's TypeScript, before this extension is
-activated — it runs `$REACTOGENIC_BINARY` or the bundled binary, never the
-workspace's CLI.
+`reactogenic.server.path`, whether the workspace is trusted, how often a
+lockfile has changed (the plugin then looks for the workspace's CLI again),
+and whether the language server lists workspace symbols (it runs, and an
+`.rtsx` document is open — until then the plugin lists those of `.rtsx`
+files). Until it hears from here — the plugin is loaded by VS Code's
+TypeScript, before this extension is activated — it runs
+`$REACTOGENIC_BINARY` or the bundled binary, never the workspace's CLI nor a
+relative path.
 
 To see it work: *TypeScript: Open TS Server log* (the setting
 `typescript.tsserver.log`); its lines hold `reactogenic:` — the binary
-chosen, each process and how many files it made.
+chosen, each process and how many files it made, a binary that failed or
+did not answer, and how many unresolved imports were looked up as `.rtsx`.
 
 ```sh
 pnpm build            # dist/extension.js, node_modules/reactogenic-typescript-plugin

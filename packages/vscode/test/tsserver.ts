@@ -79,6 +79,8 @@ export class TsServer {
     alias: string,
     readonly dir: string,
     env: Record<string, string | undefined> = {},
+    /** More of tsserver's own arguments: `--serverMode partialSemantic`. */
+    args: string[] = [],
   ) {
     this.log = path.join(dir, ".tsserver.log");
     const tsserver = path.join(path.dirname(require.resolve(`${alias}/package.json`)), "lib", "tsserver.js");
@@ -95,6 +97,7 @@ export class TsServer {
         "normal",
         "--logFile",
         this.log,
+        ...args,
       ],
       // No binary unless the test names one: neither the developer's nor the test run's.
       { cwd: dir, env: { ...process.env, REACTOGENIC_BINARY: undefined, ...env } as NodeJS.ProcessEnv },
@@ -173,6 +176,11 @@ export class TsServer {
       }
     }
     return { file: this.file(name), ...locate(text, index + inside) };
+  }
+
+  /** Text typed at the start of a line of an open file. */
+  insert(name: string, line: number, insertString: string): void {
+    this.notify("change", { file: this.file(name), line, offset: 1, endLine: line, endOffset: 1, insertString });
   }
 
   /** The semantic, syntactic and suggestion diagnostics of an open file. */

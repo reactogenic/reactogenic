@@ -425,16 +425,38 @@ Go binary.
    keeps is of the wrong text and has to be patched after it. **Rejected:**
    a cache keyed by mtime and size — it is `tsserver` that reads the file;
    the text it holds is the key.
-3. **Each answer has one server.** Workspace symbols declared in `.rtsx`
-   files, and file-rename edits in `.rtsx` files or of imports of `.rtsx`
-   modules, are `reactogenic lsp`'s (RGP1-105): the plugin leaves them out
-   instead of mapping them. VS Code asks both servers; a file-rename edit
-   made by both is applied twice.
+3. **Each answer has one server — the one that can give it.** Workspace
+   symbols declared in `.rtsx` files are `reactogenic lsp`'s (RGP1-105)
+   while it has a project; the extension tells the plugin, which lists them
+   itself until then. **Rejected:** always leaving them out — the server
+   runs only once an `.rtsx` document was opened, and never in an untrusted
+   window: until then nobody listed them (seen in VS Code 1.140). File
+   rename: no edit in an `.rtsx` file is `tsserver`'s (it has the saved
+   text). **Rejected:** also leaving out its edits of imports of `.rtsx`
+   modules in `.ts` files, as "applied twice". Measured in VS Code: it asks
+   the language server before the move and `tsserver` after it; the
+   server's edit is in the file by then, `tsserver` finds nothing left to
+   update, and without the server its edit is the only one.
 4. **Rename, and every other edit, never goes into an `.rtsx` file.**
    Through the map alone a rename is wrong (decision 5 of *IDE support*);
-   the fix-ups live in the server.
+   the fix-ups live in the server. Refused before `tsserver` collects the
+   locations, for every loaded project the rename leads into; what is seen
+   only then fails the request. **Rejected:** answering a project's
+   locations with none — `tsserver` merges the projects', and the rename
+   was applied to the others' files alone.
 5. **Configured by the client only.** The plugin is loaded in every TS
    project, in restricted mode too, and before the extension is activated:
-   it finds its binary itself, and runs the workspace's CLI only after the
-   extension has said the workspace is trusted. A tsconfig `plugins` entry
-   of its name is ignored — it would let a repository choose the binary.
+   it finds its binary itself, and runs anything of the workspace — its CLI,
+   or a relative path of the setting or of `$REACTOGENIC_BINARY` — only
+   after the extension has said the workspace is trusted. A tsconfig
+   `plugins` entry of its name is ignored — it would let a repository choose
+   the binary.
+6. **What it costs a project without `.rtsx` is counted.** Loaded
+   everywhere, it looks up each failed import once more — once per folder
+   and name: TypeScript shares one resolution among the files of a folder
+   (for a package, among folders). Per importer, a clone before its install
+   loaded 2.6–5.4 times slower (3,000 files, 13 unresolved imports each:
+   906 → 3648 ms; now 892 → 922). It does nothing in VS Code's second
+   `tsserver` (`partialSemantic`), which exists to answer while the first
+   one is busy. A binary gets 5 s per batch, not 20, and one that used them
+   up is not asked again for a minute.

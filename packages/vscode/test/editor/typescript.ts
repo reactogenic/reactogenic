@@ -4,6 +4,7 @@
 // first, as a user does: the extension itself is not activated yet.
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { activate, at, code, file, open, runner, sleep, until } from "./harness";
 
@@ -36,6 +37,15 @@ export const run = runner(() => {
       return new vscode.Position(line, "export function ".length);
     };
 
+    /** The workspace symbols named `Page` that are declared in an `.rtsx` file, from every provider of the window. */
+    const symbols = async () => {
+      const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "Page");
+      // VS Code's TypeScript labels a function `Page()`.
+      return found
+        .filter((symbol) => symbol.name.replace("()", "") === "Page" && symbol.location.uri.fsPath.endsWith(".rtsx"))
+        .map((symbol) => `${path.basename(symbol.location.uri.fsPath)} ${symbol.location.range.start.line}`);
+    };
+
     before(async () => {
       main = await open("src/main.tsx");
     });
@@ -50,6 +60,8 @@ export const run = runner(() => {
       await sleep(2_000);
       const diagnostics = vscode.languages.getDiagnostics(main.document.uri);
       assert.deepEqual(diagnostics.map(code), [], diagnostics.map((d) => d.message).join("\n"));
+      // No language server runs yet: the symbols of .rtsx files are TypeScript's to list, at the source's line.
+      assert.deepEqual(await symbols(), [`page.rtsx ${declared().line}`]);
       assert.equal(vscode.extensions.getExtension("reactogenic.rtsx")?.isActive, false, "nothing has asked for the extension yet");
     });
 
@@ -63,6 +75,18 @@ export const run = runner(() => {
         [[file("src/page.rtsx").fsPath, declared().line, declared().character]],
       );
       assert.deepEqual(vscode.languages.getDiagnostics(main.document.uri).map(code), []);
+      // The server runs, with no project yet — no .rtsx document is open: the symbols are still TypeScript's.
+      assert.equal(api.tsPlugin()?.languageServer, false);
+      assert.deepEqual(await symbols(), [`page.rtsx ${declared().line}`]);
+    });
+
+    it("an .rtsx document is opened: its symbols are the language server's, each listed once", async () => {
+      const api = await activate();
+      await open("src/page.rtsx");
+      await until("the plugin's word that the server lists symbols", () => api.tsPlugin()?.languageServer === true);
+      await until("the symbol of page.rtsx, once", async () => JSON.stringify(await symbols()) === JSON.stringify([`page.rtsx ${declared().line}`]));
+      await sleep(2_000); // and not a second time, once both servers have answered
+      assert.deepEqual(await symbols(), [`page.rtsx ${declared().line}`]);
     });
   });
 });
