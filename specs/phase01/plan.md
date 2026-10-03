@@ -637,7 +637,13 @@ the first release*. `oneCopyAnswers` marks later copies per construct.
   shorthand.
 - Depends on: 101.
 
-### RGP1-103 — Mapped program and a bare server · L
+### RGP1-103 — Mapped program and a bare server · L · done
+The seam is `contentmapper.BuiltIn` (one registered mapper, served by a
+`Project` and a `Host` that spawn nothing) plus one-line hooks where the fork
+gathers mappers: tsconfig parsing, the session's host, inferred projects.
+`lsp.Embedder` gives the server static capabilities and our server info. All
+three project shapes passed on the first run. `GOWORK=off` builds (CI checks
+it); the binary is 39.6 MB unstripped. Patches 0004–0006.
 The least-proven bet first: the built-in mapper inside the fork's project
 system.
 - Patches (decisions.md, *Patched upstream files*): built-in mappers in

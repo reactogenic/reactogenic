@@ -20,6 +20,9 @@ jobs:
         run: go test -race github.com/reactogenic/reactogenic/go/... # tsgo parses files in parallel
       - name: gofmt
         run: test -z "$(gofmt -l go/cmd go/internal)"
+      - name: Build without the workspace
+        run: GOWORK=off go build ./cmd/reactogenic # go/ is a module on its own (RGP1-003)
+        working-directory: go
 
   vendor:
     # The committed tsgo tree must equal upstream at UPSTREAM's commit + go/patches.

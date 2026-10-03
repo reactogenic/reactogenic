@@ -1,0 +1,138 @@
+diff --git a/internal/lsp/embedder.go b/internal/lsp/embedder.go
+new file mode 100644
+index 0000000..47f3521
+--- /dev/null
++++ b/internal/lsp/embedder.go
+@@ -0,0 +1,33 @@
++// Reactogenic: hooks for a host that embeds this server with a built-in
++// content mapper. Not part of upstream: added by go/patches/0006-rtsx-lsp.patch.
++
++package lsp
++
++import (
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++)
++
++// Embedder customizes the server for its host. With one set, the server has
++// static capabilities only: it registers nothing dynamically for
++// content-mapped extensions (a client that attaches by language would
++// otherwise answer every request twice), and it offers no formatting.
++type Embedder struct {
++	// Name and Version replace the server info.
++	Name, Version string
++	// Capabilities may edit the static capabilities before they are sent.
++	Capabilities func(*lsproto.ServerCapabilities)
++}
++
++func (e *Embedder) initializeResult(result *lsproto.InitializeResult) {
++	if e.Name != "" {
++		version := e.Version
++		result.ServerInfo = &lsproto.ServerInfo{Name: e.Name, Version: &version}
++	}
++	c := result.Capabilities
++	c.DocumentFormattingProvider = nil
++	c.DocumentRangeFormattingProvider = nil
++	c.DocumentOnTypeFormattingProvider = nil
++	if e.Capabilities != nil {
++		e.Capabilities(c)
++	}
++}
+diff --git a/internal/lsp/server.go b/internal/lsp/server.go
+index 1d32d1e..87b57b6 100644
+--- a/internal/lsp/server.go
++++ b/internal/lsp/server.go
+@@ -55,6 +55,7 @@ type ServerOptions struct {
+ 	Spawn              func(command []string, dir string, stderr io.Writer) (io.ReadWriteCloser, error)
+ 	ProgressDelay      time.Duration // delay before showing progress UI; 0 means no delay
+ 	SetParentProcessID func(parentPID int)
++	Embedder           *Embedder // rtsx: see embedder.go
+ }
+ 
+ func NewServer(opts *ServerOptions) *Server {
+@@ -80,6 +81,7 @@ func NewServer(opts *ServerOptions) *Server {
+ 		startWatchdog:         opts.SetParentProcessID,
+ 		initComplete:          make(chan struct{}),
+ 		progressDelay:         opts.ProgressDelay,
++		embedder:              opts.Embedder,
+ 	}
+ 	s.logger = newLogger(s)
+ 
+@@ -189,6 +191,7 @@ type Server struct {
+ 	fs                 vfs.FS
+ 	defaultLibraryPath string
+ 	typingsLocation    string
++	embedder           *Embedder // rtsx
+ 
+ 	initializeParams      *lsproto.InitializeParams
+ 	initializationOptions *lsproto.InitializationOptions
+@@ -420,7 +423,7 @@ func (s *Server) supportsContentMapperRegistration(id string) bool {
+ // open/change/close notifications to the server and requests diagnostics for them. It is called with the
+ // full desired set each time it changes; an empty slice removes any prior registration.
+ func (s *Server) RegisterContentMapperExtensions(ctx context.Context, extensions []string) error {
+-	if !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration {
++	if s.embedder != nil || !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration { // rtsx: static capabilities only
+ 		return nil
+ 	}
+ 
+@@ -1671,6 +1674,9 @@ func (s *Server) handleInitialize(ctx context.Context, params *lsproto.Initializ
+ 		},
+ 	}
+ 
++	if s.embedder != nil { // rtsx
++		s.embedder.initializeResult(response)
++	}
+ 	return response, nil
+ }
+ 
+diff --git a/rtsx/server/server.go b/rtsx/server/server.go
+new file mode 100644
+index 0000000..9bb30df
+--- /dev/null
++++ b/rtsx/server/server.go
+@@ -0,0 +1,46 @@
++// Package server runs the language server with whatever content mapper is
++// registered (rtsx.RegisterMapper) built in (specs/phase01/ide.md,
++// *reactogenic lsp*). It is its own package so that only a binary that
++// serves LSP links the language service.
++package server
++
++import (
++	"context"
++	"errors"
++	"io"
++	"time"
++
++	"github.com/microsoft/TypeScript/tsc/internal/bundled"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp"
++	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
++)
++
++// Options configure a run of the server.
++type Options struct {
++	In  io.Reader // LSP messages, framed
++	Out io.Writer
++	Err io.Writer // log output
++	Cwd string
++	// Name and Version are reported as the server info.
++	Name, Version string
++}
++
++// Run serves LSP until the client exits, In ends or ctx is done. Nothing
++// external runs: no content mapper process, no automatic type acquisition.
++func Run(ctx context.Context, o Options) error {
++	s := lsp.NewServer(&lsp.ServerOptions{
++		In:                 lsp.ToReader(o.In),
++		Out:                lsp.ToWriter(o.Out),
++		Err:                o.Err,
++		Cwd:                o.Cwd,
++		FS:                 bundled.WrapFS(osvfs.FS()),
++		DefaultLibraryPath: bundled.LibPath(),
++		TypingsLocation:    "", // no automatic type acquisition
++		NpmInstall: func(string, []string) ([]byte, error) {
++			return nil, errors.New("this server does not install packages")
++		},
++		ProgressDelay: 250 * time.Millisecond,
++		Embedder:      &lsp.Embedder{Name: o.Name, Version: o.Version},
++	})
++	return s.Run(ctx)
++}

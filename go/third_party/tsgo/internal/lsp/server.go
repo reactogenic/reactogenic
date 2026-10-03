@@ -55,6 +55,7 @@ type ServerOptions struct {
 	Spawn              func(command []string, dir string, stderr io.Writer) (io.ReadWriteCloser, error)
 	ProgressDelay      time.Duration // delay before showing progress UI; 0 means no delay
 	SetParentProcessID func(parentPID int)
+	Embedder           *Embedder // rtsx: see embedder.go
 }
 
 func NewServer(opts *ServerOptions) *Server {
@@ -80,6 +81,7 @@ func NewServer(opts *ServerOptions) *Server {
 		startWatchdog:         opts.SetParentProcessID,
 		initComplete:          make(chan struct{}),
 		progressDelay:         opts.ProgressDelay,
+		embedder:              opts.Embedder,
 	}
 	s.logger = newLogger(s)
 
@@ -189,6 +191,7 @@ type Server struct {
 	fs                 vfs.FS
 	defaultLibraryPath string
 	typingsLocation    string
+	embedder           *Embedder // rtsx
 
 	initializeParams      *lsproto.InitializeParams
 	initializationOptions *lsproto.InitializationOptions
@@ -420,7 +423,7 @@ func (s *Server) supportsContentMapperRegistration(id string) bool {
 // open/change/close notifications to the server and requests diagnostics for them. It is called with the
 // full desired set each time it changes; an empty slice removes any prior registration.
 func (s *Server) RegisterContentMapperExtensions(ctx context.Context, extensions []string) error {
-	if !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration {
+	if s.embedder != nil || !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration { // rtsx: static capabilities only
 		return nil
 	}
 
@@ -1671,6 +1674,9 @@ func (s *Server) handleInitialize(ctx context.Context, params *lsproto.Initializ
 		},
 	}
 
+	if s.embedder != nil { // rtsx
+		s.embedder.initializeResult(response)
+	}
 	return response, nil
 }
 

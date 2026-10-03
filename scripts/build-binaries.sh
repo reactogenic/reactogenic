@@ -20,7 +20,7 @@ for target in "${targets[@]}"; do
   exe=reactogenic; [[ "$platform" == win32 ]] && exe=reactogenic.exe
   out="$root/dist/npm/cli-$target"
   mkdir -p "$out/bin"
-  (cd "$root/go" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$out/bin/$exe" ./cmd/reactogenic)
+  (cd "$root/go" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$out/bin/$exe" ./cmd/reactogenic)
   # The binary holds tsgo (Apache-2.0) as well as our code (MIT).
   cp "$root/LICENSE" "$out/LICENSE"
   cp "$root/go/third_party/tsgo/LICENSE" "$out/LICENSE-typescript-go"

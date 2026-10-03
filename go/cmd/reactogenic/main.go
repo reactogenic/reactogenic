@@ -1,8 +1,10 @@
-// Command reactogenic is the phase 1 CLI: `reactogenic check` (RGP1-070) and
-// the stdio server driven by the Vite plugin (RGP1-053).
+// Command reactogenic is the phase 1 CLI: `reactogenic check` (RGP1-070),
+// the language server (RGP1-103) and the stdio server driven by the Vite
+// plugin (RGP1-053).
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -10,14 +12,21 @@ import (
 	"time"
 
 	"github.com/reactogenic/reactogenic/go/internal/check"
+	"github.com/reactogenic/reactogenic/go/internal/lsp"
 	"github.com/reactogenic/reactogenic/go/internal/server"
 )
 
+// version is stamped by the release build (scripts/build-binaries.sh).
+var version = "0.0.0-dev"
+
 const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]
+       reactogenic lsp --stdio
        reactogenic serve
+       reactogenic --version
 
   check   type-check the project, with .rtsx transpiled; errors are reported
           on the .rtsx files (exit status 1 when there are errors)
+  lsp     the language server for editors (LSP over stdio)
   serve   transform .rtsx for the Vite plugin: JSON requests on stdin, one
           response per line on stdout`
 
@@ -34,12 +43,38 @@ func main() {
 			fmt.Fprintln(os.Stderr, "reactogenic serve:", err)
 			os.Exit(1)
 		}
+	case "lsp":
+		os.Exit(runLSP(os.Args[2:]))
+	case "-v", "--version", "version":
+		fmt.Println(version)
 	case "-h", "--help", "help":
 		fmt.Println(usage)
 	default:
 		fmt.Fprintf(os.Stderr, "reactogenic: unknown command %q\n%s\n", os.Args[1], usage)
 		os.Exit(2)
 	}
+}
+
+func runLSP(args []string) int {
+	flags := flag.NewFlagSet("lsp", flag.ContinueOnError)
+	stdio := flags.Bool("stdio", false, "speak LSP on stdin and stdout")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if !*stdio {
+		fmt.Fprintln(os.Stderr, "reactogenic lsp: only --stdio is supported")
+		return 2
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if err := lsp.Serve(context.Background(), os.Stdin, os.Stdout, os.Stderr, filepath.ToSlash(cwd), version); err != nil {
+		fmt.Fprintln(os.Stderr, "reactogenic lsp:", err)
+		return 1
+	}
+	return 0
 }
 
 func runCheck(args []string) int {

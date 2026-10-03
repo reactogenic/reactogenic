@@ -9,8 +9,11 @@ every change we make to it.
 | Patch | Why |
 | --- | --- |
 | `0001-rtsx-bridge.patch` | adds `rtsx/`, the public bridge our module imports tsgo's `internal/` packages through (decisions.md, RGP1-003) |
-| `0002-rtsx-parser.patch` | slot params `{ size }` in JSX attribute position, `.rtsx` files only (decisions.md, RGP1-020) |
+| `0002-rtsx-parser.patch` | slot params `{ size }` in JSX attribute position, under the parse option `RTSX` (decisions.md, RGP1-020) |
 | `0003-rtsx-program.patch` | adds `rtsx/program.go`: the program, file-system overlay and checker bridge (RGP1-050/051) |
+| `0004-rtsx-mapper.patch` | a content mapper built into the binary (`contentmapper/builtin.go`, `rtsx/mapper.go`, `rtsx/spanmap.go`): tsconfig parsing, the session and inferred projects use it without `runExternalCode`; its file system, per-file identity and `Extra` (specs/phase01/ide.md, *The engine*; RGP1-102/103) |
+| `0005-rtsx-resolver.patch` | an extensionless import finds a content-mapped file, after every built-in extension |
+| `0006-rtsx-lsp.patch` | `lsp.Embedder` and `rtsx/server`: the language server for a host with a built-in mapper — static capabilities, no formatting, its own server info (RGP1-103) |
 
 ## Changing tsgo
 
