@@ -3,9 +3,11 @@
 Language support for Reactogenic's `.rtsx` files — extension id
 `reactogenic.rtsx`. Spec: [`specs/phase01/ide.md`](../../specs/phase01/ide.md).
 
-Two halves: the declarative one (RGP1-109) — the language `rtsx`, its
-TextMate grammar and its language configuration — and the client (RGP1-110)
-that runs `reactogenic lsp --stdio` for the window.
+Three parts: the declarative one (RGP1-109) — the language `rtsx`, its
+TextMate grammar and its language configuration; the client (RGP1-110) that
+runs `reactogenic lsp --stdio` for the window; and the TS server plugin
+(RGP1-111) that teaches VS Code's own TypeScript the `.rtsx` modules its
+`.ts` files import.
 
 The package is named `rtsx`, without the `@reactogenic` scope every other
 package of this repo has: `vsce` rejects scoped names, and the Marketplace id
@@ -24,6 +26,7 @@ VSX as a `.vsix`, never to npm.
 | commands | *Reactogenic: Restart Server*, *Reactogenic: Show Transpiled TSX* |
 | task `reactogenic: check` | the server's binary, `check --pretty=false`; closed documents only. Two matchers: `$reactogenic` for `.rtsx` lines, `$reactogenic-ts` for the rest (owner `typescript`, as `$tsc`) — use both |
 | settings | `reactogenic.server.path`, `reactogenic.autoClosingTags`, `reactogenic.trace.server` |
+| TS server plugin | `reactogenic-typescript-plugin`, for the built-in TypeScript and a workspace's own (5 and 6) |
 
 Scopes of the `.rtsx` forms; everything else keeps its TSX scope, so themes
 apply unchanged:
@@ -74,13 +77,43 @@ apply unchanged:
   `lsp`: an older workspace CLI is skipped for the bundled binary, with a
   warning in the status item.
 
+## The TS server plugin
+
+`src/plugin/`, bundled into one CommonJS file without dependencies:
+`node_modules/reactogenic-typescript-plugin/index.js` — generated, in this
+folder and at the same path in the `.vsix`, because `tsserver` loads a
+plugin by name from the extension's `node_modules`. ide.md, *The plugin*.
+
+| | |
+| --- | --- |
+| `index.ts` | what `tsserver` calls per project: resolution, the file's text, the configuration |
+| `resolution.ts` | `x.rtsx` once TypeScript's own resolution has failed |
+| `virtual.ts` | the virtual texts: which binary, `spawnSync` of `serve` (`virtual`), one process per batch, the cache |
+| `spans.ts` | positions through the span tuples, both ways |
+| `service.ts` | the language service with every answer in source positions, or without it |
+
+`tsPlugin.ts` (the extension's side) sends `configurePlugin`: the setting
+`reactogenic.server.path` and whether the workspace is trusted. Until then —
+the plugin is loaded by VS Code's TypeScript, before this extension is
+activated — it runs `$REACTOGENIC_BINARY` or the bundled binary, never the
+workspace's CLI.
+
+To see it work: *TypeScript: Open TS Server log* (the setting
+`typescript.tsserver.log`); its lines hold `reactogenic:` — the binary
+chosen, each process and how many files it made.
+
 ```sh
-pnpm build            # dist/extension.js
+pnpm build            # dist/extension.js, node_modules/reactogenic-typescript-plugin
 pnpm typecheck
-pnpm test             # unit tests: the grammar, binary resolution, the problem matcher
-pnpm test:editor      # the editor suite: opens four VS Code windows, one after the other
+pnpm test             # unit tests: the grammar, binary resolution, the problem matcher; the plugin in tsserver 5.9 and 6.0
+pnpm test:editor      # the editor suite: opens five VS Code windows, one after the other
 pnpm package          # dist/vsix/rtsx-<target>-<version>.vsix
 ```
+
+`test/plugin.test.ts` drives a real `tsserver` over stdio (`test/tsserver.ts`),
+started as VS Code starts it — `--globalPlugins`, `--pluginProbeLocations`
+this folder — for each of the npm aliases `typescript-5.9` and
+`typescript-6.0`; `.rtsx` files are on disk only, as in the editor.
 
 **The editor suite** (`scripts/test-editor.mjs`, `test/editor/`) runs the
 extension in a real VS Code with its own profile, against a copy of
@@ -92,6 +125,7 @@ extension in a real VS Code with its own profile, against a copy of
 | `untrusted` | highlighting only, no server process |
 | `monorepo` | the opened folder is a package: the CLI and its lockfile are above it; other CLIs in a nested package and outside the workspace |
 | `transpiled` | *Show Transpiled TSX* against `test/editor/fake-server.mjs`, a stand-in that has `reactogenic/transpiled` (the real server gains it with RGP1-108) |
+| `typescript` | `src/main.tsx` in VS Code's own TypeScript, through the plugin: a definition in `page.rtsx`, no TS2307 — before the extension is activated, and after |
 
 It tests this checkout with `$REACTOGENIC_BINARY` (unset: built from `go/`),
 or, with `--vsix file.vsix`, a package as it ships, with its bundled binary.
@@ -106,6 +140,8 @@ downloaded into `.vscode-test/`. On Linux without a display:
 what is in it — ours, tsgo's `LICENSE` and `NOTICE`, the grammar's and the
 bundled npm packages' (`ThirdPartyNotices.txt`) — plus `universal`, without a
 binary. Each is staged in `dist/stage/<target>`: what is there is what ships.
+The plugin's folder is the staged manifest's one dependency — `vsce` takes
+nothing else from `node_modules` — so packaging runs `npm list` in the stage.
 Nothing is published.
 
 ## Generated files

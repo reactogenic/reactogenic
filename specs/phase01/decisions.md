@@ -402,3 +402,39 @@ server only after migrating `check` — a bare server now comes first.
 **Cost accepted:** the stripped binary grows about 45% with the language
 service linked in (19 → 28 MB, darwin-arm64); the patches above must be
 rebased when the pin moves.
+
+## RGP1-111 — The TS server plugin
+
+`tsserver` (TS ≤ 6) learns `.rtsx` through a plugin the extension ships
+(ide.md, *The `.ts` side*). Its host API is synchronous; the transform is a
+Go binary.
+
+1. **`spawnSync` of `serve`, one process per batch.** Measured on macOS
+   (M2 Pro, the 28.5 MB release build): 11 ms for one 8 KB file, 65 ms for
+   50, 200 ms for 200 — a process that does nothing takes 6. A project is
+   loaded in a handful of batches (an importer's `.rtsx` files, plus those
+   beside them); a save costs one. **Rejected** for now: a long-lived child
+   behind `Atomics.wait` — a worker, a shared buffer and a lifetime to
+   manage, for 6 ms. It stays the answer if Windows is slow (unmeasured).
+2. **`tsserver` keeps the source; the program gets the virtual text.** The
+   plugin replaces what the project hands the language service (snapshot,
+   version, script kind) and wraps the service's answers. `tsserver`'s own
+   record of the file stays the saved source: it watches it, and turns the
+   mapped offsets into lines with it. **Rejected:** Svelte's way — the
+   virtual text returned from `readFile`, so that every line map `tsserver`
+   keeps is of the wrong text and has to be patched after it. **Rejected:**
+   a cache keyed by mtime and size — it is `tsserver` that reads the file;
+   the text it holds is the key.
+3. **Each answer has one server.** Workspace symbols declared in `.rtsx`
+   files, and file-rename edits in `.rtsx` files or of imports of `.rtsx`
+   modules, are `reactogenic lsp`'s (RGP1-105): the plugin leaves them out
+   instead of mapping them. VS Code asks both servers; a file-rename edit
+   made by both is applied twice.
+4. **Rename, and every other edit, never goes into an `.rtsx` file.**
+   Through the map alone a rename is wrong (decision 5 of *IDE support*);
+   the fix-ups live in the server.
+5. **Configured by the client only.** The plugin is loaded in every TS
+   project, in restricted mode too, and before the extension is activated:
+   it finds its binary itself, and runs the workspace's CLI only after the
+   extension has said the workspace is trusted. A tsconfig `plugins` entry
+   of its name is ignored — it would let a repository choose the binary.

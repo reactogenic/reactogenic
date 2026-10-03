@@ -100,10 +100,14 @@ export const bare = [<Button size="md" />, part, <Intro />];
 
 export const wrong = <Page title={1} />;
 `,
+  "src/deep/leaf.rtsx": "export const leaf = <i>leaf</i>;\n",
+  // The first file of the project: its imports reach three folders.
   "src/aliased.tsx": `import Intro from "@/intro";
 import { Page } from "@/page";
+import { part } from "@/parts";
+import { leaf } from "@/deep/leaf";
 
-export const both = [Intro, Page];
+export const all = [Intro, Page, part, leaf];
 `,
 };
 
@@ -157,10 +161,11 @@ describe.each(VERSIONS)("%s", (alias) => {
   });
 
   test("one process per batch of files, not per file", () => {
-    // Five `.rtsx` modules in two folders: the first import that resolves
-    // into a folder takes the folder's other `.rtsx` files with it.
-    expect(spawned.count()).toBe(2);
-    expect(server.pluginLog().filter((line) => line.includes("spawn")).map((line) => /(\d+) file\(s\)/.exec(line)?.[1])).toEqual(["3", "1"]);
+    // Five `.rtsx` modules in three folders. The first importer resolves to
+    // four of them: one process makes those, and the fifth, button.rtsx,
+    // which lies beside two of them and is asked for next.
+    expect(spawned.count()).toBe(1);
+    expect(server.pluginLog().filter((line) => line.includes("spawn")).map((line) => /(\d+) file\(s\)/.exec(line)?.[1])).toEqual(["5"]);
   });
 
   test("go to definition lands in page.rtsx at source line and column", async () => {
@@ -183,28 +188,22 @@ describe.each(VERSIONS)("%s", (alias) => {
   });
 
   test("a module specifier's definition is the .rtsx file", async () => {
-    // Extensionless, explicit, a directory's index.rtsx: TypeScript answers a relative specifier with the file.
-    for (const [specifier, file] of [
-      ['"./page"', "src/page.rtsx"],
-      ['"./button.rtsx"', "src/button.rtsx"],
-      ['"./parts"', "src/parts/index.rtsx"],
+    // Extensionless, explicit, a directory's index.rtsx; and through a `paths`
+    // alias, where TypeScript answers with the module's declaration — the
+    // whole text — instead of the file: its start, for all of them.
+    for (const [importer, specifier, file] of [
+      ["src/main.tsx", '"./page"', "src/page.rtsx"],
+      ["src/main.tsx", '"./button.rtsx"', "src/button.rtsx"],
+      ["src/main.tsx", '"./parts"', "src/parts/index.rtsx"],
+      ["src/aliased.tsx", '"@/intro"', "src/intro.rtsx"],
+      ["src/aliased.tsx", '"@/page"', "src/page.rtsx"],
+      ["src/aliased.tsx", '"@/parts"', "src/parts/index.rtsx"],
     ]) {
-      const body = await server.request("definitionAndBoundSpan", server.at("src/main.tsx", specifier, 1, 2));
+      const body = await server.request("definitionAndBoundSpan", server.at(importer, specifier, 1, 2));
       expect(
         body.definitions.map((d: any) => [d.file, d.start, d.end]),
         specifier,
       ).toEqual([[server.file(file), { line: 1, offset: 1 }, { line: 1, offset: 1 }]]);
-    }
-    // A `paths` alias: with the module's declaration, which is the file from
-    // its first token to its end — in the source, not in the virtual text.
-    for (const [specifier, file, source] of [
-      ['"@/intro"', "src/intro.rtsx", FILES["src/intro.rtsx"]],
-      ['"@/page"', "src/page.rtsx", PAGE],
-    ]) {
-      const body = await server.request("definitionAndBoundSpan", server.at("src/aliased.tsx", specifier, 1, 2));
-      expect(body.definitions, specifier).toHaveLength(1);
-      expect(body.definitions[0].file).toBe(server.file(file));
-      expect(sourceText({ ...body.definitions[0], where: specifier })).toBe(source);
     }
   });
 
@@ -312,6 +311,74 @@ describe.each(VERSIONS)("%s", (alias) => {
     // page.rtsx is imported by main.tsx and wrong.tsx: an import of an .rtsx module is the server's too.
     const page = await server.request("getEditsForFileRename", { oldFilePath: server.file("src/page.rtsx"), newFilePath: server.file("src/home.rtsx") });
     expect(page).toEqual([]);
+  });
+
+  test("no edit is offered into an .rtsx file", async () => {
+    // `props.missing`: TypeScript's fix would declare the property in PageProps — in page.rtsx.
+    write(dir, "src/fix.tsx", 'import type { PageProps } from "./page";\nexport const read = (props: PageProps) => props.missing;\n');
+    server.open("src/fix.tsx");
+    await server.until("src/fix.tsx", (codes) => codes.includes(2339), "the missing property");
+    const at = server.at("src/fix.tsx", "missing", 1);
+    const fixes = await server.request("getCodeFixes", { file: at.file, startLine: at.line, startOffset: at.offset, endLine: at.line, endOffset: at.offset + 7, errorCodes: [2339] });
+    expect(fixes.flatMap((fix: any) => fix.changes.map((change: any) => path.basename(change.fileName)))).not.toContain("page.rtsx");
+
+    // Move to file, with page.rtsx as the target: refused (by TypeScript itself: not a file it writes).
+    const whole = server.at("src/fix.tsx", "export const read", 1);
+    const range = { file: whole.file, startLine: whole.line, startOffset: 1, endLine: whole.line, endOffset: 80 };
+    const moved = await server.request("getEditsForRefactor", { ...range, refactor: "Move to file", action: "Move to file", interactiveRefactorArguments: { targetFile: server.file("src/page.rtsx") } });
+    expect(moved.edits).toEqual([]);
+    expect(moved.notApplicableReason).toBeTruthy();
+    // And page.rtsx is not among the files it suggests.
+    const suggestions = await server.request("getMoveToRefactoringFileSuggestions", range);
+    expect(suggestions.files.length).toBeGreaterThan(0);
+    expect(suggestions.files.filter((file: string) => file.endsWith(".rtsx"))).toEqual([]);
+    // Into a TypeScript file it still works.
+    const allowed = await server.request("getEditsForRefactor", { ...range, refactor: "Move to file", action: "Move to file", interactiveRefactorArguments: { targetFile: server.file("src/types.ts") } });
+    expect(allowed.edits.map((edit: any) => path.basename(edit.fileName)).sort()).toEqual(["fix.tsx", "types.ts"]);
+  });
+
+  test("the requests that walk the whole program work with .rtsx files in it", async () => {
+    // Completion with auto-import: `Page` is offered from page.rtsx; the
+    // import is an edit of this file, and names the module as the convention
+    // is. `twin.rtsx` has a `twin.ts` beside it, which `./twin` would be:
+    // its import keeps the extension.
+    await server.request("configure", { preferences: { includeCompletionsForModuleExports: true, includeCompletionsWithInsertText: true, allowIncompleteCompletions: true } });
+    write(dir, "src/twin.ts", "export const other = 1;\n");
+    write(dir, "src/twin.rtsx", "export const Twinned = <p />;\n");
+    write(dir, "src/auto.tsx", 'import "./twin.rtsx";\nexport const page = [Pag, Twinn];\n');
+    server.open("src/auto.tsx");
+    await server.until("src/auto.tsx", (codes) => !codes.includes(2307), "twin.rtsx");
+    for (const [typed, name, specifier] of [
+      ["Pag,", "Page", "./page"],
+      ["Twinn]", "Twinned", "./twin.rtsx"],
+    ]) {
+      const at = server.at("src/auto.tsx", typed, 1, typed.length - 1);
+      const completions = await server.request("completionInfo", { ...at, prefix: typed.slice(0, -1) });
+      const entry = completions.entries.find((e: any) => e.name === name && e.source);
+      expect(entry, `${name}, from an .rtsx module`).toBeDefined();
+      const [details] = await server.request("completionEntryDetails", { ...at, entryNames: [{ name, source: entry.source, data: entry.data }] });
+      const edits = details.codeActions.flatMap((action: any) => action.changes);
+      expect(edits.map((change: any) => path.basename(change.fileName))).toEqual(["auto.tsx"]);
+      expect(edits[0].textChanges.map((edit: any) => edit.newText.trim())).toEqual([`import { ${name} } from "${specifier}";`]);
+    }
+    // The quick fix for the unknown name writes the same import.
+    const missing = server.at("src/auto.tsx", "Pag,", 1);
+    const fixes = await server.request("getCodeFixes", { file: missing.file, startLine: missing.line, startOffset: missing.offset, endLine: missing.line, endOffset: missing.offset + 3, errorCodes: [2304, 2552] });
+    expect(fixes.flatMap((fix: any) => fix.changes.flatMap((change: any) => change.textChanges.map((edit: any) => edit.newText))).join("")).not.toContain(".rtsx");
+
+    // The project's errors, file by file; its file list; refactorings; the outline of a file.
+    const project = await server.request("projectInfo", { file: server.file("src/main.tsx"), needFileNameList: true });
+    expect(project.fileNames.filter((name: string) => name.endsWith(".rtsx")).map((name: string) => path.basename(name)).sort()).toEqual(["button.rtsx", "index.rtsx", "intro.rtsx", "leaf.rtsx", "page.rtsx", "twin.rtsx"]);
+    const main = server.at("src/main.tsx", "const props", 1);
+    await server.request("getApplicableRefactors", { file: main.file, startLine: main.line, startOffset: 1, endLine: main.line, endOffset: 40 });
+    await server.request("organizeImports", { scope: { type: "file", args: { file: server.file("src/main.tsx") } } });
+    await server.request("navtree", { file: server.file("src/main.tsx") });
+    await server.request("quickinfo", server.at("src/main.tsx", "Page", 1));
+    await server.request("compilerOptionsDiagnostics-full", { projectFileName: project.configFileName });
+    // An .rtsx file's own diagnostics are not tsserver's to give.
+    expect(await server.request("semanticDiagnosticsSync", { file: server.file("src/page.rtsx") })).toEqual([]);
+    expect(await server.request("syntacticDiagnosticsSync", { file: server.file("src/page.rtsx") })).toEqual([]);
+    expect(await server.request("suggestionDiagnosticsSync", { file: server.file("src/page.rtsx") })).toEqual([]);
   });
 
   test("a rename that reaches an .rtsx file is refused, and changes nothing", async () => {
@@ -427,16 +494,16 @@ describe.each(VERSIONS)("%s: which binary runs", (alias) => {
     try {
       server.open("src/main.tsx");
       expect(await server.codes("src/main.tsx")).toEqual([]);
-      expect([first.count(), second.count()]).toEqual([2, 0]);
+      expect([first.count(), second.count()]).toEqual([1, 0]);
       await server.request("configurePlugin", { pluginName: PLUGIN, configuration: { serverPath: second.path } });
       expect(await server.codes("src/main.tsx")).toEqual([]);
-      expect([first.count(), second.count()]).toEqual([2, 2]);
+      expect([first.count(), second.count()]).toEqual([1, 1]); // every text again, in one process
       const definition = await server.request("definition", server.at("src/main.tsx", "Page", 1));
       expect(definition.map((d: any) => [path.basename(d.file), d.start])).toEqual([["page.rtsx", { line: 9, offset: 17 }]]);
       // The same configuration again changes nothing.
       await server.request("configurePlugin", { pluginName: PLUGIN, configuration: { serverPath: second.path } });
       expect(await server.codes("src/main.tsx")).toEqual([]);
-      expect(second.count()).toBe(2);
+      expect(second.count()).toBe(1);
     } finally {
       await server.close();
       fs.rmSync(dir, { recursive: true, force: true });
@@ -469,6 +536,27 @@ describe.each(VERSIONS)("%s: which binary runs", (alias) => {
       fs.rmSync(`${spawned.path}.fail`);
       await server.until("src/later.tsx", (codes) => codes.length === 0, "the saved file's text, made on a later attempt");
       expect(await definition()).toEqual([["page.rtsx", { line: 10, offset: 17 }]]);
+    } finally {
+      await server.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an explicit ./x.rtsx resolves where a relative import must name its file (node16, a module)", async () => {
+    const dir = project({
+      "package.json": JSON.stringify({ type: "module" }),
+      "tsconfig.json": JSON.stringify({ compilerOptions: { strict: true, jsx: "preserve", module: "node16", target: "es2022", lib: ["es2022"], types: [], noEmit: true }, include: ["src"] }),
+      "src/value.rtsx": "export const value = 1;\n",
+      "src/main.ts": 'import { value } from "./value.rtsx";\nimport { value as bare } from "./value";\nexport const both = [value, bare];\n',
+    });
+    const server = new TsServer(alias, dir, { REACTOGENIC_BINARY: binary });
+    try {
+      server.open("src/main.ts");
+      // The extensionless one is an error there for any file, TypeScript's own.
+      const diagnostics = await server.diagnostics("src/main.ts");
+      expect(diagnostics.map((d) => `${d.start.line} TS${d.code}`)).toEqual(["2 TS2834"]);
+      const definition = await server.request("definition", server.at("src/main.ts", "value", 1));
+      expect(definition.map((d: any) => [path.basename(d.file), d.start])).toEqual([["value.rtsx", { line: 1, offset: 14 }]]);
     } finally {
       await server.close();
       fs.rmSync(dir, { recursive: true, force: true });

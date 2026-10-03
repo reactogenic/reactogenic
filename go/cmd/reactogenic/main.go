@@ -1,7 +1,7 @@
 // Command reactogenic is the phase 1 CLI: `reactogenic check` (RGP1-070),
 // the language server (RGP1-103), the stdio server driven by the Vite
-// plugin (RGP1-053) and the content mapper for stock TypeScript 7.1
-// (RGP1-112).
+// plugin (RGP1-053) and by the TS server plugin (RGP1-111), and the content
+// mapper for stock TypeScript 7.1 (RGP1-112).
 package main
 
 import (
@@ -32,8 +32,8 @@ const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] 
   lsp     the language server for editors (LSP over stdio); it ends with the
           client's process: --clientProcessId, else the one named in initialize
           (exit status 0 after shutdown and exit, 1 otherwise)
-  serve   transform .rtsx for the Vite plugin: JSON requests on stdin, one
-          response per line on stdout
+  serve   transform .rtsx for the Vite plugin and the editor's TypeScript
+          plugin: JSON requests on stdin, one response per line on stdout
   content-mapper
           experimental: .rtsx for stock TypeScript 7.1. 'tsc --runExternalCode'
           and its language server start it for a tsconfig that lists

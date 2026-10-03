@@ -19,6 +19,8 @@ export interface Program {
   virtual(fileName: string): Virtual | undefined;
   /** True when the specifier, written in that file, resolves to an `.rtsx` module. */
   importsRtsx(fileName: string, specifier: string): boolean;
+  /** A specifier that ends in `.rtsx`, without the extension when that is the same module from that file. */
+  specifier(fileName: string, specifier: string): string;
   /** For a message: the path as the user knows it. */
   display(fileName: string): string;
 }
@@ -49,15 +51,7 @@ export function decorate(service: ts.LanguageService, program: Program): ts.Lang
     if (!virtual) {
       return undefined;
     }
-    const mapped = virtual.map.toSource(span.start, span.length, feature);
-    if (!mapped && span.start + span.length === virtual.text.length) {
-      // From the first token to the end of the text: the module, as declared
-      // by its file — where an aliased specifier (`@/page`) leads. In the
-      // source that is the file from its first token, when that one is copied.
-      const start = virtual.map.toSource(span.start, 0, 0)?.start ?? 0;
-      return { start, length: virtual.source.length - start };
-    }
-    return mapped;
+    return virtual.map.toSource(span.start, span.length, feature);
   };
   /** A declaration around a name: its two ends, whatever was lowered between them. */
   const around = (fileName: string, span: ts.TextSpan | undefined): ts.TextSpan | undefined => {
@@ -69,6 +63,13 @@ export function decorate(service: ts.LanguageService, program: Program): ts.Lang
   const documentSpan = <T extends ts.DocumentSpan>(location: T, feature: number): T | undefined => {
     if (!isRtsx(location.fileName)) {
       return location;
+    }
+    // A module declared by its file — where a specifier that is not relative
+    // (`@/page`) leads — is the text from its first token to its end: the
+    // file's start, as for a relative specifier, and as in the server.
+    const text = program.virtual(location.fileName)?.text;
+    if ((location as { kind?: string }).kind === "module" && text !== undefined && location.textSpan.start + location.textSpan.length === text.length) {
+      return { ...location, textSpan: { start: 0, length: 0 }, contextSpan: undefined };
     }
     const textSpan = exact(location.fileName, location.textSpan, feature);
     return textSpan && { ...location, textSpan, contextSpan: around(location.fileName, location.contextSpan) };
@@ -88,6 +89,9 @@ export function decorate(service: ts.LanguageService, program: Program): ts.Lang
     (proxy as unknown as Record<string, unknown>)[key] = (fileName: string, position: number, ...rest: unknown[]) => {
       if (!program.active()) {
         return method.call(service, fileName, position, ...rest);
+      }
+      if (isRtsx(fileName)) {
+        service.getProgram(); // the position is of the file as saved: its map must be that text's
       }
       const virtual = ask(fileName, position, feature);
       return virtual === undefined ? none : map(method.call(service, fileName, virtual, ...rest), fileName);
@@ -239,13 +243,31 @@ export function decorate(service: ts.LanguageService, program: Program): ts.Lang
   // ---- edits: none into an `.rtsx` file -----------------------------------
 
   const touches = (changes: readonly ts.FileTextChanges[]): string | undefined => changes.find((change) => isRtsx(change.fileName))?.fileName;
+  /**
+   * An import TypeScript writes for an `.rtsx` module names the file,
+   * `./page.rtsx`: it does not know the extension can go. Written as the
+   * convention is — `./page` — where that is the same module (ide.md,
+   * *Specifiers the server writes*).
+   */
+  const imports = (changes: readonly ts.FileTextChanges[]): ts.FileTextChanges[] =>
+    changes.map((change) => ({
+      ...change,
+      textChanges: change.textChanges.map((edit) =>
+        edit.newText.includes(".rtsx")
+          ? { ...edit, newText: edit.newText.replace(/(["'])([^"'\n]+\.rtsx)\1/g, (_, quote: string, specifier: string) => `${quote}${program.specifier(change.fileName, specifier)}${quote}`) }
+          : edit,
+      ),
+    }));
   proxy.getCodeFixesAtPosition = (...args) => {
     const result = service.getCodeFixesAtPosition(...args);
-    return program.active() ? result.filter((fix) => touches(fix.changes) === undefined) : result;
+    return program.active() ? result.filter((fix) => touches(fix.changes) === undefined).map((fix) => ({ ...fix, changes: imports(fix.changes) })) : result;
   };
   proxy.getCombinedCodeFix = (...args) => {
     const result = service.getCombinedCodeFix(...args);
-    return program.active() && touches(result.changes) !== undefined ? { changes: [] } : result;
+    if (!program.active()) {
+      return result;
+    }
+    return touches(result.changes) !== undefined ? { changes: [] } : { ...result, changes: imports(result.changes) };
   };
   proxy.getEditsForRefactor = (...args) => {
     const result = service.getEditsForRefactor(...args);
@@ -253,9 +275,21 @@ export function decorate(service: ts.LanguageService, program: Program): ts.Lang
     return file === undefined ? result : { edits: [], notApplicableReason: `This refactoring edits ${program.display(file)}, which TypeScript cannot write: make the change in that file.` };
   };
   if (typeof service.getMoveToRefactoringFileSuggestions === "function") {
+    // *Move to file* lists the program's files by extension, and fails on
+    // one TypeScript does not know ("has unknown extension"): for the length
+    // of the call the program has no `.rtsx` files — none is a target anyway.
     proxy.getMoveToRefactoringFileSuggestions = (...args) => {
-      const result = service.getMoveToRefactoringFileSuggestions(...args);
-      return program.active() ? { ...result, files: result.files.filter((file) => !isRtsx(file)) } : result;
+      const current = program.active() ? service.getProgram() : undefined;
+      if (!current) {
+        return service.getMoveToRefactoringFileSuggestions(...args);
+      }
+      const getSourceFiles = current.getSourceFiles;
+      current.getSourceFiles = () => getSourceFiles.call(current).filter((file) => !isRtsx(file.fileName));
+      try {
+        return service.getMoveToRefactoringFileSuggestions(...args);
+      } finally {
+        current.getSourceFiles = getSourceFiles;
+      }
     };
   }
 
@@ -325,7 +359,12 @@ export function decorate(service: ts.LanguageService, program: Program): ts.Lang
   });
   proxy.getCompletionEntryDetails = (...args) => {
     const result = service.getCompletionEntryDetails(...args);
-    return result && program.active() ? { ...result, documentation: parts(result.documentation), tags: tags(result.tags) } : result;
+    if (!result || !program.active()) {
+      return result;
+    }
+    // An auto-import: its edits are in the file the completion is in.
+    const codeActions = result.codeActions?.map((action) => ({ ...action, changes: imports(action.changes) }));
+    return { ...result, codeActions, documentation: parts(result.documentation), tags: tags(result.tags) };
   };
   proxy.getSignatureHelpItems = (...args) => {
     const result = service.getSignatureHelpItems(...args);

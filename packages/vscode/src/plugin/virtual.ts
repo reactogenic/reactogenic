@@ -54,6 +54,7 @@ export class Transformer {
   private readonly cache = new Map<string, Virtual>();
   private readonly binaries = new Map<string, string | undefined>();
   private readonly failed = new Map<string, number>();
+  private readonly ids = new Map<string, number>();
   private config: Config = {};
   /** Bumped when a text may differ though its source does not: another binary. */
   generation = 0;
@@ -100,6 +101,24 @@ export class Transformer {
       this.binaries.set(projectDir, binary);
     }
     return this.binaries.get(projectDir);
+  }
+
+  /**
+   * A number for the project's binary, part of a text's version: two
+   * projects that hold one file and run different binaries (a monorepo with
+   * two versions of the CLI) do not share its parsed text.
+   */
+  binaryId(projectDir: string): number {
+    const binary = this.binary(projectDir);
+    if (binary === undefined) {
+      return 0;
+    }
+    let id = this.ids.get(binary);
+    if (id === undefined) {
+      id = this.ids.size + 1;
+      this.ids.set(binary, id);
+    }
+    return id;
   }
 
   /** True when the file has a text, the current one or a last good one. */

@@ -1047,7 +1047,85 @@ on Linux or Windows.
   tag, Toggle Line Comment inside a JSX child writes `{/* */}`.
 - Depends on: 107, 109 (*Show transpiled TSX*: 108).
 
-### RGP1-111 — The `.ts` side: TS server plugin · M
+### RGP1-111 — The `.ts` side: TS server plugin · M · done
+`serve` has a second request, `virtual` (`internal/server/virtual.go`): a
+batch of files, each with its text, through the tolerant transform of
+`reactogenic lsp` (`mapper.Transform`); for each, the virtual text and the
+span tuples in UTF-16 offsets, `export {}` appended to a file that is no
+module. The files of a batch are transformed on every processor. The Vite
+plugin's `transform` is untouched.
+The plugin is `packages/vscode/src/plugin` (five files, no `vscode` import,
+`resolve.ts` bundled in): built by `scripts/build.mjs` into
+`node_modules/reactogenic-typescript-plugin`, where `tsserver` finds it by
+name — from the checkout and, at the same path, in every `.vsix`. `vsce`
+ignores `node_modules` unless it packages dependencies: the staged manifest
+names the plugin as its one dependency, and `package.mjs` fails if the
+`.vsix` lacks it. 20 KiB minified. The extension sends the setting and the
+workspace's trust (`src/tsPlugin.ts`).
+*How*: `tsserver` keeps the `.rtsx` source as the file's text — it reads it,
+watches it, and counts lines in it. The plugin replaces what the project
+hands the program (snapshot, version, script kind TSX) and wraps the
+language service: positions out through the span map, positions in the
+other way, line and column from the source. Not Svelte's way (the text
+replaced at `readFile`, the line maps patched after it).
+*Decided here* (each in ide.md): `spawnSync` per batch — the numbers below;
+a batch is what an importer resolves to plus the `.rtsx` files beside
+those; a text is cached by the source `tsserver` holds, not by mtime and
+size, since it is `tsserver` that reads the file; workspace symbols and
+file-rename edits of `.rtsx` are **left out**, not mapped as the spec had
+it — `reactogenic lsp` answers both, and an edit made by both servers would
+be applied twice; the plugin finds its binary itself and takes the
+workspace's CLI only on the extension's word that the workspace is trusted
+(it is loaded in restricted mode too, and before the extension); a tsconfig
+`plugins` entry configures nothing; an import `tsserver` writes for an
+`.rtsx` module loses its extension where that is the same module.
+*Measured* (M2 Pro, macOS 27.0, the release build, 28.5 MB): one `serve`
+process, `virtual` with 1 / 10 / 50 / 200 files of 8 KB — 11 / 22 / 65 /
+200 ms warm (a process that does nothing: 6 ms); 300–520 ms the first time
+a freshly copied binary runs. A project without `.rtsx` whose imports all
+resolve: nothing. One with 600 files and 13 unresolved imports in each:
+400 → 470 ms to load — each failed import is looked up a second time; 890 ms
+before the lookups of one program build shared a cache.
+*Tests* (`pnpm test`; 463 in the package, the plugin's about 20 s of it on
+an idle machine): 15 on the mapping; 22 scenarios in `tsserver` 5.9.3 and
+6.0.3, loaded as VS Code loads it — beyond the Done when: related
+information, call hierarchy both ways, `references-full`, highlights, file
+references, aliased and `node16` specifiers, auto-import, a file created
+and deleted, a binary that fails, is replaced, is too old, the process
+counts, an untrusted workspace's CLI and a tsconfig entry that run nothing.
+21 mutants of the plugin: 19 killed; two cannot be reached through
+`tsserver` (its `rename` never asks for locations after a refusal; the
+files an importer resolves to are also found beside each other). Editor
+suite `typescript` (VS Code 1.140.0, built-in TypeScript 6.0.3): `main.tsx`
+before the extension is activated and after — 2 pass, from the checkout and
+from the packaged darwin-arm64 `.vsix` with its bundled binary. The other
+four suites once: 21 + 1 skipped, 3, 4 pass; `monorepo` — its window closed
+after 3 of 6 with no failure reported; alone, 6 pass.
+**Not explained**: of nine runs of the `typescript` suite, three in a row
+ended the same way — the window closed a second into the first test, no
+test reported as failed, the extension host's log saying "received
+terminate message from renderer"; the runs before and after passed, with
+the same code. Other tasks ran editor suites on this machine at the time.
+A suite that fails now waits a second before it ends, so that its report
+is not lost with the window (`test/editor/harness.ts`).
+*Found on the way*: TypeScript's *Move to file* fails in any program that
+holds a file of an extension it does not know ("has unknown extension") —
+the plugin hides the `.rtsx` files for that call; `tsserver`'s language
+service takes its program from the project (`updateFromProject`), not from
+the host's versions, so making a text again needs the project marked as
+changed — `markAsDirty`, not in the public types; while a project loads, VS
+Code's syntax server answers go-to-definition with the import itself.
+*Left*: Windows — spawn cost unmeasured, nothing run there (the OPEN
+stays); Linux not run; TypeScript < 5.0 has no `resolveModuleNameLiterals`:
+the plugin does nothing; a rename is refused on the locations of the
+file's own project — with several projects loaded, another's are not looked
+at; a segment file created or deleted changes its mounter's text at the
+mounter's next save (its exports do not depend on it); a call in a slot's
+body is listed under the component, with no caller of its own; with the
+universal `.vsix`, no binary before the extension is activated
+(`workspaceContains:**/*.rtsx` would activate it at startup — and start the
+server with no `.rtsx` document open); `MIN_CLI_VERSION` must be the first
+release with `virtual` (113); no `vscode` CI run.
 - `serve` gains tolerant mode and span tuples. The plugin (ide.md, *The
   `.ts` side*), added to the extension's manifest and `.vsix`.
 - **Done when:** `tsserver` driven over stdio reports no TS2307 for

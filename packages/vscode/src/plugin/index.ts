@@ -157,10 +157,10 @@ function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
     const getScriptKind = host.getScriptKind?.bind(host);
 
     host.getScriptKind = (fileName) => (isRtsx(fileName) ? typescript.ScriptKind.TSX : (getScriptKind?.(fileName) ?? typescript.ScriptKind.Unknown));
-    // A text changes with its source, and with the binary that makes it.
     // A text changes with its source, with the binary that makes it, and when
     // a last good one is made again.
-    host.getScriptVersion = (fileName) => (isRtsx(fileName) ? `${getScriptVersion(fileName)}:${files.generation}:${held.get(fileName)?.attempt ?? 0}` : getScriptVersion(fileName));
+    host.getScriptVersion = (fileName) =>
+      isRtsx(fileName) ? `${getScriptVersion(fileName)}:${files.generation}:${files.binaryId(directory)}:${held.get(fileName)?.attempt ?? 0}` : getScriptVersion(fileName);
     host.getScriptSnapshot = (fileName) => {
       // tsserver's own snapshot is the saved file: it reads it, watches it,
       // and keeps it for the lines and columns of what is answered.
@@ -173,9 +173,12 @@ function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
         return was.snapshot;
       }
       const code = source.getText(0, source.getLength());
-      // A file that yields nothing keeps its last good text; one that never
-      // had any stands in as its own (its declarations are TSX all the same).
-      const virtual = files.get(directory, fileName, code, [], read) ?? { source: code, text: code, map: SpanMap.identity(code.length), binary: "" };
+      // After a change of binary every text of the project is due: all of
+      // them with the first one asked for. A file that yields nothing keeps
+      // its last good text; one that never had any stands in as its own (its
+      // declarations are TSX all the same).
+      const others = was && was.generation !== files.generation ? [...held.keys()] : [];
+      const virtual = files.get(directory, fileName, code, others, read) ?? { source: code, text: code, map: SpanMap.identity(code.length), binary: "" };
       const now: Held = {
         source,
         generation: files.generation,
@@ -249,6 +252,15 @@ function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
         return now?.current ? now.virtual : undefined;
       },
       importsRtsx: (fileName, specifier) => imports.get(fileName)?.has(specifier) ?? false,
+      specifier: (fileName, specifier) => {
+        // `./page` for `./page.rtsx` when the shorter name is this file too:
+        // no built-in sibling, which the lookup would find first.
+        const bare = specifier.slice(0, -".rtsx".length);
+        const options = project.getCompilationSettings();
+        const mode = info.languageService.getProgram()?.getSourceFile(fileName)?.impliedNodeFormat;
+        const named = resolveRtsx(typescript, info.serverHost, specifier, fileName, options, undefined, mode).file;
+        return named !== undefined && resolveRtsx(typescript, info.serverHost, bare, fileName, options, undefined, mode).file === named ? bare : specifier;
+      },
       display: (fileName) => {
         const prefix = `${directory}/`;
         return fileName.startsWith(prefix) ? fileName.slice(prefix.length) : fileName;

@@ -498,7 +498,8 @@ published to npm.
   transpiled TSX*; the *reactogenic: check* task and the matchers
   `$reactogenic` and `$reactogenic-ts` (*Diagnostics*);
   the settings `reactogenic.server.path`, `reactogenic.autoClosingTags`
-  (*Tags*; on) and `reactogenic.trace.server`.
+  (*Tags*; on) and `reactogenic.trace.server`; the TS server plugin
+  (`typescriptServerPlugins`, *The `.ts` side*).
 - **Client**: `vscode-languageclient` over stdio; selector language `rtsx`,
   schemes `file` and `untitled` (not `git:` — the left side of a diff). An
   untitled document is `rtsx` by its language id alone: the server maps it
@@ -549,7 +550,8 @@ published to npm.
 - **Packaging**: one `.vsix` per platform (the six of `@reactogenic/cli`),
   each with its binary and the licences of the code in it, plus one universal
   `.vsix` without a binary (highlighting anywhere; the server if rows 1–3
-  find one). `engines.vscode: ^1.91.0`, the language client's floor.
+  find one). Every one holds the TS server plugin's folder.
+  `engines.vscode: ^1.91.0`, the language client's floor.
 
 ### The `.ts` side
 
@@ -562,29 +564,66 @@ server — does not know `.rtsx`: it reports TS2307 there.
 | the "TypeScript 7" extension with a 7.0.x server | nothing: plugins are not loaded and 7.0 has no mappers. `.ts` files report TS2307 on `.rtsx` imports; `.rtsx` files are unaffected. That extension warns that our plugin will not load and offers *Disable Native Preview in Workspace* — the remedy until 7.1 |
 | TS 7.1+ native server | the stock content mapper (below) |
 
-**The plugin** — a real folder in the `.vsix`, CommonJS, no dependencies,
-loaded by `tsserver` in every TS project, so it costs nothing until an
-`.rtsx` import appears:
+**The plugin** — `reactogenic-typescript-plugin`: a real folder in the
+`.vsix` (`node_modules/<name>`, where `tsserver` finds it by name), CommonJS,
+no dependencies. Contributed with `enableForWorkspaceTypeScriptVersions` and
+no `languages` entry: `tsserver` never opens an `.rtsx` document. It is
+loaded in every TS project (TypeScript ≥ 5.0), so it does nothing, and runs
+nothing, until an import resolves to an `.rtsx` file:
 
-- *Resolution*: TypeScript's own first; on failure, `x.rtsx` — so built-in
-  extensions win, and `paths`, `index.rtsx` and an explicit `./x.rtsx`
-  behave as in the server.
-- *Text*: the file's text, for `tsserver`, is the emitted TSX (tolerant
-  mode: a saved syntax error does not empty the module; a file that yields
-  nothing keeps its last good text).
-- *Transform*: synchronous — `spawnSync` of the binary's `serve`, one spawn
-  per batch of files, cached by mtime and size. `serve` returns the span
-  tuples of *Span map*.
-  > OPEN: spawn cost on Windows is unmeasured (5 ms warm on macOS). If it
-  > is slow, one long-lived `serve` child behind `Atomics.wait`.
-- *Answers*: every `tsserver` answer that points into an `.rtsx` file is
-  mapped to source positions — definition, type definition, implementation,
-  references, call hierarchy, navigate-to, the related information of
-  diagnostics, file-rename edits; a location without an exact source span is
-  dropped. **A rename that reaches an `.rtsx` file is refused**, naming the
-  file: it is started from the `.rtsx` side, where the *Rename* table applies.
+- *Resolution*: TypeScript's own first; on failure, the same algorithm with
+  `x.rtsx` seen as `x.tsx` — so built-in extensions win, and `paths`,
+  `index.rtsx` and an explicit `./x.rtsx` behave as in the server. An
+  `.rtsx` file created later is found without an edit to its importer (its
+  name joins the places TypeScript watches for that import); a deleted one
+  is TS2307 again.
+- *Text*: for `tsserver` the file's text is the emitted TSX of the saved
+  file (tolerant mode: a saved syntax error does not empty the module).
+  `tsserver` still reads and watches the source itself — the text in which
+  it counts the lines and columns of what it answers.
+- *Transform*: synchronous — `spawnSync` of the binary's `serve`, one process
+  per batch: the request `virtual` takes files with their texts and returns,
+  for each, the virtual text and the span tuples of *Span map*, in UTF-16
+  offsets. A batch is the files an importer resolves to, plus the `.rtsx`
+  files beside them; a text is kept until the source `tsserver` holds
+  differs, or the binary does. On macOS (M2 Pro): 11 ms for one 8 KB file,
+  65 ms for 50, 200 ms for 200; 300–500 ms the first time a new binary runs.
+  > OPEN: spawn cost on Windows is unmeasured. If it is slow, one long-lived
+  > `serve` child behind `Atomics.wait`.
+- *Binary*: the table of *Which binary runs*, the walk of row 3 starting at
+  the project's directory — decided by the plugin, which runs before the
+  extension is activated. The extension sends it (`configurePlugin`) the
+  setting of row 1 and whether the workspace is trusted: row 3 needs that
+  word, and a tsconfig `plugins` entry configures nothing. Without a binary,
+  or with one from before `virtual`, `.rtsx` imports stay unresolved — TS2307,
+  as without the plugin; a binary that comes later loads the projects again.
+  A transform that fails keeps the file's last good text, tried again on a
+  request five seconds later; no position is given out for such a text.
+- *Answers*: every `tsserver` answer that points into an `.rtsx` file is in
+  source positions — definition, type definition, implementation,
+  references, highlights, call hierarchy, `{@link}` targets, and the related
+  information of diagnostics (placed as `check` places a diagnostic). A
+  location without an exact source span — copied text that answers the
+  feature (*Span map*) — is dropped; the copies of one token are one
+  location. A position `tsserver` is asked about *in* an `.rtsx` file (the
+  next step of a call hierarchy) is mapped the other way.
+- **A rename that reaches an `.rtsx` file is refused**, naming the file: it
+  is started from the `.rtsx` side, where the *Rename* table applies. No
+  other edit goes into an `.rtsx` file either: a quick fix or refactoring
+  that would is not offered.
+- **What `reactogenic lsp` answers is not answered twice**: workspace symbols
+  declared in `.rtsx` files, and the file-rename edits in an `.rtsx` file or
+  of an import of an `.rtsx` module (the feature table), are left out — made
+  by both servers, an edit would be applied twice. An `.rtsx` file's own
+  diagnostics are the server's too.
+- An import `tsserver` writes for an `.rtsx` module (auto-import, its quick
+  fix) follows *Specifiers the server writes*: `./page`; `./page.rtsx` next
+  to a built-in sibling.
 - It serves saved files: an unsaved `.rtsx` edit reaches `.ts` files on save
   (as in Svelte's plugin).
+- With the universal `.vsix` there is no binary before the extension is
+  activated — by the first `.rtsx` document — unless `$REACTOGENIC_BINARY`
+  names one: until then `.ts` files show TS2307.
 
 ### Stock TypeScript 7.1
 
@@ -667,5 +706,5 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX* against a stand-in server. The suite also runs against a packaged `.vsix` and its bundled binary |
-| plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |
+| plugin | unit tests of the position mapping, on hand-written maps and on the binary's. `tsserver` 5.9 and 6.0 driven over stdio, the plugin loaded by name as VS Code loads it: no TS2307; definitions, references, call hierarchy and related information at source line and column — every span of every response is a place of the file on disk; rename refused, no file changed; a saved syntax error keeps the exports; a file created, deleted; a binary that fails, is replaced, is too old; the processes counted — none in a project without `.rtsx`; a tsconfig entry and an untrusted workspace run nothing of the workspace's. One editor suite: `main.tsx` in VS Code's own TypeScript, before and after the extension is activated |
 | stock mapper | a Go test host speaks the protocol over pipes: the handshake, a slot and a shorthand through a valid map, every import form, a broken file, a panic, concurrent transforms, the end of input; the corpus through it, and its typing-like mutants — no mistake reported twice or not at all, no panic behind an answer. `scripts/e2e-stock-mapper.sh` runs `typescript@next`'s `tsc --runExternalCode` on a project, each run with exactly its expected errors, and `reactogenic check` on the same tsconfig — by hand: it needs the network |
