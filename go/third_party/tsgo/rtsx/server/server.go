@@ -11,8 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/bundled"
+	"github.com/microsoft/TypeScript/tsc/internal/compiler"
 	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
+	"github.com/microsoft/TypeScript/tsc/internal/ls"
 	"github.com/microsoft/TypeScript/tsc/internal/lsp"
 	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
 	"github.com/microsoft/TypeScript/tsc/internal/tspath"
@@ -31,7 +34,34 @@ type Options struct {
 	// client's initialize: the process whose end ends the server (upstream's
 	// watchdog hook; the watching itself is the host's).
 	SetParentProcessID func(pid int)
+	// Diagnostics returns every diagnostic of a mapped file of program, as
+	// its author reads them (specs/phase01/ide.md, *Diagnostics*): the
+	// answer to textDocument/diagnostic for that document. It is asked for
+	// the program and the file, so the compiler's diagnostics are still
+	// structured where it takes them. nil: the compiler's, mapped back by
+	// position.
+	Diagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []Diagnostic
 }
+
+type (
+	// Diagnostic is one diagnostic of a mapped document: byte offsets in
+	// its source, a name as its code — or, with TS set and no Code, the
+	// compiler's number and the source "ts", which its quick fixes match
+	// on. The server makes the LSP diagnostic: the range (one character
+	// for a span of no length), the tags and severity of TS, the related
+	// locations.
+	Diagnostic = ls.HostDiagnostic
+	// RelatedInformation is a related location of a Diagnostic.
+	RelatedInformation = ls.HostRelatedInformation
+)
+
+// The severities of a Diagnostic that is not one of the compiler's.
+const (
+	SeverityError       = lsproto.DiagnosticSeverityError
+	SeverityWarning     = lsproto.DiagnosticSeverityWarning
+	SeverityInformation = lsproto.DiagnosticSeverityInformation
+	SeverityHint        = lsproto.DiagnosticSeverityHint
+)
 
 // Run serves LSP until the client exits, In ends or ctx is done. Nothing
 // external runs: no content mapper process, no automatic type acquisition.
@@ -49,7 +79,7 @@ func Run(ctx context.Context, o Options) error {
 		},
 		ProgressDelay:      250 * time.Millisecond,
 		SetParentProcessID: o.SetParentProcessID,
-		Embedder:           &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns},
+		Embedder:           &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns, Diagnostics: o.Diagnostics},
 	})
 	err := s.Run(ctx)
 	if errors.Is(err, context.Canceled) && ctx.Err() == nil {

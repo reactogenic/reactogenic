@@ -1855,6 +1855,11 @@ func (s *Server) handleSetLogVerbosity(_ context.Context, params *lsproto.SetLog
 
 func (s *Server) handleDocumentDiagnostic(ctx context.Context, languageService *ls.LanguageService, params *lsproto.DocumentDiagnosticParams) (lsproto.DocumentDiagnosticResponse, error) {
 	ctx = core.WithCheckerLifetime(ctx, core.CheckerLifetimeDiagnostics)
+	if provide := s.embedder.hostDiagnostics(); provide != nil { // rtsx: a content-mapped document's are the host's
+		if response, ok := languageService.ProvideHostDiagnostics(ctx, params.TextDocument.Uri, provide); ok {
+			return response, nil
+		}
+	}
 	if s.flakeLogging == lsproto.DiagnosticFlakeLogLevelOff {
 		return languageService.ProvideDiagnostics(ctx, params.TextDocument.Uri)
 	}

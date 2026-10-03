@@ -31,6 +31,20 @@ type Embedder struct {
 	//     a request that renames several files, or a folder, is answered
 	//     right for each.
 	Owns func(fileName string) bool
+	// Diagnostics returns the diagnostics of a content-mapped document: all
+	// of them, the compiler's too, which the host takes from the program
+	// while they are structured — to drop, place and reword them — and
+	// returns in its own words (ls.ProvideHostDiagnostics). Without it such
+	// a document gets the compiler's diagnostics, mapped back by position.
+	Diagnostics ls.HostDiagnostics
+}
+
+// hostDiagnostics is Diagnostics; nil without an embedder.
+func (e *Embedder) hostDiagnostics() ls.HostDiagnostics {
+	if e == nil {
+		return nil
+	}
+	return e.Diagnostics
 }
 
 // symbolFiles is the files workspace symbols are collected from; nil: all.

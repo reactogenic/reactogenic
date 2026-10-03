@@ -134,8 +134,9 @@ func StartWith(t *testing.T, root string, serve Serve, options Options) *Client 
 		},
 		"textDocument": map[string]any{
 			"synchronization": map[string]any{"dynamicRegistration": true},
-			"diagnostic":      map[string]any{"dynamicRegistration": true},
-			"hover":           map[string]any{"dynamicRegistration": true, "contentFormat": []string{"markdown", "plaintext"}},
+			"diagnostic": map[string]any{"dynamicRegistration": true, "relatedDocumentSupport": false, // as vscode-languageclient 10
+				"relatedInformation": true, "tagSupport": map[string]any{"valueSet": []int{1, 2}}},
+			"hover": map[string]any{"dynamicRegistration": true, "contentFormat": []string{"markdown", "plaintext"}},
 			"completion": map[string]any{"dynamicRegistration": true, "completionItem": map[string]any{
 				"resolveSupport": map[string]any{"properties": []string{"documentation", "detail", "additionalTextEdits"}},
 			}},
@@ -691,7 +692,32 @@ type Diagnostic struct {
 	Code     json.RawMessage `json:"code"`
 	Source   string          `json:"source"`
 	Message  string          `json:"message"`
+	Tags     []int           `json:"tags,omitempty"` // 1 unnecessary, 2 deprecated
+	Related  []struct {
+		Location Location `json:"location"`
+		Message  string   `json:"message"`
+	} `json:"relatedInformation,omitempty"`
 }
+
+// Show is the whole diagnostic on one line: `1:5-1:9 error ts(2322) [tags]
+// message`, the code a number or a name as the server sent it.
+func (d Diagnostic) Show() string {
+	severity := [...]string{"?", "error", "warning", "information", "hint"}[d.Severity]
+	tags := ""
+	for _, tag := range d.Tags {
+		tags += " " + [...]string{"?", "unnecessary", "deprecated"}[tag]
+	}
+	return fmt.Sprintf("%s %s %s(%s)%s %s", d.Range, severity, d.Source, d.Code, tags, d.Message)
+}
+
+// RangeText is the text of a range of a document.
+func (c *Client) RangeText(rel string, r Range) string {
+	text := c.Text(rel)
+	return text[offset(text, r.Start):offset(text, r.End)]
+}
+
+// Offset is the byte offset of an LSP position in text.
+func Offset(text string, at Position) int { return offset(text, at) }
 
 // String is `line:col CODE`: how check prints a position and a code.
 func (d Diagnostic) String() string {
@@ -706,17 +732,40 @@ func (d Diagnostic) String() string {
 // change; suggestions (hints) are left out.
 func (c *Client) Diagnostics(rel string) []Diagnostic {
 	c.t.Helper()
-	var result struct {
-		Items []Diagnostic `json:"items"`
-	}
-	c.Request("textDocument/diagnostic", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}}, &result)
 	var out []Diagnostic
-	for _, d := range result.Items {
+	for _, d := range c.AllDiagnostics(rel) {
 		if d.Severity != 4 {
 			out = append(out, d)
 		}
 	}
 	return out
+}
+
+// AllDiagnostics pulls a document's diagnostics, suggestions included.
+func (c *Client) AllDiagnostics(rel string) []Diagnostic {
+	c.t.Helper()
+	var result struct {
+		Items []Diagnostic `json:"items"`
+	}
+	c.Request("textDocument/diagnostic", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}}, &result)
+	return result.Items
+}
+
+// RefreshCount is how often the server has asked the client to pull
+// diagnostics again (workspace/diagnostic/refresh).
+func (c *Client) RefreshCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.Refreshes
+}
+
+// Close closes an open document.
+func (c *Client) Close(rel string) {
+	c.mu.Lock()
+	delete(c.docs, rel)
+	delete(c.versions, rel)
+	c.mu.Unlock()
+	c.Notify("textDocument/didClose", map[string]any{"textDocument": map[string]any{"uri": c.URI(rel)}})
 }
 
 // Lines renders diagnostics as their String forms.

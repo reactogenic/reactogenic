@@ -1125,7 +1125,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
 			}
 
 			if project.Value().containsFile(path) {
-				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path)
+				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path) && listsMappedFile(config, fileName, path) // rtsx
 				if node.logger != nil {
 					node.logger.Logf("Project contains file %s", core.IfElse(isDirectInclusion, "directly", "as a source of a referenced project"))
 				}

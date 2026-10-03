@@ -34,6 +34,10 @@ var ErrNoShutdown = errors.New("exit without shutdown")
 // the client to take what is queued for it.
 var drainTimeout = time.Second
 
+// registerMapper installs the transform, tolerant (a variable for the tests
+// of a transform that fails).
+var registerMapper = mapper.Register
+
 // Serve runs the server on in and out until the client's `exit`, the end of
 // in, or the end of the client's process. Its result is nil after shutdown
 // and exit, and when in just ends; an error — a non-zero exit status — for
@@ -44,7 +48,7 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, o Options) error {
 }
 
 func (f *front) serve(ctx context.Context, in io.Reader, out io.Writer, o Options) error {
-	mapper.Register(o.Version)
+	registerMapper(o.Version)
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
 	serverIn, toServer := io.Pipe()
@@ -56,6 +60,7 @@ func (f *front) serve(ctx context.Context, in io.Reader, out io.Writer, o Option
 	err := server.Run(ctx, server.Options{
 		In: serverIn, Out: serverOut, Err: o.Log, Cwd: o.Cwd, Name: "reactogenic", Version: o.Version,
 		SetParentProcessID: parentWatchdog(ctx, stop, o.ClientProcessID),
+		Diagnostics:        diagnostics,
 	})
 	f.mu.Lock()
 	ended, shutdown := f.ended, f.shutdown

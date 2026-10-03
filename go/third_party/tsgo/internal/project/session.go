@@ -340,6 +340,9 @@ func (s *Session) DidOpenFile(ctx context.Context, uri lsproto.DocumentUri, vers
 		fileChanges: changes,
 		Documents:   []lsproto.DocumentUri{uri},
 	})
+	if s.mappedBufferDiffers(uri) { // rtsx
+		s.scheduleDiagnosticsRefresh(0)
+	}
 }
 
 // SetContentMapperContributions atomically replaces extension-provided inferred-project mappers and
@@ -366,6 +369,7 @@ func (s *Session) SetContentMapperContributions(ctx context.Context, contributio
 func (s *Session) DidCloseFile(ctx context.Context, uri lsproto.DocumentUri) {
 	s.cancelWarmAutoImportCache()
 	s.scheduleIdleCacheClean()
+	differs := s.mappedBufferDiffers(uri) // rtsx
 	s.pendingFileChangesMu.Lock()
 	s.pendingFileChanges = append(s.pendingFileChanges, FileChange{
 		Kind: FileChangeKindClose,
@@ -373,6 +377,9 @@ func (s *Session) DidCloseFile(ctx context.Context, uri lsproto.DocumentUri) {
 	})
 	s.pendingFileChangesMu.Unlock()
 	s.ScheduleSnapshotUpdate(UpdateReasonDidCloseFile)
+	if differs { // rtsx
+		s.scheduleDiagnosticsRefresh(0)
+	}
 }
 
 func (s *Session) DidChangeFile(ctx context.Context, uri lsproto.DocumentUri, version int32, changes []lsproto.TextDocumentContentChangePartialOrWholeDocument) {

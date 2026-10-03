@@ -97,14 +97,17 @@ one that only imports it, in whatever order the references are written.
 
 A file that no project lists — reached by an import only — is reported by
 the first project that holds it. A reference to a tsconfig that is not there
-is one error, the referencing project's (TS6053).
+is one error, the referencing project's (TS6053). The editor picks an `.rtsx`
+document's project by the same rule ([ide.md](ide.md), *Diagnostics*).
 
 `--watch` re-checks on change, as `tsc --watch` does: an edited file, and one
 created or deleted — a segment's file, an import's target — in the directory
 of the tsconfig or of a project it references.
 
 The editor shows the same diagnostics, from the same code, through
-`reactogenic lsp` ([ide.md](ide.md), *Diagnostics*).
+`reactogenic lsp` ([ide.md](ide.md), *Diagnostics*) — for a project without
+a syntax error, line for line; where the hosts differ (a file being typed,
+`tsc`'s steps, style checks as warnings) is listed there.
 
 > OPEN: type errors in the Vite dev overlay (what `vite-plugin-checker` does
 > for `tsc`). Useful, but a separate process; after phase 1's core.

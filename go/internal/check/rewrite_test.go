@@ -6,45 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/reactogenic/reactogenic/go/internal/checktest"
 )
 
 // RGP1-073: every rewrite of diagnostics.md, *Rewrites*, on one project.
 func TestRewrites(t *testing.T) {
-	files := map[string]string{
-		"tsconfig.json": tsconfig,
-		"src/jsx.d.ts":  jsxTypes,
-		"src/lib.tsx": `import type { Slot } from "@reactogenic/core";
-type ReactNode = string | JSX.Element | undefined;
-export function Card(p: { $Title?: Slot<{ tone?: string; children?: ReactNode }>; $Box?: Slot<{ color: string }>; $Label?: Slot<{ children: ReactNode }>; $Icon?: Slot<{ id?: string }, { size: string }> }) { return <div />; }
-export function Must(p: { $Title: Slot<{ children?: ReactNode }> }) { return <div />; }
-export function Plain(p: { className?: string }) { return <div />; }
-export function Input(p: { value: string }) { return <input />; }
-`,
-		"src/num.rtsx":   "export default 42;\n",
-		"src/props.rtsx": "export default function P(p: { x: string }) { return <div />; }\n",
-		"src/ok.rtsx":    "export default function Ok() { return <div />; }\n",
-		"src/page.rtsx": `import { Card, Must, Plain, Input } from "./lib";
-import { Switch } from "@reactogenic/core";
-declare function getStatus(): "a" | "b" | "c";
-export const p1 = <Card><$Nope>x</$Nope></Card>;
-export const p2 = <Must />;
-export const p3 = <Card><$Title { x }>t</$Title></Card>;
-export const p4 = <Card><$Box color="r">Hi</$Box></Card>;
-export const p5 = <Card><$Label /></Card>;
-export const p6 = <Card><$Icon>text</$Icon></Card>;
-export const p7 = <Switch on={getStatus()} exhaustive><$Case is="a">A</$Case></Switch>;
-export const p8 = <div #num />;
-export const p9 = <div #props />;
-export const p10 = <Plain #ok />;
-export const p11 = <Input value />;
-`,
-	}
-	for k, v := range coreStub {
-		files[k] = v
-	}
-	files["node_modules/@reactogenic/core/index.d.ts"] += "\nexport declare function Switch(p: { on: unknown; exhaustive?: true; $Case?: unknown }): null;\nexport declare function noMatch(value: never): never;\n"
 	var got []string
-	for _, r := range runFiles(t, files) {
+	for _, r := range runFiles(t, checktest.Get("rewrites").Files) {
 		if strings.HasSuffix(r.File, "page.rtsx") {
 			got = append(got, fmt.Sprintf("%d:%d %s: %s", r.Line, r.Col, r.Code, r.Message))
 		}

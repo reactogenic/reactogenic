@@ -182,7 +182,10 @@ export const run = runner(() => {
     });
 
     it("an untitled rtsx document is served as .rtsx", async () => {
-      const text = "const n: number = 'x';\nexport const a = <div>{n}</div>;\nexport const b = <div><$Icon className=\"i\" { size }>{size}</$Icon></div>;\n";
+      // (A slot under a component: under `<div>` it would be an orphan, and
+      // the file would report that and nothing of TypeScript's.)
+      const text =
+        "const n: number = 'x';\nexport const a = <div>{n}</div>;\nexport const b = <Box><$Icon className=\"i\" { size }>{size}</$Icon></Box>;\nfunction Box(p: { $Icon?: unknown }) { return null; }\n";
       const document = await vscode.workspace.openTextDocument({ language: "rtsx", content: text });
       await vscode.window.showTextDocument(document, { preview: false });
       try {
@@ -289,25 +292,55 @@ export const run = runner(() => {
       // (The task's code is the text `TS2322`; the server's is the number.)
       await until("the task's problems to go", () => !vscode.languages.getDiagnostics(editor.document.uri).some((d) => code(d) === "TS2322"));
       assert.ok(vscode.languages.getDiagnostics(editor.document.uri).some((d) => code(d) === 2322));
+      // Each problem once: the server reports the task's three lines — the
+      // transpiler's and the reworded one under the same names — and no
+      // line of the task is left beside them. (Suggestions aside: the
+      // unused `count` is a hint, which `check` does not print.)
+      assert.deepEqual(
+        vscode.languages
+          .getDiagnostics(editor.document.uri)
+          .filter((d) => d.severity !== vscode.DiagnosticSeverity.Hint)
+          .map(problem)
+          .sort(),
+        [
+          "3:8 Error ts(2322): Type 'string' is not assignable to type 'number'.",
+          "6:15 Warning reactogenic(segment-children): Contents will be overwritten by the segment `intro`",
+          "8:9 Error reactogenic(undeclared-slot): `$Badge` is not declared in `Button`",
+        ],
+      );
       // And they go with the document.
       await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
       await until("the file's problems to go", () => vscode.languages.getDiagnostics(file("src/broken.rtsx")).length === 0);
     });
 
-    // TODO(RGP1-107): the server reports raw TypeScript errors today. With the
-    // reporting layer in its diagnostics path, this is what the editor shows.
-    it.skip("a slot-term diagnostic: undeclared-slot at the slot name", async () => {
+    // The reporting layer in the server's diagnostics path (ide.md,
+    // *Diagnostics*): what the editor shows is what `check` prints.
+    it("a slot-term diagnostic: undeclared-slot at the slot name", async () => {
       const editor = await open("src/broken.rtsx");
-      const diagnostic = await until("undeclared-slot", () =>
-        vscode.languages.getDiagnostics(editor.document.uri).find((d) => code(d) === "undeclared-slot"),
-      );
-      assert.equal(editor.document.getText(diagnostic.range), "$Badge");
-      assert.equal(where(diagnostic), "8:9");
-      assert.equal(diagnostic.message, "`$Badge` is not declared in `Button`");
-      assert.equal(diagnostic.severity, vscode.DiagnosticSeverity.Error);
-      // And the transpiler's own, with its severity.
-      const warning = vscode.languages.getDiagnostics(editor.document.uri).find((d) => code(d) === "segment-children");
-      assert.equal(warning?.severity, vscode.DiagnosticSeverity.Warning);
+      try {
+        const diagnostic = await until("undeclared-slot", () =>
+          vscode.languages.getDiagnostics(editor.document.uri).find((d) => code(d) === "undeclared-slot"),
+        );
+        assert.equal(editor.document.getText(diagnostic.range), "$Badge");
+        assert.equal(where(diagnostic), "8:9");
+        assert.equal(diagnostic.message, "`$Badge` is not declared in `Button`");
+        assert.equal(diagnostic.severity, vscode.DiagnosticSeverity.Error);
+        assert.equal(diagnostic.source, "reactogenic");
+        // And the transpiler's own, with its severity.
+        const warning = vscode.languages.getDiagnostics(editor.document.uri).find((d) => code(d) === "segment-children");
+        assert.ok(warning, "segment-children");
+        assert.equal(warning.severity, vscode.DiagnosticSeverity.Warning);
+        assert.equal(editor.document.getText(warning.range), "#intro");
+        // A suggestion of TypeScript's passes through with its tag: the
+        // unused name is faded, not underlined.
+        const unused = vscode.languages.getDiagnostics(editor.document.uri).find((d) => code(d) === 6133);
+        assert.ok(unused, "TS6133");
+        assert.equal(unused.severity, vscode.DiagnosticSeverity.Hint);
+        assert.deepEqual(unused.tags, [vscode.DiagnosticTag.Unnecessary]);
+        assert.equal(editor.document.getText(unused.range), "count");
+      } finally {
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+      }
     });
 
     // The "shown" branch runs today against a stand-in server: test/editor/transpiled.ts.

@@ -376,17 +376,20 @@ tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
 server only after migrating `check` — a bare server now comes first.
 
 **Patched upstream files** (about 130 lines planned; 265 after the review of
-102–105, with 106–108 still to add theirs; all in fast-moving packages):
+102–105; RGP1-107 adds 13 lines in three of them, the rest in new files; 108
+still to add its own; all in fast-moving packages):
 
 | File | Change |
 | --- | --- |
 | `module/resolver.go` | mapped extensions for extensionless imports |
 | `tsoptions/tsconfigparsing.go` | built-in mappers; user `.rtsx` entries dropped |
-| `project/project.go`, `session.go` | built-in mappers in inferred projects; a mapper host without `runExternalCode` |
+| `project/project.go`, `session.go` | built-in mappers in inferred projects; a mapper host without `runExternalCode`; a diagnostics refresh when a mapped document is opened or closed with a text that is not the file's on disk (upstream refreshes on its edits and on watched files) |
+| `project/projectcollectionbuilder.go` | the default project of a mapped file is its lister: the search goes on past a project that holds the file through an import only (upstream: the first that holds it) |
+| `project/mapped.go` (new) | the two rules above, as functions the patched lines call |
 | `project/compilerhost.go`, `contentmapper/host.go` | the file system to the transform; the directory listing in the cache key |
 | `contentmapper/transform.go`, `ast/ast.go` | `Extra` with the parsed file; module-ness |
 | `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
-| `ls/diagnostics.go` | the reporting hook |
+| `ls/host_diagnostics.go` (new) | the reporting hook: a mapped document's diagnostics from the host — asked for the program and the file, in place of `ls/diagnostics.go`'s path, which is not edited — and the LSP diagnostic made of each |
 | `ls/rename.go` | rename locations before write-back |
 | `ls/syntactic.go` (new) | document symbols, folding, selection ranges, closing tags on a source file |
 | `ls/symbols.go` | workspace symbols collected from the embedder's files only, before the cut to 256; slot params are not document symbols |
@@ -398,7 +401,7 @@ server only after migrating `check` — a bare server now comes first.
 | `ls/definition.go` | a mapped module reached by a non-relative specifier: the file's start |
 | `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files; the extension kept next to a built-in sibling, decided on the module's absolute path |
 | `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly; in generated text before the whole source, one that the mapper names (where a statement can go) is the source's start |
-| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename |
+| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename; `textDocument/diagnostic` of a mapped document answered by the embedder's `Diagnostics` |
 
 **Cost accepted:** the stripped binary grows about 45% with the language
 service linked in (19 → 28 MB, darwin-arm64); the patches above must be

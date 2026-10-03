@@ -51,37 +51,22 @@ func golden(t *testing.T, dir string, reports []Report) {
 // Each mistake once (ide.md, *Diagnostics*): the three projects whose output
 // the move to the mapped program changed — the overlay printed a line twice.
 func TestGoldenKnownDifferences(t *testing.T) {
-	for name, c := range map[string]struct {
-		files map[string]string
-		want  []string
-	}{
+	for name, want := range map[string][]string{
 		// An error inside a mounted segment. It was reported again under
 		// `intro.rtsx.tsx`, the alias the generated import resolved to: a
 		// second module.
-		"segment": {map[string]string{
-			"src/page.rtsx":  "export const page = <main><section #intro /></main>;\n",
-			"src/intro.rtsx": "export default function Intro() {\n  const n: number = \"x\";\n  return <p>{n}</p>;\n}\n",
-		}, []string{"src/intro.rtsx:2:9 TS2322"}},
+		"segment": {"src/intro.rtsx:2:9 TS2322"},
 		// An import that names the .rtsx file: the same.
-		"explicit-import": {map[string]string{
-			"src/main.tsx": "import { b } from \"./b.rtsx\";\nexport const a = b;\n",
-			"src/b.rtsx":   "export const b: number = \"x\";\n",
-		}, []string{"src/b.rtsx:1:14 TS2322"}},
+		"explicit-import": {"src/b.rtsx:1:14 TS2322"},
 		// An attachment with a fallback is emitted twice, as the branches of
 		// a ternary. `.nope` is an error in both, with a message per branch:
 		// reported once, from the first. `$Label` is possibly undefined in
 		// the fallback's branch only: that stays.
-		"attachment": {map[string]string{
-			"src/button.rtsx": `import type { Slot } from "@reactogenic/core";
-export function Button({ $Label }: { $Label?: Slot<{ title?: string; children?: string }> }) {
-  return <b slot={$Label} title={$Label.nope}>Button</b>;
-}
-`,
-		}, []string{"src/button.rtsx:3:34 TS18048", "src/button.rtsx:3:41 TS2339"}},
+		"attachment": {"src/button.rtsx:3:34 TS18048", "src/button.rtsx:3:41 TS2339"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if got := checkProject(t, c.files); strings.Join(got, "|") != strings.Join(c.want, "|") {
-				t.Errorf("got  %q\nwant %q", got, c.want)
+			if got := checkProject(t, name); strings.Join(got, "|") != strings.Join(want, "|") {
+				t.Errorf("got  %q\nwant %q", got, want)
 			}
 		})
 	}

@@ -330,15 +330,55 @@ file, it returns the reports for that file.
 A report carries its source range, severity, code, message, related
 information and — when it came from TS — the structured diagnostic.
 
-One difference between the hosts, TypeScript's own: `check` reports in
-`tsc`'s steps (diagnostics.md, step 3), a document's reports have none. While
-a `.ts` / `.tsx` file has a syntax error, or — in a project that emits
-declarations — next to a type error, the editor shows the type or declaration
-errors that `check` does not print yet.
+Two differences between the hosts, both TypeScript's own:
 
-In the server the layer sits where the diagnostic is still structured, before
-it becomes an LSP message. Diagnostics are pulled per open document; after a
-change to any file the server asks the client to pull again.
+- `check` reports in `tsc`'s steps (diagnostics.md, step 3), a document's
+  reports have none. While a `.ts` / `.tsx` file has a syntax error, or — in
+  a project that emits declarations — next to a type error, the editor shows
+  the type or declaration errors that `check` does not print yet.
+- TypeScript's style checks (`noUnusedLocals`, `noUnusedParameters`, …) are
+  errors in `check` and warnings in the editor, as in VS Code's own
+  TypeScript: the user's `reportStyleChecksAsWarnings`, on by default.
+
+(And the builds are strict where the editor is tolerant: a file with a syntax
+error — *Tolerance*.)
+
+In the server the layer sits where the diagnostic is still structured — the
+fork's `Embedder.Diagnostics`, asked for the program and the file in place of
+TS's own path, which would map each diagnostic back by position and gather
+those in generated code at the top of the file. The server makes the LSP
+diagnostic from the report:
+
+| A report | As an LSP diagnostic |
+| --- | --- |
+| the transpiler's, a cross-file rule's, a TS error reworded | `code`: its name (`"undeclared-slot"`); `source`: `reactogenic` |
+| a TS diagnostic that is not reworded; a syntax error of the source | `code`: TS's number (`2322`); `source`: `ts` — what TS's quick fixes match on |
+| a warning | a warning |
+| a TS suggestion — an unused name, a deprecated one | a hint with its tag (faded, struck through): passed through |
+| a span of no length | the character after it, a line break too (both of a CRLF); empty at the end of the text |
+| related information | a location in the source of the file it names — an `.rtsx` file's, mapped; without a file, the diagnostic's own range |
+
+`validate.enable: false` (TypeScript's setting) turns an `.rtsx` document's
+diagnostics off, the transpiler's with TypeScript's.
+
+Diagnostics are pulled per open document. A client pulls the document that
+changed; the others follow because the server asks it to pull again
+(`workspace/diagnostic/refresh`) after:
+
+- an edit of any open `.rtsx` document;
+- a watched file created, changed or deleted — a `.ts` file, a segment file,
+  a tsconfig;
+- an `.rtsx` document opened or closed with a text that is not the file's on
+  disk: a file never saved, a buffer the editor restored, one closed without
+  saving. Opening a saved file asks for nothing.
+
+**A document's project is its lister**, as in `check` (diagnostics.md,
+*References*): of the projects that hold an `.rtsx` file, the one whose
+tsconfig lists it — the first, when several do — not the first that reaches
+it through an import, which is TypeScript's choice for its own files. With a
+test project referenced before the app it tests, a file of the app is checked
+under the app's options, whichever document was opened first; hover and
+completion are that project's too.
 
 Project-wide errors stay with `reactogenic check`. The extension contributes
 the task *reactogenic: check* — the binary the server runs, `check
@@ -706,7 +746,7 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | Layer | Test |
 | --- | --- |
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; the output of a source that parses is TSX, or marked as holding a construct as written; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
-| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent |
+| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent. Diagnostics: every project of `check`'s goldens that has no syntax error, and the Vite test app — both hosts run on one directory, and each `.rtsx` document's pulled errors and warnings are `check`'s lines for the file (severity, code, message, position, related locations); each row of the table of *Diagnostics*; the tolerance rules as pulled; a refresh request and the changed answer after each kind of change, with no edit to the document — another document edited, opened or closed unsaved, a `.ts` file, a tsconfig, a segment file and the `.tsx` sibling created and deleted, a segment's content changed (`segment-self`) |
 | reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked — code left out, and a construct left as written; a file with a syntax error in each mode; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside), declaration errors of a project that emits included; a report's range is source text; the merge rule, case by case, and an error in `&&name` through the whole layer |
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, references in either order, a missing reference, an `include` that names extensions, a project that emits declarations, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a syntax error in an `.rtsx` and in a `.tsx` file, an unlowered construct, a warning; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |

@@ -34,7 +34,25 @@ func Project(t *testing.T, files map[string]string) string {
 	for name, text := range files {
 		all[name] = text
 	}
-	for name, text := range all {
+	write(t, dir, all)
+	return filepath.ToSlash(dir)
+}
+
+// Write writes exactly these files into a fresh directory and returns it: a
+// project that is given whole, with nothing added.
+func Write(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, files)
+	return filepath.ToSlash(dir)
+}
+
+func write(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, text := range files {
 		if text == "" {
 			continue
 		}
@@ -46,7 +64,6 @@ func Project(t *testing.T, files map[string]string) string {
 			t.Fatal(err)
 		}
 	}
-	return filepath.ToSlash(dir)
 }
 
 // Core is a stub of @reactogenic/core's types, as files of a project.

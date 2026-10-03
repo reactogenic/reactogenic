@@ -12,8 +12,9 @@ import (
 // One mistake (TS2322 on `n`); the rest is JSX and an rtsx slot element with
 // params, which plain TypeScript does not parse.
 const untitled = `const n: number = "x";
+function Box(p: { $Icon?: unknown }) { return null; }
 export const a = <div>{n}</div>;
-export const b = <div><$Icon className="i" { size }>{size}</$Icon></div>;
+export const b = <Box><$Icon className="i" { size }>{size}</$Icon></Box>;
 `
 
 // ide.md, *VS Code extension* → Client: the server is attached to untitled

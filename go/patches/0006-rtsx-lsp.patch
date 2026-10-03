@@ -200,6 +200,162 @@ index 1c43709..bd9fbdd 100644
  		sourceFile,
  		newImportFromPath,
  		importLiteral.Text(),
+diff --git a/internal/ls/host_diagnostics.go b/internal/ls/host_diagnostics.go
+new file mode 100644
+index 0000000..d2c8013
+--- /dev/null
++++ b/internal/ls/host_diagnostics.go
+@@ -0,0 +1,150 @@
++// Reactogenic: the diagnostics of a content-mapped document, from the host
++// of the built-in mapper. Not part of upstream: added by
++// go/patches/0006-rtsx-lsp.patch.
++
++package ls
++
++import (
++	"context"
++	"unicode/utf8"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/compiler"
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++)
++
++// HostDiagnostic is one diagnostic of a content-mapped file as its host
++// reports it: in the text the author wrote, in the host's words.
++type HostDiagnostic struct {
++	// Pos and End are byte offsets in the file's original text.
++	Pos, End int
++	// Code and Source name a diagnostic that is the host's own, or one of
++	// the compiler's that the host reworded. With Code empty the diagnostic
++	// has the compiler's Number as its code and the source "ts", which the
++	// compiler's quick fixes match on: TS's own, or — without TS — that of
++	// a syntax error the host's parse of the original text found.
++	Code, Source string
++	Number       int32
++	// Severity is that of a diagnostic that is not made from one of the
++	// compiler's (TS nil).
++	Severity lsproto.DiagnosticSeverity
++	Message  string
++	Related  []HostRelatedInformation
++	// TS is the compiler's diagnostic this one was made from; nil for the
++	// host's own. Its severity (the user's reportStyleChecksAsWarnings
++	// included) and its tags — unnecessary, deprecated — are kept.
++	TS *ast.Diagnostic
++}
++
++// HostRelatedInformation is a related location: byte offsets in the
++// original text of FileName. With FileName empty it has no place of its
++// own, and is shown at its diagnostic's.
++type HostRelatedInformation struct {
++	FileName string
++	Pos, End int
++	Message  string
++}
++
++// HostDiagnostics returns every diagnostic of a content-mapped file of
++// program: the complete list, the compiler's included. It is given the
++// program rather than the compiler's diagnostics because it decides which
++// of them are asked for at all — never the syntactic ones of a virtual text.
++type HostDiagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []HostDiagnostic
++
++// ProvideHostDiagnostics answers textDocument/diagnostic for a content-mapped
++// document with the host's diagnostics, in place of ProvideDiagnostics: the
++// compiler's diagnostics reach the host still structured — before
++// toLSPDiagnostics would map them, and aggregate those in synthesized code
++// at the top of the file. ok is false for a document that is not content
++// mapped: ProvideDiagnostics answers for it.
++func (l *LanguageService) ProvideHostDiagnostics(ctx context.Context, uri lsproto.DocumentUri, provide HostDiagnostics) (response lsproto.DocumentDiagnosticResponse, ok bool) {
++	program, file := l.getProgramAndFile(uri)
++	if file.SpanMap() == nil {
++		return response, false
++	}
++	items := []*lsproto.Diagnostic{}
++	if !l.UserPreferences().EnableValidation.IsFalse() {
++		document := hostScript{fileName: file.OriginalFileName(), text: file.OriginalText()}
++		styleChecksAsWarnings := l.UserPreferences().ReportStyleChecksAsWarnings.IsTrue()
++		relatedInformation := lsproto.GetClientCapabilities(ctx).TextDocument.Diagnostic.RelatedInformation
++		for _, d := range provide(ctx, program, file) {
++			items = append(items, l.hostDiagnosticToLSP(ctx, program, document, d, styleChecksAsWarnings, relatedInformation))
++		}
++	}
++	return lsproto.RelatedFullDocumentDiagnosticReportOrUnchangedDocumentDiagnosticReport{
++		FullDocumentDiagnosticReport: &lsproto.RelatedFullDocumentDiagnosticReport{Items: items},
++	}, true
++}
++
++func (l *LanguageService) hostDiagnosticToLSP(ctx context.Context, program *compiler.Program, document hostScript, d HostDiagnostic, styleChecksAsWarnings, relatedInformation bool) *lsproto.Diagnostic {
++	result := &lsproto.Diagnostic{Severity: &d.Severity}
++	if d.TS != nil {
++		// The compiler's diagnostic, converted as upstream converts it — its
++		// number as the code, the source "ts", its severity and tags — and
++		// then placed and worded by the host.
++		result = lsconv.DiagnosticToLSPPull(ctx, l.converters, d.TS, styleChecksAsWarnings)
++		result.RelatedInformation = nil
++	}
++	if d.Code != "" {
++		result.Code = &lsproto.IntegerOrString{String: &d.Code}
++		result.Source = &d.Source
++	} else {
++		result.Code = &lsproto.IntegerOrString{Integer: &d.Number}
++		result.Source = new("ts")
++	}
++	result.Message = lsproto.StringOrMarkupContent{String: &d.Message}
++	result.Range = l.hostRange(document, d.Pos, d.End)
++	if relatedInformation && len(d.Related) > 0 {
++		related := make([]*lsproto.DiagnosticRelatedInformation, 0, len(d.Related))
++		for _, r := range d.Related {
++			location := lsproto.Location{Uri: lsconv.FileNameToDocumentURI(document.fileName), Range: result.Range}
++			if r.FileName != "" {
++				location = lsproto.Location{Uri: lsconv.FileNameToDocumentURI(r.FileName)}
++				if file := program.GetSourceFile(r.FileName); file != nil {
++					script := hostScript{fileName: file.OriginalFileName(), text: file.Text()}
++					if file.SpanMap() != nil {
++						script.text = file.OriginalText()
++					}
++					location.Range, _ = l.converters.ToLSPRange(script, core.NewTextRange(r.Pos, r.End))
++				}
++			}
++			related = append(related, &lsproto.DiagnosticRelatedInformation{Location: location, Message: r.Message})
++		}
++		result.RelatedInformation = &related
++	}
++	return result
++}
++
++// hostRange is the range of a span of the document's text. A span of no
++// length covers the character after it — also a line break — so that every
++// client has something to underline; at the end of the text it stays empty.
++func (l *LanguageService) hostRange(document hostScript, pos, end int) lsproto.Range {
++	pos = max(0, min(pos, len(document.text)))
++	end = max(pos, min(end, len(document.text)))
++	if end == pos && pos < len(document.text) {
++		_, size := utf8.DecodeRuneInString(document.text[pos:])
++		end = pos + size
++		if document.text[pos] == '\r' && end < len(document.text) && document.text[end] == '\n' {
++			end++
++		}
++	}
++	lspRange, _ := l.converters.ToLSPRange(document, core.NewTextRange(pos, end))
++	return lspRange
++}
++
++// hostScript is the text a host's positions are in — the original text of
++// a content-mapped file, or the text of any other file — as a Script: its
++// offsets convert to lines and characters without a span map.
++type hostScript struct {
++	fileName string
++	text     string
++}
++
++func (s hostScript) FileName() string         { return s.fileName }
++func (s hostScript) OriginalFileName() string { return s.fileName }
++func (s hostScript) Text() string             { return s.text }
++func (s hostScript) OriginalText() string     { return s.text }
++func (hostScript) SpanMap() *spanmap.SpanMap  { return nil }
 diff --git a/internal/ls/inlay_hints.go b/internal/ls/inlay_hints.go
 index 0864f8d..5697fb0 100644
 --- a/internal/ls/inlay_hints.go
@@ -418,10 +574,10 @@ index 0000000..104d177
 +}
 diff --git a/internal/lsp/embedder.go b/internal/lsp/embedder.go
 new file mode 100644
-index 0000000..f9fa786
+index 0000000..df3475f
 --- /dev/null
 +++ b/internal/lsp/embedder.go
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,109 @@
 +// Reactogenic: hooks for a host that embeds this server with a built-in
 +// content mapper. Not part of upstream: added by go/patches/0006-rtsx-lsp.patch.
 +
@@ -455,6 +611,20 @@ index 0000000..f9fa786
 +	//     a request that renames several files, or a folder, is answered
 +	//     right for each.
 +	Owns func(fileName string) bool
++	// Diagnostics returns the diagnostics of a content-mapped document: all
++	// of them, the compiler's too, which the host takes from the program
++	// while they are structured — to drop, place and reword them — and
++	// returns in its own words (ls.ProvideHostDiagnostics). Without it such
++	// a document gets the compiler's diagnostics, mapped back by position.
++	Diagnostics ls.HostDiagnostics
++}
++
++// hostDiagnostics is Diagnostics; nil without an embedder.
++func (e *Embedder) hostDiagnostics() ls.HostDiagnostics {
++	if e == nil {
++		return nil
++	}
++	return e.Diagnostics
 +}
 +
 +// symbolFiles is the files workspace symbols are collected from; nil: all.
@@ -518,7 +688,7 @@ index 0000000..f9fa786
 +	}
 +}
 diff --git a/internal/lsp/server.go b/internal/lsp/server.go
-index 1d32d1e..363017c 100644
+index 1d32d1e..a4791eb 100644
 --- a/internal/lsp/server.go
 +++ b/internal/lsp/server.go
 @@ -55,6 +55,7 @@ type ServerOptions struct {
@@ -585,7 +755,19 @@ index 1d32d1e..363017c 100644
  		return fmt.Errorf("failed to register configuration change watcher: %w", err)
  	}
  
-@@ -1991,7 +1998,7 @@ func (s *Server) handleWillRenameFilesWorker(ctx context.Context, params *lsprot
+@@ -1848,6 +1855,11 @@ func (s *Server) handleSetLogVerbosity(_ context.Context, params *lsproto.SetLog
+ 
+ func (s *Server) handleDocumentDiagnostic(ctx context.Context, languageService *ls.LanguageService, params *lsproto.DocumentDiagnosticParams) (lsproto.DocumentDiagnosticResponse, error) {
+ 	ctx = core.WithCheckerLifetime(ctx, core.CheckerLifetimeDiagnostics)
++	if provide := s.embedder.hostDiagnostics(); provide != nil { // rtsx: a content-mapped document's are the host's
++		if response, ok := languageService.ProvideHostDiagnostics(ctx, params.TextDocument.Uri, provide); ok {
++			return response, nil
++		}
++	}
+ 	if s.flakeLogging == lsproto.DiagnosticFlakeLogLevelOff {
+ 		return languageService.ProvideDiagnostics(ctx, params.TextDocument.Uri)
+ 	}
+@@ -1991,7 +2003,7 @@ func (s *Server) handleWillRenameFilesWorker(ctx context.Context, params *lsprot
  
  	for _, languageService := range services {
  		for _, file := range params.Files {
@@ -594,7 +776,7 @@ index 1d32d1e..363017c 100644
  			for _, change := range changes {
  				if change.RenameFile != nil {
  					if !seenRenames[change.RenameFile.OldUri] {
-@@ -2164,6 +2171,7 @@ func (s *Server) handleWorkspaceSymbol(ctx context.Context, params *lsproto.Work
+@@ -2164,6 +2176,7 @@ func (s *Server) handleWorkspaceSymbol(ctx context.Context, params *lsproto.Work
  			snapshot.Converters(),
  			snapshot.UserPreferences(),
  			params.Query,
@@ -604,10 +786,10 @@ index 1d32d1e..363017c 100644
  	if params.TextDocument != nil && s.session.Config().WorkspaceSymbolsScope == lsutil.WorkspaceSymbolsScopeCurrentProject {
 diff --git a/rtsx/server/server.go b/rtsx/server/server.go
 new file mode 100644
-index 0000000..ff4f7c5
+index 0000000..a720788
 --- /dev/null
 +++ b/rtsx/server/server.go
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,128 @@
 +// Package server runs the language server with whatever content mapper is
 +// registered (rtsx.RegisterMapper) built in (specs/phase01/ide.md,
 +// *reactogenic lsp*). It is its own package so that only a binary that
@@ -621,8 +803,11 @@ index 0000000..ff4f7c5
 +	"strings"
 +	"time"
 +
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
 +	"github.com/microsoft/TypeScript/tsc/internal/bundled"
++	"github.com/microsoft/TypeScript/tsc/internal/compiler"
 +	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
++	"github.com/microsoft/TypeScript/tsc/internal/ls"
 +	"github.com/microsoft/TypeScript/tsc/internal/lsp"
 +	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
 +	"github.com/microsoft/TypeScript/tsc/internal/tspath"
@@ -641,7 +826,34 @@ index 0000000..ff4f7c5
 +	// client's initialize: the process whose end ends the server (upstream's
 +	// watchdog hook; the watching itself is the host's).
 +	SetParentProcessID func(pid int)
++	// Diagnostics returns every diagnostic of a mapped file of program, as
++	// its author reads them (specs/phase01/ide.md, *Diagnostics*): the
++	// answer to textDocument/diagnostic for that document. It is asked for
++	// the program and the file, so the compiler's diagnostics are still
++	// structured where it takes them. nil: the compiler's, mapped back by
++	// position.
++	Diagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []Diagnostic
 +}
++
++type (
++	// Diagnostic is one diagnostic of a mapped document: byte offsets in
++	// its source, a name as its code — or, with TS set and no Code, the
++	// compiler's number and the source "ts", which its quick fixes match
++	// on. The server makes the LSP diagnostic: the range (one character
++	// for a span of no length), the tags and severity of TS, the related
++	// locations.
++	Diagnostic = ls.HostDiagnostic
++	// RelatedInformation is a related location of a Diagnostic.
++	RelatedInformation = ls.HostRelatedInformation
++)
++
++// The severities of a Diagnostic that is not one of the compiler's.
++const (
++	SeverityError       = lsproto.DiagnosticSeverityError
++	SeverityWarning     = lsproto.DiagnosticSeverityWarning
++	SeverityInformation = lsproto.DiagnosticSeverityInformation
++	SeverityHint        = lsproto.DiagnosticSeverityHint
++)
 +
 +// Run serves LSP until the client exits, In ends or ctx is done. Nothing
 +// external runs: no content mapper process, no automatic type acquisition.
@@ -659,7 +871,7 @@ index 0000000..ff4f7c5
 +		},
 +		ProgressDelay:      250 * time.Millisecond,
 +		SetParentProcessID: o.SetParentProcessID,
-+		Embedder:           &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns},
++		Embedder:           &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns, Diagnostics: o.Diagnostics},
 +	})
 +	err := s.Run(ctx)
 +	if errors.Is(err, context.Canceled) && ctx.Err() == nil {

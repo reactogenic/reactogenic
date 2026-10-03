@@ -1000,7 +1000,72 @@ per tsconfig plus the layer.
   tsconfig with a `contentMappers` entry changes nothing.
 - Depends on: 103, 105.
 
-### RGP1-107 — Diagnostics in the server · M
+### RGP1-107 — Diagnostics in the server · M · done
+A pull of an `.rtsx` document is answered by the reporting layer:
+`lsp.Embedder.Diagnostics` (patch 0006) is asked for the program and the
+file in place of the fork's own path, `internal/lsp/diagnostics.go` returns
+`report.File`'s reports, and the fork makes the LSP diagnostics of them
+(`ls/host_diagnostics.go`, a new file; `ls/diagnostics.go` is not edited).
+The hook takes the program, not a list of TS's diagnostics: the layer asks
+for them itself, as `check` does, and never for a virtual text's syntax
+errors. ide.md, *Diagnostics*, has the table of what a report becomes.
+- *Equality with `check`* (`TestEqualsCheck`): the projects of check's
+  goldens are data now (`internal/checktest`, 36 projects; check's tests
+  read them by name, the goldens are byte for byte what they were). Both
+  hosts run in one process on one directory: 34 projects and the Vite test
+  app, 58 documents, 82 lines — severity, code, message, line and column,
+  and the related lines under them. The two projects with a syntax error
+  are left out and pinned in `TestTolerance` (the editor shows the type
+  error that `check`, strict or in `tsc`'s steps, does not print).
+- *Found by it*: with a test project referenced before the app it tests
+  (golden `references-order`), the server checked `src/page.rtsx` under the
+  tests' options — upstream's default project is the first that holds the
+  file, through an import too — and showed no error where `check` prints
+  two, or two where it prints none. A mapped file's default project is now
+  its lister (patch 0004, one line in `project/projectcollectionbuilder.go`;
+  ide.md, *A document's project is its lister*). `TestListerIsTheDocumentsProject`:
+  either document opened first.
+- *Refresh*: measured before any change — the fork already asks for a pull
+  after an edit of a mapped document and after a watched file (a `.ts`
+  file, a tsconfig, a sibling created or deleted). Missing: a mapped
+  document opened or closed with a text that is not the file's on disk — a
+  file never saved, a buffer closed without saving. Added (patch 0004,
+  seven lines in `project/session.go`); opening a saved file still asks for
+  nothing.
+- *Siblings* (`TestSiblings`): the probes and the cache key of 103 hold.
+  `intro.rtsx` created, deleted, and its content changed (`segment-self`
+  through it) — on disk and as a buffer never saved — and `page.tsx` created
+  and deleted (`ambiguous-module`): `page.rtsx`'s pulled diagnostics were
+  right in every case before any change; only the refresh request for the
+  unsaved buffer was not sent.
+- *Tolerance as pulled* (`TestTolerance`, `TestInternalDiagnostic`): a
+  syntax error once, the source parse's; no TS diagnostic of a stopped file
+  and its importer still checked; `internal` on the first line when the
+  transform fails, hover still answering.
+- *The extension*: the skipped test runs, and "an open document's problems
+  come from the server" now holds the whole list — the task's three lines,
+  each once. The untitled document of both suites had its slot under
+  `<div>`: an orphan, which stops the file — it is under a component now.
+  `pnpm --filter rtsx test:editor trusted`, once: 22 pass, none skipped
+  (VS Code 1.140.0, darwin-arm64).
+- *Left*: TypeScript's style checks are warnings in the editor and errors in
+  `check` (the user's `reportStyleChecksAsWarnings`; ide.md). A related
+  location in one of TypeScript's lib files is named as the fork names its
+  bundled libs (`bundled:///libs/lib.es2015.promise.d.ts`), which an editor
+  cannot open. The lister rule is in the search an opened document goes
+  through; a file that is not open keeps upstream's default project (it
+  decides nothing a pull shows). Not run: the other three editor suites,
+  the suite against a `.vsix`, Linux, Windows.
+- *Found, older than this task, not fixed*: `TestUntitledDocument`, the
+  document named `untitled:/tmp/new.rtsx`, fails now and then under the race
+  detector at its last step — closed, then opened again under the same name
+  as TypeScript, the pull is answered "no project found for URI". Five of
+  28 race-instrumented runs of that subtest; one of 12 with this task's
+  three changes to the server switched off; never seen without `-race`.
+  Not traced to the end; the likely cause: the closed document was served
+  under its alias (`untitled:tmp/new.rtsx`), the new one is not, the fork
+  reads both as one path, and when the close and the open reach it in one
+  batch it handles them per URI, in map order — the close may come last.
 - The reporting layer behind a hook in the server's diagnostics path, before
   synthesized diagnostics are aggregated; it produces the LSP diagnostics
   itself (string codes, severities). A refresh request after a change to any
@@ -1068,7 +1133,7 @@ Enter. `.vscodeignore` and the manifest's commands, task and matcher are
   nothing.
 - Depends on: 100.
 
-### RGP1-110 — VS Code extension · L · done (the slot-term diagnostic test waits for 107; *Show transpiled TSX* for 108)
+### RGP1-110 — VS Code extension · L · done (*Show transpiled TSX* waits for 108)
 Built ahead of 107 and 108, against the server of 105. `src/` (eight files,
 one 450 KiB CommonJS bundle): the client over stdio, attached to `rtsx` on
 `file` and `untitled`; the resolver of ide.md's table, without a `vscode`
@@ -1107,8 +1172,8 @@ tsgo's `LICENSE` and `NOTICE`.
 suite launches VS Code itself; after a snippet inserted at the cursor,
 `editor.selection` in the extension host lags, so the test types the next
 character instead.
-*Left*: the skipped test `TODO(RGP1-107)` (the server reports TS2322 at
-`$Badge` today, not `undeclared-slot`); the "shown" branch of *Show
+*Left*: the skipped test `TODO(RGP1-107)` (the server reported TS2322 at
+`$Badge`, not `undeclared-slot` — it runs since 107); the "shown" branch of *Show
 transpiled TSX*, never run (108); the `vscode` CI job and Linux under `xvfb`
 were never run — nothing is pushed; the other five platform `.vsix` were not
 built; the Windows copy was not run on Windows; the restart on a trust grant
