@@ -13,6 +13,7 @@ const oniguruma = require('vscode-oniguruma');
 
 export const RTSX = SCOPE_NAME;
 export const TSX = 'source.tsx';
+export const MARKDOWN = 'text.html.markdown';
 export const repoRoot = path.resolve(packageRoot, '../..');
 
 const onigLib = oniguruma
@@ -26,6 +27,7 @@ const FILES = {
   [RTSX]: 'syntaxes/rtsx.tmLanguage.json',
   [TSX]: 'grammar/upstream/TypeScriptReact.tmLanguage.json', // the unmodified TSX grammar
   'markdown.rtsx.codeblock': 'syntaxes/rtsx.markdown.tmLanguage.json',
+  [MARKDOWN]: 'grammar/upstream/markdown/markdown.tmLanguage.json', // VS Code's, unmodified
 };
 
 /**

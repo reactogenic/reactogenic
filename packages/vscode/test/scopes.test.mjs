@@ -131,7 +131,82 @@ describe('slot params', () => {
       [' the item', 1, 'comment.line.double-slash.tsx'], ['item', 1, PARAM]]],
     ['multi-line, a comment after the brace', 'const a = <Each items { // the item\n  item,\n}>x</Each>;', [['item', 1, PARAM]]],
     ['multi-line, empty', 'const a = <B><$I {\n}>x</$I></B>;', [['x', 1, CHILDREN]]],
+    // The decision waits for the line the comment closes on, as for a spread.
+    ['multi-line, a block comment left open after the brace', 'const a = <Each items {/* the\n item */ item }>x</Each>;', [
+      ['item', 1, PARAM], ['item', 1, PARAMS], [' item ', 1, 'comment.block.tsx']]],
   ]);
+
+  // A `{` that ends its line is TSX's `{…}` until a later line decides, so the
+  // braces of multi-line params keep TSX's scopes; only what is inside is params.
+  test('multi-line params keep the brace scopes of TSX', () => {
+    const brace = (source, text) => tokenize(rtsx, source).tokens.find((t) => t.text === text).scopes;
+    const multi = 'const a = <Each items {\n  item,\n}>x</Each>;';
+    for (const [text, scope] of [['{', 'punctuation.section.embedded.begin.tsx'], ['}', 'punctuation.section.embedded.end.tsx']]) {
+      expect(brace(multi, text)).toContain(scope);
+      expect(brace(multi, text)).not.toContain(PARAMS);
+    }
+    expect(brace(multi, 'item')).toEqual(expect.arrayContaining([EXPR, PARAMS, PARAM]));
+    const single = 'const a = <Each items { item }>x</Each>;';
+    for (const text of ['{', '}']) {
+      expect(brace(single, text)).toEqual(expect.arrayContaining([PARAMS, 'punctuation.definition.binding-pattern.object.tsx']));
+    }
+    expect(brace(single, 'item')).not.toContain(EXPR);
+  });
+});
+
+// No whitespace is needed between two forms — the transpiler reads `items{ item }`
+// and `value&size` as two — and while an attribute, an arg or a segment root is
+// typed in front of what the tag already holds, there is none.
+describe('a name directly before {, & or #', () => {
+  cases([
+    ['a bare attribute before an arg', 'const a = <b slot={$X} value&size>t</b>;', [['value', 1, ATTR], ['&', 1, SIGIL], ['size', 1, ARG], ['t', 1, CHILDREN]]],
+    ['a bare attribute before a segment root', 'const a = <section hidden#seg>t</section>;', [['hidden', 1, ATTR], ['seg', 1, SEGMENT], ['t', 1, CHILDREN]]],
+    ['an arg before an arg', 'const a = <b slot={$X} &size&&v={1}&w/>;', [['size', 1, ARG], ['&&', 1, SIGIL], ['v', 1, ARG], ['w', 1, ARG]]],
+    ['a segment root and an arg, both orders', 'const a = <i><b slot={$X} #seg&x>t</b><b slot={$X} &x#seg /></i>;', [
+      ['seg', 1, SEGMENT], ['x', 1, ARG], ['x', 2, ARG], ['seg', 2, SEGMENT], ['t', 1, CHILDREN]]],
+    ['a bare attribute before params', 'const a = <Each items{ item }>x</Each>;', [['items', 1, ATTR], ['item', 1, PARAM], ['x', 1, CHILDREN]]],
+    ['a namespaced attribute before params', 'const a = <A ns:x{ item }>t</A>;', [
+      ['ns', 1, 'entity.other.attribute-name.namespace.tsx'], ['x', 1, ATTR], ['item', 1, PARAM]]],
+    ['a bare attribute before multi-line params', 'const a = <Each items{\n  item\n}>x</Each>;', [['items', 1, ATTR], ['item', 1, PARAM]]],
+    ['an arg before params', 'const a = <b slot={$X} &size{ x }>t</b>;', [['&', 1, SIGIL], ['size', 1, ARG], ['x', 1, PARAM], ['t', 1, CHILDREN]]],
+    ['an && arg before params', 'const a = <b slot={$X} &&size{ x }>t</b>;', [['&&', 1, SIGIL], ['size', 1, ARG], ['x', 1, PARAM]]],
+    ['a segment root before params', 'const a = <S #seg{ x }>t</S>;', [['seg', 1, SEGMENT], ['x', 1, PARAM], ['t', 1, CHILDREN]]],
+    ['& without a name before params', 'const a = <Each items &{ item }>x</Each>;', [['&', 1, SIGIL], ['item', 1, PARAM], ['x', 1, CHILDREN]]],
+    ['&& without a name before params', 'const a = <Each items &&{ item }>x</Each>;', [['&&', 1, SIGIL], ['item', 1, PARAM]]],
+    ['# without a name before params', 'const a = <Each items #{ item }>x</Each>;', [['#', 1, SEGMENT], ['item', 1, PARAM], ['x', 1, CHILDREN]]],
+    // Valid TSX that the TSX grammar derails on: see tsx-equality.test.mjs.
+    ['a bare attribute before a spread', 'const a = <A x{...p}>t</A>;', [['x', 1, ATTR], ['p', 1, EXPR, PARAMS], ['t', 1, CHILDREN]]],
+    ['an arg, and a sigil without a name, before a spread', 'const a = <i><b slot={$X} &size{...p}>t</b><b slot={$X} &{...p} /></i>;', [
+      ['size', 1, ARG], ['p', 1, EXPR, PARAMS], ['&', 2, SIGIL], ['p', 2, EXPR, PARAMS], ['t', 1, CHILDREN]]],
+    ['a segment root before a spread', 'const a = <S #seg{...p} />;', [['seg', 1, SEGMENT], ['p', 1, EXPR, PARAMS]]],
+  ]);
+
+  // Not valid .rtsx: the sigil's part is illegal, the params are still params.
+  cases([
+    ['a namespaced arg before params', 'const a = <b slot={$X} &a:b{ x }>t</b>;', [['x', 1, PARAM], ['t', 1, CHILDREN]], ['&a:b']],
+    ['a segment that starts with a digit, before params', 'const a = <b #404{ x }>t</b>;', [['x', 1, PARAM], ['t', 1, CHILDREN]], ['#404']],
+    // A sigil needs its name before the next sigil: these stay illegal as a whole.
+    ['a sigil directly before a sigil', 'const a = <i><b slot={$X} &#seg>t</b><b ##x /><b &&&x /></i>;', [['t', 1, CHILDREN]], ['&#seg', '##x', '&&&x']],
+  ]);
+
+  // Every keystroke of typing a form in front of what the tag already holds.
+  const hosts = {
+    params: 'const a = <b slot={$X} ▮{ x }>t</b>;',
+    'a spread': 'const a = <b slot={$X} ▮{...rest}>t</b>;',
+    'a string-valued attribute': 'const a = <b slot={$X} ▮className="c">t</b>;',
+    'an arg': 'const a = <b slot={$X} ▮&&v={1}>t</b>;',
+    'a segment root': 'const a = <b slot={$X} ▮#about-us>t</b>;',
+  };
+  const typed = ['&size', '&&size', '#seg', 'value'];
+  const table = Object.entries(hosts).flatMap(([host, source]) => typed.map((text) => [text, host, source]));
+  test.each(table)('typing %s in front of %s never derails', (text, _host, source) => {
+    for (let i = 1; i <= text.length; i++) {
+      const state = source.replace('▮', text.slice(0, i));
+      const { tokens } = tokenize(rtsx, state);
+      const problems = run(rtsx, state, [['t', 1, CHILDREN]], tokens.filter(isInvalid).map((t) => t.text));
+      expect(problems, state).toEqual([]);
+    }
+  });
 });
 
 describe('segment roots', () => {
@@ -190,6 +265,10 @@ describe('what stays TSX', () => {
     ['a value after two spaces', 'const a = <B x=  {y} />;', [['y', 1, EXPR, PARAMS]]],
     ['a value after a line comment that ends in a quote', 'const a = <X a= // it\'s "q"\n  {y} b />;', [['y', 1, EXPR, PARAMS], ['b', 1, ATTR]]],
     ['a value after a line comment that ends in >', 'const a = <X a= // a -> b>\n  {y} b />;', [['y', 1, EXPR, PARAMS], ['b', 1, ATTR]]],
+    ['a value after a comment line that ends in a quote', 'const a = <X a=\n  // it\'s "q"\n  {y} b />;', [['y', 1, EXPR, PARAMS], ['b', 1, ATTR]]],
+    ['a value after two comment lines, } and >', 'const a = <X a= // {c}\n\t// a -> b>\n\t{y} b />;', [['y', 1, EXPR, PARAMS], ['b', 1, ATTR]]],
+    ['a spread after a block comment left open on the line of {', 'const a = <div {/* a\n b */ ...props} c />;', [
+      ['props', 1, EXPR, PARAMS], ['props', 1, READ, PARAM], ['c', 1, ATTR]]],
     ['a value after a block comment', 'const a = <X a=/* " */{y} b />;', [['y', 1, EXPR, PARAMS], ['b', 1, ATTR]]],
     ['&& in an expression is the logical operator', 'const a = <b x={p &&q} y={p&&q}>{p &&q}</b>;', [
       ['&&', 1, 'keyword.operator.logical.tsx'], ['&&', 2, 'keyword.operator.logical.tsx'], ['&&', 3, 'keyword.operator.logical.tsx']]],

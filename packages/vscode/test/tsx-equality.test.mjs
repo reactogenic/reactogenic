@@ -51,6 +51,24 @@ const SNIPPETS = [
   'const a = <A x= // it\'s "q"\n  {y} z />;',
   'const a = <A x= // a -> b>\n  {y} z />;',
   'const a = <A x= /* c */ {y} z=/* " */"s" />;',
+  // A comment-only line between `=` and the value, ending in what ends a value.
+  'const a = <A x=\n  // it\'s "q"\n  {y} z />;',
+  'const a = <A x=\n  // see <Foo>\n  {y} z />;',
+  'const a = <A x=\n  // {y}\n  {y} z />;',
+  'const a = <A x=\n\t// {y}\n\t{y} z />;',
+  'const a = <A x=\n// {y}\n{y} z />;',
+  'const a = <A x= // c\n  // d"\n  {y} z />;',
+  'const a = <A x=\n  // a"\n\n  // b>\n  {y} z />;',
+  'const a = <A x=\n  // \'q\'\n  "s" z />;',
+  'const a = <A x=\n  /* a" */ // b>\n  {y} z />;',
+  'const a = <A x=\n  /* a\n  b" */\n  {y} z />;',
+  // A block comment left open on the line of a spread's `{`.
+  'const a = <div {/* a\n b */ ...props} />;',
+  'const a = <div {/* a\n b */\n ...props} id="x" />;',
+  'const a = <div { /* a */ /* b\n c */ ...props} />;',
+  'const a = <div {/** a\n * b\n */ ...props} />;',
+  'const a = <div {/* a\n b */ /* c\n d */ ...props} />;',
+  'const a = <div {/* a\n b */ // c\n ...props} />;',
   'const a = <A x={y}z="s"w={v}>t</A>;',
   'const a = <A\n  // comment\n  x={1} /* c */ y\n  /** doc */\n  z="2"\n/>;',
   'const a = <svg:rect xlink:href="#a" ns:attr={1} />;',
@@ -77,10 +95,39 @@ test.each(SNIPPETS.map((s) => [s.replace(/\n/g, '⏎'), s]))('%s', (_name, sourc
   expect(differences(source + '\nconst after = 1;')).toEqual([]);
 });
 
-// The one intended difference on valid TSX: an element as an attribute value,
-// which the TSX grammar paints as illegal (and, before `>`, never recovers from).
+// The three differences on valid TSX (ide.md, "Syntax highlighting"). Two are
+// forms the TSX grammar marks illegal and, before `>`, never recovers from.
+const illegal = (grammar, source) => tokenize(grammar, source).tokens.filter((t) => t.scopes.some((s) => s.startsWith('invalid.'))).map((t) => t.text);
+
 test('an element as an attribute value is where the two differ', () => {
   const source = 'const a = <Card footer=<b>f</b> x />;';
   expect(tokenize(tsx, source).tokens.some((t) => t.scopes.includes('invalid.illegal.attribute.tsx'))).toBe(true);
-  expect(tokenize(rtsx, source).tokens.some((t) => t.scopes.some((s) => s.startsWith('invalid.')))).toBe(false);
+  expect(illegal(rtsx, source)).toEqual([]);
+});
+
+test('an attribute name directly before a spread is where the two differ', () => {
+  const source = 'const a = <A x{...p}>t</A>;\nconst after = 1;';
+  expect(illegal(tsx, source)).toEqual(['x{...p}>t</A>;', '=', '1;']); // the rest of the file
+  expect(illegal(rtsx, source)).toEqual([]);
+  // What the TSX grammar gives the same tag with a space before the spread.
+  const spaced = lines(tsx, source.replace('x{', 'x {'));
+  const unspace = (l) => l.replace(/^(\d+):(\d+)/, (_m, line, col) => `${line}:${line === '1' && Number(col) > 14 ? col - 1 : col}`);
+  expect(lines(rtsx, source)).toEqual(spaced.filter((l) => !l.startsWith('1:14 " "')).map(unspace));
+});
+
+// By design (syntax.md: a tag starting with `$` is a slot, never a component):
+// such a tag is valid TSX, and its name is the only token that differs. The
+// repo's one .tsx file with such tags is an intermediate-pass fixture, left
+// out above.
+test('a tag starting with $ is where the two differ', () => {
+  const source = 'const a = <$Modal open={o} {...p}>t</$Modal>;\nconst after = 1;';
+  const want = lines(tsx, source);
+  const got = lines(rtsx, source);
+  const differing = want.map((l, i) => [l, got[i]]).filter(([a, b]) => a !== b);
+  expect(got.length).toBe(want.length);
+  expect(differing.length).toBe(2);
+  for (const [a, b] of differing) {
+    expect(a).toMatch(/^1:\d+ "\$Modal" .* support\.class\.component\.tsx$/);
+    expect(b).toBe(a.replace('support.class.component.tsx', 'entity.name.function.slot.rtsx'));
+  }
 });

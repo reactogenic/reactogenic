@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { packageRoot, SCOPES } from '../grammar/generate.mjs';
-import { registry, tokenize } from './textmate.mjs';
+import { MARKDOWN, registry, tokenize } from './textmate.mjs';
 
 const readJson = (file) => JSON.parse(fs.readFileSync(path.join(packageRoot, file), 'utf8'));
 const regexp = (p) => (typeof p === 'string' ? new RegExp(p) : new RegExp(p.pattern, p.flags));
@@ -108,5 +108,44 @@ describe('```rtsx fences in Markdown', () => {
     expect(tokens.filter((t) => t.line === 9).every((t) => t.scopes.length === 1)).toBe(true);
     expect(tokens.filter((t) => t.line === 1).every((t) => t.scopes.length === 1)).toBe(true);
     expect(open).toEqual(['text.html.markdown']);
+  });
+
+  // Under VS Code's own Markdown grammar (the vendored copy), where the rule
+  // comes from: an ```rtsx fence is what a ```tsx fence is, with our language.
+  test('tokenize as VS Code\'s ```tsx fences do, in the document, a list and a quote', async () => {
+    const r = registry({ injectTo: { 'markdown.rtsx.codeblock': [MARKDOWN] } });
+    const grammar = await r.loadGrammar(MARKDOWN);
+    const code = ['const a = <div className="c" {...p}>', '  {items.map((i) => <li key={i.id}>{i.name}</li>)}', '</div>;'];
+    const document = (language) =>
+      [
+        '# Title',
+        '',
+        '```' + language,
+        ...code,
+        '```',
+        '',
+        '- item',
+        '',
+        '  ~~~' + language + ' {1}',
+        ...code.map((l) => '  ' + l),
+        '  ~~~',
+        '',
+        '> ```' + language,
+        ...code.map((l) => '> ' + l),
+        '> ```',
+        '',
+        'text `' + language + '` end',
+      ].join('\n');
+    const lines = (language) => {
+      const { tokens, open } = tokenize(grammar, document(language), { whitespace: true });
+      expect(open).toEqual([MARKDOWN]);
+      return tokens.map((t) => `${t.line} ${JSON.stringify(t.text)} ${t.scopes.join(' ')}`);
+    };
+    const asRtsx = (line) => line.replaceAll('"tsx"', '"rtsx"').replaceAll('meta.embedded.block.typescriptreact', 'meta.embedded.block.rtsx');
+    const got = lines('rtsx');
+    expect(got).toEqual(lines('tsx').map(asRtsx));
+    // All three fences are code: the stand-in for source.tsx is the vendored TSX grammar.
+    expect(got.filter((l) => l.includes('meta.embedded.block.rtsx') && l.includes('entity.name.tag.tsx')).length).toBe(12);
+    expect(got.at(-2)).toContain('markup.inline.raw.string.markdown');
   });
 });

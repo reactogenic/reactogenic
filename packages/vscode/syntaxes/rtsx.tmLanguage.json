@@ -5962,7 +5962,7 @@
 			]
 		},
 		"jsx-tag-attribute-name": {
-			"match": "(?x)\n  \\s*\n  (?:([_$[:alpha:]][-_$[:alnum:].]*)(:))?\n  ([_$[:alpha:]][-_$[:alnum:]]*)\n  (?=\\s|=|/?>|/\\*|//)",
+			"match": "(?x)\n  \\s*\n  (?:([_$[:alpha:]][-_$[:alnum:].]*)(:))?\n  ([_$[:alpha:]][-_$[:alnum:]]*)\n  (?=\\s|=|/?>|/\\*|//|[{&#])",
 			"captures": {
 				"1": {
 					"name": "entity.other.attribute-name.namespace.tsx"
@@ -6024,7 +6024,7 @@
 			"match": "\\S+"
 		},
 		"rtsx-slot-arg": {
-			"match": "(&&?)([_$[:alpha:]][-_$[:alnum:]]*)?(?=\\s|=|/?>|/\\*|//)",
+			"match": "(&&?)(?:([_$[:alpha:]][-_$[:alnum:]]*)(?=\\s|=|/?>|/\\*|//|[{&#])|(?=\\s|=|/?>|/\\*|//|\\{))",
 			"captures": {
 				"1": {
 					"name": "storage.modifier.slot-arg.rtsx"
@@ -6036,7 +6036,7 @@
 		},
 		"rtsx-segment-root": {
 			"name": "meta.segment-root.rtsx",
-			"match": "(#)(?:[_$[:alpha:]][-_$[:alnum:]]*)?(?=\\s|=|/?>|/\\*|//)",
+			"match": "(#)(?:[_$[:alpha:]][-_$[:alnum:]]*(?=\\s|=|/?>|/\\*|//|[{&#])|(?=\\s|=|/?>|/\\*|//|\\{))",
 			"captures": {
 				"0": {
 					"name": "support.class.component.segment.rtsx"
@@ -6048,7 +6048,7 @@
 		},
 		"rtsx-sigil-illegal": {
 			"name": "invalid.illegal.attribute.tsx",
-			"match": "[&#](?:(?!/?>)\\S)*"
+			"match": "[&#](?:(?!/?>|\\{)\\S)*"
 		},
 		"rtsx-slot-params": {
 			"name": "meta.slot-params.rtsx",
@@ -6071,7 +6071,7 @@
 			]
 		},
 		"rtsx-slot-params-or-spread": {
-			"begin": "\\{(?=\\s*(?:/\\*.*?\\*/\\s*)*(?://.*)?$)",
+			"begin": "\\{(?=\\s*(?:/\\*.*?\\*/\\s*)*(?://.*|/\\*(?:(?!\\*/).)*)?$)",
 			"beginCaptures": {
 				"0": {
 					"name": "punctuation.section.embedded.begin.tsx"
@@ -6119,7 +6119,7 @@
 			"end": "(?<=[}'\">])|(?=/?>)",
 			"patterns": [
 				{
-					"begin": "(?=//)",
+					"begin": "(?=(?:^[ \\t]+)?//)",
 					"end": "\\n",
 					"patterns": [
 						{

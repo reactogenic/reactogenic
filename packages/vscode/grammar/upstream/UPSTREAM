@@ -20,6 +20,18 @@ TypeScriptReact.tmLanguage.json
   licence: MIT — LICENSE.txt and ThirdPartyNotices.txt, copied from that
     commit (babel-sublime and language-javascript, both MIT)
 
+markdown/markdown.tmLanguage.json
+  from: extensions/markdown-basics/syntaxes/markdown.tmLanguage.json
+  sha256: e1f1a3960a2e7582943cc18245428662f777cac609338d78c53f9ba7c469d5ff
+  origin: https://github.com/microsoft/vscode-markdown-tm-grammar
+    (syntaxes/markdown.tmLanguage, converted to JSON by VS Code)
+  commit: 0812fc4b190efc17bfed0d5b4ff918eff8e4e377
+  date: 2025-08-25
+  licence: MIT — markdown/LICENSE.txt, copied from that commit
+  used: one rule, fenced_code_block_tsx — the ```rtsx fence is derived from
+    it. That repository's build.js generates the rule; nothing of the
+    TextMate Markdown bundle, which the grammar otherwise builds on, is in it.
+
 vscode/language-configuration.json
   from: extensions/typescript-basics/language-configuration.json
 vscode/tags-language-configuration.json
