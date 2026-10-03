@@ -74,11 +74,12 @@ src/Page.rtsx:18:3 - error missing-slot: `Card` requires `$Title`.
 
 | The file | Reports |
 | --- | --- |
-| has a syntax error | its syntax errors, nothing else: the passes do not run (the build is strict). Its module still exports what it declares, so its importers are checked, and the rest of the program is |
+| has a syntax error | its syntax errors, each once, nothing else: the passes do not run (the build is strict). Its module still exports what it declares, so its importers are checked, and the rest of the program is |
 | has code the transpiler left out — an expression or a component inside an orphaned slot element, or inside a `Switch` or `Match` that cannot be lowered (`null` in the emitted TSX) | the transpiler's errors only. TS's would be about code the author did not write: every name used only there reads as unused ([ide.md](ide.md), *Tolerance*, rule 4) |
 | has a construct that stays as written — an arg on an element without `slot={$X}` (arg-without-slot), params on an intrinsic element (params-on-html) | the transpiler's errors only. The emitted text is not TSX there, and TS's errors would be about what it makes of `<option &size />` (rule 4) |
 | has code that is emitted twice (an attachment and its fallback; `&&name`, an arg and a prop) | each mistake once ([ide.md](ide.md), *Diagnostics*) |
 | is `name.rtsx` next to `name.tsx` | ambiguous-module, and its own errors: both files are modules of the program |
+| mounts a segment that has no file | segment-not-found, and not TS2307 as well: the import TS cannot resolve is the one the root emits |
 
 **References.** The projects a tsconfig references are checked first, each
 with its own options, then the tsconfig's own files — so a tsconfig with
@@ -98,7 +99,8 @@ one that only imports it, in whatever order the references are written.
 A file that no project lists — reached by an import only — is reported by
 the first project that holds it. A reference to a tsconfig that is not there
 is one error, the referencing project's (TS6053). The editor picks an `.rtsx`
-document's project by the same rule ([ide.md](ide.md), *Diagnostics*).
+document's project by the same rule, among the tsconfig nearest to the file
+and the projects it references ([ide.md](ide.md), *Diagnostics*).
 
 `--watch` re-checks on change, as `tsc --watch` does: an edited file, and one
 created or deleted — a segment's file, an import's target — in the directory

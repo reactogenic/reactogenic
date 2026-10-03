@@ -254,8 +254,37 @@ func TestProjects(t *testing.T) {
 		want := "src/broken.rtsx(3,34): error TS17008: JSX element 'span' has no corresponding closing tag.\n" + // not its type error, nor its orphaned slot
 			"src/main.tsx(2,14): error TS2322: Type 'number' is not assignable to type 'string'.\n" + // `n` is still exported
 			"src/main.tsx(4,14): error TS2322: Type 'string' is not assignable to type 'number'.\n"
+		if !strings.HasPrefix(got, want) {
+			t.Errorf("got:\n%swant first:\n%s", got, want)
+		}
+		// Each syntax error once: two elements are open at the end of
+		// unclosed.rtsx, and the parser reports the missing `</` for each —
+		// the same line twice.
+		if n := strings.Count(got, "src/unclosed.rtsx(8,1): error TS1005: '</' expected.\n"); n != 1 {
+			t.Errorf("`'</' expected` at the end of unclosed.rtsx is printed %d times:\n%s", n, got)
+		}
+	})
+
+	// A segment root without a file is one mistake, and one line:
+	// `segment-not-found` — not TS2307 too, on the import the root emits. An
+	// import the author wrote keeps its TS2307.
+	t.Run("segment-missing", func(t *testing.T) {
+		got := output(project(t, "segment-missing"), "tsconfig.json")
+		goldenText(t, got)
+		want := "src/page.rtsx(1,22): error TS2307: Cannot find module './gone' or its corresponding type declarations.\n" +
+			"src/page.rtsx(3,25): error segment-not-found: No segment `intro` next to `page.rtsx`: looked for `intro.rtsx`, `.tsx`, `.jsx`, `.ts`, `.js`\n"
 		if got != want {
 			t.Errorf("got:\n%swant:\n%s", got, want)
+		}
+	})
+
+	// TypeScript's style checks are errors, as in tsc: they fail the check.
+	// (The editor shows them as warnings by default: ide.md, *Diagnostics*.)
+	t.Run("style-checks", func(t *testing.T) {
+		got := output(project(t, "style-checks"), "tsconfig.json")
+		goldenText(t, got)
+		if strings.Count(got, "): error TS6133: ") != 2 || strings.Count(got, "\n") != 2 {
+			t.Errorf("got:\n%s", got)
 		}
 	})
 

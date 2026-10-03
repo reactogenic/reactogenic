@@ -149,15 +149,23 @@ func fileReports(ctx context.Context, p *rtsx.Program, file *rtsx.SourceFile, ts
 	// false (ide.md, *Tolerance*, rule 4). The syntax errors and the
 	// transpiler's diagnostics above remain.
 	if !f.Stopped {
+		unparsed := unparsedStatements(f, file)
 		var own []Report
 		for _, d := range ts {
-			if d.File() == file && !segmentImport(f, d) {
-				own = append(own, fromTS(d))
+			if d.File() != file || segmentImport(f, d) {
+				continue
+			}
+			if r := fromTS(d); !unparsed(r.at, virtualSpan(d)) {
+				own = append(own, r)
 			}
 		}
 		reports = append(reports, once(superseded(own))...)
 		if p != nil {
-			reports = append(reports, slotConditionals(ctx, p, file, f, source)...)
+			for _, r := range slotConditionals(ctx, p, file, f, source) {
+				if !unparsed(r.Span, emit.Span{}) {
+					reports = append(reports, r)
+				}
+			}
 		}
 	}
 	if p != nil {
@@ -236,16 +244,43 @@ func position(file *rtsx.SourceFile, span emit.Span) (name string, at emit.Span,
 	return file.FileName(), span, line, col
 }
 
-// segmentImport: TS5097 (an import path ending in `.tsx` or `.ts`) on the
-// import a segment root emits. The import names the file found, extension
-// included (syntax.md, *Segment files*); it is not the author's, and needs
-// no allowImportingTsExtensions.
+// unparsedStatements is the test of ide.md, *Tolerance*, rule 4, for a file
+// being typed: whether TypeScript's diagnostic at a span of the source, and
+// at its span of the virtual text, is in a top-level statement that does
+// not parse — in the source, or as TypeScript reads the virtual text. What
+// it says there is about the breakage, not about the author's code: the
+// passes lowered a recovered tree, and the virtual text is broken in its
+// own way. A source that parses has no such statement.
+func unparsedStatements(f *mapper.File, file *rtsx.SourceFile) func(at, virtual emit.Span) bool {
+	if !slices.ContainsFunc(f.Diagnostics, func(d transpiler.Diagnostic) bool { return strings.HasPrefix(d.Code, "TS") }) {
+		return func(emit.Span, emit.Span) bool { return false } // no syntax error: the only diagnostics under TypeScript's numbers
+	}
+	virtualStatements := transpiler.UnparsedStatements(file)
+	return func(at, virtual emit.Span) bool {
+		return transpiler.InUnparsed(f.Unparsed, at.Pos) || virtual != (emit.Span{}) && transpiler.InUnparsed(virtualStatements, virtual.Pos)
+	}
+}
+
+// segmentImport: what TypeScript says of the import a segment root emits,
+// and the author need not read — the import is the transpiler's.
+//
+//   - TS5097, an import path ending in `.tsx` or `.ts`: the import names the
+//     file found, extension included (syntax.md, *Segment files*), and needs
+//     no allowImportingTsExtensions.
+//   - TS2307 / TS2792, no such module, when the transpiler found no file for
+//     the root: `segment-not-found` says so, at the same `#name`.
 func segmentImport(f *mapper.File, d *rtsx.Diagnostic) bool {
-	if d.Code() != 5097 || f.Map == nil {
+	missing := d.Code() == 2307 || d.Code() == 2792
+	if d.Code() != 5097 && !missing || f.Map == nil {
 		return false
 	}
 	note := innermostNote(f.Notes, f.Map.Source(virtualSpan(d)))
-	return note != nil && note.Kind == "segment"
+	if note == nil || note.Kind != "segment" {
+		return false
+	}
+	return !missing || slices.ContainsFunc(f.Diagnostics, func(t transpiler.Diagnostic) bool {
+		return t.Code == "segment-not-found" && t.Span == note.Span
+	})
 }
 
 // superseded drops the TS errors that follow from another one: a key

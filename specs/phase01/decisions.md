@@ -376,7 +376,7 @@ tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
 server only after migrating `check` — a bare server now comes first.
 
 **Patched upstream files** (about 130 lines planned; 265 after the review of
-102–105; RGP1-107 adds 13 lines in three of them, the rest in new files; 108
+102–105; RGP1-107 adds 18 lines in three of them, the rest in new files; 108
 still to add its own; all in fast-moving packages):
 
 | File | Change |
@@ -384,7 +384,7 @@ still to add its own; all in fast-moving packages):
 | `module/resolver.go` | mapped extensions for extensionless imports |
 | `tsoptions/tsconfigparsing.go` | built-in mappers; user `.rtsx` entries dropped |
 | `project/project.go`, `session.go` | built-in mappers in inferred projects; a mapper host without `runExternalCode`; a diagnostics refresh when a mapped document is opened or closed with a text that is not the file's on disk (upstream refreshes on its edits and on watched files) |
-| `project/projectcollectionbuilder.go` | the default project of a mapped file is its lister: the search goes on past a project that holds the file through an import only (upstream: the first that holds it) |
+| `project/projectcollectionbuilder.go` | the default project of a mapped file is its lister: among a config and its references the search goes on past a project that holds the file through an import only, and takes the first such when none lists it — never a reason to search the configs above (upstream: the first that holds it) |
 | `project/mapped.go` (new) | the two rules above, as functions the patched lines call |
 | `project/compilerhost.go`, `contentmapper/host.go` | the file system to the transform; the directory listing in the cache key |
 | `contentmapper/transform.go`, `ast/ast.go` | `Extra` with the parsed file; module-ness |

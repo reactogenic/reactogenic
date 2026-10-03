@@ -960,14 +960,12 @@ per tsconfig plus the layer.
     directory is still watched. A referenced tsconfig that is there and
     does not parse reports its own errors, as before.
 - *Left*: the second gap of that OPEN stands (`./x.jsx` checked as `x.ts`
-  when both exist — measured). `segment-not-found` comes with TS's TS2307 on
-  the same `#name`: one mistake, two lines — no rule drops it, and none did.
+  when both exist — measured). `segment-not-found` came with TS's TS2307 on
+  the same `#name`: one mistake, two lines — dropped since RGP1-107's review.
   `segment-self` follows mounted roots (the notes): a root inside another
   root's overwritten children no longer counts as a mount. On the first run
   of `--watch`, a file of a *referenced* project that changes while that run
   is under way is seen at its next change. Not run: Windows.
-  > OPEN: drop TS2307 on a segment import when `segment-not-found` is
-  > reported for it (as TS5097 is dropped)?
 - *Found in the review fixes, older than this task, not touched*:
   - Pass 4's output is the one text no later pass parses, and it is not
     always TSX: `<section#intro />` (no space before `#`) emits
@@ -1056,16 +1054,74 @@ errors. ide.md, *Diagnostics*, has the table of what a report becomes.
   through; a file that is not open keeps upstream's default project (it
   decides nothing a pull shows). Not run: the other three editor suites,
   the suite against a `.vsix`, Linux, Windows.
-- *Found, older than this task, not fixed*: `TestUntitledDocument`, the
-  document named `untitled:/tmp/new.rtsx`, fails now and then under the race
-  detector at its last step — closed, then opened again under the same name
-  as TypeScript, the pull is answered "no project found for URI". Five of
-  28 race-instrumented runs of that subtest; one of 12 with this task's
-  three changes to the server switched off; never seen without `-race`.
-  Not traced to the end; the likely cause: the closed document was served
-  under its alias (`untitled:tmp/new.rtsx`), the new one is not, the fork
-  reads both as one path, and when the close and the open reach it in one
-  batch it handles them per URI, in map order — the close may come last.
+- *Review* (six findings, each reproduced by a test that fails on the tree
+  before the fixes — run there; four fixed, one fixed and widened, one put to
+  the owner):
+  - *The lister rule climbed*: it sent the search past the nearest tsconfig,
+    so a root tsconfig that packages extend — its default `include` lists
+    everything — took every `.rtsx` document of a package whose `include`
+    names extensions (TS2307 on the package's `paths` alias, where
+    `check -p packages/app` prints none), and with nobody listing the file
+    the outermost importer won. Now inside one search — a config and its
+    references: a lister first, else the first importer, and no climbing on
+    that account (patch 0004: the importers of one search, six lines in
+    `projectcollectionbuilder.go`). `TestNearestProjectIsTheDocumentsProject`:
+    both nested layouts, each also against `check -p` on the package.
+    (Among importers the order is the search's — the config, then its
+    references — where `check` takes references first; they differ only when
+    a referenced project imports a file it does not list, which `composite`
+    forbids.)
+  - *False diagnostics while typing*: TS's semantic errors came from a
+    virtual text broken in its own way. *Tolerance* rule 4 now drops TS's
+    diagnostics in a top-level statement that does not parse — in the source
+    (`Output.Unparsed`) or in TS's parse of the virtual text; the innermost
+    statement was tried first and is not enough (an unclosed string moves
+    later statements into another scope: 56 false errors left). Rule 3, for
+    the transpiler's own: every element around the node counts, not the
+    nearest (`segment-in-loop` under an `Each` the root is not in), and
+    `component-name` is judged by the top-level statement.
+    `TestTypingShowsNothingFalse`, the Vite test app typed at every opening
+    tag, 2516 states (every third under the race detector, where the full
+    run took two minutes) — off the typed line, before: 116 messages naming a
+    generated helper, 164 reworded TS errors (`no-values` 127, `slot-list`
+    31, …), 3,943 other TS errors, 166 `component-name`, 12
+    `segment-in-loop`; after: none, in every state. The file's one type
+    error, in another statement, is shown in each of the 1825 states that
+    are not stopped (691 are: rule 4's other half, unchanged). Without the
+    virtual-text half: 104 false TS errors, four of them reworded. The price
+    is written into the rules: a true error in the statement — for the
+    transpiler's, in the JSX tree — being typed waits until it parses.
+  - *A syntax error twice*: the parser reports the `</` missing at the end
+    of the text once per element still open. The transpiler records a
+    diagnostic once (`Output.add`) — for the editor, `check` and Vite alike.
+    Golden `syntax-error` gains `unclosed.rtsx`; `TestTolerance`.
+  - *`segment-not-found` with TS2307*: TS2307 / TS2792 on the import a root
+    emits is dropped when the transpiler reported the root (golden
+    `segment-missing`, where the author's own unresolved import keeps its
+    TS2307; `TestSiblings`, `TestWatch`). The OPEN of RGP1-106 is closed.
+  - *Style checks as warnings; `validate.enable`*: the owner's to decide —
+    both are `> OPEN:` in ide.md, *Diagnostics*, the behaviour unchanged.
+    Pinned on both sides: golden `style-checks` (errors in `check`);
+    `TestDiagnosticSettings` (the same lines, warnings by default);
+    `TestEqualsCheck` runs that project with the setting off — equal.
+  - *`TestUntitledDocument` failed now and then*: traced. An untitled name
+    that ends in `.rtsx` had its alias only while opened as `rtsx`; closed
+    and opened again as TypeScript, the close (`untitled:tmp/new.rtsx`) and
+    the open (`untitled:/tmp/new.rtsx`) reached the fork in one batch as two
+    URIs of one path, applied in map order — the close last, now and
+    then, with or without the race detector. The front now gives such a
+    name its alias whatever the language id (`alias.go`): one URI, close
+    then open. `TestUntitledNameReused`, 48 rounds: failed at round 3 before;
+    36 race-instrumented runs of both tests now pass (5 of 36 failed).
+  - `TestEqualsCheck` now: 36 projects and the Vite test app, 60 documents,
+    86 lines.
+  - *Found on the way*: `TestInferredProjectIsNotRebuilt` (RGP1-103) read
+    the server's log right after a hover; under load the snapshot's lines
+    come later (one failure in a full run). It waits for them now.
+  - *Left*: rule 3's reach is measured on one app; a transpiler diagnostic
+    that depends on its surroundings in another way may still be false while
+    typing. A stopped file still shows nothing of TS's (691 of the 2516
+    states: `&a` or `{ a }` on an element being typed stops the whole file).
 - The reporting layer behind a hook in the server's diagnostics path, before
   synthesized diagnostics are aggregated; it produces the LSP diagnostics
   itself (string codes, severities). A refresh request after a change to any

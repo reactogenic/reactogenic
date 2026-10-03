@@ -43,7 +43,14 @@ func TestEqualsCheck(t *testing.T) {
 					documents = append(documents, name)
 				}
 			}
-			equalsCheck(t, lsptest.Write(t, p.Files), config, documents, p.Unlisted)
+			options := lsptest.Options{}
+			if p.StyleChecks {
+				// TypeScript's style checks are warnings in the editor by
+				// the user's setting, on by default (TestDiagnosticSettings).
+				// With it off the editor shows check's lines here too.
+				options.Settings = map[string]any{"typescript": map[string]any{"reportStyleChecksAsWarnings": false}}
+			}
+			equalsCheck(t, lsptest.Write(t, p.Files), config, documents, p.Unlisted, options)
 		})
 	}
 
@@ -86,15 +93,15 @@ func TestEqualsCheck(t *testing.T) {
 		if err := os.Symlink(modules, dir+"/node_modules"); err != nil {
 			t.Fatal(err)
 		}
-		equalsCheck(t, dir, "tsconfig.json", documents, nil)
+		equalsCheck(t, dir, "tsconfig.json", documents, nil, lsptest.Options{})
 	})
 }
 
 // equalsCheck runs check on the tsconfig and the server on the directory,
 // and compares them document by document.
-func equalsCheck(t *testing.T, dir, config string, documents, unlisted []string) {
+func equalsCheck(t *testing.T, dir, config string, documents, unlisted []string, options lsptest.Options) {
 	t.Helper()
-	c := lsptest.Start(t, dir, serve) // first: Serve registers the transform
+	c := lsptest.StartWith(t, dir, serve, options) // first: Serve registers the transform
 	want := map[string][]string{}
 	for _, r := range check.Run(dir + "/" + config) {
 		rel := strings.TrimPrefix(r.File, dir+"/")

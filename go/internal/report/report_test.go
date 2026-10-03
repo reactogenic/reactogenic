@@ -200,6 +200,49 @@ func TestSyntaxError(t *testing.T) {
 	same(t, "strict, the program", lines(dir, Program(p, nil)), []string{"main.tsx:2:14 error TS2322", "page.rtsx:3:16 error TS17008"})
 }
 
+// ide.md, *Tolerance*, rule 4, for a file that is not stopped: TypeScript
+// says nothing about a top-level statement that does not parse. A slot
+// element being typed above an attachment: recovery makes the attachment
+// its child, the passes lower that tree, and TypeScript's errors about the
+// result — `$Title` "is a list", an untyped `isAssigned` — land on the
+// attachment's line, which the author is not touching. The true mistake in
+// the same statement waits with them; the one in another statement shows.
+func TestUnparsedStatement(t *testing.T) {
+	const source = `import type { Slot } from "@reactogenic/core";
+export const n: number = "x";
+export function List({ $Title }: { $Title?: Slot<{ className?: string; children?: string }> }) {
+  const m: number = "y";
+  return (
+    <section>
+      {m}
+      <$Title c
+      <h1 slot={$Title} className="default">Untitled</h1>
+    </section>
+  );
+}
+`
+	p, dir := program(t, true, map[string]string{"src/list.rtsx": source})
+	reports, f := file(t, p, dir+"/src/list.rtsx")
+	if f.Stopped || len(f.Unparsed) != 1 || !strings.HasPrefix(source[f.Unparsed[0].Pos:], "export function List") {
+		t.Errorf("stopped %v, the statements that do not parse: %v", f.Stopped, f.Unparsed)
+	}
+	var semantic []string
+	for _, r := range reports {
+		if r.TS != nil || !strings.HasPrefix(r.Code, "TS") { // not a syntax error of the source parse
+			semantic = append(semantic, fmt.Sprintf("%d:%d %s", r.Line, r.Col, r.Code))
+		}
+	}
+	same(t, "list.rtsx, but its syntax errors", semantic, []string{"2:14 TS2322"})
+	if len(reports) == len(semantic) {
+		t.Errorf("no syntax error: %v", lines(dir, reports))
+	}
+
+	// The statement closed: everything is reported again.
+	p, dir = program(t, true, map[string]string{"src/list.rtsx": strings.Replace(source, "<$Title c\n", "<b>c</b>\n", 1)})
+	reports, _ = file(t, p, dir+"/src/list.rtsx")
+	same(t, "list.rtsx, parsing", lines(dir, reports), []string{"list.rtsx:2:14 error TS2322", "list.rtsx:4:9 error TS2322"})
+}
+
 // A failure of the transpiler itself is one `internal` report on the first
 // line, and the file is stopped (ide.md, *Tolerance*, rule 5).
 func TestInternalError(t *testing.T) {

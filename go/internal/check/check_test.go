@@ -240,9 +240,9 @@ func TestWatch(t *testing.T) {
 		}
 	}
 
-	next("the first run", "src/page.rtsx:1:36 segment-not-found", "src/page.rtsx:1:36 TS2307")
+	next("the first run", "src/page.rtsx:1:36 segment-not-found")
 	write("src/a.rtsx", "export const a: number = \"x\";\n")
-	next("an edit", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-not-found", "src/page.rtsx:1:36 TS2307")
+	next("an edit", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-not-found")
 	write("src/intro.rtsx", "export default function Intro({ title }: { title: string }) {\n  return <p>{title}</p>;\n}\n")
 	next("a segment file created", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-props")
 	write("src/intro.rtsx", "export default function Intro() {\n  return <p>intro</p>;\n}\n")
@@ -250,7 +250,7 @@ func TestWatch(t *testing.T) {
 	if err := os.Remove(dir + "/src/intro.rtsx"); err != nil {
 		t.Fatal(err)
 	}
-	next("the segment file deleted", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-not-found", "src/page.rtsx:1:36 TS2307")
+	next("the segment file deleted", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-not-found")
 }
 
 // --watch on a tsconfig that only references other projects watches their

@@ -2,6 +2,7 @@ package transpiler
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 
@@ -103,6 +104,12 @@ type Output struct {
 	// reads `<option &size />` as `<option` `& size / >`, and what it says
 	// about the file is not about the author's code (ide.md, *Tolerance*).
 	Unlowered bool
+	// Unparsed, in tolerant mode: the top-level statements of the source
+	// that hold a syntax error (UnparsedStatements). What was lowered there
+	// was lowered from a recovered tree, and TS's diagnostics there are
+	// about the breakage, not about the author's code (ide.md,
+	// *Tolerance*, rule 4).
+	Unparsed []emit.Span
 }
 
 // Shorthand is a bare name with two meanings.
@@ -226,6 +233,7 @@ func Transpile(in Input) (Output, error) {
 		rtsx.Bind(file)
 		if p.n == 0 {
 			source, sourceErrs = file, errs
+			out.Unparsed = UnparsedStatements(file)
 		}
 		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, entry: in.Entry, readFile: in.readFile,
 			report: func(s emit.Span, sev Severity, code, msg string) bool {
@@ -234,6 +242,12 @@ func Transpile(in Input) (Output, error) {
 				// source parse decides; this pass's own tree may add to it
 				// (recovery can re-parent lowered text differently).
 				if broken && (underParseError(source, sourceErrs, at) || file != source && underParseError(file, errs, s)) {
+					return false
+				}
+				// What depends on the names in scope is no better than the
+				// scopes: an unclosed brace or string moves the statements
+				// that follow into another one.
+				if broken && scoped[code] && InUnparsed(out.Unparsed, at.Pos) {
 					return false
 				}
 				line, col := emit.LineCol(src, at.Pos)
@@ -317,22 +331,31 @@ func Transpile(in Input) (Output, error) {
 	return out, nil
 }
 
+// add records a diagnostic, once: the parser says some things twice — the
+// `</` that is missing at the end of the text, once per element still open
+// there — with the same range, code and message. (TypeScript's program
+// merges such for a .tsx file; the source parse has no program.)
 func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg string) {
 	line, col := emit.LineCol(src, s.Pos)
-	o.Diagnostics = append(o.Diagnostics, Diagnostic{File: file, Line: line, Col: col, Span: s, Severity: sev, Code: code, Message: msg})
+	d := Diagnostic{File: file, Line: line, Col: col, Span: s, Severity: sev, Code: code, Message: msg}
+	if !slices.Contains(o.Diagnostics, d) {
+		o.Diagnostics = append(o.Diagnostics, d)
+	}
 }
 
-// underParseError: the node at s, or the nearest JSX element or fragment
-// around it, holds a parse error (ide.md, *Tolerance*). Recovery re-parents
-// what follows a half-typed attribute, so the unit of trust is the element.
+// underParseError: the node at s, or a JSX element or fragment around it,
+// holds a parse error (ide.md, *Tolerance*). Recovery re-parents what
+// follows a half-typed attribute or an unterminated string, so the unit of
+// trust is the JSX tree: what a node is a child of, or in a loop of, is read
+// off every element above it.
 //
 // A node holds an error when the parser flagged it or one below it, or when
 // the range of a parse error (errs) lies within it: an unclosed tag leaves
-// no flag — recovery rebuilds the element — only its error. Nothing above
-// the nearest element counts: a syntax error elsewhere in the file hides
-// nothing here. A node with no element around it answers for its statement
-// instead, and a diagnostic on the file as a whole (the zero span) has no
-// node to be broken.
+// no flag — recovery rebuilds the element — only its error. Nothing outside
+// the tree counts: a syntax error elsewhere in the file hides nothing here.
+// A node with no element around it answers for its statement instead, and a
+// diagnostic on the file as a whole (the zero span) has no node to be
+// broken.
 //
 // The file must be bound: the binder sets the flag.
 func underParseError(file *rtsx.SourceFile, errs []emit.Span, s emit.Span) bool {
@@ -366,14 +389,27 @@ func underParseError(file *rtsx.SourceFile, errs []emit.Span, s emit.Span) bool 
 	if holds(n) {
 		return true
 	}
+	element := false
 	for p := n.Parent; p != nil; p = p.Parent {
 		if isJSXElement(p) {
-			return holds(p)
+			if element = true; holds(p) {
+				return true
+			}
 		}
+	}
+	if element {
+		return false
 	}
 	// No element around it: the statement it is written in. Recovery makes
 	// the children of an owner whose opening tag is half-typed
 	// (`<Button variant=>`) top-level expressions of that statement.
+	return statementHoldsError(file, errs, n)
+}
+
+// statementHoldsError: the statement n is written in — the innermost of a
+// block or of the file — holds a parse error: a flagged node, or the range
+// of an error (errs).
+func statementHoldsError(file *rtsx.SourceFile, errs []emit.Span, n *rtsx.Node) bool {
 	for p := n; p.Parent != nil; p = p.Parent {
 		if p.Parent.Kind != rtsx.KindBlock && p.Parent != file.AsNode() {
 			continue
@@ -389,6 +425,39 @@ func underParseError(file *rtsx.SourceFile, errs []emit.Span, s emit.Span) bool 
 			}
 		}
 		return false
+	}
+	return false
+}
+
+// UnparsedStatements are the top-level statements of a parse that hold a
+// syntax error — a flagged node, or the range of an error — each from its
+// first token to its end (ide.md, *Tolerance*, rule 4). The unit is the
+// top-level statement, not the innermost: an unclosed brace or string moves
+// what follows into another scope, where a statement may parse and still not
+// be what the author wrote.
+func UnparsedStatements(file *rtsx.SourceFile) []emit.Span {
+	if len(file.Diagnostics()) == 0 {
+		return nil
+	}
+	rtsx.Bind(file) // the binder sets the flag of a recovered node
+	var errs, spans []emit.Span
+	for _, d := range file.Diagnostics() {
+		errs = append(errs, emit.Span{Pos: d.Pos(), End: d.End()})
+	}
+	for _, statement := range file.Statements.Nodes {
+		if statementHoldsError(file, errs, statement) {
+			spans = append(spans, emit.Span{Pos: rtsx.TokenStart(file, statement), End: statement.End()})
+		}
+	}
+	return spans
+}
+
+// InUnparsed reports whether pos is in one of the statements.
+func InUnparsed(statements []emit.Span, pos int) bool {
+	for _, s := range statements {
+		if s.Pos <= pos && pos <= s.End {
+			return true
+		}
 	}
 	return false
 }
@@ -431,6 +500,11 @@ func oneCopyAnswers(pieces []emit.Piece) {
 		}
 	}
 }
+
+// scoped are the errors that are decided by what is in scope — a `$` tag is
+// a component's name when a binding of that name is — and so by the whole
+// top-level statement they are in (ide.md, *Tolerance*, rule 3).
+var scoped = map[string]bool{"component-name": true}
 
 // staysAsWritten are the errors of pass 0 whose construct no pass lowers: an
 // arg belongs to an attachment and params to a component or a slot element,

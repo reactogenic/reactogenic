@@ -3,6 +3,7 @@ package lsp_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/reactogenic/reactogenic/go/internal/lsptest"
 )
@@ -40,6 +41,11 @@ func TestInferredProjectIsNotRebuilt(t *testing.T) {
 	}
 	// The log is where it shows: it does say so when the roots change.
 	c.OpenAs("loose2.rtsx", "export const loose2 = 2;\n")
+	// The log is written behind the answers: under load a snapshot's lines
+	// come after the hover it served.
+	for deadline := time.Now().Add(5 * time.Second); updates() == before && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if after := updates(); after != before+1 {
 		t.Errorf("a second loose file: %d updates, %d before\n%s", after, before, strings.Join(c.Logs(), "\n"))
 	}

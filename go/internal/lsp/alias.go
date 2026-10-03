@@ -61,7 +61,13 @@ func (a *aliases) fromClient(body []byte) []byte {
 			uri := msg.Params.TextDocument.URI
 			switch msg.Method {
 			case "textDocument/didOpen":
-				if name := serverName(uri); name != "" && msg.Params.TextDocument.LanguageID == "rtsx" {
+				// A name that already ends in `.rtsx` is mapped whatever its
+				// language id — the fork finds the mapper by the extension —
+				// and is one document under one name: closed as rtsx and
+				// opened again as TypeScript, the fork gets the close and the
+				// open of one URI, in that order. Under two spellings of one
+				// path it applied them in either order.
+				if name := serverName(uri); name != "" && (msg.Params.TextDocument.LanguageID == "rtsx" || isRTSX(uri)) {
 					if a.toServer == nil {
 						a.toServer, a.toClient = map[string]string{}, map[string]string{}
 					}

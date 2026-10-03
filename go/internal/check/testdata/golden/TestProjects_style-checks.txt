@@ -1,0 +1,2 @@
+src/page.rtsx(2,32): error TS6133: 'size' is declared but its value is never read.
+src/page.rtsx(3,9): error TS6133: 'unused' is declared but its value is never read.

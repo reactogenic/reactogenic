@@ -157,18 +157,24 @@ A file being typed rarely parses. The transform never fails on user input:
 1. Passes run on TS's recovered tree (`Input.Tolerant`). A pass that fails
    keeps the previous pass's text and map; the result is marked *stopped*,
    naming the pass.
-2. Syntax errors are the **source** parse's only; TS's syntactic diagnostics
-   of the virtual text are never shown.
-3. A transpiler diagnostic is dropped when its node, or the nearest JSX
-   element or fragment enclosing it, contains a parse error (no
-   `case-no-test` on a half-typed `<$Case`; no `orphan-slot` under an element
-   whose attribute is half-typed, or after a tag that is not closed yet).
+2. Syntax errors are the **source** parse's only, each once (the parser
+   reports a missing `</` at the end of the text once per element still
+   open); TS's syntactic diagnostics of the virtual text are never shown.
+3. A transpiler diagnostic is dropped when its node, or a JSX element or
+   fragment enclosing it, contains a parse error (no `case-no-test` on a
+   half-typed `<$Case`; no `orphan-slot` under an element whose attribute is
+   half-typed, or after a tag that is not closed yet).
    - *Contains*: the parser flagged a node there, or the range of one of its
      errors lies there — an unclosed tag (TS17008) leaves no flag.
    - Decided on the **source** parse: a diagnostic of a later pass is judged
      where the author wrote the construct. That pass's own parse can only
      add to it — recovery may re-parent lowered text differently.
-   - Nothing above that element counts: a syntax error elsewhere in the file
+   - Every element around it counts, not the nearest alone: what is in a
+     loop, or under which owner, is read off the elements above, and an
+     unterminated string re-parents what follows it (`#intro` "would be
+     mounted more than once", under an `Each` it is not in). The price: a
+     true diagnostic elsewhere in that JSX tree waits until the tree parses.
+     Nothing outside the tree counts: a syntax error elsewhere in the file
      hides nothing.
    - A node with no element around it (a root element) is judged by the
      **statement** it is written in: recovery turns the children of an owner
@@ -176,10 +182,43 @@ A file being typed rarely parses. The transform never fails on user input:
      into top-level expressions of that statement. An error in another
      statement or another function hides nothing. A file-level diagnostic
      (`ambiguous-module`) is never dropped.
+   - A diagnostic decided by the names in scope — `component-name` — is
+     judged by its **top-level statement** (rule 4's unit): an unclosed
+     brace declares the next component inside this one, where `$Title` is a
+     binding.
    - What the dropped error was about is left out, and the construct is
      lowered around it: a `$Case` being typed does not take its `Switch` —
      the subject, the other cases — out of the virtual text.
-4. For a *stopped* file — up to the last resort, the source as virtual text
+4. TS says nothing about a **top-level statement that does not parse** — a
+   component being typed. What the passes lowered there was a recovered
+   tree, and the virtual text is broken in its own way: TS's errors about it
+   land on lines the author is not touching, reworded in slot terms that are
+   not true or naming generated helpers.
+
+   ```tsx
+   <section>
+     <$Title c                                               // being typed
+     <h1 slot={$Title} className="default">Untitled</h1>     // untouched
+   </section>
+   // shown: the syntax errors
+   // not: `$Title` is a list; a slot is one value      (TS2345, reworded: slot-list)
+   //      Binding element 'isAssigned' implicitly has an 'any' type.
+   ```
+
+   - *Does not parse*: the statement holds a syntax error of the source
+     parse (*contains*, as in rule 3) — or the statement of the virtual
+     text that TS's diagnostic is in holds one of TS's own parse: the two
+     recover differently, and TS may take in statements that the source
+     parse left whole.
+   - The unit is the top-level statement, not the innermost: an unclosed
+     brace or string moves what follows into another scope, where a
+     statement can parse and still not be what the author wrote.
+   - The other top-level statements are checked as ever: a type error in
+     another component stays while this one is typed. The price: a true
+     type error in the statement being typed waits until it parses.
+   - `slot-conditional` there is dropped too: it asks the checker.
+
+   For a *stopped* file — up to the last resort, the source as virtual text
    mapped 1:1 — every TS diagnostic of the file is dropped (unlowered
    constructs would produce false ones). The same when code was **left
    out**: a `Switch` or `Match` that cannot be lowered and an orphaned slot
@@ -275,7 +314,10 @@ has no extension to find the mapper by. The language id of `didOpen` decides:
 a document that is not a `file:` and is opened as `rtsx` is a mapped `.rtsx`
 file. The front serves it to the fork under a name ending in `.rtsx` and
 translates that name in every message, both ways; nothing is decoded while no
-such document is open. It belongs to no project: relative imports do not
+such document is open. A name that ends in `.rtsx` already
+(`untitled:/tmp/new.rtsx`) is mapped by its extension whatever it is opened
+as, and has the one served name: closed and opened again as another language,
+it is one document reopened. It belongs to no project: relative imports do not
 resolve, and there are no JSX types — as for an untitled TSX document.
 
 ### Diagnostics
@@ -296,10 +338,13 @@ file, it returns the reports for that file.
   container's notes, joined by the checker) and `segment-self` through
   another file (the mounts of the program's `.rtsx` files, followed from
   their notes; a root that names its own file is the transpiler's).
-- TS5097 on a segment import of a `.tsx` / `.ts` file is dropped: the import
-  is the transpiler's (syntax.md, *Segment files*).
-- For a **stopped** file, no TS diagnostic at all (*Tolerance*, rule 4); TS's
-  syntax errors of a virtual text, never (rule 2).
+- On the import a segment root emits — the transpiler's, not the author's
+  (syntax.md, *Segment files*) — two TS errors are dropped: TS5097, for a
+  `.tsx` / `.ts` file named with its extension; and TS2307 / TS2792, no such
+  module, when the root has `segment-not-found`: one mistake, one line.
+- For a **stopped** file, no TS diagnostic at all, and none in a top-level
+  statement that does not parse (*Tolerance*, rule 4); TS's syntax errors of
+  a virtual text, never (rule 2).
 - **Each mistake once.** Code copied to several virtual places is checked in
   each. Diagnostics with the same range, code and message are merged; a
   diagnostic in a secondary copy — one that answers no feature (*Span map*,
@@ -338,7 +383,19 @@ Two differences between the hosts, both TypeScript's own:
   the type or declaration errors that `check` does not print yet.
 - TypeScript's style checks (`noUnusedLocals`, `noUnusedParameters`, …) are
   errors in `check` and warnings in the editor, as in VS Code's own
-  TypeScript: the user's `reportStyleChecksAsWarnings`, on by default.
+  TypeScript: the user's `reportStyleChecksAsWarnings`, on by default. The
+  codes are TypeScript's list (TS6133, not TS6198); with the setting off the
+  editor shows `check`'s lines.
+
+  ```
+  src/page.rtsx(3,9): error TS6133: 'unused' is declared but its value is never read.   check, and the task's problem while the document is closed
+  3:9 warning TS6133                                                                    the document, open
+  ```
+  > OPEN: keep TypeScript's default, or errors unless the user sets
+  > `reportStyleChecksAsWarnings`? Today an `.rtsx` document reads like the
+  > `.tsx` next to it, and not like `check`'s line for it. Not decided: the
+  > server does for an `.rtsx` document what TypeScript's does for a `.tsx`
+  > one (RGP1-107).
 
 (And the builds are strict where the editor is tolerant: a file with a syntax
 error — *Tolerance*.)
@@ -360,6 +417,9 @@ diagnostic from the report:
 
 `validate.enable: false` (TypeScript's setting) turns an `.rtsx` document's
 diagnostics off, the transpiler's with TypeScript's.
+> OPEN: keep the transpiler's — syntax errors, `orphan-slot`: what fails the
+> build — when TypeScript's validation is off? Not decided: one switch for
+> the whole answer, as TypeScript's for a `.tsx` document (RGP1-107).
 
 Diagnostics are pulled per open document. A client pulls the document that
 changed; the others follow because the server asks it to pull again
@@ -379,6 +439,21 @@ it through an import, which is TypeScript's choice for its own files. With a
 test project referenced before the app it tests, a file of the app is checked
 under the app's options, whichever document was opened first; hover and
 completion are that project's too.
+
+The rule is **among a tsconfig and the projects it references** — what
+`check -p` reads — starting, as TypeScript does, from the nearest
+`tsconfig.json` above the file. When none of them lists the file, it is the
+first of them that imports it; a tsconfig further up is asked only when none
+of them holds the file at all, as for a `.tsx` file.
+
+```jsonc
+// tsconfig.json — a base the packages extend; by default it lists every file under it
+{ "compilerOptions": { "strict": true } }
+// packages/app/tsconfig.json — main.tsx imports ./page
+{ "extends": "../../tsconfig.json", "compilerOptions": { "jsx": "preserve", "paths": { "@/*": ["./src/*"] } },
+  "include": ["src/**/*.ts", "src/**/*.tsx"] }
+// packages/app/src/page.rtsx is the package's — its `paths`, its `jsx` — as `check -p packages/app` reports it
+```
 
 Project-wide errors stay with `reactogenic check`. The extension contributes
 the task *reactogenic: check* — the binary the server runs, `check
@@ -746,9 +821,9 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | Layer | Test |
 | --- | --- |
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; the output of a source that parses is TSX, or marked as holding a construct as written; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
-| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent. Diagnostics: every project of `check`'s goldens that has no syntax error, and the Vite test app — both hosts run on one directory, and each `.rtsx` document's pulled errors and warnings are `check`'s lines for the file (severity, code, message, position, related locations); each row of the table of *Diagnostics*; the tolerance rules as pulled; a refresh request and the changed answer after each kind of change, with no edit to the document — another document edited, opened or closed unsaved, a `.ts` file, a tsconfig, a segment file and the `.tsx` sibling created and deleted, a segment's content changed (`segment-self`) |
-| reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked — code left out, and a construct left as written; a file with a syntax error in each mode; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside), declaration errors of a project that emits included; a report's range is source text; the merge rule, case by case, and an error in `&&name` through the whole layer |
-| `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, references in either order, a missing reference, an `include` that names extensions, a project that emits declarations, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a syntax error in an `.rtsx` and in a `.tsx` file, an unlowered construct, a warning; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
+| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent. Diagnostics: every project of `check`'s goldens that has no syntax error, and the Vite test app — both hosts run on one directory, and each `.rtsx` document's pulled errors and warnings are `check`'s lines for the file (severity, code, message, position, related locations); each row of the table of *Diagnostics*; the tolerance rules as pulled, and over the Vite test app being typed — an attribute at the end of every opening tag, a child under it, character by character: off the typed line a state shows syntax errors, the file's one mistake in another statement, and nothing else; a document's project in nested tsconfigs — one above lists the file, nobody lists it — as `check -p` on the nearest; a refresh request and the changed answer after each kind of change, with no edit to the document — another document edited, opened or closed unsaved, a `.ts` file, a tsconfig, a segment file and the `.tsx` sibling created and deleted, a segment's content changed (`segment-self`) |
+| reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked — code left out, and a construct left as written; a file with a syntax error in each mode, and a statement that does not parse next to one that does; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside), declaration errors of a project that emits included; a report's range is source text; the merge rule, case by case, and an error in `&&name` through the whole layer |
+| `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, references in either order, a missing reference, an `include` that names extensions, a project that emits declarations, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a segment without a file, a syntax error in an `.rtsx` (one the parser reports twice included) and in a `.tsx` file, an unlowered construct, a warning, TypeScript's style checks; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX* against a stand-in server. The suite also runs against a packaged `.vsix` and its bundled binary |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |

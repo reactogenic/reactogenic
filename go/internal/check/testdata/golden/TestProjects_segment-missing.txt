@@ -1,0 +1,2 @@
+src/page.rtsx(1,22): error TS2307: Cannot find module './gone' or its corresponding type declarations.
+src/page.rtsx(3,25): error segment-not-found: No segment `intro` next to `page.rtsx`: looked for `intro.rtsx`, `.tsx`, `.jsx`, `.ts`, `.js`

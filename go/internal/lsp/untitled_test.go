@@ -17,6 +17,35 @@ export const a = <div>{n}</div>;
 export const b = <Box><$Icon className="i" { size }>{size}</$Icon></Box>;
 `
 
+// A name that ends in `.rtsx` is one document to the server whatever
+// language it is opened as. Closed as rtsx and opened again at once as
+// TypeScript — the last step of TestUntitledDocument — the close and the
+// open reach the fork in one batch: under two spellings of the name
+// (`untitled:tmp/new.rtsx`, the alias, and `untitled:/tmp/new.rtsx`) the
+// fork took them for two documents at one path and applied them in map
+// order, so that now and then the close came last and the pull was answered
+// "no project found for URI" — one run in eight, enough to fail CI.
+func TestUntitledNameReused(t *testing.T) {
+	client := start(t, app)
+	const uri = "untitled:/tmp/new.rtsx"
+	doc := map[string]any{"uri": uri}
+	for i := range 48 {
+		for _, language := range []string{"rtsx", "typescript"} {
+			client.Notify("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": language, "version": 1, "text": "const s: string = 1;\n"}})
+			var report struct {
+				Items []lsptest.Diagnostic `json:"items"`
+			}
+			if err := client.Try("textDocument/diagnostic", map[string]any{"textDocument": doc}, &report); err != nil {
+				t.Fatalf("round %d, opened as %s: %v", i, language, err)
+			}
+			if got := lsptest.Lines(report.Items); !slices.Contains(got, "1:7 TS2322") {
+				t.Fatalf("round %d, opened as %s: %q", i, language, got)
+			}
+			client.Notify("textDocument/didClose", map[string]any{"textDocument": doc})
+		}
+	}
+}
+
 // ide.md, *VS Code extension* → Client: the server is attached to untitled
 // documents of the language rtsx. Such a document has no file name, so no
 // extension to find the mapper by: the language id of didOpen decides.

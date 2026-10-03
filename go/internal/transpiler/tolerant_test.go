@@ -58,6 +58,17 @@ func TestTolerantRule3(t *testing.T) {
 		{"the subject of a Switch being retyped", inReturn("    <Switch on=>\n      <$Case is=\"a\">A</$Case>\n      <$Case is=\"b\">B</$Case>\n      <$Case is=\"c\">C</$Case>\n    </Switch>"), ""},
 		{"the owner's `>` deleted", inReturn("    <Button variant=\"x\"\n      <$Icon className=\"i\" />\n      <$Label>{s}</$Label>\n    </Button>"), ""},
 		{"an orphan and the error in one statement", "export const a = <$Orphan />, b = ;\n", ""},
+		// Dropped: any element around it counts, not only the nearest. What
+		// is in a loop, or under which owner, is read off the elements above
+		// — here an unterminated string takes the text up to the next `"`,
+		// and `#intro` ends up under `Each`.
+		{"an element above the nearest holds the error", "import { Each } from \"@reactogenic/core\";\n" + inReturn("    <main>\n      <Each items={s} { item }>\n        <p className=\"\n      </Each>\n      <b title=\"t\"><section #intro /></b>\n    </main>"), ""},
+		// The price: a true diagnostic elsewhere in that tree waits with it.
+		{"the error in a sibling: a true diagnostic waits", inReturn("    <section>\n      <p className=\n      <b><Switch><$Case is=\"a\">A</$Case></Switch></b>\n    </section>"), ""},
+		// Dropped: what is decided by the names in scope is judged by the
+		// whole top-level statement. `A` is not closed, so `B` is declared
+		// inside it, where `$T` is a binding.
+		{"a `$` tag in a scope that an unclosed brace moved it to", "export function A({ $T }: { $T: any }) {\n  if ($T) {\n  return null;\n}\nexport function B() {\n  return <List><$T>x</$T></List>;\n}\n", ""},
 		// Kept: the syntax error is in another statement or another function.
 		{"a root element, error in the statement before", tolerantHead + "  const y = s.;\n  return (<Switch><$Case is=\"a\">A</$Case></Switch>);\n}\n", "4:11 flow-no-subject"},
 		{"a root element, an unterminated string on the line before", tolerantHead + "  const y = \"abc\n  return (<Switch><$Case is=\"a\">A</$Case></Switch>);\n}\n", "4:11 flow-no-subject"},
@@ -66,7 +77,7 @@ func TestTolerantRule3(t *testing.T) {
 		{"a root element, error in another function", "export function B() {\n  const y = ;\n}\n" + inReturn("    <Switch><$Case is=\"a\">A</$Case></Switch>"), "7:5 flow-no-subject"},
 		{"an orphan at the top level", "export const a = <$Orphan />;\nexport function B() {\n  const y = ;\n}\n", "1:18 orphan-slot"},
 	} {
-		if got, _ := tolerantCodes(t, map[string]string{"a.rtsx": c.src}, "a.rtsx"); got != c.want {
+		if got, _ := tolerantCodes(t, map[string]string{"a.rtsx": c.src, "intro.rtsx": "export default function Intro() {\n  return null;\n}\n"}, "a.rtsx"); got != c.want {
 			t.Errorf("%s: transpiler diagnostics %q, want %q\n%s", c.name, got, c.want, c.src)
 		}
 	}

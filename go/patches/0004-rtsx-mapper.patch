@@ -221,10 +221,10 @@ index 59c0d99..f2a46d8 100644
  	return c.contentMapperProject
 diff --git a/internal/project/mapped.go b/internal/project/mapped.go
 new file mode 100644
-index 0000000..445d792
+index 0000000..517be3a
 --- /dev/null
 +++ b/internal/project/mapped.go
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,72 @@
 +// Reactogenic: what the session does for the documents of the built-in
 +// content mapper. Not part of upstream: added by
 +// go/patches/0004-rtsx-mapper.patch.
@@ -270,12 +270,20 @@ index 0000000..445d792
 +	return !matches
 +}
 +
-+// listsMappedFile reports whether a project that contains a file may be its
-+// default project: always, but for a file of the built-in mapper, which is
-+// its lister's — the project whose config names it, in `files` or through
-+// `include` — and not one that reaches it through an import only. The
-+// search for a default project goes on past such a project, which stays the
-+// fallback when no project lists the file.
++// listsMappedFile reports whether a project that contains a file ends the
++// search for its default project: always, but for a file of the built-in
++// mapper, which is its lister's — the project whose config names it, in
++// `files` or through `include` — before one that reaches it through an
++// import only.
++//
++// The preference holds inside one search: a config and the projects it
++// references. There the search goes on past an importer, and takes the
++// first of them when none of these projects lists the file
++// (findOrCreateDefaultConfiguredProjectWorker's `importers`). It is no
++// reason to go on to the configs above: an importer is found where upstream
++// finds it, and a config higher up — a base config that packages extend
++// lists every file under it by default — does not take the file from the
++// package that imports it.
 +//
 +// Upstream takes the first project that contains the file, so with
 +// `references` to a test project and then to the app it tests, a file of the
@@ -290,18 +298,37 @@ index 0000000..445d792
 +	return listed
 +}
 diff --git a/internal/project/projectcollectionbuilder.go b/internal/project/projectcollectionbuilder.go
-index eb37526..e87630c 100644
+index eb37526..4f2dee7 100644
 --- a/internal/project/projectcollectionbuilder.go
 +++ b/internal/project/projectcollectionbuilder.go
-@@ -1125,7 +1125,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
- 			}
+@@ -1065,6 +1065,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
+ 	logger *logging.LogTree,
+ ) searchResult {
+ 	var configs collections.SyncMap[tspath.Path, *tsoptions.ParsedCommandLine]
++	var importers collections.SyncSet[tspath.Path] // rtsx: see listsMappedFile
+ 	if visited == nil {
+ 		visited = &collections.SyncSet[searchNodeKey]{}
+ 	}
+@@ -1126,6 +1127,10 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
  
  			if project.Value().containsFile(path) {
--				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path)
-+				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path) && listsMappedFile(config, fileName, path) // rtsx
+ 				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path)
++				if isDirectInclusion && !listsMappedFile(config, fileName, path) { // rtsx
++					importers.Add(configFilePath)
++					isDirectInclusion = false
++				}
  				if node.logger != nil {
  					node.logger.Logf("Project contains file %s", core.IfElse(isDirectInclusion, "directly", "as a source of a referenced project"))
  				}
+@@ -1164,7 +1169,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
+ 		}
+ 	}
+ 
+-	if search.Stopped {
++	if search.Stopped || project != nil && importers.Has(b.toPath(search.Path[0].configFileName)) { // rtsx
+ 		// Found a project that directly contains the file.
+ 		return searchResult{
+ 			project: project,
 diff --git a/internal/project/session.go b/internal/project/session.go
 index 08585aa..6d2c9d7 100644
 --- a/internal/project/session.go

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/reactogenic/reactogenic/go/internal/check"
 	"github.com/reactogenic/reactogenic/go/internal/checktest"
 	"github.com/reactogenic/reactogenic/go/internal/lsptest"
 )
@@ -149,6 +150,25 @@ func TestDiagnosticSettings(t *testing.T) {
 	if got := show(c); got != "" {
 		t.Errorf("validate.enable off: %s", got)
 	}
+
+	// The difference from `check`, on the project of its golden
+	// `style-checks`: each line it prints as an error is the editor's
+	// warning, by default — the same place, code and message.
+	// (TestEqualsCheck has the same project with the setting off: equal.)
+	dir := lsptest.Write(t, checktest.Get("style-checks").Files)
+	c = lsptest.Start(t, dir, serve)
+	c.Open(page)
+	var printed, pulled []string
+	for _, r := range check.Run(dir + "/tsconfig.json") {
+		printed = append(printed, fmt.Sprintf("%d:%d %s %s: %s", r.Line, r.Col, r.Severity, r.Code, r.Message))
+	}
+	for _, d := range c.Diagnostics(page) {
+		line, col := lineCol(c.Text(page), d.Range.Start)
+		pulled = append(pulled, fmt.Sprintf("%d:%d %s TS%s: %s", line, col, [...]string{"?", "error", "warning", "information", "hint"}[d.Severity], d.Code, d.Message))
+	}
+	if got, want := strings.Join(pulled, "\n"), strings.ReplaceAll(strings.Join(printed, "\n"), " error TS6133: ", " warning TS6133: "); got != want || len(printed) != 2 || strings.Contains(strings.Join(printed, "\n"), "warning") {
+		t.Errorf("style-checks — the editor shows:\n%s\ncheck prints:\n%s", strings.Join(pulled, "\n"), strings.Join(printed, "\n"))
+	}
 }
 
 // ide.md, *Tolerance*, rules 2–4 as the editor sees them.
@@ -158,6 +178,9 @@ func TestTolerance(t *testing.T) {
 		// TypeScript finds the unclosed tag in the virtual text too. The
 		// rest of a file being typed is still checked.
 		"src/typing.rtsx": "export const n: number = \"x\";\nexport const a = <div><span></div>;\n",
+		// Each once, also where the parser says a thing twice: two elements
+		// open at the end of the text, the state of JSX typed top-down.
+		"src/unclosed.rtsx": checktest.UnclosedTwice,
 		// Rules 2 and 4: `&size` stays in the virtual text as written, which
 		// is then not TSX. TypeScript's syntax errors there are not shown,
 		// nor anything else it says of the file — not the true type error
@@ -171,10 +194,11 @@ func TestTolerance(t *testing.T) {
 		"src/main.rtsx": "import { n } from \"./orphan\";\nexport const s: string = n;\n",
 	}))
 	for rel, want := range map[string]string{
-		"src/typing.rtsx": "1:14 TS2322, 2:24 TS17008",
-		"src/args.rtsx":   "2:26 arg-without-slot",
-		"src/orphan.rtsx": "3:23 orphan-slot",
-		"src/main.rtsx":   "2:14 TS2322",
+		"src/typing.rtsx":   "1:14 TS2322, 2:24 TS17008",
+		"src/unclosed.rtsx": "3:6 TS17008, 4:8 TS17008, 5:7 TS17002, 7:1 TS1381, 8:1 TS1005",
+		"src/args.rtsx":     "2:26 arg-without-slot",
+		"src/orphan.rtsx":   "3:23 orphan-slot",
+		"src/main.rtsx":     "2:14 TS2322",
 	} {
 		c.Open(rel)
 		if got := strings.Join(lsptest.Lines(c.AllDiagnostics(rel)), ", "); got != want {
@@ -192,7 +216,7 @@ func TestTolerance(t *testing.T) {
 	//     at all — tsc's steps — and of page.rtsx only `orphan-slot`. A
 	//     document's diagnostics have no steps (ide.md, *Diagnostics*).
 	for name, want := range map[string]map[string]string{
-		"syntax-error":     {"src/broken.rtsx": "1:14 TS2322, 3:34 TS17008"},
+		"syntax-error":     {"src/broken.rtsx": "1:14 TS2322, 3:34 TS17008", "src/unclosed.rtsx": "3:6 TS17008, 4:8 TS17008, 5:7 TS17002, 7:1 TS1381, 8:1 TS1005"},
 		"tsx-syntax-error": {"src/page.rtsx": "1:14 TS2322, 2:26 orphan-slot"},
 	} {
 		c := lsptest.Start(t, lsptest.Write(t, checktest.Get(name).Files), serve)
@@ -291,7 +315,9 @@ func TestSiblings(t *testing.T) {
 	const page, intro = "src/page.rtsx", "src/intro.rtsx"
 	const plain = "export default function Intro() {\n  return <p>intro</p>;\n}\n"
 	const loop = "export default function Intro() {\n  return <div><section #page /></div>;\n}\n"
-	const missing = "2:25 segment-not-found, 2:25 TS2307"
+	// One mistake, one line: not TypeScript's TS2307 as well, on the import
+	// the root emits for a file that is not there.
+	const missing = "2:25 segment-not-found"
 	c.Open(page)
 	pulled := func() string { return strings.Join(lsptest.Lines(c.Diagnostics(page)), ", ") }
 	if got := pulled(); got != missing {
@@ -357,5 +383,58 @@ func TestListerIsTheDocumentsProject(t *testing.T) {
 		if hover := c.Hover(helper, c.At(helper, "mine", 1, 1)); !strings.Contains(hover, "const mine: number") || strings.Contains(hover, "undefined") {
 			t.Errorf("opened %v: hover in helper.rtsx, the tests': %q", order, hover)
 		}
+	}
+}
+
+// The lister rule is among a tsconfig and the projects it references — one
+// search — and never a reason to look at the tsconfigs above: a package
+// whose `include` names extensions reaches its .rtsx files through imports
+// (check's golden `include-extensions`), and they are the package's, as its
+// .tsx files are and as `check -p packages/app` reports them. Not the
+// root's, whose tsconfig — a base the packages extend — lists everything
+// under it by default; nor, when nobody lists the file, the outermost
+// project that imports it.
+func TestNearestProjectIsTheDocumentsProject(t *testing.T) {
+	const page = "packages/app/src/page.rtsx"
+	// Under the package's options: an untyped parameter (strict). Under the
+	// root's, which has no `paths`: TS2307 on `@/util`, and no TS7006.
+	const want = "2:22 TS7006"
+	app := map[string]string{
+		"packages/app/tsconfig.json": `{ "extends": "../../tsconfig.json", "compilerOptions": { "strict": true, "paths": { "@/*": ["./src/*"] } }, "include": ["src/**/*.ts", "src/**/*.tsx"] }`,
+		"packages/app/src/jsx.d.ts":  checktest.JSXTypes,
+		"packages/app/src/util.ts":   "export const label: string = \"x\";\n",
+		"packages/app/src/main.tsx":  "import { Page, pick } from \"./page\";\nexport const m = [<Page />, pick(1)];\n",
+		page:                         "import { label } from \"@/util\";\nexport const pick = (o) => o;\nexport function Page() {\n  return <p>{label}</p>;\n}\n",
+	}
+	loose := strings.Replace(checktest.Options, `"strict": true`, `"strict": false`, 1)
+	for name, files := range map[string]map[string]string{
+		// The root's default `include` lists every file under it.
+		"an ancestor lists it": {
+			"tsconfig.json": `{ "compilerOptions": { ` + loose + ` } }`,
+		},
+		// The root reaches the file as the package does: by an import.
+		"nobody lists it": {
+			"tsconfig.json": `{ "compilerOptions": { ` + loose + ` }, "files": ["root.tsx", "packages/app/src/jsx.d.ts"] }`,
+			"root.tsx":      "import { pick } from \"./packages/app/src/page\";\nexport const r = pick(1);\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := lsptest.Write(t, lsptest.With(app, files))
+			c := lsptest.Start(t, dir, serve)
+			c.Open(page)
+			if got := strings.Join(lsptest.Lines(c.Diagnostics(page)), ", "); got != want {
+				t.Errorf("page.rtsx has %q, want the package's %q", got, want)
+			}
+			// As `check -p packages/app` prints it.
+			var printed []string
+			for _, r := range check.Run(dir + "/packages/app/tsconfig.json") {
+				if strings.HasSuffix(r.File, page) {
+					printed = append(printed, fmt.Sprintf("%d:%d %s", r.Line, r.Col, r.Code))
+				}
+			}
+			if got := strings.Join(printed, ", "); got != want {
+				t.Errorf("check -p packages/app prints %q for page.rtsx, want %q", got, want)
+			}
+		})
 	}
 }

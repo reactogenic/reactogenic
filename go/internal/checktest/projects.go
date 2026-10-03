@@ -20,6 +20,10 @@ type Project struct {
 	// differ by design — the builds are strict, the editor tolerant
 	// (ide.md, *Tolerance*) — and in tsc's steps (*Diagnostics*).
 	SyntaxError bool
+	// StyleChecks: the project turns on TypeScript's style checks, which
+	// the editor shows as warnings by default — the user's
+	// `reportStyleChecksAsWarnings` — and `check` prints as errors.
+	StyleChecks bool
 	// Unlisted are the .rtsx files that are in no program of the project:
 	// no `include` matches them and no import reaches them. `check` does
 	// not report them; an editor that opens one checks it on its own.
@@ -428,6 +432,8 @@ export function Button({ $Label }: { $Label?: Slot<{ title?: string; children?: 
 		"tsconfig.json":   TSConfig,
 		"src/broken.rtsx": "export const n: number = \"x\";\nexport function Broken() {\n  return <div><$Title>t</$Title><span></div>;\n}\n",
 		"src/main.tsx":    "import { Broken, n } from \"./broken\";\nexport const s: string = n;\nexport const app = <Broken />;\nexport const m: number = \"y\";\n",
+		// Each syntax error once, also where the parser says it twice.
+		"src/unclosed.rtsx": UnclosedTwice,
 	})},
 
 	// A syntax error in a .ts / .tsx file is TypeScript's: as in tsc, no
@@ -444,7 +450,29 @@ export function Button({ $Label }: { $Label?: Slot<{ title?: string; children?: 
 		"src/page.rtsx":  "export const page = <section #intro>old</section>;\n",
 		"src/intro.rtsx": "export default function Intro() {\n  return <p>intro</p>;\n}\n",
 	})},
+
+	// A segment root without a file is one mistake: `segment-not-found`, and
+	// not TS2307 as well on the import the root emits. An import of the
+	// author's that finds no module keeps its TS2307.
+	{Name: "segment-missing", Files: With(map[string]string{
+		"tsconfig.json": TSConfig,
+		"src/page.rtsx": "import { gone } from \"./gone\";\nexport default function Page() {\n  return <main><section #intro />{gone}</main>;\n}\n",
+	})},
+
+	// TypeScript's style checks — `noUnusedLocals`, `noUnusedParameters` —
+	// are errors here, as in tsc. In the editor they are warnings unless the
+	// user turns `reportStyleChecksAsWarnings` off (ide.md, *Diagnostics*).
+	{Name: "style-checks", StyleChecks: true, Files: With(map[string]string{
+		"tsconfig.json": strings.Replace(TSConfig, `"noEmit": true`, `"noEmit": true, "noUnusedLocals": true, "noUnusedParameters": true`, 1),
+		"src/page.rtsx": "import type { Slot } from \"@reactogenic/core\";\nexport function Page({ $Title, size }: { $Title?: Slot<{ children?: string }>; size: number }) {\n  const unused = 1;\n  return <h1 slot={$Title}>Untitled</h1>;\n}\n",
+	})},
 }
+
+// UnclosedTwice has a second `<h1>` where `</h1>` was meant: `h1` and
+// `section` are both open at the end of the text, and TypeScript's parser
+// reports the missing `</` there once per open element — the same range,
+// code and message.
+const UnclosedTwice = "export function L() {\n  return (\n    <section>\n      <h1 className=\"d\">Untitled<h1>\n    </section>\n  );\n}\n"
 
 // loose is Options without `strict`.
 var loose = strings.Replace(Options, `"strict": true`, `"strict": false`, 1)

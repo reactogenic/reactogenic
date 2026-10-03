@@ -43,12 +43,20 @@ func (s *Session) mappedBufferDiffers(uri lsproto.DocumentUri) bool {
 	return !matches
 }
 
-// listsMappedFile reports whether a project that contains a file may be its
-// default project: always, but for a file of the built-in mapper, which is
-// its lister's — the project whose config names it, in `files` or through
-// `include` — and not one that reaches it through an import only. The
-// search for a default project goes on past such a project, which stays the
-// fallback when no project lists the file.
+// listsMappedFile reports whether a project that contains a file ends the
+// search for its default project: always, but for a file of the built-in
+// mapper, which is its lister's — the project whose config names it, in
+// `files` or through `include` — before one that reaches it through an
+// import only.
+//
+// The preference holds inside one search: a config and the projects it
+// references. There the search goes on past an importer, and takes the
+// first of them when none of these projects lists the file
+// (findOrCreateDefaultConfiguredProjectWorker's `importers`). It is no
+// reason to go on to the configs above: an importer is found where upstream
+// finds it, and a config higher up — a base config that packages extend
+// lists every file under it by default — does not take the file from the
+// package that imports it.
 //
 // Upstream takes the first project that contains the file, so with
 // `references` to a test project and then to the app it tests, a file of the
