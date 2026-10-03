@@ -25,9 +25,11 @@ Scope, and nothing else:
 2. **TS errors mapped back to `.rtsx`** — `reactogenic check` type-checks the
    emitted `.tsx` and reports every error on the source, in slot terms.
 
+3. **IDE support** — language server, syntax highlighting, VS Code
+   extension (`specs/phase01/ide.md`).
+
 Out of phase 1: rules of layout, shell / islands / `Dynamic`, shell
-components, `Form`, persistent state, shell compilation, server, routing,
-language service. The transpiler itself **is** Go from day 1: a tsgo fork
+components, `Form`, persistent state, shell compilation, server, routing. The transpiler itself **is** Go from day 1: a tsgo fork
 with TS7's checker in-process, which the Vite plugin drives as a long-lived
 process (`specs/phase01/decisions.md`, RGP1-001). Those specs are parked in `specs/later/`; do not pull them
 into `specs/phase01/`. The architecture below is the long-term target.
@@ -120,12 +122,15 @@ Babel): TypeScript's own parser accepts `#name` as an attribute named
 the transform needs no types (the transpiler is syntactic), the runtime package.
 `specs/phase01/diagnostics.md` — `reactogenic check`, source-map origins,
 rewrites of TS errors into slot terms.
+`specs/phase01/ide.md` — IDE support: `reactogenic lsp` (the fork's TS7
+language server with the `.rtsx` transform built in as a content mapper; the
+same program model and diagnostics as `check`), the generated TextMate
+grammar, the VS Code extension (`packages/vscode`).
 `specs/phase01/plan.md` — tasks `RGP1-xxx`; `specs/phase01/decisions.md` —
 one section per decided task.
 
 Parked in `specs/later/`: `layout.md` (shell vs island rules, `Dynamic`,
-shell components, `Form` / `$Field`), `persistent-state.md`, `tooling.md`
-(language service).
+shell components, `Form` / `$Field`), `persistent-state.md`.
 
 ## Rejected (do not propose again)
 
@@ -152,7 +157,8 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
 | `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
-| `later/layout.md`, `later/persistent-state.md`, `later/tooling.md` | parked |
+| `phase01/ide.md` | specified; M8 (RGP1-100–112) in progress |
+| `later/layout.md`, `later/persistent-state.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
 Phase 1 open decisions: how the plugin hands TSX

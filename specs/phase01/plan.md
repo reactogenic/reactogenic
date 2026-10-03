@@ -23,6 +23,7 @@ Size: **S** ≤ 2 days, **M** ≤ 1 week, **L** > 1 week (split it before starti
 | M5 | Vite plugin | 060–069 | example app runs in `vite dev` and `vite build` |
 | M6 | `reactogenic check` | 070–089 | every *types* error in syntax.md is reported on the `.rtsx` |
 | M7 | Conformance and release | 090–099 | spec ↔ tests complete, packages ready to publish |
+| M8 | IDE support | 100–112 | `.rtsx` in VS Code: highlighting, `check`'s errors live, hover, completion, definition, rename |
 
 M1 and M2 can run in parallel. M4 can start once RGP1-030 is done. M5 and M6
 both need M3 and M4, but not each other.
@@ -575,7 +576,128 @@ Versioning, changelog, and publishing to npm. Publishing is outward-facing,
 so it happens only on your go-ahead.
 - Depends on: 090, 091, 092.
 
+## M8 — IDE support
+
+Spec: [ide.md](ide.md). Research (2026-10-03): ten investigations, each
+checked by a second pass, summarized in decisions.md, *IDE support*.
+
+```
+100 ─▶ 101 ─▶ 103 ─▶ 104 ─▶ 105 ─▶ 106 ─▶ 107 ─▶ 112
+        └──▶ 102 ──────────────┘
+        └──▶ 110, 111
+108 ─▶ 109 ◀── 105
+```
+
+### RGP1-100 — Research and spec · M · done
+ide.md, this milestone, decisions.md.
+
+### RGP1-101 — The transform as a content mapper · M
+- Copy names instead of synthesizing them: slot tag names, attribute names
+  of slot elements, arg keys, closing tag names (ide.md, *Span map*). The
+  emitted text does not change; diagnostic columns that move are updated in
+  the fixtures and the spec.
+- `emit`: a piece can be marked *secondary* (a second copy of the same source
+  text); `Map.Spans()` returns the span-map tuples — copied → verbatim (all
+  features but formatting; secondary → none), synthesized → atom on its
+  origin, no features. No gaps.
+- Numeric codes for transpiler diagnostics (the mapper contract has no
+  string codes); the names stay what the user sees.
+- **Done when:** over the conformance corpus the span map validates against
+  the fork's `spanmap`, and every node of the virtual tree maps to the same
+  source span as `emit.Map.Source`.
+- Depends on: 100.
+
+### RGP1-102 — Tolerant transform · M
+- `Input.Tolerant` (ide.md, *Tolerance*): passes on the recovered tree,
+  per-pass fallback, source-only syntax errors, suppression on broken
+  constructs, identity as the last resort. Strict mode unchanged.
+- **Done when:** typing-like mutants of every fixture (delete, insert,
+  truncate at each token) never panic, never hang and always yield a virtual
+  text with a valid map; `iconSize.` inside a slot body keeps its tree.
+- Depends on: 101.
+
+### RGP1-103 — Mapped program · L
+- Bridge: the `.rtsx` mapper in-process, for every project — configured,
+  referenced, inferred — with no tsconfig entry and no flag.
+- Patches: extensionless resolution of mapped extensions (built-in extensions
+  first; `paths` aliases included); the rtsx grammar must not apply to
+  virtual text; a mapped `.rtsx` is always a module.
+- A created or deleted sibling re-transforms (ide.md, *Segments*).
+- **Done when:** a program of `.ts` / `.tsx` / `.rtsx` importing each other,
+  with and without extensions and through a `paths` alias, builds with one
+  module per file.
+- Depends on: 101.
+
+### RGP1-104 — `reactogenic check` on the mapped program · M
+- The overlay file system, the `.rtsx.tsx` alias and the TS5097 filter go;
+  rewrites, `slot-conditional` and transpiler diagnostics move into a
+  reporting layer the server shares; duplicates are merged.
+- **Done when:** the existing `check` suite passes with unchanged
+  expectations; an error inside a mounted segment is reported once; a
+  tsconfig with a `contentMappers` entry does not break `check`.
+- Depends on: 103.
+
+### RGP1-105 — `reactogenic lsp` · L
+- `reactogenic lsp --stdio` on the fork's server with the mapper built in;
+  automatic type acquisition off; `reactogenic --version` and `serverInfo`.
+- A stdio LSP client for Go tests, and a fixture project.
+- **Done when:** hover, definition, references, completion (also right after
+  `iconSize.` in a half-typed file), document symbols and folding answer at
+  `.rtsx` positions, from the built binary.
+- Depends on: 102, 103.
+
+### RGP1-106 — Diagnostics in the server · M
+- The reporting layer of 104 behind a hook where the server still has the
+  structured diagnostic (ide.md, *Diagnostics*).
+- **Done when:** for the `check` suite's projects, the diagnostics pulled for
+  each `.rtsx` document equal `check`'s lines for that file.
+- Depends on: 104, 105.
+
+### RGP1-107 — Slots, segments, rename · L
+- Slot-name completion after `<$`; `#name` definition and completion;
+  rename fix-ups and refusal (ide.md, *Rename*); `reactogenic/transpiled`.
+- **Done when:** each row of ide.md's *Rename* table has a test, and no
+  rename in the fixture project leaves it with a new error.
+- Depends on: 106.
+
+### RGP1-108 — Grammar · M
+- Vendored TSX grammar with its notices, the generator, the generated
+  `rtsx.tmLanguage.json`, the language configurations.
+- **Done when:** the scope assertions pass; plain TSX tokenizes as under
+  `source.tsx`; no `.rtsx` file of the repo has an `invalid.*` token;
+  regenerating changes nothing.
+- Depends on: 100.
+
+### RGP1-109 — VS Code extension · L
+- `packages/vscode`: manifest, client, binary resolution, status item,
+  commands, the `check` task, packaging per platform.
+- **Done when:** in an isolated VS Code profile, opening the fixture project
+  shows highlighting, a slot-term diagnostic, hover and go-to-definition.
+- Depends on: 105, 108.
+
+### RGP1-110 — The `.ts` side: TS server plugin · M
+- A plugin for `tsserver` (TS ≤ 6), contributed by the extension: resolves
+  `.rtsx` imports, serves the emitted TSX, maps positions back.
+- **Done when:** driven over stdio, `tsserver` reports no TS2307 for
+  `import { Page } from "./page"` in a `.tsx` file, and go-to-definition
+  lands in `page.rtsx` at the right line.
+- Depends on: 101.
+
+### RGP1-111 — Stock content mapper · S
+- `reactogenic content-mapper` and the manifest in `@reactogenic/cli`
+  (ide.md, *Stock TypeScript 7.1*). Experimental.
+- **Done when:** `typescript@next`'s `tsc --runExternalCode` checks a project
+  with `.rtsx` files and reports at `.rtsx` positions.
+- Depends on: 102.
+
+### RGP1-112 — Docs and release · S
+- getting-started (*Editor*), README, CI jobs for the grammar and the
+  extension, versions, the `.vsix` files. Publishing to the Marketplace and
+  Open VSX, and the npm release with `lsp`, happen on your go-ahead.
+- Depends on: 107, 109.
+
 ## Not in phase 1
 
-Language service and editor support ([../later/tooling.md](../later/tooling.md));
-type errors in the Vite dev overlay; everything in `specs/later/`.
+Type errors in the Vite dev overlay; everything in `specs/later/`; from
+ide.md: formatting, a tree-sitter grammar, the *Not in the first release*
+table.

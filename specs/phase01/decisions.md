@@ -310,3 +310,48 @@ extension included, so Vite and TS7 load the file the lookup chose rather than
 resolving by their own orders (TS: `.ts` before `.tsx`). `reactogenic check`
 resolves `./x.rtsx` through an `x.rtsx.tsx` alias of the virtual `x.tsx`, and
 drops TS5097 on segment imports.
+
+## IDE support (RGP1-100)
+
+Researched 2026-10-03 against the vendored fork, `typescript@7.0.2`,
+`typescript@next` (7.1.0-dev.20261002.1) and VS Code 1.140; every claim below
+was run or read, then re-checked by a second pass.
+
+**Findings**
+
+| | |
+| --- | --- |
+| TS7 has *content mappers* (`internal/contentmapper`, `internal/spanmap`) | a file of an unsupported extension becomes virtual TS plus a span map; `tsc` and the language server serve it at original positions. Our fork has all of it and builds a working server as is |
+| …but only from 7.1 | 7.0.2 ignores `contentMappers` and rejects `--runExternalCode`; 7.1: beta 2026-10-06, stable planned 2026-11-24. VS Code 1.140 still runs TypeScript 6.0.3's `tsserver` by default |
+| mapped files are not found by extensionless imports | `./button` → TS2307; upstream closed it as intended (microsoft/TypeScript#64546) |
+| a mapper cannot touch TS's diagnostics | it runs before the checker: no slot-term rewrites, no `slot-conditional` |
+| client-contributed mappers reach inferred projects only | a tsconfig project needs its own `contentMappers` entry |
+| our `emit.Map` *is* a span map | copied → verbatim, synthesized-with-origin → atom; validated over the conformance corpus |
+| atoms must carry no features | an origin is often a whole tag: with features, hover and rename answer for unrelated generated code |
+| the transpiler returns nothing on a syntax error | the normal state while typing: no completion after `user.` |
+| rename through the map alone is wrong | `<Button size>` → `<Button dim>`; slot closing tags left behind |
+| `check` has a duplicate | an error inside a mounted segment prints twice, once under `intro.rtsx.tsx` |
+
+**Decisions**
+
+1. **Our own server on the fork** (`reactogenic lsp`), with the transform as
+   a built-in content mapper. Works on today's stable tools; keeps
+   extensionless imports (resolver patch); can rewrite diagnostics.
+2. **One program model.** `check` leaves the overlay for the same mapped
+   program — the editor and the CLI cannot disagree, and the duplicate goes.
+3. **One emission.** Names are copied so TS reaches them; no IDE-only output.
+4. **Tolerant in the editor, strict in builds.**
+5. **Rename is correct or refused.**
+6. **Highlighting is a generated fork of the TSX grammar**, not injections.
+7. **The `.ts` side**: a TS server plugin for `tsserver` (TS ≤ 6), the stock
+   content mapper for TS 7.1+. Our server attaches to `.rtsx` only — taking
+   over `.ts` files would mean disabling VS Code's TypeScript per workspace
+   (Vue's abandoned "takeover mode").
+8. **The stock content mapper is a by-product**, experimental until 7.1 is
+   stable; revisit making it the default path when 7.1 ships, upstream
+   resolves extensionless imports, and the client middleware
+   (`registerLspMiddleware`, merged 2026-10-02) is released.
+
+**Cost accepted:** the binary grows by roughly a third with the language
+service linked in; patches to the fork's resolver, config parsing and
+diagnostics path must be rebased when the pin moves.

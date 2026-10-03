@@ -32,13 +32,15 @@ terminal and CI.
 
 1. Load `tsconfig.json`. `.rtsx` files are picked up by the same `include`
    and `exclude` globs as `.tsx`.
-2. Transpile every `.rtsx` file. `Button.rtsx` enters the program as an
-   in-memory `Button.tsx` — never written to disk — so extensionless imports
-   resolve with TS's own module resolution. A segment import names its file
-   (`./about-us.rtsx`): TS finds it as `about-us.rtsx.tsx`, an alias whose
-   real path is the virtual `about-us.tsx`, so the program holds one module.
-   TS5097 on a segment import (a `.tsx` / `.ts` extension) is dropped: the
-   import is the transpiler's.
+2. Transpile every `.rtsx` file. `Button.rtsx` is a module of the program
+   under its own name; TS parses and checks its emitted TSX — never written
+   to disk — and a span map carries positions back ([ide.md](ide.md), *The
+   engine*). Imports resolve with or without the extension: `./button` finds
+   `button.rtsx` after the built-in extensions; a segment import names its
+   file (`./about-us.rtsx`).
+   > Until RGP1-104: `check` serves `Button.rtsx` as an in-memory
+   > `Button.tsx` through an overlay, with an `about-us.rtsx.tsx` alias for
+   > segment imports.
 3. Check the program. Diagnostics in virtual files are mapped back (*Mapping*);
    diagnostics in real `.ts` / `.tsx` files pass through, with any related
    information that points into a virtual file mapped too.
@@ -51,6 +53,9 @@ src/Page.rtsx:18:3 - error missing-slot: `Card` requires `$Title`.
 ```
 
 `--watch` re-checks on change, as `tsc --watch` does.
+
+The editor shows the same diagnostics, from the same code, through
+`reactogenic lsp` ([ide.md](ide.md), *Diagnostics*).
 
 > OPEN: type errors in the Vite dev overlay (what `vite-plugin-checker` does
 > for `tsc`). Useful, but a separate process; after phase 1's core.

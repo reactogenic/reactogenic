@@ -178,9 +178,8 @@ None. Every bare attribute desugars to A or B.
   attribute changes that attribute's meaning with no error when the types
   happen to agree (`const disabled = false; … <Button disabled />`).
 
-> ROADMAP: a warning in the `.tsx` → `.rtsx` migration path on bare
-> attributes that resolve as case A (the silent flip). Belongs with editor
-> tooling ([../later/tooling.md](../later/tooling.md)).
+> ROADMAP: an inlay hint on bare attributes that resolve as case A (the
+> silent flip) — [ide.md](ide.md), *Not in the first release*.
 
 ### Prior art
 
