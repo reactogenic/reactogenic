@@ -12,6 +12,7 @@ package stockmapper
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -146,7 +147,10 @@ func (s *server) handle(msg message) {
 	switch msg.Method {
 	case "initialize":
 		// Offsets are bytes: what the transpiler's map counts, and what the
-		// host converts to anyway. It offers utf-8 always.
+		// host converts to anyway. It offers utf-8 always. (Neither encoding
+		// serves a source that is not valid UTF-8: the host's JSON carries
+		// U+FFFD for the bad byte, so the copied text no longer equals the
+		// original it is checked against — ide.md, the limits.)
 		s.reply(msg.ID, initializeResult{PositionEncoding: "utf-8", DiagnosticSource: DiagnosticSource}, nil)
 	case "openProject":
 		var p openProjectParams
@@ -240,6 +244,10 @@ func (s *server) logf(format string, args ...any) {
 	}
 }
 
+// maxMessage bounds a message: a source file and its path. A length above it
+// is not a message — and one that fits an int but no slice would be a panic.
+const maxMessage = 1 << 30
+
 // readMessage reads one framed message: headers, a blank line, then
 // Content-Length bytes.
 func readMessage(r *bufio.Reader) ([]byte, error) {
@@ -264,16 +272,19 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 			continue // Content-Type, or a header of a later protocol
 		}
 		length, err = strconv.Atoi(strings.TrimSpace(value))
-		if err != nil || length < 0 {
+		if err != nil || length < 0 || length > maxMessage {
 			return nil, fmt.Errorf("content mapper protocol: Content-Length %q", strings.TrimSpace(value))
 		}
 	}
-	body := make([]byte, length)
-	if _, err := io.ReadFull(r, body); err != nil {
+	// The header is a claim, not an allocation: beyond a megabyte the body
+	// grows as its bytes arrive.
+	var body bytes.Buffer
+	body.Grow(min(length, 1<<20))
+	if _, err := io.CopyN(&body, r, int64(length)); err != nil {
 		if err == io.EOF {
 			return nil, io.ErrUnexpectedEOF
 		}
 		return nil, err
 	}
-	return body, nil
+	return body.Bytes(), nil
 }

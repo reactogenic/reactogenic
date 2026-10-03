@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 
@@ -45,17 +46,22 @@ const policyIgnore = 0
 // transform is the built-in mapper's transform (go/internal/mapper) plus
 // what the stock host cannot do for a mapped file:
 //
-//   - imports get their `.rtsx` (resolve.go): after the passes, an edit to
-//     the emitted text whose map is composed with theirs, as the passes
-//     compose one another. The inserted text is synthesized on the specifier:
-//     an atom without features, so the specifier itself still answers from
-//     its copied text;
+//   - imports and module augmentations get their `.rtsx` (resolve.go):
+//     after the passes, an edit to the emitted text whose map is composed
+//     with theirs, as the passes compose one another. The inserted text is
+//     synthesized on the specifier: an atom without features, so the
+//     specifier itself still answers from its copied text. An alias that
+//     cannot carry the extension is replaced by a relative path, the whole
+//     of it an atom on the specifier;
 //   - a file without imports or exports gets `export {}`: an .rtsx file is
 //     always a module (in our hosts the mapper says so; here only the text
 //     can);
-//   - TS5097 on the import a segment root generates for a `.tsx` / `.ts`
-//     file is dropped (syntax.md, *Segment files*), by an ignore directive
-//     over that specifier and nothing else;
+//   - the import a segment root generates for a `.tsx` / `.ts` file
+//     (syntax.md, *Segment files*) loses its extension, and TS5097 with it.
+//     Where a sibling would win the extensionless import — `intro.ts` next
+//     to the segment `intro.tsx` — the extension stays and an ignore
+//     directive over that specifier drops TS5097, with whatever else
+//     TypeScript reports on that specifier: a directive has no codes;
 //   - a stopped file (ide.md, *Tolerance*) drops every TypeScript
 //     diagnostic of its virtual text, by a directive over all of it.
 //
@@ -78,36 +84,59 @@ func (s *server) transform(p transformParams, proj *project) (result transformRe
 	}
 
 	// What TypeScript will parse, but for the edits below.
-	virtual, emitted := rtsx.ParseTSX(p.FileName+".tsx", text), toSource
+	virtualName := p.FileName + ".tsx"
+	virtual := rtsx.ParseTSX(virtualName, text)
 	var (
-		edits    []emit.Edit
-		inserted []insertion
-		ignored  [][2]int // virtual ranges, before the edits
+		edits   []emit.Edit
+		moved   []shift
+		ignored [][2]int // virtual ranges, before the edits
 	)
-	for _, specifier := range virtual.Imports() {
+	replace := func(span emit.Span, with string, origin emit.Span) {
+		edits = append(edits, emit.Edit{Span: span, Pieces: []emit.Piece{emit.Synth(with, origin)}})
+		moved = append(moved, shift{span.End, len(with) - span.Len()})
+	}
+	specifiers, isModule := virtual.Imports(), virtual.ExternalModuleIndicator != nil
+	switch {
+	case isModule:
+		specifiers = append(specifiers[:len(specifiers):len(specifiers)], virtual.ModuleAugmentations...)
+	case len(virtual.AmbientModuleNames) > 0:
+		// `declare module "./button"` augments once the file is a module:
+		// parsed as TypeScript will, with the `export {}` of below. It is
+		// appended, so the positions are this text's.
+		specifiers = append(specifiers[:len(specifiers):len(specifiers)], rtsx.ParseTSX(virtualName, text+moduleMarker).ModuleAugmentations...)
+	}
+	for _, specifier := range specifiers {
 		span := emit.Span{Pos: rtsx.TokenStart(virtual, specifier), End: specifier.End()}
-		name, ok := quoted(text[span.Pos:span.End])
-		if !ok {
-			continue // unterminated, or written with escapes
-		}
-		if suffix := s.explicitSuffix(p.FileName, name, proj); suffix != "" {
-			at := span.End - 1 // before the closing quote
-			edits = append(edits, emit.Edit{Span: emit.Span{Pos: at, End: at}, Pieces: []emit.Piece{emit.Synth(suffix, span)}})
-			inserted = append(inserted, insertion{at, len(suffix)})
+		if span.Pos < 0 || span.End > len(text) || span.Len() < 2 {
 			continue
 		}
-		if (strings.HasSuffix(name, ".tsx") || strings.HasSuffix(name, ".ts")) && isSegmentImport(file, toSource.Source(span)) {
-			ignored = append(ignored, [2]int{span.Pos, span.End})
+		name, ok := quoted(text[span.Pos:span.End])
+		if !ok {
+			continue // `global`; unterminated, or written with escapes
+		}
+		inner := emit.Span{Pos: span.Pos + 1, End: span.End - 1} // between the quotes
+		suffix, whole := s.explicitImport(p.FileName, name, proj)
+		switch {
+		case suffix != "":
+			replace(emit.Span{Pos: inner.End, End: inner.End}, suffix, span)
+		case whole != "":
+			replace(inner, whole, span)
+		case (strings.HasSuffix(name, ".tsx") || strings.HasSuffix(name, ".ts")) && isSegmentImport(file, toSource.Source(span)):
+			if bare, same := s.extensionless(p.FileName, name); same {
+				replace(inner, bare, span)
+			} else {
+				ignored = append(ignored, [2]int{span.Pos, span.End})
+			}
 		}
 	}
-	if virtual.ExternalModuleIndicator == nil {
+	if !isModule {
 		end := emit.Span{Pos: len(text), End: len(text)}
-		edits = append(edits, emit.Edit{Span: end, Pieces: []emit.Piece{emit.Synth("\nexport {};\n", end)}})
+		edits = append(edits, emit.Edit{Span: end, Pieces: []emit.Piece{emit.Synth(moduleMarker, end)}})
 	}
 	if len(edits) > 0 {
 		next, m, err := emit.Apply(text, edits)
 		if err != nil {
-			panic(err) // edits are insertions at distinct positions
+			panic(err) // edits are at distinct specifiers and at the end
 		}
 		text, toSource = next, m.Then(toSource)
 	}
@@ -121,8 +150,8 @@ func (s *server) transform(p transformParams, proj *project) (result transformRe
 	case len(ignored) > 0:
 		result.DiagnosticDirectives = &directives{}
 		for _, r := range ignored {
-			shift := shiftAt(inserted, r[0])
-			result.DiagnosticDirectives.Directives = append(result.DiagnosticDirectives.Directives, [5]int{0, 0, r[0] + shift, r[1] + shift, policyIgnore})
+			by := shiftAt(moved, r[0])
+			result.DiagnosticDirectives.Directives = append(result.DiagnosticDirectives.Directives, [5]int{0, 0, r[0] + by, r[1] + by, policyIgnore})
 		}
 	}
 	if result.DiagnosticDirectives != nil {
@@ -132,13 +161,32 @@ func (s *server) transform(p transformParams, proj *project) (result transformRe
 	if file.Err != nil {
 		result.Diagnostics = append(result.Diagnostics, internalError(p.Content, file.Err.Error()))
 	}
+	// Whether TypeScript finds syntax errors in the virtual text — the text
+	// it will parse, edits included: `export {}` after a file cut off at
+	// `export` makes one statement of the two, which parses.
+	typeScriptReports := sync.OnceValue(func() bool {
+		final := virtual
+		if len(edits) > 0 {
+			final = rtsx.ParseTSX(virtualName, text)
+		}
+		return len(final.Diagnostics()) > 0
+	})
 	for _, d := range file.Diagnostics {
 		if d.Severity != transpiler.Error {
 			continue // the contract has no warnings
 		}
 		code, named := numericCode(d.Code)
-		if !named && reportedByTypeScript(virtual, emitted, code, d.Span.Pos) {
-			continue // TypeScript finds the same syntax error in the virtual text
+		if !named {
+			// A syntax error of the source parse. While the virtual text has
+			// syntax errors of its own, TypeScript reports the mistake
+			// there — at another place and often under another code, so no
+			// comparison tells "the same" — and the source parse's are not
+			// sent: one mistake, one report. They are the mapper's to send
+			// when the virtual text parses: the passes lowered the broken
+			// code away (the children of a segment root).
+			if typeScriptReports() {
+				continue
+			}
 		}
 		message := d.Message
 		if named {
@@ -153,17 +201,21 @@ func (s *server) transform(p transformParams, proj *project) (result transformRe
 	return result
 }
 
-type insertion struct{ at, length int }
+// moduleMarker makes a file a module, at its end.
+const moduleMarker = "\nexport {};\n"
 
-// shiftAt: how far the insertions before pos moved it.
-func shiftAt(inserted []insertion, pos int) int {
-	shift := 0
-	for _, i := range inserted {
-		if i.at <= pos {
-			shift += i.length
+// shift: an edit that ends at from made the text after it longer by by.
+type shift struct{ from, by int }
+
+// shiftAt: how far the edits before pos moved it.
+func shiftAt(moved []shift, pos int) int {
+	total := 0
+	for _, m := range moved {
+		if m.from <= pos {
+			total += m.by
 		}
 	}
-	return shift
+	return total
 }
 
 // quoted returns the text of a string literal written without escapes.
@@ -183,24 +235,6 @@ func quoted(literal string) (string, bool) {
 func isSegmentImport(file *mapper.File, source emit.Span) bool {
 	for _, note := range file.Notes {
 		if note.Kind == "segment" && note.Span == source {
-			return true
-		}
-	}
-	return false
-}
-
-// reportedByTypeScript: the virtual text has a syntax error with this code
-// that maps to this source offset. The host shows it, at the same place; the
-// transpiler's copy would be a duplicate. A syntax error the passes lowered
-// away — the virtual text parses there — stays the mapper's to report.
-func reportedByTypeScript(virtual *rtsx.SourceFile, toSource *emit.Map, code int32, sourcePos int) bool {
-	text := virtual.Text()
-	for _, d := range virtual.Diagnostics() {
-		if d.Code() != code {
-			continue
-		}
-		pos := min(rtsx.SkipTrivia(text, d.Pos()), len(text))
-		if toSource.Source(emit.Span{Pos: pos, End: max(d.End(), pos)}).Pos == sourcePos {
 			return true
 		}
 	}

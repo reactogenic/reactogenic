@@ -13,7 +13,9 @@ import (
 // fork's resolver does (go/patches/0005-rtsx-resolver.patch). Here the
 // mapper writes the extension into the virtual text of the files it owns,
 // by the same rule: an .rtsx file is found after every built-in extension,
-// as a file before a directory's index, relative or through `paths`.
+// as a file before a directory's index, relative or through `paths`. Not
+// through node_modules: a package's .rtsx files are imported by their full
+// names.
 
 const mappedExtension = ".rtsx"
 
@@ -105,29 +107,75 @@ func isDriveAbsolute(p string) bool {
 	return len(p) >= 3 && p[1] == ':' && p[2] == '/'
 }
 
-// explicitSuffix returns what to append to the specifier of an import
-// written in the file fileName so that it names the .rtsx file our own
-// resolver would find for it; "" when the import is fine as written — it
-// finds a built-in file, names its extension already, or finds nothing.
-func (s *server) explicitSuffix(fileName, specifier string, proj *project) string {
+// explicitImport returns how to rewrite the specifier of an import written
+// in the file fileName so that it names the .rtsx file our own resolver
+// would find for it: a suffix to append, or — for an alias that no longer
+// matches its `paths` pattern with the suffix on (an exact alias, a pattern
+// with text after its `*`) — a relative path to that file, in place of the
+// whole specifier. Both are "" when the import is fine as written: it finds
+// a built-in file, names its extension already, or finds nothing.
+func (s *server) explicitImport(fileName, specifier string, proj *project) (suffix, whole string) {
 	if specifier == "" {
-		return ""
+		return "", ""
 	}
 	directoryOnly := strings.HasSuffix(specifier, "/")
 	if isRelative(specifier) {
 		last := specifier[strings.LastIndex(specifier, "/")+1:]
 		suffix, _ := s.mappedSuffix(path.Join(path.Dir(fileName), specifier), directoryOnly || last == "." || last == "..")
-		return joinSuffix(specifier, suffix)
+		return joinSuffix(specifier, suffix), ""
 	}
 	for _, candidate := range proj.candidates(specifier) {
 		if s.opts.FileExists(candidate) {
-			return "" // a substitution that names its file
+			return "", "" // a substitution that names its file
 		}
-		if suffix, found := s.mappedSuffix(candidate, directoryOnly); found {
-			return joinSuffix(specifier, suffix)
+		suffix, found := s.mappedSuffix(candidate, directoryOnly)
+		if !found {
+			continue
+		}
+		if suffix == "" {
+			return "", ""
+		}
+		target := candidate + suffix
+		if suffix = joinSuffix(specifier, suffix); s.aliasFinds(proj, specifier+suffix, target) {
+			return suffix, ""
+		}
+		return "", relativeSpecifier(path.Dir(fileName), target)
+	}
+	return "", ""
+}
+
+// aliasFinds: TypeScript, resolving specifier through `paths`, reaches the
+// file target before anything else.
+func (s *server) aliasFinds(proj *project, specifier, target string) bool {
+	for _, candidate := range proj.candidates(specifier) {
+		if candidate == target {
+			return true
+		}
+		if s.opts.FileExists(candidate) {
+			return false
+		}
+		if _, found := s.mappedSuffix(candidate, false); found {
+			return false
 		}
 	}
-	return ""
+	return false
+}
+
+// relativeSpecifier names the file target from a file in fromDir: `./x`,
+// `../x`; the absolute path when they share no root (two Windows drives).
+func relativeSpecifier(fromDir, target string) string {
+	from, to := strings.Split(strings.TrimSuffix(fromDir, "/"), "/"), strings.Split(target, "/")
+	common := 0
+	for common < len(from) && common < len(to)-1 && from[common] == to[common] {
+		common++
+	}
+	if common == 0 {
+		return target
+	}
+	if common == len(from) {
+		return "./" + strings.Join(to[common:], "/")
+	}
+	return strings.Repeat("../", len(from)-common) + strings.Join(to[common:], "/")
 }
 
 func isRelative(specifier string) bool {
@@ -156,8 +204,9 @@ func (s *server) mappedSuffix(candidate string, directoryOnly bool) (suffix stri
 			return mappedExtension, true
 		}
 	}
-	// A directory: its package.json is TypeScript's business; else its index.
-	if exists(candidate + "/package.json") {
+	// A directory: the entry its package.json names is TypeScript's
+	// business; else its index.
+	if s.namesEntry(candidate + "/package.json") {
 		return "", true
 	}
 	for _, ext := range builtInExtensions {
@@ -167,6 +216,45 @@ func (s *server) mappedSuffix(candidate string, directoryOnly bool) (suffix stri
 	}
 	if exists(candidate + "/index" + mappedExtension) {
 		return "/index" + mappedExtension, true
+	}
+	return "", false
+}
+
+// namesEntry: the package.json has one of the fields TypeScript reads a
+// directory's entry from when the directory is imported by its path. One
+// without them — or one that is not JSON — leaves the directory to its
+// index.
+func (s *server) namesEntry(packageJSON string) bool {
+	if !s.opts.FileExists(packageJSON) {
+		return false
+	}
+	text, ok := s.opts.ReadFile(packageJSON)
+	if !ok {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal([]byte(text), &fields) != nil {
+		return false
+	}
+	for _, field := range []string{"types", "typings", "main", "typesVersions"} {
+		if _, named := fields[field]; named {
+			return true
+		}
+	}
+	return false
+}
+
+// extensionless returns the specifier of a segment's import without its
+// `.tsx` / `.ts`, when TypeScript finds the same file that way: no sibling
+// with an extension it tries first.
+func (s *server) extensionless(fileName, specifier string) (string, bool) {
+	ext := path.Ext(specifier)
+	bare := strings.TrimSuffix(specifier, ext)
+	base := path.Join(path.Dir(fileName), bare)
+	for _, tried := range builtInExtensions {
+		if s.opts.FileExists(base + tried) {
+			return bare, tried == ext
+		}
 	}
 	return "", false
 }

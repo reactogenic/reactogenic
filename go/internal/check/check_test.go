@@ -90,6 +90,46 @@ func TestClean(t *testing.T) {
 	}
 }
 
+// ide.md, *The engine* and *Stock TypeScript 7.1*: a project that also runs
+// stock TypeScript 7.1 lists @reactogenic/cli in tsconfig `contentMappers`.
+// `check` ignores the entry: the same reports as without it — no TS18068
+// for the `--runExternalCode` it does not need — and the package's command
+// is not run.
+func TestContentMappersEntryIgnored(t *testing.T) {
+	check := func(entry string) []string {
+		dir := writeProject(t, map[string]string{
+			"tsconfig.json": strings.Replace(tsconfig, `"include": ["src"]`, entry+`"include": ["src"]`, 1),
+			"src/jsx.d.ts":  jsxTypes,
+			"src/b.rtsx":    "import { C } from \"./c\";\nconst label = 1;\nexport const b = <C label />;\nexport const o = <div><$Title>t</$Title></div>;\n",
+			"src/c.tsx":     "export function C(p: { label: string }) {\n  return <div>{p.label}</div>;\n}\n",
+			// A mapper package whose command, if anything ran it, would
+			// leave a file behind.
+			"node_modules/@reactogenic/cli/package.json": `{ "name": "@reactogenic/cli", "version": "0.0.0",
+  "typescript": { "contentMapper": { "exec": ["sh", "-c", "touch spawned"] } } }`,
+		})
+		var got []string
+		for _, r := range Run(dir + "/tsconfig.json") {
+			got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+":"+strconv.Itoa(r.Col)+" "+r.Code)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "node_modules/@reactogenic/cli/spawned")); err == nil {
+			t.Errorf("the configured mapper's command was run")
+		}
+		return got
+	}
+	plain := check("")
+	if want := []string{"src/b.rtsx:3:21 TS2322", "src/b.rtsx:4:23 orphan-slot"}; strings.Join(plain, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("without the entry: %q, want %q", plain, want)
+	}
+	for name, entry := range map[string]string{
+		"the package":        `{ "package": "@reactogenic/cli", "extensions": [".rtsx"] }`,
+		"an unknown package": `{ "package": "not-installed", "extensions": [".rtsx"] }`,
+	} {
+		if got := check(`"contentMappers": [` + entry + "],\n  "); strings.Join(got, "\n") != strings.Join(plain, "\n") {
+			t.Errorf("%s: %q, without the entry %q", name, got, plain)
+		}
+	}
+}
+
 // A stand-in for the installed @reactogenic/core, for temporary projects.
 var coreStub = map[string]string{
 	"node_modules/@reactogenic/core/package.json": `{ "name": "@reactogenic/core", "types": "index.d.ts" }`,

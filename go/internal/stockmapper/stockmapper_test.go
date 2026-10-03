@@ -15,7 +15,6 @@ import (
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 
 	"github.com/reactogenic/reactogenic/go/internal/conformance"
-	"github.com/reactogenic/reactogenic/go/internal/emit"
 )
 
 // host is the other end of the protocol, as TypeScript speaks it: framed
@@ -302,14 +301,18 @@ func TestTransform(t *testing.T) {
 // extension — in the virtual text here, since stock TypeScript does not look.
 func TestExplicitImports(t *testing.T) {
 	disk := files{
-		"/proj/src/button.rtsx":        "",
-		"/proj/src/card.rtsx":          "",
-		"/proj/src/card.ts":            "", // a built-in sibling wins
-		"/proj/src/ui/index.rtsx":      "",
-		"/proj/src/lib/index.ts":       "",
-		"/proj/src/lib.rtsx":           "", // a file before a directory
-		"/proj/src/pkg/package.json":   "",
+		"/proj/src/button.rtsx":   "",
+		"/proj/src/card.rtsx":     "",
+		"/proj/src/card.ts":       "", // a built-in sibling wins
+		"/proj/src/ui/index.rtsx": "",
+		"/proj/src/lib/index.ts":  "",
+		"/proj/src/lib.rtsx":      "", // a file before a directory
+		// A package.json that names its entry is TypeScript's business; one
+		// that names none leaves the directory to its index.
+		"/proj/src/pkg/package.json":   `{ "name": "pkg", "types": "./entry.d.ts" }`,
 		"/proj/src/pkg/index.rtsx":     "",
+		"/proj/src/named/package.json": `{ "name": "named" }`,
+		"/proj/src/named/index.rtsx":   "",
 		"/proj/src/index.rtsx":         "",
 		"/proj/src/deep/inner.rtsx":    "",
 		"/proj/shared/panel.rtsx":      "",
@@ -319,7 +322,13 @@ func TestExplicitImports(t *testing.T) {
 	h := start(t, disk.options())
 	h.call("openProject", map[string]any{"configFileName": "/proj/tsconfig.json", "projectHandle": "p:0", "compilerOptions": map[string]any{
 		"configFilePath": "/proj/tsconfig.json",
-		"paths":          map[string]any{"@/*": []string{"./src/*"}, "@shared/*": []string{"./missing/*", "./shared/*"}, "entry": []string{"./shared/exact/entry.tsx"}},
+		"paths": map[string]any{
+			"@/*": []string{"./src/*"}, "@shared/*": []string{"./missing/*", "./shared/*"}, "entry": []string{"./shared/exact/entry.tsx"},
+			// Aliases the extension cannot be appended to: exact ones, to a
+			// file and to a directory, and a pattern with text after its `*`.
+			"@button": []string{"./src/button"}, "@ui": []string{"./src/ui"}, "@card": []string{"./src/card"},
+			"kit/*/mod": []string{"./src/*"}, "@panel": []string{"./missing/panel", "./shared/panel"},
+		},
 	}})
 	source := `import a from "./button";
 import b from './card';
@@ -338,6 +347,19 @@ import "./styles.css";
 export * from "./deep/inner";
 export type T = import("./button").T;
 export const lazy = () => import("../src/button");
+import n from "./named";
+import o from "@button";
+import p from '@ui';
+import q from "@card";
+import r from "kit/button/mod";
+import s from "kit/ui/mod";
+import u from "kit/deep/inner/mod";
+import v from "@panel";
+import w from "@/named";
+declare module "./button" { interface Extra { x: number } }
+declare module "@button" { interface Extra { y: number } }
+declare module "react" { interface Extra { z: number } }
+declare global { interface Window { page: true } }
 `
 	result := h.transform("/proj/src/page.rtsx", source)
 	want := `import a from "./button.rtsx";
@@ -357,11 +379,39 @@ import "./styles.css";
 export * from "./deep/inner.rtsx";
 export type T = import("./button.rtsx").T;
 export const lazy = () => import("../src/button.rtsx");
+import n from "./named/index.rtsx";
+import o from "./button.rtsx";
+import p from './ui/index.rtsx';
+import q from "@card";
+import r from "./button.rtsx";
+import s from "./ui/index.rtsx";
+import u from "./deep/inner.rtsx";
+import v from "../shared/panel.rtsx";
+import w from "@/named/index.rtsx";
+declare module "./button.rtsx" { interface Extra { x: number } }
+declare module "./button.rtsx" { interface Extra { y: number } }
+declare module "react" { interface Extra { z: number } }
+declare global { interface Window { page: true } }
 `
 	if result.Text != want {
 		t.Errorf("virtual text:\n%s\nwant:\n%s", result.Text, want)
 	}
-	spanMap(t, result, source)
+	m := spanMap(t, result, source)
+	// A replaced alias is an atom on the specifier the author wrote, quotes
+	// and all: an error there lands on `"@button"`.
+	alias := strings.Index(source, `"@button"`)
+	aliasEnd := alias + len(`"@button"`)
+	at := strings.Index(result.Text, `import o from "./button.rtsx"`) + len(`import o from `)
+	if pos, end, exact := rtsx.SpanSource(m, at+1, at+1+len(`./button.rtsx`)); exact || pos != alias || end != aliasEnd {
+		t.Errorf("the replaced alias maps to [%d,%d) (exact: %v), want the specifier [%d,%d)", pos, end, exact, alias, aliasEnd)
+	}
+	if pos, end, _ := rtsx.SpanSource(m, at, at+len(`"./button.rtsx"`)); pos != alias || end != aliasEnd {
+		t.Errorf("the specifier of the replaced alias maps to [%d,%d), want [%d,%d)", pos, end, alias, aliasEnd)
+	}
+	// From another directory the replacement climbs.
+	if deep := h.transform("/proj/src/deep/page.rtsx", "import o from \"@button\";\nimport v from \"@panel\";\n"); deep.Text != "import o from \"../button.rtsx\";\nimport v from \"../../shared/panel.rtsx\";\n" {
+		t.Errorf("from src/deep:\n%s", deep.Text)
+	}
 
 	// Without the project — a handle the mapper was not told about — the
 	// relative imports are still explicit; the aliases are not.
@@ -376,14 +426,40 @@ export const lazy = () => import("../src/button.rtsx");
 	}
 }
 
+// What replaces an alias names the file from the importing file's directory,
+// as the host writes paths: `/` everywhere, a drive letter on Windows.
+func TestRelativeSpecifier(t *testing.T) {
+	for _, c := range [][3]string{
+		{"/proj/src", "/proj/src/button.rtsx", "./button.rtsx"},
+		{"/proj/src", "/proj/src/ui/index.rtsx", "./ui/index.rtsx"},
+		{"/proj/src/deep/er", "/proj/src/button.rtsx", "../../button.rtsx"},
+		{"/proj/src", "/shared/panel.rtsx", "../../shared/panel.rtsx"},
+		{"/", "/button.rtsx", "./button.rtsx"},
+		{"C:/proj/src", "C:/proj/shared/panel.rtsx", "../shared/panel.rtsx"},
+		{"C:/proj/src", "D:/shared/panel.rtsx", "D:/shared/panel.rtsx"}, // no common root: the path itself
+	} {
+		if got := relativeSpecifier(c[0], c[1]); got != c[2] {
+			t.Errorf("relativeSpecifier(%q, %q) = %q, want %q", c[0], c[1], got, c[2])
+		}
+	}
+}
+
 // An .rtsx file is always a module: one without imports or exports says so
 // in its virtual text.
 func TestAlwaysAModule(t *testing.T) {
-	h := start(t, files{}.options())
+	h := start(t, files{"/proj/src/button.rtsx": ""}.options())
 	source := "const answer = 42;\n"
 	result := h.transform("/proj/src/loose.rtsx", source)
 	if result.Text != source+"\nexport {};\n" {
 		t.Errorf("virtual text: %q", result.Text)
+	}
+	spanMap(t, result, source)
+	// As a module, its `declare module` is an augmentation — of an .rtsx
+	// module, by its full name.
+	source = "declare module \"./button\" { interface Extra { x: number } }\n"
+	result = h.transform("/proj/src/augment.rtsx", source)
+	if result.Text != "declare module \"./button.rtsx\" { interface Extra { x: number } }\n\nexport {};\n" {
+		t.Errorf("an augmentation alone: %q", result.Text)
 	}
 	spanMap(t, result, source)
 	if empty := h.transform("/proj/src/empty.rtsx", ""); empty.Text != "\nexport {};\n" {
@@ -425,8 +501,8 @@ func TestTranspilerDiagnostics(t *testing.T) {
 }
 
 // ide.md, *Tolerance*: a file being typed still has a virtual text and a
-// valid map. Its syntax errors are TypeScript's to report when the virtual
-// text has them too, and the mapper's when the passes lowered them away.
+// valid map. Its syntax errors are TypeScript's to report while the virtual
+// text has any, and the mapper's when the passes lowered them away.
 func TestBrokenFile(t *testing.T) {
 	disk := files{"/proj/src/button.rtsx": buttonSource}
 	h := start(t, disk.options())
@@ -447,7 +523,7 @@ export function Page({ user }: { user: { name: string } }) {
 			t.Errorf("the virtual text lacks %q:\n%s", want, result.Text)
 		}
 	}
-	// TS1003 is in the virtual text at the same place: not sent twice.
+	// TS1003 is in the virtual text: not sent twice.
 	if len(result.Diagnostics) != 0 {
 		t.Errorf("diagnostics: %q", lines(result.Diagnostics, source))
 	}
@@ -456,10 +532,25 @@ export function Page({ user }: { user: { name: string } }) {
 		t.Errorf("the virtual text's own syntax errors: %d", len(virtual.Diagnostics()))
 	}
 
-	// "The same" is the same code at the same place.
-	onVirtual, at := emit.Identity(len(result.Text)), strings.Index(result.Text, "}</p>")
-	if !reportedByTypeScript(virtual, onVirtual, 1003, at) || reportedByTypeScript(virtual, onVirtual, 1005, at) || reportedByTypeScript(virtual, onVirtual, 1003, 0) {
-		t.Errorf("reportedByTypeScript does not tell TS1003 at %d from the rest", at)
+	// One mistake, one report — also where TypeScript finds it in generated
+	// text, at another place than the source parse does (`size` became
+	// `size={size}`), or under another code (TS1003 for the source's
+	// TS1145), or after the element a slot was lowered into.
+	for name, body := range map[string]string{
+		"a file cut off in a tag":  "import { Button } from \"./button\";\nexport function Page() {\n  const size = 2;\n  return <Button size",
+		"a value still to come":    "import { Button } from \"./button\";\nexport function Page() {\n  const size = 2;\n  return <Button size= />;\n}\n",
+		"a brace left open":        "import { Button } from \"./button\";\nexport const P = ({ a }: { a: string }) => <Button size={1}><$Icon>{a.</$Icon></Button>;\n",
+		"a brace typed into a tag": "import { Button } from \"./button\";\nexport function Page() {\n  const size = 2;\n  return <But{ton size />;\n}\n",
+		"params half typed":        "import { Button } from \"./button\";\nexport function Page() {\n  const size = 2;\n  return <Button size><$Icon { si>{size}</$Icon></Button>;\n}\n",
+	} {
+		result := h.transform("/proj/src/typing.rtsx", body)
+		spanMap(t, result, body)
+		if got := syntaxErrors(result); len(got) != 0 {
+			t.Errorf("%s: the mapper sends %q", name, lines(got, body))
+		}
+		if virtual := rtsx.ParseTSX("/proj/src/typing.rtsx.tsx", result.Text); len(virtual.Diagnostics()) == 0 {
+			t.Errorf("%s: nobody reports the mistake:\n%s", name, result.Text)
+		}
 	}
 
 	// A syntax error in code a pass replaces — the children of a segment
@@ -480,11 +571,18 @@ export function Page({ user }: { user: { name: string } }) {
 	}
 }
 
-// A segment root's import of a `.tsx` file is the transpiler's: TS5097 on
-// it is dropped — on that specifier, and nowhere else.
-func TestSegmentImportDirective(t *testing.T) {
+// A segment root's import of a `.tsx` / `.ts` file is the transpiler's, and
+// TS5097 on it is not the author's. The import loses its extension: no
+// TS5097, and every other error TypeScript has for that module still shows
+// (a file that is not a module: TS2306, on the specifier). Only where a
+// sibling would win the extensionless import does the extension stay, under
+// an ignore directive — on that specifier, and nowhere else.
+func TestSegmentImport(t *testing.T) {
 	disk := files{
 		"/proj/src/intro.tsx":   "export default function Intro() { return null; }\n",
+		"/proj/src/outro.ts":    "export default function Outro() { return null; }\n",
+		"/proj/src/outro.js":    "", // `./outro` is outro.ts all the same
+		"/proj/src/plain.jsx":   "export default function Plain() { return null; }\n",
 		"/proj/src/about.rtsx":  "export default function About() { return null; }\n",
 		"/proj/src/helper.tsx":  "export const help = 1;\n",
 		"/proj/src/widget.rtsx": "",
@@ -493,10 +591,34 @@ func TestSegmentImportDirective(t *testing.T) {
 	source := `import { Widget } from "./widget";
 import { help } from "./helper.tsx";
 export function Page() {
-  return <main><section #intro /><section #about />{help}<Widget /></main>;
+  return <main><section #intro /><section #outro /><section #plain /><section #about />{help}<Widget /></main>;
 }
 `
 	result := h.transform("/proj/src/page.rtsx", source)
+	m := spanMap(t, result, source)
+	// The author's own `./helper.tsx` keeps its extension, and its TS5097;
+	// a .jsx and an .rtsx segment keep theirs, which no error is about.
+	for _, want := range []string{
+		`import _Section_intro from "./intro";`, `import _Section_outro from "./outro";`, `import _Section_plain from "./plain.jsx";`,
+		`import _Section_about from "./about.rtsx";`, `from "./helper.tsx"`, `from "./widget.rtsx"`,
+	} {
+		if !strings.Contains(result.Text, want) {
+			t.Errorf("the virtual text lacks %q:\n%s", want, result.Text)
+		}
+	}
+	if result.DiagnosticDirectives != nil {
+		t.Errorf("directives: %+v", result.DiagnosticDirectives)
+	}
+	// An error on the generated specifier lands on the segment root.
+	if pos, exact := sourceOf(t, m, result.Text, `"./intro"`, 1); exact || pos != strings.Index(source, "#intro") {
+		t.Errorf("the specifier maps to %d (exact: %v), want `#intro` at %d", pos, exact, strings.Index(source, "#intro"))
+	}
+
+	// `intro.ts` next to the segment `intro.tsx`: TypeScript would take the
+	// extensionless import to the .ts. The import stays explicit, under the
+	// directive. The insertions before it are counted.
+	disk["/proj/src/intro.ts"] = "export const other = 1;\n"
+	result = h.transform("/proj/src/page.rtsx", source)
 	spanMap(t, result, source)
 	if result.DiagnosticDirectives == nil || len(result.DiagnosticDirectives.Directives) != 1 {
 		t.Fatalf("directives: %+v\n%s", result.DiagnosticDirectives, result.Text)
@@ -508,9 +630,7 @@ export function Page() {
 	if got := result.Text[d[2]:d[3]]; got != `"./intro.tsx"` || d[4] != policyIgnore {
 		t.Errorf("the directive covers %q, policy %d", got, d[4])
 	}
-	// The author's own `./helper.tsx` keeps its TS5097; the .rtsx segment
-	// needs no directive.
-	if !strings.Contains(result.Text, `import _Section_about from "./about.rtsx";`) || !strings.Contains(result.Text, `from "./widget.rtsx"`) {
+	if !strings.Contains(result.Text, `import _Section_outro from "./outro";`) {
 		t.Errorf("virtual text:\n%s", result.Text)
 	}
 	raw, _ := json.Marshal(result.DiagnosticDirectives)
@@ -705,9 +825,8 @@ func TestCodeTable(t *testing.T) {
 	}
 }
 
-// Over the conformance corpus the stock mapper answers every file with a
-// map the compiler accepts, and with no code outside the table.
-func TestCorpus(t *testing.T) {
+func corpus(t *testing.T) []conformance.Case {
+	t.Helper()
 	spec, err := os.ReadFile("../../../specs/phase01/syntax.md")
 	if err != nil {
 		t.Fatal(err)
@@ -721,17 +840,48 @@ func TestCorpus(t *testing.T) {
 	if len(cases) < 60 {
 		t.Fatalf("%d cases", len(cases))
 	}
-	withDiagnostics := 0
-	for _, c := range cases {
-		disk := files{}
-		for name, text := range c.Files {
-			disk["/case/"+name] = text
+	return cases
+}
+
+// caseServer is a mapper over the files of a corpus case, and its log: a
+// transform that panics still answers (the source stands in, a valid
+// result), so only the log tells.
+func caseServer(c conformance.Case) (*server, *strings.Builder) {
+	disk := files{}
+	for name, text := range c.Files {
+		disk["/case/"+name] = text
+	}
+	opts, log := disk.options(), &strings.Builder{}
+	opts.Log = log
+	return newServer(io.Discard, opts), log
+}
+
+// syntaxErrors are the source parse's errors among a result's diagnostics:
+// those under TypeScript's own numbers.
+func syntaxErrors(result transformResult) []diagnostic {
+	var out []diagnostic
+	for _, d := range result.Diagnostics {
+		if d.Code >= 1000 {
+			out = append(out, d)
 		}
-		s := newServer(io.Discard, disk.options())
+	}
+	return out
+}
+
+// Over the conformance corpus the stock mapper answers every file with a
+// map the compiler accepts, with no code outside the table, and without a
+// panic behind the answer.
+func TestCorpus(t *testing.T) {
+	withDiagnostics := 0
+	for _, c := range corpus(t) {
+		s, log := caseServer(c)
 		source := c.Files[c.Entry]
 		result := s.transform(transformParams{FileName: "/case/" + c.Entry, Content: source}, nil)
 		t.Run(c.ID, func(t *testing.T) {
 			spanMap(t, result, source)
+			if log.Len() > 0 {
+				t.Errorf("the mapper logged:\n%s", log)
+			}
 			if len(result.Diagnostics) > 0 {
 				withDiagnostics++
 			}
@@ -744,5 +894,83 @@ func TestCorpus(t *testing.T) {
 	}
 	if withDiagnostics == 0 {
 		t.Errorf("no case of the corpus has a transpiler error")
+	}
+}
+
+// One mistake, one report (ide.md, *Stock TypeScript 7.1*): over typing-like
+// mutants of the corpus — the text cut off, a character deleted, one typed —
+// a result never carries a syntax error of the source parse while its
+// virtual text has syntax errors of its own, which TypeScript reports; and a
+// source that does not parse is never passed off as clean. No transform
+// panics on the way, and every result is one the compiler accepts.
+func TestSyntaxErrorsOnce(t *testing.T) {
+	typed := []string{"<", ">", "{", "}", "&", "#", "$", ".", "=", "/", "\"", "("}
+	mutants, broken, typeScripts, mappers, twice, silent, shown := 0, 0, 0, 0, 0, 0, 0
+	for _, c := range corpus(t) {
+		s, log := caseServer(c)
+		src := c.Files[c.Entry]
+		stride := max(1, len(src)/100)
+		try := func(text string) {
+			mutants++
+			fileName := "/case/" + c.Entry
+			result := s.transform(transformParams{FileName: fileName, Content: text}, nil)
+			fail := func(format string, args ...any) {
+				if shown++; shown <= 10 {
+					t.Errorf("%s: %s\n--- source\n%s\n--- virtual\n%s", c.ID, fmt.Sprintf(format, args...), text, result.Text)
+				}
+			}
+			if log.Len() > 0 {
+				fail("the mapper logged:\n%s", log)
+				log.Reset()
+			}
+			spanMap(t, result, text)
+			if len(rtsx.ParseRTSX(fileName, text).Diagnostics()) == 0 {
+				return
+			}
+			broken++
+			virtual, fromMapper := rtsx.ParseTSX(fileName+".tsx", result.Text).Diagnostics(), syntaxErrors(result)
+			switch {
+			case len(virtual) > 0 && len(fromMapper) > 0:
+				twice++
+				fail("TypeScript reports %d syntax errors in the virtual text (the first: TS%d %s) and the mapper sends %q", len(virtual), virtual[0].Code(), rtsx.Message(virtual[0]), lines(fromMapper, text))
+			case len(virtual) > 0:
+				typeScripts++
+			case len(fromMapper) > 0:
+				mappers++
+			case len(result.Diagnostics) == 0:
+				silent++
+				fail("the source has syntax errors and nobody reports one")
+			}
+		}
+		for i := 0; i <= len(src); i += stride {
+			try(src[:i]) // typing, top to bottom
+			if i < len(src) {
+				try(src[:i] + src[i+1:]) // a deleted character
+			}
+			try(src[:i] + typed[(i/stride)%len(typed)] + src[i:]) // a typed one
+		}
+	}
+	if twice+silent > 0 {
+		t.Errorf("%d mutants reported twice, %d not at all", twice, silent)
+	}
+	if mutants < 10000 || broken < mutants/3 || mappers == 0 {
+		t.Errorf("%d mutants, %d with syntax errors, %d of them the mapper's to report: the corpus is not exercised", mutants, broken, mappers)
+	}
+	t.Logf("%d mutants, %d with syntax errors: %d reported by TypeScript, %d by the mapper", mutants, broken, typeScripts, mappers)
+}
+
+// A Content-Length no message has is a protocol error — not an allocation,
+// not a panic.
+func TestContentLengthBound(t *testing.T) {
+	for _, length := range []string{"9000000000000000000", "1000000000000", "1073741825", "99999999999999999999"} {
+		err := Serve(strings.NewReader("Content-Length: "+length+"\r\n\r\n{}"), io.Discard, Options{})
+		if err == nil || !strings.Contains(err.Error(), "content mapper protocol: Content-Length") {
+			t.Errorf("Content-Length %s: %v", length, err)
+		}
+	}
+	// Below the bound, a length the input does not have is the end of the
+	// input, found without the claimed allocation.
+	if err := Serve(strings.NewReader("Content-Length: 1073741824\r\n\r\n{}"), io.Discard, Options{}); err != io.ErrUnexpectedEOF {
+		t.Errorf("a gigabyte announced, two bytes sent: %v", err)
 	}
 }

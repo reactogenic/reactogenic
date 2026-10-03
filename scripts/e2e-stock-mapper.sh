@@ -16,7 +16,7 @@ set -uo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 work="${1:-$(mktemp -d)}"
 mkdir -p "$work"
-work="$(cd "$work" && pwd)"
+work="$(cd "$work" && pwd -P)" # the physical path: TypeScript's messages name files by it
 project="$work/project"
 
 if [[ -z "${REACTOGENIC_BINARY:-}" ]]; then
@@ -38,13 +38,16 @@ echo "typescript: $("$tsc" --version)"
 echo "manifest:   $(node -p 'JSON.stringify(JSON.parse(fs.readFileSync("node_modules/@reactogenic/cli/package.json", "utf8")).typescript)')"
 
 # No allowImportingTsExtensions: the import a segment root generates for
-# intro.tsx would be TS5097 without the mapper's ignore directive.
+# intro.tsx would be TS5097 if the mapper wrote its extension.
+# `paths`: a pattern the extension can be appended to, and three it cannot —
+# an exact alias of a file, one of a directory, a pattern with text after
+# its `*`.
 cat > tsconfig.json <<'EOF'
 {
   "compilerOptions": {
     "strict": true, "noEmit": true, "jsx": "react-jsx", "module": "esnext", "moduleResolution": "bundler",
     "target": "es2022", "lib": ["es2022", "dom"], "skipLibCheck": true,
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"], "@button": ["./src/button"], "@widgets": ["./src/widgets"], "ui/*/mod": ["./src/*"] }
   },
   "contentMappers": [{ "package": "@reactogenic/cli", "extensions": [".rtsx"] }],
   "include": ["src"]
@@ -72,7 +75,8 @@ export function Button({ $Label, $Icon, size }: ButtonProps) {
 }
 EOF
 cat > src/widgets/index.rtsx <<'EOF'
-export function Badge({ text }: { text: string }) {
+export interface BadgeProps { text: string }
+export function Badge({ text }: BadgeProps) {
   return <em>{text}</em>;
 }
 EOF
@@ -114,11 +118,32 @@ export function Page({ status }: { status: "loading" | "ready" }) {
   );
 }
 EOF
+# The aliases that cannot carry an extension, and a module augmentation.
+cat > src/aliases.rtsx <<'EOF'
+import { Button } from "@button";
+import { Badge } from "@widgets";
+import { Button as Patterned } from "ui/button/mod";
+
+declare module "./widgets" {
+  interface BadgeProps { tone?: "calm" | "loud" }
+}
+
+export function Aliases() {
+  return (
+    <p>
+      <Button size="md" />
+      <Badge text="new" tone="calm" />
+      <Patterned size="lg" />
+    </p>
+  );
+}
+EOF
 # A .tsx file names the extension: stock TypeScript does not look for .rtsx.
 cat > src/main.tsx <<'EOF'
 import { Page } from "./page.rtsx";
 export const app = <Page status="ready" />;
 EOF
+rm -rf "$work/src.clean" # of an earlier run in the same work-dir
 cp -R src "$work/src.clean"
 
 failed=0
@@ -144,6 +169,13 @@ run() {
   done
   if [[ $# -eq 0 && -n "$out" ]]; then
     echo "FAIL: output, expected none"
+    failed=1
+  fi
+  # The expected errors and no others: one mistake, one report.
+  local errors
+  errors="$(grep -c '): error ' <<<"$out")"
+  if [[ $# -gt 0 && "$errors" != "$#" ]]; then
+    echo "FAIL: $errors errors, expected $#"
     failed=1
   fi
 }
@@ -182,6 +214,14 @@ run "a syntax error: once, TypeScript's own"  2 \
   "src/page.rtsx(16,27): error TS1003: Identifier expected."
 reset
 
+# The source parse puts this one at the `>` (12,20); TypeScript finds it in
+# the virtual text, in what the slot was lowered to, which maps to the slot's
+# tag. Still one report.
+edit src/page.rtsx '<$Icon { size }>' '<$Icon { si>'
+run "a syntax error TypeScript finds at another place than the source parse: once"  2 \
+  "src/page.rtsx(12,9): error TS1005: ',' expected."
+reset
+
 # The children of a segment root are replaced: the virtual text parses, so
 # the error is the mapper's to report, under TypeScript's number.
 edit src/page.rtsx '<section #intro />' '<section #intro>{status.}</section>'
@@ -192,14 +232,52 @@ reset
 edit src/page.rtsx 'import { Badge } from "./widgets";' 'import { Badge } from "./widgets";
 import Intro from "./intro.tsx";'
 edit src/page.rtsx '<Badge text={status} />' '<Intro />'
-run "the ignore directive is the generated import's only: the author's own ./intro.tsx is TS5097"  2 \
+run "the generated segment import has no TS5097; the author's own ./intro.tsx has"  2 \
   "src/page.rtsx(5,19): error TS5097: An import path can only end with a '.tsx' extension when 'allowImportingTsExtensions' is enabled."
+reset
+
+# Nothing hides what TypeScript says about a segment's module: the generated
+# import of a `.ts` segment is extensionless, not under an ignore directive.
+echo 'function Notes() { return null; }' > src/notes.ts
+edit src/page.rtsx '<footer #outro />' '<footer #notes />'
+run "a .ts segment that is not a module: TS2306, on the segment root"  2 \
+  "src/page.rtsx(21,15): error TS2306: File '$project/src/notes.ts' is not a module."
+reset
+
+# intro.ts next to the segment intro.tsx would win an extensionless import:
+# there the import keeps `.tsx`, and the directive drops its TS5097.
+echo 'export default 5;' > src/intro.ts
+run "a .ts sibling of a .tsx segment: the import stays explicit, without TS5097"  0
+reset
+
+edit src/aliases.rtsx '<Button size="md" />' '<Button size="sm" />'
+edit src/aliases.rtsx 'tone="calm"' 'tone="shrill"'
+edit src/aliases.rtsx '<Patterned size="lg" />' '<Patterned size="xl" />'
+run "type errors through an exact alias, an augmentation of a directory's index, a pattern with a suffix"  2 \
+  "src/aliases.rtsx(12,15): error TS2322: Type '\"sm\"' is not assignable to type 'Size'." \
+  "src/aliases.rtsx(13,25): error TS2322: Type '\"shrill\"' is not assignable to type '\"calm\" | \"loud\" | undefined'." \
+  "src/aliases.rtsx(14,18): error TS2322: Type '\"xl\"' is not assignable to type 'Size'."
 reset
 
 edit src/main.tsx '"./page.rtsx"' '"./page"'
 run "the limit: an extensionless import of an .rtsx file written in a .tsx file"  2 \
   "src/main.tsx(1,22): error TS2307: Cannot find module './page' or its corresponding type declarations."
 reset
+
+# `reactogenic check` on the same tsconfig: the `contentMappers` entry is
+# ignored — no TS18068 for the `--runExternalCode` it does not need.
+# (Until RGP1-106 moves `check` to the mapped program it prints one error of
+# its own here, on `page.rtsx.tsx`: main.tsx names `./page.rtsx`.)
+out="$("$REACTOGENIC_BINARY" check --pretty=false 2>&1)"
+code=$?
+echo
+echo "== reactogenic check on the same tsconfig ignores the contentMappers entry"
+echo "\$ reactogenic check   (exit $code)"
+[[ -n "$out" ]] && echo "$out"
+if grep -q 'TS18068' <<<"$out"; then
+  echo "FAIL: TS18068"
+  failed=1
+fi
 
 echo
 if [[ "$failed" != 0 ]]; then
