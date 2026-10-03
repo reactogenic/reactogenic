@@ -33,45 +33,80 @@ func Run(configPath string) []Report {
 
 // run checks the project and, first, the projects it references — a tsconfig
 // with `references` and no files of its own (Vite's template) is checked
-// through them. A referenced project's modules are in the referencing
-// program too, read from source; each file is reported once, by the first
-// project that holds it: its own, checked with its own options. It also
-// returns the tsconfig files read, for --watch.
+// through them. It also returns the tsconfig files read, for --watch.
+//
+// A referenced project's modules are in the referencing program too, read
+// from source — and checked there with the referencing project's options.
+// So each file is reported once, by its own project: the first that lists
+// it, in `files` or through `include`, whichever project is checked first.
+// A file that no project lists — one reached through an import only — is
+// reported by the first that holds it.
 func run(configPath string) (reports []Report, configs []string) {
-	reported := map[string]bool{} // files, and the reports that have none
-	var project func(config string)
-	project = func(config string) {
+	fs := rtsx.OSFS()
+	type loaded struct {
+		project     *rtsx.Project // nil: the tsconfig cannot be read
+		diagnostics []*rtsx.Diagnostic
+	}
+	var projects []loaded // a project after those it references
+	var load func(config string)
+	load = func(config string) {
 		if slices.Contains(configs, config) {
 			return
 		}
 		configs = append(configs, config)
-		program, configDiagnostics := rtsx.NewProgram(config, path.Dir(config), rtsx.OSFS())
-		if program != nil {
-			for _, reference := range rtsx.ProjectReferences(program) {
-				project(reference)
+		// A referenced tsconfig that is not there is the referencing
+		// project's to report (TS6053), once.
+		if config != configPath && !fs.FileExists(config) {
+			return
+		}
+		project, diagnostics := rtsx.LoadProject(config, path.Dir(config), fs)
+		if project != nil {
+			for _, reference := range project.References() {
+				load(reference)
 			}
 		}
-		files := map[string]bool{}
-		for _, r := range report.Program(program, configDiagnostics) {
+		projects = append(projects, loaded{project, diagnostics})
+	}
+	load(configPath)
+
+	owner := map[string]int{} // a listed file → the first project that lists it
+	for i, p := range projects {
+		if p.project == nil {
+			continue
+		}
+		for _, file := range p.project.Files() {
+			if _, listed := owner[file]; !listed {
+				owner[file] = i
+			}
+		}
+	}
+	reported := map[string]bool{} // the files no project lists, and the reports that have no file
+	for i, p := range projects {
+		var program *rtsx.Program // one at a time: built, checked, let go
+		if p.project != nil {
+			program = p.project.Program()
+		}
+		held := map[string]bool{}
+		for _, r := range report.Program(program, p.diagnostics) {
 			key := r.File
 			if key == "" {
 				key = "\x00" + r.Code + r.Message
 			}
-			if !reported[key] {
-				reports = append(reports, r)
-				files[key] = true
+			if o, listed := owner[key]; listed && o != i || !listed && reported[key] {
+				continue
 			}
+			reports = append(reports, r)
+			held[key] = true
 		}
 		if program != nil {
 			for _, file := range program.GetSourceFiles() {
-				files[file.FileName()] = true
+				held[file.FileName()] = true
 			}
 		}
-		for file := range files {
-			reported[file] = true
+		for key := range held {
+			reported[key] = true
 		}
 	}
-	project(configPath)
 	slices.SortStableFunc(reports, func(a, b Report) int {
 		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Col, b.Col))
 	})

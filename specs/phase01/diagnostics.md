@@ -34,8 +34,19 @@ terminal and CI.
 }
 ```
 
-1. Load `tsconfig.json`. `.rtsx` files are picked up by the same `include`
-   and `exclude` globs as `.tsx`.
+1. Load `tsconfig.json`. `include` and `exclude` match `.rtsx` files as they
+   match `.tsx`: a directory (`"src"`) or a `*` covers both; a pattern that
+   names an extension covers that extension.
+
+   ```jsonc
+   "include": ["src"]                                            // every .ts, .tsx and .rtsx under src
+   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.rtsx"]   // the same, spelled out
+   "include": ["src/**/*.ts", "src/**/*.tsx"]                    // no .rtsx file is listed
+   ```
+
+   An `.rtsx` file that is not listed is still a module of the program when
+   an import reaches it, and is checked then. One that nothing reaches is not
+   checked, like a `.tsx` file outside `include`.
 2. Transpile every `.rtsx` file. `Button.rtsx` is a module of the program
    under its own name; TS parses and checks its emitted TSX — never written
    to disk — and a span map carries positions back ([ide.md](ide.md), *The
@@ -45,7 +56,10 @@ terminal and CI.
    nothing: the transform is built in.
 3. Check the program. Diagnostics in `.rtsx` files are mapped back
    (*Mapping*); diagnostics in `.ts` / `.tsx` files pass through, with any
-   related information that points into an `.rtsx` file mapped too.
+   related information that points into an `.rtsx` file mapped too. Nothing
+   is emitted, so the errors that only an emit of declarations finds
+   (TS4094, …) are reported here, for any project that emits them — with
+   `noEmit` or without.
 4. Print in `tsc`'s format, with the `.rtsx` path and a code frame of the
    `.rtsx` source. Transpiler errors use their name as the code:
 
@@ -60,15 +74,28 @@ src/Page.rtsx:18:3 - error missing-slot: `Card` requires `$Title`.
 | --- | --- |
 | has a syntax error | its syntax errors, nothing else: the passes do not run (the build is strict). Its module still exports what it declares, so its importers are checked, and the rest of the program is |
 | has code the transpiler left out — an expression or a component inside an orphaned slot element, or inside a `Switch` or `Match` that cannot be lowered (`null` in the emitted TSX) | the transpiler's errors only. TS's would be about code the author did not write: every name used only there reads as unused ([ide.md](ide.md), *Tolerance*, rule 4) |
-| has code that is emitted twice (an attachment and its fallback) | each mistake once ([ide.md](ide.md), *Diagnostics*) |
+| has a construct that stays as written — an arg on an element without `slot={$X}` (arg-without-slot), params on an intrinsic element (params-on-html) | the transpiler's errors only. The emitted text is not TSX there, and TS's errors would be about what it makes of `<option &size />` (rule 4) |
+| has code that is emitted twice (an attachment and its fallback; `&&name`, an arg and a prop) | each mistake once ([ide.md](ide.md), *Diagnostics*) |
 | is `name.rtsx` next to `name.tsx` | ambiguous-module, and its own errors: both files are modules of the program |
 
 **References.** The projects a tsconfig references are checked first, each
 with its own options, then the tsconfig's own files — so a tsconfig with
 `references` and no files of its own (Vite's template) prints what its
 projects print. A referenced project's modules are read from source (an
-`.rtsx` file has no build output). Each file is reported once, by the first
-project that holds it.
+`.rtsx` file has no build output), so they are in the referencing program
+too, under its options. Each file is reported once, by **its own project**:
+the first that lists it (`files`, `include`), in whatever order the
+references are written.
+
+```jsonc
+// tsconfig.json — test/page.test.tsx imports ../src/page
+"references": [{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.app.json" }]
+// src/page.rtsx is the app's: reported with the app's options, as `-p tsconfig.app.json` reports it
+```
+
+A file that no project lists — reached by an import only — is reported by
+the first project that holds it. A reference to a tsconfig that is not there
+is one error, the referencing project's (TS6053).
 
 `--watch` re-checks on change, as `tsc --watch` does: an edited file, and one
 created or deleted — a segment's file, an import's target — in the directory

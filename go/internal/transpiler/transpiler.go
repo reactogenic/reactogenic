@@ -97,6 +97,12 @@ type Output struct {
 	// the author's code: names used only there read as unused (ide.md,
 	// *Tolerance*).
 	Dropped bool
+	// Unlowered: a construct that is an error where it stands is still in
+	// TSX as the author wrote it — `&size` on an element without
+	// `slot={$X}`, params on an intrinsic element. That text is not TSX: TS
+	// reads `<option &size />` as `<option` `& size / >`, and what it says
+	// about the file is not about the author's code (ide.md, *Tolerance*).
+	Unlowered bool
 }
 
 // Shorthand is a bare name with two meanings.
@@ -257,7 +263,8 @@ func Transpile(in Input) (Output, error) {
 					out.SlotGroups = append(out.SlotGroups, g)
 				}
 			},
-			dropped: func() { out.Dropped = true },
+			dropped:   func() { out.Dropped = true },
+			unlowered: func() { out.Unlowered = true },
 			generated: func(local, written string) {
 				if out.Generated == nil {
 					out.Generated = map[string]string{}
@@ -425,6 +432,12 @@ func oneCopyAnswers(pieces []emit.Piece) {
 	}
 }
 
+// staysAsWritten are the errors of pass 0 whose construct no pass lowers: an
+// arg belongs to an attachment and params to a component or a slot element,
+// and there is none. The attribute stays in the output, which is then not
+// TSX (Output.Unlowered).
+var staysAsWritten = map[string]bool{"arg-without-slot": true, "params-on-html": true}
+
 // checks is pass 0: errors reported against what the author wrote.
 func checks(c *passContext) []emit.Edit {
 	var errs []syntax.Error
@@ -439,6 +452,10 @@ func checks(c *passContext) []emit.Edit {
 			sev = Warning
 		}
 		c.report(emit.Span{Pos: e.Pos, End: e.End}, sev, e.Code, e.Message)
+		// Reported or dropped as half-typed, the construct stays as written.
+		if staysAsWritten[e.Code] {
+			c.unlowered()
+		}
 	}
 	c.checkSegmentFiles()
 	c.checkAmbiguousModule()

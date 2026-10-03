@@ -43,11 +43,40 @@ func TestTolerantEqualsStrict(t *testing.T) {
 			"shorthands":      {tolerant.Shorthands, strict.Shorthands},
 			"slot groups":     {tolerant.SlotGroups, strict.SlotGroups},
 			"dropped":         {tolerant.Dropped, strict.Dropped},
+			"unlowered":       {tolerant.Unlowered, strict.Unlowered},
 		} {
 			if !reflect.DeepEqual(pair[0], pair[1]) {
 				t.Errorf("%s: %s differ:\n%+v\n%+v", c.ID, name, pair[0], pair[1])
 			}
 		}
+	}
+}
+
+// What TS7 checks is TSX: of a source that parses, the output of all the
+// passes parses as plain TSX — or it is marked (Output.Unlowered: an error
+// left a construct as written), and the reporting layer then drops what TS
+// says about the file (ide.md, *Tolerance*, rule 4). An error code that
+// leaves its construct in the output without marking it fails here.
+func TestOutputIsTSXOrMarked(t *testing.T) {
+	marked := 0
+	for _, c := range corpus(t) {
+		if c.UntilPass != 0 {
+			continue
+		}
+		out, err := transpiler.Transpile(transpiler.Input{Files: c.Files, Entry: c.Entry})
+		if err != nil || out.Map == nil {
+			continue // a syntax error in the source
+		}
+		if out.Unlowered {
+			marked++
+			continue
+		}
+		if errs := rtsx.ParseTSX("/"+c.Entry+".tsx", out.TSX).Diagnostics(); len(errs) > 0 {
+			t.Errorf("%s: the output is not TSX (%s) and not marked:\n%s", c.ID, rtsx.Message(errs[0]), out.TSX)
+		}
+	}
+	if marked < 2 { // fixtures/slots/arg-without-slot, fixtures/parse/params-on-html
+		t.Errorf("%d marked outputs: the corpus has no unlowered construct", marked)
 	}
 }
 

@@ -188,8 +188,13 @@ A file being typed rarely parses. The transform never fails on user input:
    attribute next to a body are skipped — whether their error was shown or
    dropped, every name used only there would read as unused. (The children
    of a segment root are overwritten by design, with a warning: the file is
-   not marked.) Source parse errors and transpiler diagnostics of the
-   completed passes remain; hover and completion keep working.
+   not marked.) And when a construct **stays as written**: an arg on an
+   element without `slot={$X}` (`arg-without-slot`) and params on an
+   intrinsic element (`params-on-html`) are errors that no pass lowers, so
+   the virtual text is not TSX — TS reads `<option &size />` as `<option`
+   `& size / >`, and reports on that. Source parse errors and transpiler
+   diagnostics of the completed passes remain; hover and completion keep
+   working.
 5. A panic inside a pass is caught there, whether the source parses or not:
    step 4 from the last good text, plus one `internal` diagnostic on the
    first line naming the pass. A panic anywhere else in the transform is
@@ -310,6 +315,16 @@ file, it returns the reports for that file.
   // TS2339 … on type '{ title?: string; … }'       the first copy: reported
   // TS2339 … on type 'unique symbol'               the fallback's copy: dropped
   // TS18048 '$Label' is possibly 'undefined'       the fallback's copy only: reported
+  ```
+
+  A mistake is never dropped altogether. The secondary copies yield first;
+  what is left is then merged — in that order, because the copy that answers
+  need not come first:
+
+  ```tsx
+  <tr slot={$Row} &&className={row.nope} />   // the element's prop, then the arg — which answers
+  // TS2339 … 'nope' …   the prop's copy, secondary: dropped
+  // TS2339 … 'nope' …   the arg's copy, the same message: reported
   ```
 
 A report carries its source range, severity, code, message, related
@@ -684,10 +699,10 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 
 | Layer | Test |
 | --- | --- |
-| transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
+| transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; the output of a source that parses is TSX, or marked as holding a construct as written; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
 | server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent |
-| reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked; a file with a syntax error in each mode; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside); a report's range is source text; the merge rule, case by case |
-| `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a syntax error in an `.rtsx` and in a `.tsx` file, a warning; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
+| reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked — code left out, and a construct left as written; a file with a syntax error in each mode; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside), declaration errors of a project that emits included; a report's range is source text; the merge rule, case by case, and an error in `&&name` through the whole layer |
+| `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, references in either order, a missing reference, an `include` that names extensions, a project that emits declarations, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a syntax error in an `.rtsx` and in a `.tsx` file, an unlowered construct, a warning; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX* against a stand-in server. The suite also runs against a packaged `.vsix` and its bundled binary |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |

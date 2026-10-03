@@ -296,24 +296,30 @@ func copyOf(m *emit.Map, virtual emit.Span) (int, bool) {
 //
 // Nothing else is merged: two reports on synthesized text share a range —
 // their construct's — without being the same mistake.
+//
+// The two rules run one after the other, each on what it may drop: a
+// secondary copy yields to another copy, and only then are equal reports
+// merged, among those that stay. Run together they would drop a mistake
+// altogether: of `&&name={expr}` the secondary copy — the element's prop —
+// is emitted before the one that answers, the arg, with the same message.
 func once(reports []Report) []Report {
-	var kept []Report
+	var copies []Report
 next:
 	for i, r := range reports {
 		for j, q := range reports {
-			if i == j || q.Span != r.Span || q.Code != r.Code {
-				continue
-			}
-			if j < i && q.Message == r.Message {
-				continue next
-			}
 			// Of several secondary copies with nothing in the primary one,
 			// the first stays.
-			if r.secondary && q.copy != 0 && q.copy != r.copy && (!q.secondary || j < i) {
+			if r.secondary && i != j && q.Span == r.Span && q.Code == r.Code && q.copy != 0 && q.copy != r.copy && (!q.secondary || j < i) {
 				continue next
 			}
 		}
-		kept = append(kept, r)
+		copies = append(copies, r)
+	}
+	var kept []Report
+	for _, r := range copies {
+		if !slices.ContainsFunc(kept, func(q Report) bool { return q.Span == r.Span && q.Code == r.Code && q.Message == r.Message }) {
+			kept = append(kept, r)
+		}
 	}
 	return kept
 }

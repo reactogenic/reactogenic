@@ -208,6 +208,38 @@ export function Button({ size, $Icon, $Label, $List }: ButtonProps) {
 	}
 }
 
+// Each mistake once (ide.md, *Diagnostics*) — and not never. `&&name` is an
+// arg and a prop: one source text, emitted as the element's prop (twice,
+// with a fallback) and as the arg, which is the copy that answers. A type
+// error in it — in `&&name={expr}`, or a bare `&&name` that is no binding —
+// is one line.
+func TestArgAndProp(t *testing.T) {
+	got := checkProject(t, map[string]string{"src/rows.rtsx": `import type { Slot } from "@reactogenic/core";
+type P = { $Row: Slot<{ className?: string }, { className: string }>; row: { id: string } };
+export function A({ $Row, row }: P) {
+  return <tr slot={$Row} &&className={row.nope} />;
+}
+export function B({ $Row }: P) {
+  return <tr slot={$Row} &&className />;
+}
+export function C({ $Row, row }: P) {
+  return <tr slot={$Row} &&className={row.nope}>fallback</tr>;
+}
+export function D({ $Row }: P) {
+  return <tr slot={$Row} &&className>fallback</tr>;
+}
+`})
+	want := []string{
+		"src/rows.rtsx:4:43 TS2339", // `row.nope`
+		"src/rows.rtsx:7:28 TS2304", // `className`: no such name
+		"src/rows.rtsx:10:43 TS2339",
+		"src/rows.rtsx:13:28 TS2304",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
 // The attachment's children are the fallback; recursive slots and last-wins
 // type-check clean.
 func TestSlotsTypeCheck(t *testing.T) {
@@ -350,6 +382,41 @@ func TestWatchReferences(t *testing.T) {
 		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("the edit was not picked up")
+	}
+}
+
+// A referenced project that is not there is the referencing project's error
+// (TS6053), once — and its directory is watched all the same: the project is
+// checked when it appears.
+func TestWatchMissingReference(t *testing.T) {
+	dir := writeProject(t, map[string]string{
+		"solution/tsconfig.json": `{ "files": [], "references": [{ "path": "../app" }] }`,
+	})
+	stop := make(chan struct{})
+	runs := make(chan []Report, 8)
+	go Watch(dir+"/solution/tsconfig.json", 20*time.Millisecond, stop, func(r []Report) { runs <- r })
+	defer close(stop)
+	if first := <-runs; len(first) != 1 || first[0].Code != "TS6053" {
+		t.Fatalf("first run: %+v", first)
+	}
+	for name, text := range map[string]string{"app/src/jsx.d.ts": jsxTypes, "app/src/a.rtsx": "export const a: number = \"x\";\n", "app/tsconfig.json": tsconfig} {
+		os.MkdirAll(filepath.Dir(dir+"/"+name), 0o755)
+		if err := os.WriteFile(dir+"/"+name, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A run may fall between the writes: the last one sees them all.
+	timeout := time.After(20 * time.Second)
+	for {
+		select {
+		case reports := <-runs:
+			if len(reports) == 1 && reports[0].Code == "TS2322" && reports[0].File == dir+"/app/src/a.rtsx" {
+				return
+			}
+			t.Logf("a run: %+v", reports)
+		case <-timeout:
+			t.Fatal("the project that appeared was not checked")
+		}
 	}
 }
 

@@ -1,0 +1,6 @@
+# tests that are not strict, before a strict app
+src/page.rtsx(1,24): error TS7031: Binding element 'items' implicitly has an 'any' type.
+src/page.rtsx(2,26): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/util.ts(1,22): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/util.ts(1,25): error TS7006: Parameter 'k' implicitly has an 'any' type.
+# strict tests before an app that is not

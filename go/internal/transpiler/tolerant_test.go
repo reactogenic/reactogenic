@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/microsoft/TypeScript/tsc/rtsx"
 )
 
 // tolerantCodes transpiles files[entry] in tolerant mode and returns the
@@ -150,6 +152,45 @@ func TestDropped(t *testing.T) {
 	codes, out := tolerantCodes(t, map[string]string{"a.rtsx": src}, "a.rtsx")
 	if codes != "" || !out.Dropped || !strings.Contains(out.TSX, "<Button />") {
 		t.Errorf("an unclosed Match above a slot: diagnostics %q, dropped %v\n%s", codes, out.Dropped, out.TSX)
+	}
+}
+
+// A construct that is an error where it stands and that no pass lowers — an
+// arg without an attachment, params on an intrinsic element — stays in the
+// output as written and marks the file (Output.Unlowered): that text is not
+// TSX. Everything else is lowered, or replaced: the output is TSX.
+func TestUnlowered(t *testing.T) {
+	for _, c := range []struct {
+		name, jsx string
+		unlowered bool
+	}{
+		{"an arg without an attachment", "<option &ok />", true},
+		{"an arg and prop without an attachment", "<option slot=\"header\" &&value={s} />", true},
+		{"an arg on a component", "<Button &ok />", true},
+		{"params on an intrinsic element", "<div { x }>{x}</div>", true},
+		{"params on a component", "<Button { x }>{x}</Button>", false},
+		{"params on a slot element", "<Button><$Icon { x }>{x}</$Icon></Button>", false},
+		{"params given twice", "<Button { x } { y }>{x}</Button>", false},
+		{"an orphaned slot", "<div><$Icon { x }>{x}</$Icon></div>", false},
+		{"nothing wrong", "<option value={s} />", false},
+	} {
+		for _, tolerant := range []bool{false, true} {
+			out, err := Transpile(Input{Files: map[string]string{"a.rtsx": inReturn("    " + c.jsx)}, Entry: "a.rtsx", Tolerant: tolerant})
+			if err != nil || out.Unlowered != c.unlowered {
+				t.Errorf("%s (tolerant %v): err %v, unlowered %v, want %v\n%s", c.name, tolerant, err, out.Unlowered, c.unlowered, out.TSX)
+				continue
+			}
+			if tsx := len(rtsx.ParseTSX("/a.tsx", out.TSX).Diagnostics()) == 0; tsx == c.unlowered {
+				t.Errorf("%s (tolerant %v): unlowered %v, and the output parses as TSX: %v\n%s", c.name, tolerant, c.unlowered, tsx, out.TSX)
+			}
+		}
+	}
+	// The same where the error is dropped, the tag being half-typed: the arg
+	// is in the output all the same.
+	src := inReturn("    <div>\n      <option &ok\n    </div>")
+	codes, out := tolerantCodes(t, map[string]string{"a.rtsx": src}, "a.rtsx")
+	if codes != "" || !out.Unlowered || !strings.Contains(out.TSX, "&ok") {
+		t.Errorf("an arg in an unclosed tag: diagnostics %q, unlowered %v\n%s", codes, out.Unlowered, out.TSX)
 	}
 }
 

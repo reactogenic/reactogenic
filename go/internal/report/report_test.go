@@ -326,6 +326,17 @@ func TestOnce(t *testing.T) {
 			[]Report{report("TS2339", "narrowed", 1, false), report("TS2339", "not narrowed", 2, true)}, "TS2339 narrowed"},
 		"the primary copy is kept wherever it comes": {
 			[]Report{report("TS2339", "not narrowed", 1, true), report("TS2339", "narrowed", 2, false)}, "TS2339 narrowed"},
+		// `&&name={expr}`: the element's prop is emitted before the arg, which
+		// is the copy that answers — and TS says the same of both.
+		"a secondary copy before the primary one, the same message: the primary": {
+			[]Report{report("TS2339", "same", 1, true), report("TS2339", "same", 2, false)}, "TS2339 same"},
+		// … with a fallback: the prop once more, in the other branch.
+		"secondary, primary, secondary, one message: one": {
+			[]Report{report("TS2339", "same", 1, true), report("TS2339", "same", 2, false), report("TS2339", "same", 3, true)}, "TS2339 same"},
+		"secondary, secondary, primary, one message: one": {
+			[]Report{report("TS2339", "same", 1, true), report("TS2339", "same", 3, true), report("TS2339", "same", 2, false)}, "TS2339 same"},
+		"secondary copies only, one message: one": {
+			[]Report{report("TS2339", "same", 2, true), report("TS2339", "same", 3, true)}, "TS2339 same"},
 		"secondary copies only: the first": {
 			[]Report{report("TS2339", "x", 2, true), report("TS2339", "y", 3, true)}, "TS2339 x"},
 		"a secondary copy with a code of its own: kept": {
@@ -346,5 +357,125 @@ func TestOnce(t *testing.T) {
 		if strings.Join(got, "|") != c.want {
 			t.Errorf("%s: %q, want %q", name, got, c.want)
 		}
+	}
+}
+
+// *Each mistake once*, through the whole layer: `&&name` is an arg and a
+// prop — one source text, emitted as the element's prop (in each branch,
+// with a fallback) and as the arg. A type error in it is reported once — not
+// twice, and not never — by both forms of the layer and in both modes.
+func TestArgAndProp(t *testing.T) {
+	// What an attachment with args calls, besides the stand-in's.
+	const coreWithArgs = `type ReactNode = string | number | boolean | null | undefined | { readonly $$typeof: symbol };
+export declare const NOT_ASSIGNED: unique symbol;
+export type NotAssigned = typeof NOT_ASSIGNED;
+type Key = string | number | bigint;
+export type Slot<Props, Args = never> = (Omit<Props, "children"> & { children?: (args: Args) => ReactNode }) | NotAssigned;
+export declare function slotArgs<S>(slot: S, args: object): object;
+export declare function slotKey(slot: unknown, args: object, fallback?: Key | null): Key | null | undefined;
+export declare function isAssigned<S>(slot: S): slot is Exclude<S, NotAssigned | undefined | null>;
+export declare function slotProps<S extends object>(slot: S): S;
+export declare function renderSlot<S extends object>(slot: S, args: object, fallback?: ReactNode): ReactNode;`
+	const rows = `import type { Slot } from "@reactogenic/core";
+type P = { $Row: Slot<{ className?: string }, { className: string }>; row: { id: string } };
+export function A({ $Row, row }: P) {
+  return <tr slot={$Row} &&className={row.nope} />;
+}
+export function B({ $Row }: P) {
+  return <tr slot={$Row} &&className />;
+}
+export function C({ $Row, row }: P) {
+  return <tr slot={$Row} &&className={row.nope}>fallback</tr>;
+}
+export function D({ $Row }: P) {
+  return <tr slot={$Row} &&className>fallback</tr>;
+}
+`
+	want := []string{
+		"rows.rtsx:4:43 error TS2339", // `row.nope`
+		"rows.rtsx:7:28 error TS2304", // `className`: no such name
+		"rows.rtsx:10:43 error TS2339",
+		"rows.rtsx:13:28 error TS2304",
+	}
+	for _, tolerant := range []bool{true, false} {
+		p, dir := program(t, tolerant, map[string]string{"src/rows.rtsx": rows, "node_modules/@reactogenic/core/index.d.ts": coreWithArgs})
+		reports, _ := file(t, p, dir+"/src/rows.rtsx")
+		var errors []Report
+		for _, r := range reports {
+			if r.Severity == Error {
+				errors = append(errors, r)
+			}
+		}
+		same(t, fmt.Sprintf("tolerant %v, File", tolerant), lines(dir, errors), want)
+		same(t, fmt.Sprintf("tolerant %v, Program", tolerant), lines(dir, Program(p, nil)), want)
+	}
+}
+
+// ide.md, *Tolerance*, rule 4: a construct that is an error where it stands
+// and that no pass lowers — an arg on an element without `slot={$X}`, params
+// on an intrinsic element — is in the virtual text as written, which is then
+// not TSX. TS reads `<option &size />` as `<option` `& size / >`: what it
+// says about that file is dropped, like its syntax errors. The file is
+// stopped; its importers are checked.
+func TestUnlowered(t *testing.T) {
+	for name, c := range map[string]struct {
+		source string
+		want   []string
+	}{
+		"arg-without-slot": {
+			"declare const size: number;\ndeclare const v: number;\nexport const a = <option &size />;\nexport const b = <option slot=\"header\" &&value={v} />;\nexport const n: number = \"x\";\n",
+			[]string{"page.rtsx:3:26 error arg-without-slot", "page.rtsx:4:40 error arg-without-slot"},
+		},
+		"params-on-html": {
+			"declare const size: number;\nexport const a = <div { size }>body</div>;\nexport const n: number = \"x\";\n",
+			[]string{"page.rtsx:2:23 error params-on-html"},
+		},
+	} {
+		for _, tolerant := range []bool{true, false} {
+			what := fmt.Sprintf("%s, tolerant %v", name, tolerant)
+			p, dir := program(t, tolerant, map[string]string{
+				"src/page.rtsx": c.source,
+				"src/main.tsx":  "import { n } from \"./page\";\nexport const s: string = n;\n",
+			})
+			reports, f := file(t, p, dir+"/src/page.rtsx")
+			if !f.Stopped || !f.Unlowered {
+				t.Errorf("%s: stopped %v, unlowered %v", what, f.Stopped, f.Unlowered)
+			}
+			// The premise: TS does not parse that text.
+			if len(p.GetSyntacticDiagnostics(context.Background(), p.GetSourceFile(dir+"/src/page.rtsx"))) == 0 {
+				t.Errorf("%s: the virtual text is TSX:\n%s", what, f.TSX)
+			}
+			same(t, what+", File", lines(dir, reports), c.want)
+			same(t, what+", Program", lines(dir, Program(p, nil)), append([]string{"main.tsx:2:14 error TS2322"}, c.want...))
+		}
+	}
+}
+
+// The errors that only an emit of declarations finds (TS4094: a private
+// member of an exported anonymous class) are in both forms of the layer, in
+// a project that emits as in one with `noEmit`: `check` never emits, so
+// nothing else would report them.
+func TestDeclarationDiagnostics(t *testing.T) {
+	for name, emit := range map[string]string{
+		"a composite project that emits": `"composite": true, "emitDeclarationOnly": true, "outDir": "out"`,
+		"declarations under noEmit":      `"noEmit": true, "declaration": true`,
+	} {
+		p, dir := program(t, false, map[string]string{
+			"tsconfig.json": strings.Replace(tsconfig, `"noEmit": true`, emit, 1),
+			"src/a.rtsx":    "export const C = class { private x = 1 };\nexport const el = <div />;\n",
+			"src/b.ts":      "export const D = class { private y = 1 };\n",
+		})
+		want := []string{"a.rtsx:1:14 error TS4094", "b.ts:1:14 error TS4094"}
+		same(t, name+", Program", lines(dir, Program(p, nil)), want)
+		var got []string
+		for _, name := range []string{"a.rtsx", "b.ts"} {
+			reports, _ := file(t, p, dir+"/src/"+name)
+			for _, r := range reports {
+				if r.Severity != Suggestion {
+					got = append(got, lines(dir, []Report{r})...)
+				}
+			}
+		}
+		same(t, name+", File", got, want)
 	}
 }

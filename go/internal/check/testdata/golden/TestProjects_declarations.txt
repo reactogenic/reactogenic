@@ -1,0 +1,2 @@
+src/a.rtsx(1,14): error TS4094: Property 'x' of exported anonymous class type may not be private or protected.
+  src/a.rtsx:1:14 - Add a type annotation to the variable C.

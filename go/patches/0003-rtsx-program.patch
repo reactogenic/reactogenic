@@ -1,9 +1,9 @@
 diff --git a/rtsx/program.go b/rtsx/program.go
 new file mode 100644
-index 0000000..e5cd460
+index 0000000..d66a7a9
 --- /dev/null
 +++ b/rtsx/program.go
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,175 @@
 +// Reactogenic's bridge to tsgo's program, file system and checker.
 +// Not part of upstream: added by go/patches/0003-rtsx-program.patch.
 +// Keep it thin — aliases and short wrappers only.
@@ -37,34 +37,60 @@ index 0000000..e5cd460
 +	return osvfs.FS()
 +}
 +
-+// NewProgram reads the tsconfig at configPath through fs and builds its
-+// program, with TypeScript's lib files bundled. It also returns the config's
-+// parsing diagnostics; the program is nil when the config cannot be read.
-+//
-+// A module of a referenced project is read from its source, as the language
-+// server reads it, not from the output a build would have left: a
-+// content-mapped file has no output to leave, and the two would disagree.
-+func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
++// Project is a tsconfig that has been read, before its program is built.
++type Project struct {
++	host   compiler.CompilerHost
++	config *tsoptions.ParsedCommandLine
++}
++
++// LoadProject reads the tsconfig at configPath through fs, with TypeScript's
++// lib files bundled. It also returns the config's parsing diagnostics; the
++// project is nil when the config cannot be read.
++func LoadProject(configPath, cwd string, fs FS) (*Project, []*Diagnostic) {
 +	wrapped := bundled.WrapFS(fs)
 +	host := compiler.NewCompilerHost(cwd, wrapped, bundled.LibPath(), nil, nil, builtInProject(wrapped))
 +	config, diags := tsoptions.GetParsedCommandLineOfConfigFile(configPath, nil, nil, host, nil)
 +	if config == nil {
 +		return nil, diags
 +	}
-+	program := compiler.NewProgram(compiler.ProgramOptions{Host: host, Config: config, UseSourceOfProjectReference: true})
-+	return program, diags
++	return &Project{host: host, config: config}, diags
 +}
 +
-+// ProjectReferences are the tsconfig paths of the projects p's config
-+// references.
-+func ProjectReferences(p *Program) []string {
-+	return p.CommandLine().ResolvedProjectReferencePaths()
++// Files are the files the tsconfig lists — its `files`, and what its
++// `include` matches: the project's own, as against those its program only
++// reaches through an import.
++func (c *Project) Files() []string {
++	return c.config.FileNames()
++}
++
++// References are the tsconfig paths of the projects the tsconfig references.
++func (c *Project) References() []string {
++	return c.config.ResolvedProjectReferencePaths()
++}
++
++// Program builds the project's program.
++//
++// A module of a referenced project is read from its source, as the language
++// server reads it, not from the output a build would have left: a
++// content-mapped file has no output to leave, and the two would disagree.
++func (c *Project) Program() *Program {
++	return compiler.NewProgram(compiler.ProgramOptions{Host: c.host, Config: c.config, UseSourceOfProjectReference: true})
++}
++
++// NewProgram is LoadProject and Program: the program of the tsconfig at
++// configPath, nil when the config cannot be read.
++func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
++	project, diags := LoadProject(configPath, cwd, fs)
++	if project == nil {
++		return nil, diags
++	}
++	return project.Program(), diags
 +}
 +
 +// AllDiagnostics returns what `tsc --noEmit` reports for p, sorted: config,
-+// syntactic, program, global, semantic and declaration diagnostics, the
-+// later ones only while the earlier are none — the steps of
-+// compiler.GetDiagnosticsOfAnyProgram.
++// syntactic, program, global, semantic and — of a project that emits
++// declarations — declaration diagnostics, the later ones only while the
++// earlier are none — the steps of compiler.GetDiagnosticsOfAnyProgram.
 +//
 +// But for one: the syntactic diagnostics of a content-mapped file are left
 +// out, and stop nothing. They are about its virtual text; the syntax errors
@@ -88,7 +114,10 @@ index 0000000..e5cd460
 +			// The globals found while checking.
 +			all = append(all, p.GetGlobalDiagnostics(ctx)...)
 +		}
-+		if p.Options().NoEmit.IsTrue() && p.Options().GetEmitDeclarations() && len(all) == config {
++		// Nothing is emitted here, whatever `noEmit` says: the errors an emit
++		// would report are reported now (GetDiagnosticsOfAnyProgram's
++		// skipNoEmitCheckForDtsDiagnostics), as FileDiagnostics reports them.
++		if p.Options().GetEmitDeclarations() && len(all) == config {
 +			all = append(all, p.GetDeclarationDiagnostics(ctx, nil)...)
 +		}
 +	}

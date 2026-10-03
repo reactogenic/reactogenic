@@ -914,6 +914,39 @@ per tsconfig plus the layer.
   (before: TS2307 — the first gap of syntax.md's OPEN, closed); a segment
   loop of three files, equal to the overlay's output; syntax errors; a
   warning.
+- *Review* (six findings, each reproduced on the binary, fixed with a test
+  that fails without the fix):
+  - *An error in `&&name` was lost* — `check` exited 0. The merge rule ran
+    its two halves at once: the secondary copy (the element's prop, emitted
+    before the arg) yielded to the primary, and the primary to the "earlier
+    report with the same message". Now in sequence: secondary copies yield,
+    then equal reports are merged. Goldens `TestArgAndProp` (`&&x={expr}`
+    and bare `&&x`, with and without a fallback: four lines, were none).
+  - *An unlowered construct*: `arg-without-slot` and `params-on-html` leave
+    their attribute in the output. The transpiler marks it
+    (`Output.Unlowered`), the mapper stops the file, rule 4 drops TS's
+    diagnostics — seven false TS errors on the reviewer's five-line file,
+    none now. In the corpus these two codes are the only ones whose output
+    is not TSX; `TestOutputIsTSXOrMarked` holds that.
+  - *Ownership by the order of `references`*: a file is its lister's, not
+    its first holder's (golden `references-order`: tests listed before the
+    app print the app's four errors, as `-p tsconfig.app.json`; strict tests
+    before a loose app print none). The tsconfigs are read first
+    (`rtsx.LoadProject`: files, references), then one program at a time.
+  - *`include` that names extensions*: an intended difference, not changed —
+    `["src/**/*.ts", "src/**/*.tsx"]` lists no `.rtsx` file (the overlay
+    listed them all, as `.tsx`); such a file is checked when an import
+    reaches it. diagnostics.md step 1 says so; golden `include-extensions`;
+    the reason in decisions.md. The other direction improved:
+    `["src/**/*.rtsx"]` and `files: ["src/a.rtsx"]` work.
+  - *Declaration errors*: `rtsx.AllDiagnostics` had them under `noEmit`
+    only, the per-file form always. `check` never emits: now for any project
+    that emits declarations (golden `declarations`: TS4094 in a composite
+    project). As every later step of `tsc`'s, they are reported while the
+    program has no other error; the per-file form has no steps.
+  - *A missing reference* was two lines (TS6053, and TS5083 from reading
+    it): the reference is not read when its tsconfig is not there. Its
+    directory is still watched.
 - *Left*: the second gap of that OPEN stands (`./x.jsx` checked as `x.ts`
   when both exist — measured). `segment-not-found` comes with TS's TS2307 on
   the same `#name`: one mistake, two lines — no rule drops it, and none did.
@@ -923,6 +956,17 @@ per tsconfig plus the layer.
   is under way is seen at its next change. Not run: Windows.
   > OPEN: drop TS2307 on a segment import when `segment-not-found` is
   > reported for it (as TS5097 is dropped)?
+- *Found in the review fixes, older than this task, not touched*:
+  - Pass 4's output is the one text no later pass parses, and it is not
+    always TSX: `<section#intro />` (no space before `#`) emits
+    `<sectionid="intro" …>`; a tag `<#section …>`, or one split over two
+    lines, gives an import name that is no identifier. No transpiler error,
+    the file is not marked, and `check` prints what TS makes of the text
+    (`TS2304: Cannot find name 'main'`). 216 such outputs among the 80,771
+    mutants of the corpus that parse clean (a character deleted or a short
+    text typed, at every offset); none in the corpus itself.
+  - A TS2322 on an arg is always reworded `slot-no-args` ("its body is not a
+    function") — also when the slot has args and the arg's type is wrong.
 - First, golden `check` output from today's overlay: every project of the
   check suite, the Vite test app, one project per row of diagnostics.md
   *Rewrites*.

@@ -135,6 +135,124 @@ func TestProjects(t *testing.T) {
 		}
 	})
 
+	// Who reports a file does not depend on the order of `references`: its
+	// own project does — the one that lists it — though a project listed
+	// before has the file in its program, through an import, and checks it
+	// with other options. A test project listed before the app it tests:
+	// the root prints what `-p tsconfig.app.json` prints, either way round.
+	t.Run("references-order", func(t *testing.T) {
+		loose := strings.Replace(options, `"strict": true`, `"strict": false`, 1)
+		const testFirst = `{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.app.json" }`
+		const appFirst = `{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.test.json" }`
+		project := func(references, test, app string) string {
+			return writeProject(t, with(map[string]string{
+				"tsconfig.json":      `{ "files": [], "references": [` + references + `] }`,
+				"tsconfig.test.json": `{ "compilerOptions": { ` + test + ` }, "include": ["test", "src/jsx.d.ts"] }`,
+				"tsconfig.app.json":  `{ "compilerOptions": { ` + app + ` }, "include": ["src"] }`,
+				"src/page.rtsx":      "export function Page({ items }) {\n  return <ul>{items.map((i) => <li>{i}</li>)}</ul>;\n}\n",
+				"src/util.ts":        "export const pick = (o, k) => o[k];\n",
+				"test/page.test.tsx": "import { Page } from \"../src/page\";\nimport { pick } from \"../src/util\";\nexport const t = [<Page items={[]} />, pick];\n",
+			}))
+		}
+		// The app is strict, its tests are not: the untyped parameters are
+		// the app's errors.
+		dir := project(testFirst, loose, options)
+		root, app := output(dir, "tsconfig.json"), output(dir, "tsconfig.app.json")
+		swapped := output(project(appFirst, loose, options), "tsconfig.json")
+		// The tests are strict, the app is not: they are nobody's.
+		dir = project(testFirst, options, loose)
+		strictTests, looseApp := output(dir, "tsconfig.json"), output(dir, "tsconfig.app.json")
+		goldenText(t, "# tests that are not strict, before a strict app\n"+root+"# strict tests before an app that is not\n"+strictTests)
+		if root != app || root != swapped || strings.Count(root, "src/page.rtsx") != 2 || strings.Count(root, "src/util.ts") != 2 {
+			t.Errorf("the root prints:\n%s`-p tsconfig.app.json` prints:\n%swith the app listed first, the root prints:\n%s", root, app, swapped)
+		}
+		if strictTests != "" || looseApp != "" {
+			t.Errorf("strict tests first — the root prints:\n%s`-p tsconfig.app.json` prints:\n%s", strictTests, looseApp)
+		}
+	})
+
+	// A reference to a project that is not there is one error, the
+	// referencing project's (TS6053) — not a second one for the tsconfig
+	// that could not be read. The tsconfig `check` is given is another
+	// matter: that one is read, and missing.
+	t.Run("reference-missing", func(t *testing.T) {
+		dir := writeProject(t, with(map[string]string{
+			"tsconfig.json": `{ "compilerOptions": { ` + options + ` }, "include": ["src"], "references": [{ "path": "./gone" }] }`,
+			"src/a.rtsx":    "export const el = <div><$T>t</$T></div>;\n",
+		}))
+		got := output(dir, "tsconfig.json")
+		goldenText(t, got)
+		if strings.Count(got, "error") != 2 || !strings.Contains(got, "src/a.rtsx(1,24): error orphan-slot") || !strings.Contains(got, "error TS6053: File '<root>/gone' not found.") {
+			t.Errorf("got:\n%s", got)
+		}
+		if missing := output(dir, "gone/tsconfig.json"); !strings.Contains(missing, "error TS5083") {
+			t.Errorf("-p gone/tsconfig.json:\n%s", missing)
+		}
+	})
+
+	// diagnostics.md, step 1: `include` matches .rtsx as it matches .tsx — a
+	// directory or a `*` covers both, a pattern that names an extension
+	// covers that extension. An .rtsx file that no pattern matches is in the
+	// program when an import reaches it, and is checked then; one that
+	// nothing reaches is not, like a .tsx file.
+	t.Run("include-extensions", func(t *testing.T) {
+		check := func(include string) string {
+			return output(writeProject(t, with(map[string]string{
+				"tsconfig.json":      `{ "compilerOptions": { ` + options + ` }, "include": [` + include + `] }`,
+				"src/main.tsx":       "import { page } from \"./page\";\nexport const app = page;\n",
+				"src/page.rtsx":      "export const page: number = \"x\";\n",
+				"src/unreached.rtsx": "export const u: number = \"x\";\nexport const el = <div><$T>t</$T></div>;\n",
+			})), "tsconfig.json")
+		}
+		directory, named, onlyTS := check(`"src"`), check(`"src/**/*.ts", "src/**/*.tsx", "src/**/*.rtsx"`), check(`"src/**/*.ts", "src/**/*.tsx"`)
+		goldenText(t, "# \"src/**/*.ts\", \"src/**/*.tsx\", \"src/**/*.rtsx\"\n"+named+"# \"src/**/*.ts\", \"src/**/*.tsx\"\n"+onlyTS)
+		if named != directory || strings.Count(named, "src/unreached.rtsx") != 2 || !strings.Contains(named, "src/page.rtsx(1,14): error TS2322") {
+			t.Errorf("with .rtsx named:\n%swith the directory:\n%s", named, directory)
+		}
+		if want := "src/page.rtsx(1,14): error TS2322: Type 'string' is not assignable to type 'number'.\n"; onlyTS != want {
+			t.Errorf("without .rtsx named:\n%s", onlyTS)
+		}
+	})
+
+	// A construct that is an error where it stands and stays as written — an
+	// arg on an element without `slot={$X}`, params on an intrinsic element
+	// — leaves text that is not TSX. The file reports the transpiler's
+	// errors, and nothing of what TS makes of that text (ide.md, *Tolerance*,
+	// rule 4); its importers are checked.
+	t.Run("unlowered", func(t *testing.T) {
+		dir := writeProject(t, with(map[string]string{
+			"tsconfig.json":   tsconfig,
+			"src/args.rtsx":   "declare const size: number;\ndeclare const v: number;\nexport const a = <option &size />;\nexport const b = <option slot=\"header\" &&value={v} />;\nexport const n: number = \"x\";\n",
+			"src/params.rtsx": "declare const size: number;\nexport const x = <div { size }>body</div>;\n",
+			"src/main.tsx":    "import { n } from \"./args\";\nexport const s: string = n;\n",
+		}))
+		got := output(dir, "tsconfig.json")
+		goldenText(t, got)
+		want := "src/args.rtsx(3,26): error arg-without-slot: `&size` is an arg of a slot attachment; this element has no `slot={$X}`\n" +
+			"src/args.rtsx(4,40): error arg-without-slot: `&&value` is an arg of a slot attachment; this element has no `slot={$X}`\n" +
+			"src/main.tsx(2,14): error TS2322: Type 'number' is not assignable to type 'string'.\n" +
+			"src/params.rtsx(2,23): error params-on-html: Params are only allowed on components and slot elements\n"
+		if got != want {
+			t.Errorf("got:\n%swant:\n%s", got, want)
+		}
+	})
+
+	// `check` never emits, so what an emit of declarations would report
+	// (TS4094) it reports — in a composite project that emits them too, not
+	// only under `noEmit`. The editor shows it there (the reporting layer's
+	// per-file form).
+	t.Run("declarations", func(t *testing.T) {
+		dir := writeProject(t, with(map[string]string{
+			"tsconfig.json": `{ "compilerOptions": { ` + strings.Replace(options, `"noEmit": true`, `"composite": true, "emitDeclarationOnly": true, "outDir": "out"`, 1) + ` }, "include": ["src"] }`,
+			"src/a.rtsx":    "export const C = class { private x = 1 };\nexport const el = <div />;\n",
+		}))
+		got := output(dir, "tsconfig.json")
+		goldenText(t, got)
+		if !strings.HasPrefix(got, "src/a.rtsx(1,14): error TS4094") || strings.Count(got, "error") != 1 {
+			t.Errorf("got:\n%s", got)
+		}
+	})
+
 	// A `paths` alias finds an .rtsx module, with and without the extension.
 	t.Run("paths-alias", func(t *testing.T) {
 		dir := writeProject(t, with(map[string]string{

@@ -20,8 +20,9 @@ import (
 type File struct {
 	transpiler.Output
 	// Stopped: the virtual text is not the file's lowered TSX — the passes
-	// ended early (Output.Stopped names the pass), or code was left out of
-	// it (Output.Dropped) — so TS's diagnostics for it mean nothing.
+	// ended early (Output.Stopped names the pass), code was left out of it
+	// (Output.Dropped), or a construct stays in it as written
+	// (Output.Unlowered) — so TS's diagnostics for it mean nothing.
 	Stopped bool
 	// Err is a failure of the transpiler itself.
 	Err error
@@ -120,7 +121,7 @@ func transform(req rtsx.MapperRequest, tolerant bool) (result rtsx.MapperResult)
 	for _, s := range out.Map.Spans() {
 		spans = append(spans, s)
 	}
-	return rtsx.MapperResult{Text: out.TSX, Spans: spans, Extra: &File{Output: out, Stopped: out.Stopped != "" || out.Dropped}}
+	return rtsx.MapperResult{Text: out.TSX, Spans: spans, Extra: &File{Output: out, Stopped: out.Stopped != "" || out.Dropped || out.Unlowered}}
 }
 
 // identityFeatures: what the source answers when it stands in as its own

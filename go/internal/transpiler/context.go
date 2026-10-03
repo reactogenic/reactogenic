@@ -27,6 +27,8 @@ type passContext struct {
 	generated     func(local, written string)
 	// dropped records Output.Dropped: code of the author's is left out.
 	dropped func()
+	// unlowered records Output.Unlowered: a construct stays as written.
+	unlowered func()
 	// names holds every identifier of the original source, so generated
 	// names can never capture or shadow the author's.
 	names map[string]bool
