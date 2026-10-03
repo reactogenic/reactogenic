@@ -59,7 +59,9 @@ terminal and CI.
    related information that points into an `.rtsx` file mapped too. Nothing
    is emitted, so the errors that only an emit of declarations finds
    (TS4094, …) are reported here, for any project that emits them — with
-   `noEmit` or without.
+   `noEmit` or without. In `tsc`'s steps: no type error while a `.ts` /
+   `.tsx` file has a syntax error, no declaration error while there is a
+   type error.
 4. Print in `tsc`'s format, with the `.rtsx` path and a code frame of the
    `.rtsx` source. Transpiler errors use their name as the code:
 
@@ -84,8 +86,8 @@ with its own options, then the tsconfig's own files — so a tsconfig with
 projects print. A referenced project's modules are read from source (an
 `.rtsx` file has no build output), so they are in the referencing program
 too, under its options. Each file is reported once, by **its own project**:
-the first that lists it (`files`, `include`), in whatever order the
-references are written.
+one that lists it (`files`, `include`) — the first, when several do — never
+one that only imports it, in whatever order the references are written.
 
 ```jsonc
 // tsconfig.json — test/page.test.tsx imports ../src/page

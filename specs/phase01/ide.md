@@ -330,6 +330,12 @@ file, it returns the reports for that file.
 A report carries its source range, severity, code, message, related
 information and — when it came from TS — the structured diagnostic.
 
+One difference between the hosts, TypeScript's own: `check` reports in
+`tsc`'s steps (diagnostics.md, step 3), a document's reports have none. While
+a `.ts` / `.tsx` file has a syntax error, or — in a project that emits
+declarations — next to a type error, the editor shows the type or declaration
+errors that `check` does not print yet.
+
 In the server the layer sits where the diagnostic is still structured, before
 it becomes an LSP message. Diagnostics are pulled per open document; after a
 change to any file the server asks the client to pull again.
@@ -706,4 +712,4 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX* against a stand-in server. The suite also runs against a packaged `.vsix` and its bundled binary |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |
-| stock mapper | a Go test host speaks the protocol over pipes: the handshake, a slot and a shorthand through a valid map, every import form, a broken file, a panic, concurrent transforms, the end of input; the corpus through it, and its typing-like mutants — no mistake reported twice or not at all, no panic behind an answer. `scripts/e2e-stock-mapper.sh` runs `typescript@next`'s `tsc --runExternalCode` on a project, each run with exactly its expected errors, and `reactogenic check` on the same tsconfig — by hand: it needs the network |
+| stock mapper | a Go test host speaks the protocol over pipes: the handshake, a slot and a shorthand through a valid map, every import form, a broken file, a construct left as written, a panic, concurrent transforms, the end of input; the corpus through it, and its typing-like mutants — no mistake reported twice or not at all, no panic behind an answer. `scripts/e2e-stock-mapper.sh` runs `typescript@next`'s `tsc --runExternalCode` on a project, each run with exactly its expected errors, and `reactogenic check` on the same tsconfig — by hand: it needs the network |

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -220,9 +221,20 @@ func TestInternalError(t *testing.T) {
 // per-file form returns — the editor's — is what the whole-program form —
 // `check`'s — has for that file, suggestions aside: transpiler diagnostics
 // and warnings, rewrites, the cross-file rules, the TS5097 drop, the merged
-// duplicate.
+// duplicate. In a project with `noEmit` and in a composite one that emits
+// declarations: the per-file form asks for declaration diagnostics there.
 func TestFileEqualsProgram(t *testing.T) {
+	for name, config := range map[string]string{
+		"noEmit":    tsconfig,
+		"composite": strings.Replace(tsconfig, `"noEmit": true`, `"composite": true, "emitDeclarationOnly": true, "outDir": "out"`, 1),
+	} {
+		t.Run(name, func(t *testing.T) { fileEqualsProgram(t, config) })
+	}
+}
+
+func fileEqualsProgram(t *testing.T, config string) {
 	p, dir := program(t, true, map[string]string{
+		"tsconfig.json": config,
 		"src/card.rtsx": `import type { Slot } from "@reactogenic/core";
 export function Card({ $Title, $Label }: { $Title: Slot<{ children?: string }>; $Label?: Slot<{ title?: string; children?: string }> }) {
   return <article><h2 slot={$Title} /><b slot={$Label} title={$Label.nope}>Label</b></article>;
@@ -478,4 +490,17 @@ func TestDeclarationDiagnostics(t *testing.T) {
 		}
 		same(t, name+", File", got, want)
 	}
+
+	// Where the two forms still differ: the program's follows `tsc`'s steps —
+	// declaration errors are a later step than type errors, reported while
+	// there are none — and the per-file form has no steps, as TS's own
+	// language server has none.
+	p, dir := program(t, false, map[string]string{
+		"tsconfig.json": strings.Replace(tsconfig, `"noEmit": true`, `"noEmit": true, "declaration": true`, 1),
+		"src/a.rtsx":    "export const C = class { private x = 1 };\nexport const n: number = \"x\";\n",
+	})
+	same(t, "next to a type error, Program", lines(dir, Program(p, nil)), []string{"a.rtsx:2:14 error TS2322"})
+	reports, _ := file(t, p, dir+"/src/a.rtsx")
+	reports = slices.DeleteFunc(reports, func(r Report) bool { return r.Severity == Suggestion })
+	same(t, "next to a type error, File", lines(dir, reports), []string{"a.rtsx:1:14 error TS4094", "a.rtsx:2:14 error TS2322"})
 }

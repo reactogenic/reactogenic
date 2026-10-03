@@ -914,20 +914,26 @@ per tsconfig plus the layer.
   (before: TS2307 — the first gap of syntax.md's OPEN, closed); a segment
   loop of three files, equal to the overlay's output; syntax errors; a
   warning.
-- *Review* (six findings, each reproduced on the binary, fixed with a test
-  that fails without the fix):
+- *Review* (six findings, each reproduced on the binary built before the
+  fixes; five fixed, each with tests that fail on that tree — run there —
+  and one, the `include` patterns, kept and specified):
   - *An error in `&&name` was lost* — `check` exited 0. The merge rule ran
     its two halves at once: the secondary copy (the element's prop, emitted
     before the arg) yielded to the primary, and the primary to the "earlier
     report with the same message". Now in sequence: secondary copies yield,
     then equal reports are merged. Goldens `TestArgAndProp` (`&&x={expr}`
     and bare `&&x`, with and without a fallback: four lines, were none).
+    With React's own types and the real `@reactogenic/core` (by hand): one
+    TS2551 per `&&className={option.valu}`, was none.
   - *An unlowered construct*: `arg-without-slot` and `params-on-html` leave
     their attribute in the output. The transpiler marks it
     (`Output.Unlowered`), the mapper stops the file, rule 4 drops TS's
-    diagnostics — seven false TS errors on the reviewer's five-line file,
-    none now. In the corpus these two codes are the only ones whose output
-    is not TSX; `TestOutputIsTSXOrMarked` holds that.
+    diagnostics — eight false TS errors on the reviewer's two files, none
+    now. The price, as for code left out: a true type error elsewhere in
+    such a file waits until the construct is fixed. In the corpus these two
+    codes are the only ones whose output is not TSX;
+    `TestOutputIsTSXOrMarked` holds that. The stock mapper follows
+    (`Stopped`): an ignore directive over such a file's virtual text.
   - *Ownership by the order of `references`*: a file is its lister's, not
     its first holder's (golden `references-order`: tests listed before the
     app print the app's four errors, as `-p tsconfig.app.json`; strict tests
@@ -943,10 +949,16 @@ per tsconfig plus the layer.
     only, the per-file form always. `check` never emits: now for any project
     that emits declarations (golden `declarations`: TS4094 in a composite
     project). As every later step of `tsc`'s, they are reported while the
-    program has no other error; the per-file form has no steps.
+    program has no other error; the per-file form has no steps, so next to
+    a type error the two forms still differ (pinned in
+    `TestDeclarationDiagnostics`; ide.md, *Diagnostics*) — RGP1-107's
+    comparison with `check` meets it in a project that has both.
+    `TestFileEqualsProgram` also runs on a composite project.
   - *A missing reference* was two lines (TS6053, and TS5083 from reading
-    it): the reference is not read when its tsconfig is not there. Its
-    directory is still watched.
+    it): the reference is not read when its tsconfig is not there — a
+    directory that is missing, or one without a `tsconfig.json`. Its
+    directory is still watched. A referenced tsconfig that is there and
+    does not parse reports its own errors, as before.
 - *Left*: the second gap of that OPEN stands (`./x.jsx` checked as `x.ts`
   when both exist — measured). `segment-not-found` comes with TS's TS2307 on
   the same `#name`: one mistake, two lines — no rule drops it, and none did.
@@ -959,12 +971,13 @@ per tsconfig plus the layer.
 - *Found in the review fixes, older than this task, not touched*:
   - Pass 4's output is the one text no later pass parses, and it is not
     always TSX: `<section#intro />` (no space before `#`) emits
-    `<sectionid="intro" …>`; a tag `<#section …>`, or one split over two
-    lines, gives an import name that is no identifier. No transpiler error,
-    the file is not marked, and `check` prints what TS makes of the text
-    (`TS2304: Cannot find name 'main'`). 216 such outputs among the 80,771
-    mutants of the corpus that parse clean (a character deleted or a short
-    text typed, at every offset); none in the corpus itself.
+    `<sectionid="intro" …>`. No transpiler error for it, the file is not
+    marked, and `check` prints what TS makes of the text (`TS7005: Variable
+    'main' implicitly has an 'any' type`; `Property 'Panelid' does not
+    exist` for `<Ui.Panel#intro>`). Measured: 218 such outputs — all this
+    form — among the 69,349 mutants of the corpus that parse clean (one
+    character deleted, or one of fourteen typed, at every offset); none in
+    the corpus itself.
   - A TS2322 on an arg is always reworded `slot-no-args` ("its body is not a
     function") — also when the slot has args and the arg's type is wrong.
 - First, golden `check` output from today's overlay: every project of the

@@ -500,6 +500,27 @@ func TestTranspilerDiagnostics(t *testing.T) {
 	}
 }
 
+// ide.md, *Tolerance*, rule 4: a construct that stays as written — an arg
+// without an attachment, params on an intrinsic element — leaves a virtual
+// text that is not TSX. The file is stopped: the transpiler's error is sent,
+// and an ignore directive covers what TypeScript would say about the text.
+func TestUnlowered(t *testing.T) {
+	h := start(t, files{}.options())
+	for source, want := range map[string]string{
+		"declare const size: number;\nexport const a = <option &size />;\n":      "2:26+5 102 arg-without-slot: `&size` is an arg of a slot attachment; this element has no `slot={$X}`",
+		"declare const size: number;\nexport const a = <div { size }>x</div>;\n": "2:23+8 103 params-on-html: Params are only allowed on components and slot elements",
+	} {
+		result := h.transform("/proj/src/page.rtsx", source)
+		spanMap(t, result, source)
+		if got := strings.Join(lines(result.Diagnostics, source), "\n"); got != want {
+			t.Errorf("diagnostics:\n%s\nwant:\n%s", got, want)
+		}
+		if ds := result.DiagnosticDirectives; ds == nil || len(ds.Directives) != 1 || ds.Directives[0] != [5]int{0, 0, 0, len(result.Text), policyIgnore} {
+			t.Errorf("%q: directives: %+v", source, result.DiagnosticDirectives)
+		}
+	}
+}
+
 // ide.md, *Tolerance*: a file being typed still has a virtual text and a
 // valid map. Its syntax errors are TypeScript's to report while the virtual
 // text has any, and the mapper's when the passes lowered them away.
