@@ -175,6 +175,7 @@ func (c *passContext) removeOrphans() []emit.Edit {
 	visit = func(n *rtsx.Node) bool {
 		if isSlotElement(n) && !claimed(n) {
 			c.errorAt(n, "orphan-slot", "Slot must be immediate child of the component")
+			c.leftOut(n)
 			edits = append(edits, emit.Edit{Span: c.span(n), Pieces: inPosition(n, c.openingSpan(n), []emit.Piece{emit.Synth("null", c.openingSpan(n))})})
 			return false
 		}
@@ -242,7 +243,7 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 func meaningfulChildren(children []*rtsx.Node) []*rtsx.Node {
 	var out []*rtsx.Node
 	for _, ch := range children {
-		if !(ch.Kind == rtsx.KindJsxText && ch.AsJsxText().ContainsOnlyTriviaWhiteSpaces) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
+		if !syntax.BlankText(ch) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
 			out = append(out, ch)
 		}
 	}
@@ -469,7 +470,7 @@ func (c *passContext) keyedEntry(el *rtsx.Node) []emit.Piece {
 	case v == nil:
 		key = []emit.Piece{emit.Synth("[undefined]", c.span(attr))} // a bare `key`: TS reports it
 	case v.Kind == rtsx.KindStringLiteral:
-		key = []emit.Piece{c.copy(v)}
+		key = []emit.Piece{c.copyValue(v)}
 	default:
 		key = append(append([]emit.Piece{emit.Synth("[", c.span(attr))}, c.operand(v, rtsx.PrecedenceComma)...), emit.Synth("]", c.span(attr)))
 	}
@@ -592,7 +593,7 @@ func (c *passContext) attributeProps(attrs []*rtsx.Node) [][]emit.Piece {
 		case v.Kind == rtsx.KindJsxExpression:
 			prop = append(prop, c.operand(v.Expression(), rtsx.PrecedenceComma)...)
 		default:
-			prop = append(prop, c.copy(v))
+			prop = append(prop, c.copyValue(v))
 		}
 		props = append(props, prop)
 	}
@@ -654,7 +655,11 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 	}
 	for _, name := range names {
 		c.note(first[name], "slot-prop", name, slotName)
-		props = append(props, append([]emit.Piece{c.slotName(name, firstTag[name], first[name]), emit.Synth(": ", first[name])}, values[name]...))
+		key := []emit.Piece{c.slotName(name, firstTag[name], first[name])}
+		if !identifierName.MatchString(name) { // `<$sub-item>`: a quoted key, the name still copied
+			key = []emit.Piece{emit.Synth(`"`, first[name]), key[0], emit.Synth(`"`, first[name])}
+		}
+		props = append(props, append(append(key, emit.Synth(": ", first[name])), values[name]...))
 	}
 	if a.params != nil {
 		c.note(c.span(a.params), "slot-params", slotName, "")

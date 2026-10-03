@@ -106,14 +106,17 @@ func (c *passContext) lowerSwitch(el *rtsx.Node) []emit.Edit {
 	return append(edits, c.replace(el, origin, expr)...)
 }
 
-// switchCases reads and checks the `$Case` children of a `Switch`.
+// switchCases reads and checks the `$Case` children of a `Switch`. A child
+// whose error is dropped — it is half-typed (ide.md, *Tolerance*) — is left
+// out, and the `Switch` is lowered around it.
 func (c *passContext) switchCases(el *rtsx.Node) ([]switchCase, bool) {
 	ok := true
 	var cases []switchCase
 	for _, ch := range jsxChildren(el) {
 		if !isJSXElement(ch) || ch.Kind == rtsx.KindJsxFragment || c.tagText(ch) != "$Case" {
-			c.errorAt(ch, "switch-children", "Only `$Case` is allowed here")
-			ok = false
+			if c.invalid(ch, "switch-children", "Only `$Case` is allowed here") {
+				ok = false
+			}
 			continue
 		}
 		a := readAttributes(ch)
@@ -143,7 +146,9 @@ func (c *passContext) switchCases(el *rtsx.Node) ([]switchCase, bool) {
 		case def != nil:
 			sc.isDef = true
 		case is == nil || value(is) == nil:
-			c.errorAt(ch, "case-no-test", "`$Case` requires `is`")
+			if !c.invalid(ch, "case-no-test", "`$Case` requires `is`") {
+				continue // being typed: not a case yet
+			}
 			ok = false
 		default:
 			sc.is = value(is)

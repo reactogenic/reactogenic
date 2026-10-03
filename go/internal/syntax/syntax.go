@@ -9,6 +9,22 @@ import (
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 )
 
+// BlankText: JSX text that is formatting, not content — only whitespace,
+// with a line break. That is the scanner's rule, and the parser's flag says
+// the same on a valid file; after error recovery the flag can be stale (it
+// is read from the token before a rescan), so the text itself decides.
+// Whitespace without a line break is content: `<b> {x}</b>`.
+func BlankText(n *rtsx.Node) bool {
+	if n.Kind != rtsx.KindJsxText {
+		return false
+	}
+	if n.AsJsxText().ContainsOnlyTriviaWhiteSpaces {
+		return true
+	}
+	text := rtsx.NodeText(n)
+	return strings.ContainsAny(text, "\r\n") && strings.TrimSpace(text) == ""
+}
+
 // SlotParams returns the ObjectBindingPattern of slot params (`{ size }`)
 // when attr is one. The parser stores params as a JsxSpreadAttribute whose
 // expression is that pattern.

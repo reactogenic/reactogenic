@@ -1,6 +1,7 @@
 package conformance
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,7 +20,8 @@ func corpus(t *testing.T) []Case {
 }
 
 // ide.md, *Tolerance*: when the source parses clean, tolerant mode hides
-// nothing and changes nothing.
+// nothing and changes nothing — the text, the diagnostics, the map and
+// everything exported beside it.
 func TestTolerantEqualsStrict(t *testing.T) {
 	for _, c := range corpus(t) {
 		in := transpiler.Input{Files: c.Files, Entry: c.Entry, UntilPass: c.UntilPass}
@@ -29,13 +31,21 @@ func TestTolerantEqualsStrict(t *testing.T) {
 		}
 		in.Tolerant = true
 		tolerant, err := transpiler.Transpile(in)
-		if err != nil || tolerant.Stopped != "" || tolerant.TSX != strict.TSX || len(tolerant.Diagnostics) != len(strict.Diagnostics) {
+		if err != nil || tolerant.Stopped != "" || tolerant.TSX != strict.TSX {
 			t.Errorf("%s: tolerant differs from strict (err %v, stopped %q)", c.ID, err, tolerant.Stopped)
 			continue
 		}
-		for i, d := range strict.Diagnostics {
-			if tolerant.Diagnostics[i] != d {
-				t.Errorf("%s: diagnostic %d differs: %+v / %+v", c.ID, i, tolerant.Diagnostics[i], d)
+		for name, pair := range map[string][2]any{
+			"diagnostics":     {tolerant.Diagnostics, strict.Diagnostics},
+			"map":             {tolerant.Map.Segments, strict.Map.Segments},
+			"notes":           {tolerant.Notes, strict.Notes},
+			"generated names": {tolerant.Generated, strict.Generated},
+			"shorthands":      {tolerant.Shorthands, strict.Shorthands},
+			"slot groups":     {tolerant.SlotGroups, strict.SlotGroups},
+			"dropped":         {tolerant.Dropped, strict.Dropped},
+		} {
+			if !reflect.DeepEqual(pair[0], pair[1]) {
+				t.Errorf("%s: %s differ:\n%+v\n%+v", c.ID, name, pair[0], pair[1])
 			}
 		}
 	}
@@ -46,7 +56,8 @@ func TestTolerantEqualsStrict(t *testing.T) {
 // sigil or bracket typed — the transform never panics, never hangs, and
 // always yields a virtual text with a map the compiler accepts.
 func TestTolerantMutants(t *testing.T) {
-	typed := []string{"<", ">", "{", "}", "&", "#", "$", ".", "=", "/", "\"", "("}
+	// "\n": Enter inside a string attribute leaves valid JSX, not valid JS.
+	typed := []string{"<", ">", "{", "}", "&", "#", "$", ".", "=", "/", "\"", "(", "\n"}
 	mutants, broken, stopped := 0, 0, map[string]int{}
 	for _, c := range corpus(t) {
 		src := c.Files[c.Entry]
@@ -60,11 +71,10 @@ func TestTolerantMutants(t *testing.T) {
 			files[c.Entry] = text
 			out, err := transpiler.Transpile(transpiler.Input{Files: files, Entry: c.Entry, UntilPass: c.UntilPass, Tolerant: true})
 			if err != nil {
-				// The source parsed clean and a pass broke it: a real bug,
-				// reported as in strict mode. Mutants reach it rarely.
-				if !strings.Contains(err.Error(), "does not parse") {
-					t.Errorf("%s: %v\n--- source\n%s", c.ID, err, text)
-				}
+				// Only a source that parses clean gets here: a pass failed
+				// on it, or wrote text that does not parse. A bug of ours,
+				// in strict mode too.
+				t.Errorf("%s: %v\n--- source\n%s", c.ID, err, text)
 				return
 			}
 			if out.Map == nil {
@@ -74,11 +84,17 @@ func TestTolerantMutants(t *testing.T) {
 			if out.Stopped != "" {
 				stopped[out.Stopped[:strings.Index(out.Stopped, ":")]]++
 			}
+			syntaxErrors := false
 			for _, d := range out.Diagnostics {
-				if strings.HasPrefix(d.Code, "TS") {
-					broken++
-					break
+				syntaxErrors = syntaxErrors || strings.HasPrefix(d.Code, "TS")
+				// A span the reporting layer can turn into a range.
+				if d.Span.Pos < 0 || d.Span.End < d.Span.Pos || d.Span.End > len(text) {
+					t.Errorf("%s: %s has the span [%d,%d) in %d bytes\n--- source\n%s", c.ID, d.Code, d.Span.Pos, d.Span.End, len(text), text)
+					return
 				}
+			}
+			if syntaxErrors {
+				broken++
 			}
 			var tuples [][6]int32
 			covered := 0

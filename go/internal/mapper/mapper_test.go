@@ -117,3 +117,107 @@ export const app = [<Page />, <P2 />];
 		}
 	}
 }
+
+// request is a mapper request over files in memory.
+func request(files map[string]string, name string) rtsx.MapperRequest {
+	return rtsx.MapperRequest{
+		FileName:   name,
+		Content:    files[name],
+		FileExists: func(p string) bool { _, ok := files[p]; return ok },
+		ReadFile:   func(p string) (string, bool) { text, ok := files[p]; return text, ok },
+	}
+}
+
+func codes(f *File) string {
+	var out []string
+	for _, d := range f.Diagnostics {
+		out = append(out, fmt.Sprintf("%d:%d %s", d.Line, d.Col, d.Code))
+	}
+	return strings.Join(out, ", ")
+}
+
+// ide.md, *Segments*: the transform is a function of the file's text and of
+// which siblings exist — what its cache key holds. A sibling's contents
+// change nothing: `segment-self`, which follows mounts through other files,
+// is not the transform's to report.
+func TestTransformReadsNoSibling(t *testing.T) {
+	page := "export default function Page() {\n  return <main #intro />;\n}\n"
+	var results []rtsx.MapperResult
+	for _, intro := range []string{
+		"export default function Intro() {\n  return <p>intro</p>;\n}\n",
+		"export default function Intro() {\n  return <nav #page />;\n}\n", // mounts the page back
+	} {
+		files := map[string]string{"/src/page.rtsx": page, "/src/intro.rtsx": intro}
+		req := request(files, "/src/page.rtsx")
+		var bits []bool
+		for _, p := range depends(req) {
+			bits = append(bits, req.FileExists(p))
+		}
+		if fmt.Sprint(bits) != "[false true false false false false]" {
+			t.Fatalf("depends bits %v", bits)
+		}
+		results = append(results, transform(req))
+	}
+	a, b := results[0], results[1]
+	if a.Text != b.Text || fmt.Sprint(a.Spans) != fmt.Sprint(b.Spans) {
+		t.Errorf("virtual text or spans differ:\n%s\n---\n%s", a.Text, b.Text)
+	}
+	fa, fb := a.Extra.(*File), b.Extra.(*File)
+	if codes(fa) != "" || codes(fb) != "" || fa.Stopped || fb.Stopped {
+		t.Errorf("same key, different results: diagnostics %q / %q", codes(fa), codes(fb))
+	}
+	// Existence is still seen: without the sibling, segment-not-found.
+	f := transform(request(map[string]string{"/src/page.rtsx": page}, "/src/page.rtsx")).Extra.(*File)
+	if codes(f) != "2:16 segment-not-found" {
+		t.Errorf("no sibling: %q", codes(f))
+	}
+}
+
+// ide.md, *Tolerance*, rule 5: a panic in a pass leaves the previous pass's
+// text and names the pass, whether the source parses or not; a panic outside
+// the passes is caught here, with the source as its own virtual text.
+func TestPanics(t *testing.T) {
+	for _, broken := range []string{"", "const b = ;\n"} {
+		files := map[string]string{"/src/page.rtsx": "const size = 1;\nexport const a = <section #intro size />;\n" + broken, "/src/intro.rtsx": ""}
+		req := request(files, "/src/page.rtsx")
+		calls := 0
+		req.FileExists = func(p string) bool {
+			if p == "/src/intro.rtsx" {
+				if calls++; calls > 2 { // pass 0 looks twice; then pass 4
+					panic("boom")
+				}
+			}
+			_, ok := files[p]
+			return ok
+		}
+		result := transform(req)
+		f := result.Extra.(*File)
+		if !f.Stopped || f.Err != nil || f.Output.Stopped != "pass 4 (segment roots): boom" {
+			t.Errorf("broken %q: stopped %v, err %v, output stopped %q", broken, f.Stopped, f.Err, f.Output.Stopped)
+		}
+		if !strings.Contains(codes(f), "1:1 internal") || !strings.Contains(result.Text, "size={size}") {
+			t.Errorf("broken %q: diagnostics %q, text\n%s", broken, codes(f), result.Text)
+		}
+		if err := rtsx.ValidateSpanMap(rtsx.NewSpanMap(result.Spans), result.Text, req.Content); err != nil {
+			t.Errorf("broken %q: %v", broken, err)
+		}
+	}
+
+	// The last resort: the parser refuses a name that is not normalized.
+	files := map[string]string{"/src/../page.rtsx": "export const a = <b />;\n"}
+	result := transform(request(files, "/src/../page.rtsx"))
+	f := result.Extra.(*File)
+	if !f.Stopped || f.Err == nil || result.Text != files["/src/../page.rtsx"] || len(result.Spans) != 1 {
+		t.Errorf("last resort: stopped %v, err %v, text %q, spans %v", f.Stopped, f.Err, result.Text, result.Spans)
+	}
+}
+
+// A construct the transform had to leave out marks the file as a stopped
+// one: TS's diagnostics for it are not about the author's code.
+func TestDroppedIsStopped(t *testing.T) {
+	src := "import { Switch } from \"@reactogenic/core\";\nexport const a = (s: string, x: string) => <Switch on={s}><$Case>{x}</$Case></Switch>;\n"
+	f := transform(request(map[string]string{"/src/a.rtsx": src}, "/src/a.rtsx")).Extra.(*File)
+	if !f.Stopped || f.Output.Stopped != "" || !f.Dropped || !strings.Contains(codes(f), "case-no-test") {
+		t.Errorf("stopped %v (%q), dropped %v, diagnostics %q", f.Stopped, f.Output.Stopped, f.Dropped, codes(f))
+	}
+}

@@ -63,7 +63,7 @@ func CheckSegments(file *rtsx.SourceFile) []Error {
 
 func hasContent(el *rtsx.Node) bool {
 	for _, ch := range el.Children().Nodes {
-		if !(ch.Kind == rtsx.KindJsxText && ch.AsJsxText().ContainsOnlyTriviaWhiteSpaces) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
+		if !BlankText(ch) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
 			return true
 		}
 	}

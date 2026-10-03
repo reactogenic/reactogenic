@@ -1,0 +1,35 @@
+import { Switch, Match } from "@reactogenic/core";
+// A JSX attribute string is not a JS string: no escapes, line breaks allowed,
+// character references decoded. Where its value moves to a JS position it is
+// written as the JS literal of that value.
+export const a = (
+  <Button title="Tom &amp; Jerry">
+    <$Icon className="
+      w-4 h-4
+      text-red-500
+    " />
+    <$Label title="Tom &amp; Jerry" path="C:\new\table" quote='say "hi" &#38; &#x26; &copy; &nope; &amp' plain="as is">x</$Label>
+  </Button>
+);
+export const b = (
+  <Switch on={status}>
+    <$Case is="a&amp;b">A</$Case>
+    <$Case is="C:\temp">B</$Case>
+    <$Case is="plain">C</$Case>
+  </Switch>
+);
+export const c = (
+  <Table>
+    <$Column key="a&amp;b" />
+    <$Column key="C:\new" />
+  </Table>
+);
+export const d = <Match on="a\b">yes</Match>;
+export function Box({ $Title, $Row }: any) {
+  return (
+    <div>
+      <h1 slot={$Title} &&title="C:\temp" &plain="a&amp;b">fallback</h1>
+      <p slot={$Row} key="r&amp;1" />
+    </div>
+  );
+}

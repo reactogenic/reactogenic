@@ -41,10 +41,10 @@ index f54b4bc..535bfd4 100644
  }
 diff --git a/internal/parser/rtsx.go b/internal/parser/rtsx.go
 new file mode 100644
-index 0000000..31b3e60
+index 0000000..4e97e51
 --- /dev/null
 +++ b/internal/parser/rtsx.go
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,65 @@
 +// Reactogenic: the .rtsx extensions to JSX attribute parsing.
 +// Not part of upstream: added by go/patches/0002-rtsx-parser.patch.
 +
@@ -105,5 +105,8 @@ index 0000000..31b3e60
 +	p.scanJsxIdentifier()
 +	name := p.parseIdentifierNameErrorOnUnicodeEscapeSequence()
 +	id := p.finishNode(p.factory.NewIdentifier(prefix+name.Text()), pos)
++	// `name` is not in the tree: an error it absorbed — a nameless `&`,
++	// `& size` — is the arg's.
++	id.Flags |= name.Flags & ast.NodeFlagsThisNodeHasError
 +	return p.finishNode(p.factory.NewJsxAttribute(id, p.parseJsxAttributeValue()), pos)
 +}

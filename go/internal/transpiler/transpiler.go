@@ -84,10 +84,17 @@ type Output struct {
 	// element that fills it. Only the first is copied into the emitted prop
 	// name, so only it answers the editor directly (ide.md, *Span map*).
 	SlotGroups []SlotGroup
-	// Stopped, in tolerant mode: why the passes ended early. TSX is then the
-	// last good text — up to the source itself — and still holds unlowered
-	// constructs, so TS's diagnostics for it mean nothing.
+	// Stopped, in tolerant mode: why the passes ended early, starting with
+	// the pass ("pass 2 (flow lowering): …"). TSX is then the last good text
+	// — up to the source itself — and still holds unlowered constructs, so
+	// TS's diagnostics for it mean nothing.
 	Stopped string
+	// Dropped: code the author wrote is not in TSX — a `Switch` or `Match`
+	// that cannot be lowered and an orphaned slot element are replaced by
+	// `null`; a half-typed `$Case` with a body is left out. What TS says
+	// about the file is then not about the author's code: names used only
+	// there read as unused (ide.md, *Tolerance*).
+	Dropped bool
 }
 
 // Shorthand is a bare name with two meanings.
@@ -150,7 +157,23 @@ func Transpile(in Input) (Output, error) {
 		names    map[string]bool
 		runs     int
 		broken   bool // tolerant: the source has syntax errors
+		// The source parse and the ranges of its errors: where a half-typed
+		// construct is recognised (ide.md, *Tolerance*, rule 3).
+		source     *rtsx.SourceFile
+		sourceErrs []emit.Span
+		writer     pass // the pass that wrote text
+		// Text emitted twice (an attachment's fallback) goes through the
+		// later runs twice; what is found in it is recorded once.
+		seenDiagnostics = map[Diagnostic]bool{}
+		seenNotes       = map[Note]bool{}
+		seenGroups      = map[string]bool{}
 	)
+	note := func(n Note) {
+		if !seenNotes[n] {
+			seenNotes[n] = true
+			out.Notes = append(out.Notes, n)
+		}
+	}
 	// stop ends a tolerant run early, keeping the last good text.
 	stop := func(p pass, why any) (Output, error) {
 		out.TSX, out.Map = text, toSource
@@ -163,22 +186,28 @@ func Transpile(in Input) (Output, error) {
 			break
 		}
 		file := rtsx.ParseRTSX("/"+in.Entry, text)
-		if parseErrors := file.Diagnostics(); len(parseErrors) > 0 {
+		parseErrors := file.Diagnostics()
+		if len(parseErrors) > 0 {
 			// Emitted text that does not parse is our bug only when the
 			// source did: a broken source may stay broken through a pass.
 			if p.n > 0 && !broken {
-				return Output{}, fmt.Errorf("transpiler: pass %d (%s) produced code that does not parse: %s", p.n-1, passes[p.n-1].name, rtsx.Message(parseErrors[0]))
+				return Output{}, fmt.Errorf("transpiler: pass %d (%s) produced code that does not parse: %s", writer.n, writer.name, rtsx.Message(parseErrors[0]))
 			}
 			if p.n == 0 {
 				// Syntax errors are the source parse's, only.
 				for _, d := range parseErrors {
-					out.add(in.Entry, src, emit.Span{Pos: rtsx.SkipTrivia(src, d.Pos()), End: d.End()}, Error, fmt.Sprintf("TS%d", d.Code()), rtsx.Message(d))
+					// A zero-length error sits before the trivia: never past its end.
+					out.add(in.Entry, src, emit.Span{Pos: min(rtsx.SkipTrivia(src, d.Pos()), d.End()), End: d.End()}, Error, fmt.Sprintf("TS%d", d.Code()), rtsx.Message(d))
 				}
 				if !in.Tolerant {
 					return out, nil
 				}
 				broken = true
 			}
+		}
+		var errs []emit.Span
+		for _, d := range parseErrors {
+			errs = append(errs, emit.Span{Pos: d.Pos(), End: d.End()})
 		}
 		if names == nil {
 			names = identifiers(file)
@@ -187,18 +216,31 @@ func Transpile(in Input) (Output, error) {
 			continue
 		}
 		rtsx.Bind(file)
+		if p.n == 0 {
+			source, sourceErrs = file, errs
+		}
 		c := &passContext{file: file, text: text, names: names, imports: map[string]bool{}, entry: in.Entry, readFile: in.readFile,
-			report: func(s emit.Span, sev Severity, code, msg string) {
-				if broken && underParseError(file, s) {
-					return // a half-typed construct: its errors are the parser's
+			report: func(s emit.Span, sev Severity, code, msg string) bool {
+				at := toSource.Source(s)
+				// A half-typed construct: its errors are the parser's. The
+				// source parse decides; this pass's own tree may add to it
+				// (recovery can re-parent lowered text differently).
+				if broken && (underParseError(source, sourceErrs, at) || file != source && underParseError(file, errs, s)) {
+					return false
 				}
-				out.add(in.Entry, src, toSource.Source(s), sev, code, msg)
+				line, col := emit.LineCol(src, at.Pos)
+				d := Diagnostic{File: in.Entry, Line: line, Col: col, Span: at, Severity: sev, Code: code, Message: msg}
+				if !seenDiagnostics[d] {
+					seenDiagnostics[d] = true
+					out.Diagnostics = append(out.Diagnostics, d)
+				}
+				return true
 			},
 			note: func(s emit.Span, kind, name, detail string) {
-				out.Notes = append(out.Notes, Note{Span: toSource.Source(s), Kind: kind, Name: name, Detail: detail})
+				note(Note{Span: toSource.Source(s), Kind: kind, Name: name, Detail: detail})
 			},
 			noteTag: func(s, tag emit.Span, kind, name string) {
-				out.Notes = append(out.Notes, Note{Span: toSource.Source(s), Kind: kind, Name: name, Tag: toSource.Source(tag)})
+				note(Note{Span: toSource.Source(s), Kind: kind, Name: name, Tag: toSource.Source(tag)})
 			},
 			shorthandSite: func(name emit.Span, kind string) {
 				out.Shorthands = append(out.Shorthands, Shorthand{Name: toSource.Source(name), Kind: kind})
@@ -208,8 +250,12 @@ func Transpile(in Input) (Output, error) {
 				for _, t := range tags {
 					g.Tags = append(g.Tags, toSource.Source(t))
 				}
-				out.SlotGroups = append(out.SlotGroups, g)
+				if key := fmt.Sprint(g); !seenGroups[key] {
+					seenGroups[key] = true
+					out.SlotGroups = append(out.SlotGroups, g)
+				}
 			},
+			dropped: func() { out.Dropped = true },
 			generated: func(local, written string) {
 				if out.Generated == nil {
 					out.Generated = map[string]string{}
@@ -217,15 +263,18 @@ func Transpile(in Input) (Output, error) {
 				out.Generated[local] = written
 			}}
 		var edits []emit.Edit
-		if broken {
-			// On a recovered tree a pass may meet shapes it never sees in
-			// valid code; whatever happens, the file keeps a virtual text.
+		if in.Tolerant {
+			// The editor's file always keeps a virtual text: a pass that
+			// panics — on a recovered tree it may meet shapes it never sees
+			// in valid code — ends the passes, and says so (ide.md,
+			// *Tolerance*, rule 5).
 			var panicked any
 			func() {
 				defer func() { panicked = recover() }()
 				edits = p.run(c)
 			}()
 			if panicked != nil {
+				out.add(in.Entry, src, emit.Span{}, Error, "internal", fmt.Sprintf("pass %d (%s): %v", p.n, p.name, panicked))
 				return stop(p, panicked)
 			}
 		} else {
@@ -244,7 +293,7 @@ func Transpile(in Input) (Output, error) {
 		if err != nil {
 			return Output{}, fmt.Errorf("transpiler: pass %d (%s): %w", p.n, p.name, err)
 		}
-		text, toSource = next, m.Then(toSource)
+		text, toSource, writer = next, m.Then(toSource), p
 		if p.repeat {
 			if runs++; runs > maxRuns && broken {
 				return stop(p, "does not settle")
@@ -267,48 +316,89 @@ func (o *Output) add(file, src string, s emit.Span, sev Severity, code, msg stri
 // underParseError: the node at s, or the nearest JSX element or fragment
 // around it, holds a parse error (ide.md, *Tolerance*). Recovery re-parents
 // what follows a half-typed attribute, so the unit of trust is the element.
+//
+// A node holds an error when the parser flagged it or one below it, or when
+// the range of a parse error (errs) lies within it: an unclosed tag leaves
+// no flag — recovery rebuilds the element — only its error. Nothing above
+// the nearest element counts: a syntax error elsewhere in the file hides
+// nothing here, and a diagnostic on the file as a whole (the zero span) has
+// no node to be broken.
+//
 // The file must be bound: the binder sets the flag.
-func underParseError(file *rtsx.SourceFile, s emit.Span) bool {
+func underParseError(file *rtsx.SourceFile, errs []emit.Span, s emit.Span) bool {
+	if s == (emit.Span{}) {
+		return false
+	}
+	start := func(n *rtsx.Node) int {
+		if n.Kind == rtsx.KindJsxText {
+			return n.Pos() // whitespace text has no token of its own
+		}
+		return rtsx.TokenStart(file, n)
+	}
 	n := rtsx.TokenAt(file, s.Pos)
-	for n != nil && (n.End() < s.End || rtsx.TokenStart(file, n) > s.Pos) {
+	for n != nil && (n.End() < s.End || start(n) > s.Pos) {
 		n = n.Parent
 	}
-	for node := n; n != nil; n = n.Parent {
+	if n == nil || n == file.AsNode() {
+		return false
+	}
+	holds := func(n *rtsx.Node) bool {
 		if rtsx.HasParseError(n) {
 			return true
 		}
-		if n != node {
-			switch n.Kind {
-			case rtsx.KindJsxElement, rtsx.KindJsxSelfClosingElement, rtsx.KindJsxFragment:
-				return false
+		for _, e := range errs {
+			if n.Pos() <= e.Pos && e.End <= n.End() {
+				return true
 			}
+		}
+		return false
+	}
+	if holds(n) {
+		return true
+	}
+	for p := n.Parent; p != nil; p = p.Parent {
+		if isJSXElement(p) {
+			return holds(p)
 		}
 	}
 	return false
 }
 
 // oneCopyAnswers: text copied several times into one construct (an attachment
-// emitted in both branches of its ternary, a Switch subject per case) is
-// checked in each place but answers the editor from the first only (ide.md,
-// *Span map*). Copies with a mask of their own — the two copies of a
-// shorthand — are different symbols and both answer.
+// emitted in both branches of its ternary, a Switch subject per case, a
+// slot's previous value in each null branch of a conditional) is checked in
+// each place but answers the editor from the first only (ide.md, *Span
+// map*). Copies with different masks — the two copies of a shorthand — are
+// different symbols and both answer; the same copy again, with the same
+// mask, is one more identical copy.
 func oneCopyAnswers(pieces []emit.Piece) {
+	type masked struct {
+		from    emit.Span
+		without emit.Features
+	}
 	var seen []emit.Span
+	seenMasked := map[masked]bool{}
 	for i, p := range pieces {
-		if !p.Copied || p.Without != 0 {
+		if !p.Copied {
 			continue
 		}
 		again := false
-		for _, s := range seen {
-			if p.From.Pos < s.End && s.Pos < p.From.End {
-				again = true
-				break
+		if p.Without != 0 {
+			again = seenMasked[masked{p.From, p.Without}]
+			seenMasked[masked{p.From, p.Without}] = true
+		} else {
+			for _, s := range seen {
+				if p.From.Pos < s.End && s.Pos < p.From.End {
+					again = true
+					break
+				}
+			}
+			if !again {
+				seen = append(seen, p.From)
 			}
 		}
 		if again {
 			pieces[i] = p.Lacking(emit.AllFeatures)
-		} else {
-			seen = append(seen, p.From)
 		}
 	}
 }

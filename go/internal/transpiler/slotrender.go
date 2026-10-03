@@ -238,7 +238,7 @@ func (c *passContext) argValue(attr *rtsx.Node, name string) []emit.Piece {
 	case init.Kind == rtsx.KindJsxExpression:
 		return c.operand(init.Expression(), rtsx.PrecedenceComma)
 	default:
-		return []emit.Piece{c.copy(init)}
+		return []emit.Piece{c.copyValue(init)}
 	}
 }
 

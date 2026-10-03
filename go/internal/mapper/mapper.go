@@ -19,8 +19,9 @@ import (
 // output — its map, notes, generated names — for the reporting layer.
 type File struct {
 	transpiler.Output
-	// Stopped: the transform did not complete, so the virtual text is not
-	// the file's lowered TSX; TS's diagnostics for it mean nothing.
+	// Stopped: the virtual text is not the file's lowered TSX — the passes
+	// ended early (Output.Stopped names the pass), or code was left out of
+	// it (Output.Dropped) — so TS's diagnostics for it mean nothing.
 	Stopped bool
 	// Err is a failure of the transpiler itself.
 	Err error
@@ -43,9 +44,10 @@ func Register(version string) {
 }
 
 // transform never fails (ide.md, *Tolerance*): a file being typed gets the
-// passes on its recovered tree; one that stops a pass keeps the last good
-// text; a failure of the transpiler itself — a panic included — leaves the
-// source as its own virtual text, mapped 1:1.
+// passes on its recovered tree; one that stops a pass — a panic in it
+// included — keeps the last good text; a failure of the transpiler itself
+// leaves the source as its own virtual text, mapped 1:1. The recover here is
+// the last resort, for a panic outside the passes.
 func transform(req rtsx.MapperRequest) (result rtsx.MapperResult) {
 	identity := func(out transpiler.Output, err error) rtsx.MapperResult {
 		var spans [][6]int32
@@ -60,9 +62,12 @@ func transform(req rtsx.MapperRequest) (result rtsx.MapperResult) {
 		}
 	}()
 	out, err := transpiler.Transpile(transpiler.Input{
-		Files:    map[string]string{req.FileName: req.Content},
-		Entry:    req.FileName,
-		ReadFile: req.ReadFile,
+		Files: map[string]string{req.FileName: req.Content},
+		Entry: req.FileName,
+		// Of its siblings the transform learns only which exist (ide.md,
+		// *Segments*) — what `depends` puts in the cache key. Their contents
+		// are not in the key, so they must not reach the result.
+		ReadFile: func(p string) (string, bool) { return "", req.FileExists(p) },
 		Tolerant: true,
 	})
 	if err != nil || out.Map == nil {
@@ -72,7 +77,7 @@ func transform(req rtsx.MapperRequest) (result rtsx.MapperResult) {
 	for _, s := range out.Map.Spans() {
 		spans = append(spans, s)
 	}
-	return rtsx.MapperResult{Text: out.TSX, Spans: spans, Extra: &File{Output: out, Stopped: out.Stopped != ""}}
+	return rtsx.MapperResult{Text: out.TSX, Spans: spans, Extra: &File{Output: out, Stopped: out.Stopped != "" || out.Dropped}}
 }
 
 // identityFeatures: what the source answers when it stands in as its own

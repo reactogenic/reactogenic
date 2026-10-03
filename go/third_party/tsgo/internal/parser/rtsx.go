@@ -58,5 +58,8 @@ func (p *Parser) parseJsxArgAttribute() *ast.Node {
 	p.scanJsxIdentifier()
 	name := p.parseIdentifierNameErrorOnUnicodeEscapeSequence()
 	id := p.finishNode(p.factory.NewIdentifier(prefix+name.Text()), pos)
+	// `name` is not in the tree: an error it absorbed — a nameless `&`,
+	// `& size` — is the arg's.
+	id.Flags |= name.Flags & ast.NodeFlagsThisNodeHasError
 	return p.finishNode(p.factory.NewJsxAttribute(id, p.parseJsxAttributeValue()), pos)
 }

@@ -104,7 +104,7 @@ of editor features it may answer.
 
   | Source token | Emitted as | Gives |
   | --- | --- | --- |
-  | slot tag name `<$Icon` | the prop name `$Icon=` / the key `$Icon:` | hover, definition, references on the slot |
+  | slot tag name `<$Icon` | the prop name `$Icon=` / the key `$Icon:` (in quotes when not an identifier: `"$sub-item":`) | hover, definition, references on the slot |
   | attribute names of a slot element | the object keys | hover, completion of slot props |
   | arg names `&size`, `&&value` | the arg keys | hover, definition |
   | closing tag name `</Button>` | the rebuilt closing tag, when one is emitted | hover, definition there |
@@ -114,8 +114,10 @@ of editor features it may answer.
   three diagnostic columns move from the `<` / `&` to the name.
 - **Several copies of one token.**
   - *Identical copies* — an attachment emitted in both branches of its
-    ternary, the `$X` of `slot={$X}`, a `Switch` subject repeated per case:
-    the first copy has the features; the others have none.
+    ternary, the `$X` of `slot={$X}`, a `Switch` subject repeated per case, a
+    slot's previous value kept by each null branch of a conditional: the
+    first copy has the features; the others have none — names and both
+    copies of a shorthand included.
   - *Shorthand* — `<Input value />`, `&size`, a slot's bare attribute — where
     the two copies are different symbols (the prop and the binding): both
     answer, as TS does on `{ value }`.
@@ -124,12 +126,25 @@ of editor features it may answer.
     | --- | --- |
     | name (the prop / arg key) | hover, completion, definition, type definition, references, highlights |
     | value (the binding) | hover, definition, references, highlights, rename, semantic tokens, inlay hints |
+- **Attribute strings.** A string attribute whose value moves to a JS
+  position — a slot prop, `is=`, `on=`, an arg, a key — is copied when it
+  reads the same as a JS string, so hover and completion work inside
+  `is="loading"`. One with a backslash, `&` or a line break does not (JSX has
+  no escapes, allows line breaks and decodes `&amp;`): it is written as the
+  JS literal of its value, an atom on the string.
+
+  ```tsx
+  <$Label title="Tom &amp; Jerry" path="C:\new" />   // .rtsx
+  $Label={{ title: "Tom & Jerry", path: "C:\\new" }}  // virtual TSX
+  ```
 - **Slot groups.** An owner has one `$X` prop however many `<$X>` elements
   fill it (repeated: last wins; keyed: one per key), so only one tag can be
   copied — the first, where diagnostics already land. The transpiler exports,
   per owner and name, the tag-name spans (opening and closing) of every
-  element. A request on any other span of the group is answered at the copied
-  one, with the answer's own range set back to the requested token.
+  element — once, like every note and diagnostic, however often the owner's
+  text is emitted (an attachment's fallback is emitted twice). A request on
+  any other span of the group is answered at the copied one, with the
+  answer's own range set back to the requested token.
 - **Syntactic features run on the source tree**, not the virtual text:
   folding, selection ranges, closing-tag insertion. A slot element has no
   element in the virtual text, and the rtsx parser yields standard node
@@ -140,25 +155,43 @@ of editor features it may answer.
 A file being typed rarely parses. The transform never fails on user input:
 
 1. Passes run on TS's recovered tree (`Input.Tolerant`). A pass that fails
-   keeps the previous pass's text and map; the result is marked *stopped*.
+   keeps the previous pass's text and map; the result is marked *stopped*,
+   naming the pass.
 2. Syntax errors are the **source** parse's only; TS's syntactic diagnostics
    of the virtual text are never shown.
 3. A transpiler diagnostic is dropped when its node, or the nearest JSX
    element or fragment enclosing it, contains a parse error (no
    `case-no-test` on a half-typed `<$Case`; no `orphan-slot` under an element
-   whose attribute is half-typed).
+   whose attribute is half-typed, or after a tag that is not closed yet).
+   - *Contains*: the parser flagged a node there, or the range of one of its
+     errors lies there — an unclosed tag (TS17008) leaves no flag.
+   - Decided on the **source** parse: a diagnostic of a later pass is judged
+     where the author wrote the construct. That pass's own parse can only
+     add to it — recovery may re-parent lowered text differently.
+   - Nothing above that element counts. A syntax error elsewhere in the file
+     hides nothing; a diagnostic with no element around it (a root element,
+     `ambiguous-module`) is dropped only for an error inside its own node.
+   - What the dropped error was about is left out, and the construct is
+     lowered around it: a `$Case` being typed does not take its `Switch` —
+     the subject, the other cases — out of the virtual text.
 4. For a *stopped* file — up to the last resort, the source as virtual text
    mapped 1:1 — every TS diagnostic of the file is dropped (unlowered
-   constructs would produce false ones). Source parse errors and transpiler
-   diagnostics of the completed passes remain; hover and completion keep
-   working.
-5. A panic inside the transform is caught at the mapper boundary: step 4,
-   plus one `internal` diagnostic on the first line naming the pass. The
+   constructs would produce false ones). The same when code was **left
+   out**: a `Switch` or `Match` that cannot be lowered and an orphaned slot
+   element become `null`, a half-typed `$Case` with a body is skipped —
+   whether their error was shown or dropped, every name used only there
+   would read as unused. Source parse errors and transpiler diagnostics of
+   the completed passes remain; hover and completion keep working.
+5. A panic inside a pass is caught there, whether the source parses or not:
+   step 4 from the last good text, plus one `internal` diagnostic on the
+   first line naming the pass. A panic anywhere else in the transform is
+   caught at the mapper boundary, with the source as virtual text. The
    server keeps running.
 
 When the source parses clean, nothing is hidden: a pass that fails, or
 emitted text that does not parse, is `internal` at 1:1, as in `check`, and
-tolerant output equals strict output byte for byte.
+tolerant output equals strict output byte for byte — the map and everything
+exported beside it included.
 
 The build paths stay strict: Vite and `reactogenic check` fail on a syntax
 error as today.

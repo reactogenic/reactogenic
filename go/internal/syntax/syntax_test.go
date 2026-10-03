@@ -233,3 +233,36 @@ func TestSlotArgErrors(t *testing.T) {
 		t.Error("want a syntax error in .tsx")
 	}
 }
+
+// The error of a half-typed arg — `&` without a name yet, `& name` — is on
+// the arg attribute, so whoever asks the tree what is broken finds it there
+// (ide.md, *Tolerance*).
+func TestSlotArgErrorFlag(t *testing.T) {
+	for _, text := range []string{
+		`const x = <span slot={$Icon} &></span>;`,
+		`const x = <span slot={$Icon} & size></span>;`,
+		`const x = <span slot={$Icon} &&></span>;`,
+		`const x = <Match& on={s}>x</Match>;`,
+	} {
+		file, attrs := attributes(t, text)
+		rtsx.Bind(file)
+		if len(file.Diagnostics()) == 0 {
+			t.Fatalf("want a parse error: %s", text)
+		}
+		flagged := false
+		for _, attr := range attrs {
+			if _, kind := SlotArg(attr); kind != NotArg {
+				flagged = rtsx.HasParseError(attr)
+			}
+		}
+		if !flagged {
+			t.Errorf("the arg attribute carries no parse-error flag: %s", text)
+		}
+	}
+	// A well-formed arg carries none.
+	file, attrs := attributes(t, `const x = <span slot={$Icon} &size></span>;`)
+	rtsx.Bind(file)
+	if rtsx.HasParseError(attrs[1]) {
+		t.Error("`&size` is flagged")
+	}
+}

@@ -27,8 +27,11 @@ fixtures/shorthand/no-binding
 fixtures/shorthand/slot-params@pass1
 fixtures/shorthand/tdz
 fixtures/slots/arg-without-slot
+fixtures/slots/attribute-strings
 fixtures/slots/attributes
+fixtures/slots/conditional-previous
 fixtures/slots/errors
+fixtures/slots/hyphen-names
 fixtures/slots/keyed
 fixtures/slots/last-wins
 fixtures/slots/nested

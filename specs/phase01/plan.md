@@ -623,6 +623,33 @@ whose name is copied from after its origin — TS reports on the name or the
 value, never on that span. Whitespace is not copied (it would change the
 emitted text): prop completion on an empty position is in ide.md's *Not in
 the first release*. `oneCopyAnswers` marks later copies per construct.
+Revised after review (findings 2.3–2.10, 3.14):
+- A diagnostic's span never runs backwards. A zero-length syntax error keeps
+  the parser's position; it was moved to the next token, often the next
+  line (`check` and Vite printed it there too). An error on whitespace text
+  is on the text, not an empty span at what follows.
+- A JSX attribute string moved to a JS position is the JS literal of its
+  value when it holds `\`, `&` or a line break (ide.md, *Span map*). It was
+  copied raw: a multi-line `className` on a slot element was an internal
+  error, `&amp;` and `C:\new` changed value. Line breaks are kept, as
+  TypeScript and esbuild do (Babel folds them into a space). Fixture
+  `slots/attribute-strings`.
+- A slot tag that is not an identifier (`<$sub-item>`) is a slot — the `$`
+  decides, as syntax.md's grammar table and pass 0 already had it. On a
+  component it was a valid attribute name; inside a slot it is now a quoted
+  key, the name still copied. Fixture `slots/hyphen-names`.
+- A masked copy emitted twice answers once (a slot's previous value under
+  two null branches; fixture `slots/conditional-previous`). The corpus test
+  checks each shorthand for exactly its two copies with the table's
+  features, and compares all twenty feature bits with the fork's
+  declaration.
+- The spans that run backwards are the props of a slot first filled by a
+  lowered `Match` / `Switch` — with or without a null branch, so a
+  `slot-conditional` note does not identify them; the test allows a
+  collapsed span on that attribute shape only (five in the corpus now).
+- Diagnostics, notes and slot groups found in text that is emitted twice
+  (an attachment's fallback) are recorded once.
+- "Produced code that does not parse" names the pass that wrote the text.
 - Copy names instead of synthesizing them (ide.md, *Span map*): slot tag
   names, attribute names of slot elements, arg keys, closing tag names where
   one is emitted. The emitted text does not
@@ -676,6 +703,33 @@ system.
 panic, no hang, a valid map every time, and — after a guard in the segment
 pass and skipping a nameless `&` — not one stopped pass. The mapper is
 tolerant and recovers from a panic.
+Revised after review (findings 2.1, 2.2, 2.5, 2.9, 3.9, 1.5); the mutant
+test now types Enter too, fails on every error and checks every span:
+26,600 mutants, 17,853 with syntax errors.
+- Rule 3 was wrong in both directions. An unclosed tag leaves no flag in
+  the tree, so valid `$Case`s after one got `orphan-slot`; and any syntax
+  error anywhere dropped the diagnostics of root elements and
+  `ambiguous-module`. It is now decided on the source parse, by flags and
+  by the parser's error ranges, up to the nearest element and no further.
+  Patch 0002: the flag of a nameless or detached `&` reaches the attribute.
+- Whitespace text with a line break is formatting whatever the parser's flag
+  says: after recovery the flag is stale, and the text was reported as
+  `switch-children`.
+- A `$Case` being typed took the whole `Switch` out of the virtual text: no
+  completion in `<$Case is={Status.}`, and with `noUnusedLocals` an error on
+  every name used only there. A child or attribute whose error is dropped is
+  now left out and the `Switch` / `Match` lowered around it. Where code is
+  left out all the same — `null` for a construct that cannot be lowered or
+  an orphaned slot, a skipped case with a body — the file says so
+  (`Output.Dropped`; the mapper's `File.Stopped`), and rule 4 applies. Both
+  server scenarios are tests (`internal/lsp`).
+- A panic in a pass is recovered in `Transpile` for a clean source too: the
+  last good text, the pass named, the `internal` diagnostic added there. The
+  mapper's own `recover` is the last resort.
+- The mapper tells the transform which siblings exist, never what they hold
+  — what its cache key covers. `segment-self` through another file is
+  therefore not reported by the mapped transform (a direct self-mount still
+  is); RGP1-106 reports it as a cross-file rule. `check` is unchanged.
 - `Input.Tolerant` (ide.md, *Tolerance*): passes on the recovered tree,
   per-pass fallback and the *stopped* mark, suppression under a broken JSX
   element, identity as the last resort, `recover` at the mapper boundary.

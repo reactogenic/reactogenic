@@ -53,6 +53,30 @@ func TestSyntaxErrorsAreDiagnostics(t *testing.T) {
 	}
 }
 
+// A syntax error's span never runs backwards: a zero-length one (an
+// unterminated string, a missing expression at a line end) stays where the
+// parser put it, not on the next line's first token.
+func TestSyntaxErrorSpans(t *testing.T) {
+	for _, c := range []struct {
+		src       string
+		line, col int
+	}{
+		{"export function A() {\n  const a = \"abc\n  return <div className=\"x\">hi</div>;\n}\n", 2, 17},
+		{"const a = <b>{\n", 1, 15},
+	} {
+		for _, tolerant := range []bool{false, true} {
+			out, err := Transpile(Input{Files: map[string]string{"a.rtsx": c.src}, Entry: "a.rtsx", Tolerant: tolerant})
+			if err != nil || len(out.Diagnostics) == 0 {
+				t.Fatalf("%q: %v %+v", c.src, err, out.Diagnostics)
+			}
+			d := out.Diagnostics[0]
+			if d.Span.End < d.Span.Pos || d.Span.End > len(c.src) || d.Line != c.line || d.Col != c.col {
+				t.Errorf("%q (tolerant %v): %s at %d:%d, span [%d,%d); want %d:%d", c.src, tolerant, d.Code, d.Line, d.Col, d.Span.Pos, d.Span.End, c.line, c.col)
+			}
+		}
+	}
+}
+
 // Pass 0 errors come out with source positions, and output is still produced.
 func TestCheckErrorsAreDiagnostics(t *testing.T) {
 	src := "export const x = (\n  <div { size }>body</div>\n);\n"
@@ -197,5 +221,52 @@ func TestTolerant(t *testing.T) {
 	out, _ := Transpile(Input{Files: map[string]string{"a.rtsx": "const a = <Button><$Ic</Button>;\n"}, Entry: "a.rtsx"})
 	if out.TSX != "" || out.Map != nil || len(out.Diagnostics) == 0 {
 		t.Errorf("strict: %+v", out)
+	}
+}
+
+// An attachment's fallback is emitted twice — as the slot's fallback and as
+// the element without the slot — and each copy goes through the later runs.
+// What is found there is recorded once.
+func TestFallbackRecordedOnce(t *testing.T) {
+	out := transpile(t, "export const a = <div><span slot={$Badge}><$Icon /></span></div>;\n")
+	if len(out.Diagnostics) != 1 || out.Diagnostics[0].Code != "orphan-slot" {
+		t.Errorf("diagnostics: %+v", out.Diagnostics)
+	}
+	out = transpile(t, "const size = 1;\nexport const a = <span slot={$Badge} &size><Button><$Icon className=\"i\" /></Button></span>;\n")
+	if len(out.Diagnostics) != 0 || len(out.SlotGroups) != 1 {
+		t.Errorf("diagnostics %+v, slot groups %+v", out.Diagnostics, out.SlotGroups)
+	}
+	seen := map[Note]bool{}
+	for _, n := range out.Notes {
+		if seen[n] {
+			t.Errorf("note recorded twice: %+v", n)
+		}
+		seen[n] = true
+	}
+	if strings.Count(out.TSX, "$Icon={{ className: \"i\" }}") != 2 {
+		t.Errorf("the fallback is emitted in both branches:\n%s", out.TSX)
+	}
+}
+
+// Emitted text that does not parse is reported against the pass that wrote
+// it — a repeating pass re-parses its own output.
+func TestDoesNotParseNamesThePass(t *testing.T) {
+	saved := passes
+	defer func() { passes = saved }()
+	ran := false
+	passes = []pass{
+		{0, "checks", func(*passContext) []emit.Edit { return nil }, false},
+		{1, "one", func(*passContext) []emit.Edit { return nil }, false},
+		{2, "two", func(*passContext) []emit.Edit {
+			if ran {
+				return nil
+			}
+			ran = true
+			return []emit.Edit{{Span: emit.Span{}, Pieces: []emit.Piece{emit.Synth("(", emit.Span{})}}}
+		}, true},
+	}
+	_, err := Transpile(Input{Files: map[string]string{"a.rtsx": "export const a = 1;\n"}, Entry: "a.rtsx"})
+	if err == nil || !strings.Contains(err.Error(), "pass 2 (two) produced code that does not parse") {
+		t.Errorf("got %v", err)
 	}
 }
