@@ -27,7 +27,7 @@ prototype to be rewritten later.
 | --- | --- |
 | Parser (RGP1-002) | Extending tsgo's own JSX parser becomes the natural option. Masking the reserved forms before parsing, or using Babel, would mean a second parser next to the one the checker uses. Still decided in RGP1-002 |
 | Type query (RGP1-051) | A call into tsgo's checker from Go: the props type of the tag, then `$X` in it, minus `undefined` / `null`, then array or tuple |
-| Program (RGP1-050) | tsgo's compiler host with an in-memory overlay: each `Foo.rtsx` is served as `Foo.tsx` |
+| Program (RGP1-050) | tsgo's compiler host with an in-memory overlay: each `Foo.rtsx` is served as `Foo.tsx` — superseded by *IDE support*, decision 2 |
 | `reactogenic check` (M6) | The Go binary itself, installed through an npm `bin` shim |
 | Vite plugin (M5) | The plugin runs in Node, so it drives a Go process (*Node ↔ Go* below) |
 | Semantics | The project is type-checked with TS7 semantics, including its `.ts` / `.tsx` files. Differences from the user's `tsc` 5.x are TS7's differences, not ours |
@@ -308,8 +308,9 @@ dropped: a segment is an ordinary module, made a segment by being mounted, so
 segment-import goes with it. The emitted import names the file found,
 extension included, so Vite and TS7 load the file the lookup chose rather than
 resolving by their own orders (TS: `.ts` before `.tsx`). `reactogenic check`
-resolves `./x.rtsx` through an `x.rtsx.tsx` alias of the virtual `x.tsx`, and
-drops TS5097 on segment imports.
+resolves `./x.rtsx` through an `x.rtsx.tsx` alias of the virtual `x.tsx`
+(superseded by *IDE support*, decision 2: `x.rtsx` is the module, resolved as
+written), and drops TS5097 on segment imports.
 
 ## IDE support (RGP1-100)
 
@@ -402,3 +403,14 @@ server only after migrating `check` — a bare server now comes first.
 **Cost accepted:** the stripped binary grows about 45% with the language
 service linked in (19 → 28 MB, darwin-arm64); the patches above must be
 rebased when the pin moves.
+
+**`check` on the mapped program (RGP1-106).** What was open in decision 2,
+settled while moving `check`:
+
+| | |
+| --- | --- |
+| strict, by the transform | `check` registers the same mapper with the passes strict. A file with a syntax error is not lowered: it reports its syntax errors, and its source is its virtual text — stopped, so nothing TS says about it is shown — instead of an empty module (the overlay's, which gave every importer TS2306). **Rejected:** the tolerant transform in `check` — a build would print type errors of a half-parsed file |
+| rule 4 is the layer's, in both hosts | a file with code left out reports no TS diagnostic in `check` either: the editor and `check` must print the same lines, and those diagnostics are false in both |
+| TS's syntax errors of a mapped file stop nothing | `tsc` checks no types while any file has a syntax error. A syntax error in an `.rtsx` file never did that in `check` (the overlay served an empty file); it still does not, and one in a `.ts` / `.tsx` file still does |
+| referenced projects are checked first | a referenced project's sources are in the referencing program (there is no output to read instead), under the referencing project's options. Reporting them there would check a file twice, the second time with the wrong options: each project reports its own files. **Rejected:** `tsc -p`'s reading, where a referenced project is not checked at all — its `.rtsx` errors would pass `check` and fail `vite build` |
+| `ambiguous-module` is the transpiler's | the overlay's own copy said "and the `.rtsx` is not checked"; it is now — both files are modules |

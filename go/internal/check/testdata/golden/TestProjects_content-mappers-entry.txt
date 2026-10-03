@@ -1,0 +1,2 @@
+src/main.tsx(2,14): error TS2322: Type 'Element' is not assignable to type 'number'.
+src/page.rtsx(2,28): error undeclared-slot: `$Nope` is not declared in `Card`

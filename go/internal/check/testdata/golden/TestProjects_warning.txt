@@ -1,0 +1,1 @@
+src/page.rtsx(1,30): warning segment-children: Contents will be overwritten by the segment `intro`

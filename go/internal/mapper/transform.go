@@ -8,6 +8,6 @@ import "github.com/microsoft/TypeScript/tsc/rtsx"
 // stands in as its own virtual text. As there, the transform reads which
 // siblings exist and nothing of their contents.
 func Transform(fileName, content string, fileExists func(path string) bool) (string, *File) {
-	result := transform(rtsx.MapperRequest{FileName: fileName, Content: content, FileExists: fileExists})
+	result := transform(rtsx.MapperRequest{FileName: fileName, Content: content, FileExists: fileExists}, true)
 	return result.Text, result.Extra.(*File)
 }

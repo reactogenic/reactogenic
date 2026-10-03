@@ -10,7 +10,7 @@ src/page.rtsx(9,32): error params-required: `$Icon` requires params: its body is
 src/page.rtsx(10,19): error switch-missing-case: Missing `"b"`, `"c"`
 src/page.rtsx(11,24): error segment-not-component: The segment `num` has no default component
 src/page.rtsx(12,24): error segment-props: A segment takes no props: `props` requires `x`
-  src/props.rtsx.tsx:1:32 - 'x' is declared here.
+  src/props.rtsx:1:32 - 'x' is declared here.
 src/page.rtsx(13,27): error segment-root-props: `Plain` must accept `id` and `children` to be a segment root
 src/page.rtsx(14,27): error TS2322: Type 'boolean' is not assignable to type 'string'.
   No `value` in scope: a bare attribute is `true`. Did you mean `value={value}`?

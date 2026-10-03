@@ -1,0 +1,2 @@
+src/page.rtsx(2,25): error segment-props: A segment takes no props: `intro` requires `title`
+  src/intro.rtsx:1:44 - 'title' is declared here.

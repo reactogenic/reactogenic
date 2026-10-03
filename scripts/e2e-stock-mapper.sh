@@ -265,17 +265,16 @@ run "the limit: an extensionless import of an .rtsx file written in a .tsx file"
 reset
 
 # `reactogenic check` on the same tsconfig: the `contentMappers` entry is
-# ignored — no TS18068 for the `--runExternalCode` it does not need.
-# (Until RGP1-106 moves `check` to the mapped program it prints one error of
-# its own here, on `page.rtsx.tsx`: main.tsx names `./page.rtsx`.)
+# ignored — no TS18068 for the `--runExternalCode` it does not need — and the
+# clean project is clean: main.tsx names `./page.rtsx`, which is the module.
 out="$("$REACTOGENIC_BINARY" check --pretty=false 2>&1)"
 code=$?
 echo
 echo "== reactogenic check on the same tsconfig ignores the contentMappers entry"
 echo "\$ reactogenic check   (exit $code)"
 [[ -n "$out" ]] && echo "$out"
-if grep -q 'TS18068' <<<"$out"; then
-  echo "FAIL: TS18068"
+if [[ "$code" != 0 || -n "$out" ]]; then
+  echo "FAIL: expected exit 0 and no output"
   failed=1
 fi
 

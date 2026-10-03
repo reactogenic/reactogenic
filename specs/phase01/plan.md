@@ -296,7 +296,7 @@ into one declaration.
 
 ## M4 — Type service
 
-### RGP1-050 — Project program with virtual `.tsx` · M · done
+### RGP1-050 — Project program with virtual `.tsx` · M · done (superseded by RGP1-106: the mapped program)
 ### RGP1-051 — The list-slot query · S · removed by RGP1-043 (the transpiler needs no types)
 `go/internal/project`, over the bridge `rtsx/program.go` (patch 0003).
 - An overlay file system (tsgo's `wrapvfs`) serves `Foo.tsx` for every
@@ -871,7 +871,58 @@ every item of a mapped file, and indexed past a text with no statement
   scenario through the built binary.
 - Depends on: 103, 104.
 
-### RGP1-106 — `reactogenic check` on the mapped program · M
+### RGP1-106 — `reactogenic check` on the mapped program · M · done
+`internal/report` is the layer: `report.File(program, file)` for the editor
+(suggestions included), `report.Program(program, config)` for `check`; both
+go through one per-file function, and a test holds them equal file by file.
+`internal/project` — the overlay, the alias, its `ambiguous-module`, the
+TS18068 filter — is gone, with `rtsx.WrapFS`; `check` is `rtsx.NewProgram`
+per tsconfig plus the layer.
+- *Goldens*: eight of the thirteen recorded files are byte-identical; one
+  line changed in each of the other five, all expected — three duplicates
+  gone (an error in a mounted segment and one in a module imported as
+  `./b.rtsx`, each printed again under `x.rtsx.tsx`; the attachment's second
+  TS2339, merged), one related location (`props.rtsx.tsx:1:32` →
+  `props.rtsx:1:32`), and `ambiguous-module` without the overlay's "and the
+  `.rtsx` is not checked" — it is checked now
+  (`TestAmbiguousModuleIsChecked`). The Vite test app, with the real
+  `@reactogenic/core` and React's types: no output, before and after.
+  `scripts/e2e-stock-mapper.sh` run again (`typescript@7.1.0-dev.20261003.1`):
+  its twelve `tsc` runs as before, and `check` on the same project now
+  exits 0 with no output, which the script asserts.
+- *Strict*: `mapper.RegisterStrict`. A file with a syntax error is its own
+  virtual text, stopped. Before, it was an empty module: every importer got
+  TS2306, and the type errors behind that import were hidden (golden
+  `syntax-error`). TS's syntax errors of a virtual text are left out of the
+  program's diagnostics in the bridge (`rtsx.AllDiagnostics`) — they would
+  stop the type check of the whole program, as a `.tsx` file's still do.
+- *Rule 4 in `check`*: a file with code left out (an orphaned slot that holds
+  an expression) reports the transpiler's error and no TS diagnostic. The
+  overlay printed them; no recorded golden had the case.
+- *References*: referenced projects first, each file reported by its own
+  project, with its own options (golden `cross-project`: `lib` is not
+  strict, `app` is, and `lib`'s untyped parameters are no error in either
+  run). `-p app` therefore prints the errors of the `lib` it references, as
+  the overlay did (under the alias); `tsc -p` would not check `lib` at all
+  (decisions.md). `--watch` follows the referenced projects' directories,
+  and `.jsx` / `.js` files (a segment may be one).
+- *New goldens* (`TestProjects`): `.rtsx` only (no TS18003 — the mapper is
+  in tsconfig parsing, so the stale error of the research prototype does not
+  arise); Vite's template (the root prints what `-p tsconfig.app.json`
+  prints; before: nothing); a file of two projects; a cross-project import;
+  `paths`; a `contentMappers` entry; a segment under `node16` / `nodenext`
+  (before: TS2307 — the first gap of syntax.md's OPEN, closed); a segment
+  loop of three files, equal to the overlay's output; syntax errors; a
+  warning.
+- *Left*: the second gap of that OPEN stands (`./x.jsx` checked as `x.ts`
+  when both exist — measured). `segment-not-found` comes with TS's TS2307 on
+  the same `#name`: one mistake, two lines — no rule drops it, and none did.
+  `segment-self` follows mounted roots (the notes): a root inside another
+  root's overwritten children no longer counts as a mount. On the first run
+  of `--watch`, a file of a *referenced* project that changes while that run
+  is under way is seen at its next change. Not run: Windows.
+  > OPEN: drop TS2307 on a segment import when `segment-not-found` is
+  > reported for it (as TS5097 is dropped)?
 - First, golden `check` output from today's overlay: every project of the
   check suite, the Vite test app, one project per row of diagnostics.md
   *Rewrites*.
@@ -1085,9 +1136,9 @@ with a suffix stayed unresolved; the segment directive hid TS2306;
 drops it, ahead of 106.
 Left: Windows and VS Code's own client were not run; in the stock server,
 go to definition on a `paths` specifier of a mapped file returns nothing —
-also for one written in a `.tsx` file; on that project `check` prints
-TS5097 under `page.rtsx.tsx` (the overlay's alias of a module a `.tsx` file
-imports by its full name — gone with 106).
+also for one written in a `.tsx` file. (On that project `check` printed
+TS5097 under `page.rtsx.tsx`, the overlay's alias of a module a `.tsx` file
+imports by its full name: gone with RGP1-106.)
 - `reactogenic content-mapper` and the manifest in `@reactogenic/cli`
   (ide.md, *Stock TypeScript 7.1*): numeric codes for transpiler
   diagnostics, `recover` around every transform, a generated segment import

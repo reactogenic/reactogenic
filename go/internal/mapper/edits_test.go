@@ -94,7 +94,7 @@ func TestPanicIsCaughtAtTheBoundary(t *testing.T) {
 			result := transform(rtsx.MapperRequest{
 				FileName: "/p/src/page.rtsx", Content: source, ReadFile: boom,
 				FileExists: func(p string) bool { _, ok := boom(p); return ok },
-			})
+			}, true)
 			file, ok := result.Extra.(*File)
 			if !ok || !file.Stopped {
 				t.Fatalf("not marked stopped: %+v", result.Extra)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/reactogenic/reactogenic/go/internal/check"
 	"github.com/reactogenic/reactogenic/go/internal/lsp"
+	"github.com/reactogenic/reactogenic/go/internal/mapper"
 	"github.com/reactogenic/reactogenic/go/internal/server"
 	"github.com/reactogenic/reactogenic/go/internal/stockmapper"
 )
@@ -126,6 +127,10 @@ func runCheck(args []string) int {
 		b, err := os.ReadFile(p)
 		return string(b), err == nil
 	}
+	// Every .rtsx file is a module of the program, checked through its
+	// emitted TSX (ide.md, *The engine*). Strict: a build fails on a syntax
+	// error.
+	mapper.RegisterStrict(version)
 	if *watch {
 		check.Watch(filepath.ToSlash(config), 300*time.Millisecond, nil, func(reports []check.Report) {
 			fmt.Printf("\n[%s] %d error(s). Watching for file changes.\n", time.Now().Format("15:04:05"), check.Errors(reports))

@@ -1,0 +1,3 @@
+src/intro.rtsx(2,24): error segment-self: `#outro` mounts the segment it is written in
+src/outro.rtsx(2,24): error segment-self: `#intro` mounts the segment it is written in
+src/outro.rtsx(2,42): error segment-self: `#outro` mounts the segment it is written in

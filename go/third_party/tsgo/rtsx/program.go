@@ -6,6 +6,7 @@ package rtsx
 
 import (
 	"context"
+	"slices"
 
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
 	"github.com/microsoft/TypeScript/tsc/internal/astnav"
@@ -16,26 +17,18 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/tsoptions"
 	"github.com/microsoft/TypeScript/tsc/internal/vfs"
 	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
-	"github.com/microsoft/TypeScript/tsc/internal/vfs/wrapvfs"
 )
 
 type (
-	FS             = vfs.FS
-	FSEntries      = vfs.Entries
-	FSReplacements = wrapvfs.Replacements
-	Program        = compiler.Program
-	Checker        = checker.Checker
-	Type           = checker.Type
+	FS      = vfs.FS
+	Program = compiler.Program
+	Checker = checker.Checker
+	Type    = checker.Type
 )
 
 // OSFS is the real file system.
 func OSFS() FS {
 	return osvfs.FS()
-}
-
-// WrapFS overrides some methods of fs; nil replacements fall through.
-func WrapFS(fs FS, r FSReplacements) FS {
-	return wrapvfs.Wrap(fs, r)
 }
 
 // NewProgram reads the tsconfig at configPath through fs and builds its
@@ -56,17 +49,62 @@ func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
 	return program, diags
 }
 
-// AllDiagnostics returns what `tsc --noEmit` reports for p, sorted:
-// config, syntactic, program, bind, global and semantic diagnostics.
-func AllDiagnostics(p *Program) []*Diagnostic {
-	ctx := context.Background()
-	return compiler.SortAndDeduplicateDiagnostics(
-		compiler.GetDiagnosticsOfAnyProgram(ctx, p, nil, false, p.GetBindDiagnostics, p.GetSemanticDiagnostics))
+// ProjectReferences are the tsconfig paths of the projects p's config
+// references.
+func ProjectReferences(p *Program) []string {
+	return p.CommandLine().ResolvedProjectReferencePaths()
 }
 
-// GetChecker returns p's checker and the func that releases it.
-func GetChecker(p *Program) (*Checker, func()) {
-	return p.GetTypeChecker(context.Background())
+// AllDiagnostics returns what `tsc --noEmit` reports for p, sorted: config,
+// syntactic, program, global, semantic and declaration diagnostics, the
+// later ones only while the earlier are none — the steps of
+// compiler.GetDiagnosticsOfAnyProgram.
+//
+// But for one: the syntactic diagnostics of a content-mapped file are left
+// out, and stop nothing. They are about its virtual text; the syntax errors
+// of the source are its mapper's to report (specs/phase01/ide.md,
+// *Tolerance*).
+func AllDiagnostics(p *Program) []*Diagnostic {
+	ctx := context.Background()
+	all := slices.Clip(p.GetConfigFileParsingDiagnostics())
+	config := len(all)
+	for _, d := range p.GetSyntacticDiagnostics(ctx, nil) {
+		if d.File() == nil || d.File().SpanMap() == nil {
+			all = append(all, d)
+		}
+	}
+	if len(all) == config {
+		all = append(all, p.GetProgramDiagnostics()...)
+		p.GetBindDiagnostics(ctx, nil)
+		all = append(all, p.GetGlobalDiagnostics(ctx)...)
+		if len(all) == config {
+			all = append(all, p.GetSemanticDiagnostics(ctx, nil)...)
+			// The globals found while checking.
+			all = append(all, p.GetGlobalDiagnostics(ctx)...)
+		}
+		if p.Options().NoEmit.IsTrue() && p.Options().GetEmitDeclarations() && len(all) == config {
+			all = append(all, p.GetDeclarationDiagnostics(ctx, nil)...)
+		}
+	}
+	return compiler.SortAndDeduplicateDiagnostics(all)
+}
+
+// FileDiagnostics returns what the language server reports for one file of
+// p: its syntactic, semantic (declaration diagnostics included, when
+// declarations are emitted) and suggestion diagnostics.
+func FileDiagnostics(ctx context.Context, p *Program, file *SourceFile) (syntactic, semantic, suggestion []*Diagnostic) {
+	syntactic = p.GetSyntacticDiagnostics(ctx, file)
+	semantic = p.GetSemanticDiagnostics(ctx, file)
+	if p.Options().GetEmitDeclarations() {
+		semantic = append(slices.Clip(semantic), p.GetDeclarationDiagnostics(ctx, file)...)
+	}
+	return syntactic, semantic, p.GetSuggestionDiagnostics(ctx, file)
+}
+
+// GetChecker returns the checker p checks file with, and the func that
+// releases it.
+func GetChecker(ctx context.Context, p *Program, file *SourceFile) (*Checker, func()) {
+	return p.GetTypeCheckerForFile(ctx, file)
 }
 
 // TokenAt is the token at pos in file.

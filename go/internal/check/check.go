@@ -1,179 +1,88 @@
 // Package check is `reactogenic check` (specs/phase01/diagnostics.md): the
 // transpiler's errors and TS7's, all reported on the files the author wrote.
+//
+// The program is the mapped one (specs/phase01/ide.md, *The engine*): every
+// .rtsx file is a module under its own name, checked through its emitted
+// TSX. The caller registers the transform first — mapper.RegisterStrict: a
+// build fails on a syntax error. What is reported is the reporting layer's
+// (internal/report), which the language server shares.
 package check
 
 import (
+	"cmp"
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 
-	"github.com/reactogenic/reactogenic/go/internal/emit"
-	"github.com/reactogenic/reactogenic/go/internal/project"
-	"github.com/reactogenic/reactogenic/go/internal/transpiler"
+	"github.com/reactogenic/reactogenic/go/internal/report"
 )
 
 // Report is one diagnostic, positioned in a file the author wrote.
-type Report struct {
-	File      string // absolute
-	Line, Col int    // 1-based; 0 for a diagnostic without a file
-	Error     bool   // an error, not a warning
-	Code      string // "TS2322", or a transpiler code such as "orphan-slot"
-	Message   string
-	Related   []Report
-
-	span      emit.Span // in File, for TS diagnostics of an .rtsx file
-	supersede emit.Span // slot-key-inline: TS errors in this span follow from it
-}
+type Report = report.Report
 
 // Run type-checks the project of the tsconfig at configPath (absolute).
 func Run(configPath string) []Report {
-	p := project.Open(configPath)
-	var reports []Report
-	// Transpiler errors, once per file (RGP1-075).
-	for file, out := range p.Outputs() {
-		for _, d := range out.Diagnostics {
-			reports = append(reports, Report{File: file, Line: d.Line, Col: d.Col, Error: d.Severity == transpiler.Error, Code: d.Code, Message: d.Message})
-		}
-	}
-	var ts []Report
-	for _, d := range p.Diagnostics() {
-		if segmentImport(p, d) {
-			continue
-		}
-		ts = append(ts, fromTS(p, d))
-	}
-	reports = append(reports, superseded(ts)...)
-	reports = append(reports, slotConditionals(p)...)
-	for _, file := range p.Ambiguous() {
-		tsx := strings.TrimSuffix(file, ".rtsx") + ".tsx"
-		reports = append(reports, Report{File: file, Line: 1, Col: 1, Error: true, Code: "ambiguous-module",
-			Message: fmt.Sprintf("`%s` and `%s` side by side: an import of `./%s` is ambiguous, and the `.rtsx` is not checked",
-				filepath.Base(tsx), filepath.Base(file), strings.TrimSuffix(filepath.Base(tsx), ".tsx"))})
-	}
-	sort.SliceStable(reports, func(i, j int) bool {
-		a, b := reports[i], reports[j]
-		if a.File != b.File {
-			return a.File < b.File
-		}
-		if a.Line != b.Line {
-			return a.Line < b.Line
-		}
-		return a.Col < b.Col
-	})
+	reports, _ := run(configPath)
 	return reports
 }
 
-// fromTS maps a TS diagnostic back: from a virtual Foo.tsx to Foo.rtsx
-// through the transpiler's map (diagnostics.md, *Mapping*), or as it is.
-func fromTS(p *project.Project, d *rtsx.Diagnostic) Report {
-	r := Report{Error: rtsx.IsError(d), Code: fmt.Sprintf("TS%d", d.Code()), Message: flatten(d)}
-	if d.File() == nil {
-		return r
-	}
-	span := emit.Span{Pos: rtsx.SkipTrivia(d.File().Text(), d.Pos()), End: d.End()}
-	r.File, r.Line, r.Col = position(p, d.File(), span)
-	if src, ok := p.SourceOf(d.File().FileName()); ok {
-		out, _ := p.Output(src)
-		text, _ := p.Source(src)
-		r.span = out.Map.Source(span)
-		if code, message, related, ok := rewrite(d, out, text, r.span); ok {
-			r.Code, r.Message, r.Related = code, message, related
-			if code == "slot-key-inline" {
-				r.supersede = innermostNote(out.Notes, r.span).Tag
+// run checks the project and, first, the projects it references — a tsconfig
+// with `references` and no files of its own (Vite's template) is checked
+// through them. A referenced project's modules are in the referencing
+// program too, read from source; each file is reported once, by the first
+// project that holds it: its own, checked with its own options. It also
+// returns the tsconfig files read, for --watch.
+func run(configPath string) (reports []Report, configs []string) {
+	reported := map[string]bool{} // files, and the reports that have none
+	var project func(config string)
+	project = func(config string) {
+		if slices.Contains(configs, config) {
+			return
+		}
+		configs = append(configs, config)
+		program, configDiagnostics := rtsx.NewProgram(config, path.Dir(config), rtsx.OSFS())
+		if program != nil {
+			for _, reference := range rtsx.ProjectReferences(program) {
+				project(reference)
 			}
 		}
-		r.Message = renameGenerated(r.Message, out.Generated)
-	}
-	for _, rel := range d.RelatedInformation() {
-		rr := Report{Message: flatten(rel)}
-		if rel.File() != nil {
-			rr.File, rr.Line, rr.Col = position(p, rel.File(), emit.Span{Pos: rtsx.SkipTrivia(rel.File().Text(), rel.Pos()), End: rel.End()})
-		}
-		r.Related = append(r.Related, rr)
-	}
-	return r
-}
-
-// segmentImport: TS5097 (an import path ending in `.tsx` or `.ts`) on the
-// import a segment root emits. The import names the file found, extension
-// included (syntax.md, *Segment files*); it is not the author's, and needs
-// no allowImportingTsExtensions.
-func segmentImport(p *project.Project, d *rtsx.Diagnostic) bool {
-	if d.Code() != 5097 || d.File() == nil {
-		return false
-	}
-	src, ok := p.SourceOf(d.File().FileName())
-	if !ok {
-		return false
-	}
-	out, _ := p.Output(src)
-	at := out.Map.Source(emit.Span{Pos: rtsx.SkipTrivia(d.File().Text(), d.Pos()), End: d.End()})
-	note := innermostNote(out.Notes, at)
-	return note != nil && note.Kind == "segment"
-}
-
-// superseded drops the TS errors that follow from another one: a key
-// function passed by reference is read as an entry key, and everything TS
-// then says about that slot element restates the misreading.
-func superseded(reports []Report) []Report {
-	var kept []Report
-	for _, r := range reports {
-		drop := false
-		for _, s := range reports {
-			if s.supersede.Len() > 0 && s.File == r.File && s.Code != r.Code &&
-				s.supersede.Pos <= r.span.Pos && r.span.End <= s.supersede.End {
-				drop = true
+		files := map[string]bool{}
+		for _, r := range report.Program(program, configDiagnostics) {
+			key := r.File
+			if key == "" {
+				key = "\x00" + r.Code + r.Message
+			}
+			if !reported[key] {
+				reports = append(reports, r)
+				files[key] = true
 			}
 		}
-		if !drop {
-			kept = append(kept, r)
+		if program != nil {
+			for _, file := range program.GetSourceFiles() {
+				files[file.FileName()] = true
+			}
+		}
+		for file := range files {
+			reported[file] = true
 		}
 	}
-	return kept
-}
-
-// position returns where span of file is in the author's source.
-func position(p *project.Project, file *rtsx.SourceFile, span emit.Span) (string, int, int) {
-	name := file.FileName()
-	if src, ok := p.SourceOf(name); ok {
-		out, _ := p.Output(src)
-		text, _ := p.Source(src)
-		if out.Map != nil {
-			span = out.Map.Source(span)
-		}
-		line, col := emit.LineCol(text, span.Pos)
-		return src, line, col
-	}
-	line, col := emit.LineCol(file.Text(), span.Pos)
-	return name, line, col
-}
-
-// flatten renders a message and its chain, indented as tsc does.
-func flatten(d *rtsx.Diagnostic) string {
-	var b strings.Builder
-	var walk func(d *rtsx.Diagnostic, depth int)
-	walk = func(d *rtsx.Diagnostic, depth int) {
-		if depth > 0 {
-			b.WriteString("\n" + strings.Repeat("  ", depth))
-		}
-		b.WriteString(rtsx.Message(d))
-		for _, next := range d.MessageChain() {
-			walk(next, depth+1)
-		}
-	}
-	walk(d, 0)
-	return b.String()
+	project(configPath)
+	slices.SortStableFunc(reports, func(a, b Report) int {
+		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Col, b.Col))
+	})
+	return reports, configs
 }
 
 // Errors counts the reports that are errors.
 func Errors(reports []Report) int {
 	n := 0
 	for _, r := range reports {
-		if r.Error {
+		if r.Severity == report.Error {
 			n++
 		}
 	}
@@ -185,10 +94,7 @@ func Errors(reports []Report) int {
 // otherwise `file(line,col): error CODE: message`.
 func Print(w io.Writer, reports []Report, cwd string, pretty bool, readFile func(string) (string, bool)) {
 	for _, r := range reports {
-		kind := "warning"
-		if r.Error {
-			kind = "error"
-		}
+		kind := r.Severity.String()
 		name := rel(cwd, r.File)
 		switch {
 		case r.File == "":

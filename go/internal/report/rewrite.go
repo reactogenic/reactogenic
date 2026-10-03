@@ -1,4 +1,4 @@
-package check
+package report
 
 import (
 	"fmt"
@@ -63,7 +63,7 @@ func rewrite(d *rtsx.Diagnostic, out transpiler.Output, src string, at emit.Span
 		return "slot-no-args", fmt.Sprintf("`%s` takes no args: its body is not a function", note.Name), nil, true
 	case note.Kind == "shorthand-true" && d.Code() == 2322:
 		// TS's message is accurate; add the likely cause.
-		hint := Report{Message: fmt.Sprintf("No `%s` in scope: a bare attribute is `true`. Did you mean `%s={%s}`?", note.Name, note.Name, note.Name)}
+		hint := Report{Severity: Message, Message: fmt.Sprintf("No `%s` in scope: a bare attribute is `true`. Did you mean `%s={%s}`?", note.Name, note.Name, note.Name)}
 		return fmt.Sprintf("TS%d", d.Code()), flatten(d), []Report{hint}, true
 	}
 	return "", "", nil, false

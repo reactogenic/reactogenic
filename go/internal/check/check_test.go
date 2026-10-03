@@ -243,8 +243,8 @@ export const page = (
 	}
 }
 
-// Foo.tsx next to Foo.rtsx: the program sees the .tsx, so the .rtsx is
-// never transpiled — reported, not silently skipped.
+// Foo.tsx next to Foo.rtsx: an import of `./Foo` finds the .tsx, and the
+// transpiler reports the pair on the .rtsx (vite.md, *Module resolution*).
 func TestAmbiguousModule(t *testing.T) {
 	got := checkProject(t, map[string]string{
 		"src/card.rtsx": "export const a = <p>rtsx</p>;\n",
@@ -255,30 +255,100 @@ func TestAmbiguousModule(t *testing.T) {
 	}
 }
 
-// RGP1-076: an edit is picked up and re-checked.
+// Both files of such a pair are modules of the program, each checked: the
+// .rtsx is not hidden by the .tsx, as it was when it was served under the
+// .tsx's name.
+func TestAmbiguousModuleIsChecked(t *testing.T) {
+	got := checkProject(t, map[string]string{
+		"src/card.rtsx": "export const a: number = <p>rtsx</p>;\n",
+		"src/card.tsx":  "export const a = <p>tsx</p>;\n",
+		"src/main.tsx":  "import { a } from \"./card\";\nimport { a as b } from \"./card.rtsx\";\nexport const s: string[] = [a, b];\n",
+	})
+	want := []string{
+		"src/card.rtsx:1:1 ambiguous-module",
+		"src/card.rtsx:1:14 TS2322",
+		"src/main.tsx:3:29 TS2322", // `a` is card.tsx's: an element
+		"src/main.tsx:3:32 TS2322", // `b` is card.rtsx's: a number
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
+// RGP1-076: an edit of an .rtsx file is picked up and re-checked; so is a
+// file created or deleted next to one — a segment's file, whose existence
+// decides what its mounter emits.
 func TestWatch(t *testing.T) {
 	dir := writeProject(t, map[string]string{
 		"tsconfig.json": tsconfig,
 		"src/jsx.d.ts":  jsxTypes,
 		"src/a.rtsx":    "export const a: number = 1;\n",
+		"src/page.rtsx": "export const page = <main><section #intro /></main>;\n",
+	})
+	stop := make(chan struct{})
+	runs := make(chan []Report, 8)
+	go Watch(dir+"/tsconfig.json", 20*time.Millisecond, stop, func(r []Report) { runs <- r })
+	defer close(stop)
+	next := func(what string, want ...string) {
+		t.Helper()
+		select {
+		case reports := <-runs:
+			var got []string
+			for _, r := range reports {
+				got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+":"+strconv.Itoa(r.Col)+" "+r.Code)
+			}
+			if strings.Join(got, "|") != strings.Join(want, "|") {
+				t.Errorf("%s: got %q, want %q", what, got, want)
+			}
+		case <-time.After(20 * time.Second):
+			t.Fatalf("%s: not picked up", what)
+		}
+	}
+	write := func(name, text string) {
+		t.Helper()
+		if err := os.WriteFile(dir+"/"+name, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	next("the first run", "src/page.rtsx:1:36 segment-not-found", "src/page.rtsx:1:36 TS2307")
+	write("src/a.rtsx", "export const a: number = \"x\";\n")
+	next("an edit", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-not-found", "src/page.rtsx:1:36 TS2307")
+	write("src/intro.rtsx", "export default function Intro({ title }: { title: string }) {\n  return <p>{title}</p>;\n}\n")
+	next("a segment file created", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-props")
+	write("src/intro.rtsx", "export default function Intro() {\n  return <p>intro</p>;\n}\n")
+	next("the segment file edited", "src/a.rtsx:1:14 TS2322")
+	if err := os.Remove(dir + "/src/intro.rtsx"); err != nil {
+		t.Fatal(err)
+	}
+	next("the segment file deleted", "src/a.rtsx:1:14 TS2322", "src/page.rtsx:1:36 segment-not-found", "src/page.rtsx:1:36 TS2307")
+}
+
+// --watch on a tsconfig that only references other projects watches their
+// directories, wherever they are.
+func TestWatchReferences(t *testing.T) {
+	dir := writeProject(t, map[string]string{
+		"solution/tsconfig.json": `{ "files": [], "references": [{ "path": "../app" }] }`,
+		"app/tsconfig.json":      tsconfig,
+		"app/src/jsx.d.ts":       jsxTypes,
+		"app/src/a.rtsx":         "export const a: number = 1;\n",
 	})
 	stop := make(chan struct{})
 	runs := make(chan []Report, 4)
-	go Watch(dir+"/tsconfig.json", 20*time.Millisecond, stop, func(r []Report) { runs <- r })
+	go Watch(dir+"/solution/tsconfig.json", 20*time.Millisecond, stop, func(r []Report) { runs <- r })
 	defer close(stop)
-
 	if first := <-runs; len(first) != 0 {
 		t.Fatalf("first run: %+v", first)
 	}
-	if err := os.WriteFile(dir+"/src/a.rtsx", []byte("export const a: number = \"x\";\n"), 0o644); err != nil {
+	if err := os.WriteFile(dir+"/app/src/a.rtsx", []byte("export const a: number = \"x\";\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case second := <-runs:
-		if len(second) != 1 || second[0].Code != "TS2322" {
+		if len(second) != 1 || second[0].Code != "TS2322" || second[0].File != dir+"/app/src/a.rtsx" {
 			t.Errorf("second run: %+v", second)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatal("the edit was not picked up")
 	}
 }

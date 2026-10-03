@@ -37,11 +37,24 @@ func Of(file *rtsx.SourceFile) (*File, bool) {
 	return f, ok
 }
 
-// Register installs the transform for the process. version is part of every
-// cache key: a new binary never reuses an old result.
+// Register installs the transform for the process, tolerant: the editor's
+// (ide.md, *Tolerance*). version is part of every cache key: a new binary
+// never reuses an old result.
 func Register(version string) {
+	register(version, true)
+}
+
+// RegisterStrict installs the transform as the builds run it — `reactogenic
+// check`: a file with a syntax error reports its syntax errors and is not
+// lowered. Its source stands in as its virtual text, so that the modules
+// importing it still find what it exports, and the file is Stopped.
+func RegisterStrict(version string) {
+	register(version, false)
+}
+
+func register(version string, tolerant bool) {
 	mapped := func(req rtsx.MapperRequest) rtsx.MapperResult {
-		result := transform(req)
+		result := transform(req, tolerant)
 		result.StatementStarts = statementStarts(result.Text, result.Spans)
 		return result
 	}
@@ -75,7 +88,10 @@ func statementStarts(text string, spans [][6]int32) []int32 {
 // included — keeps the last good text; a failure of the transpiler itself
 // leaves the source as its own virtual text, mapped 1:1. The recover here is
 // the last resort, for a panic outside the passes.
-func transform(req rtsx.MapperRequest) (result rtsx.MapperResult) {
+//
+// Strict (tolerant false), the passes do not run on a source with a syntax
+// error: that file too is its own virtual text.
+func transform(req rtsx.MapperRequest, tolerant bool) (result rtsx.MapperResult) {
 	identity := func(out transpiler.Output, err error) rtsx.MapperResult {
 		var spans [][6]int32
 		if len(req.Content) > 0 {
@@ -95,7 +111,7 @@ func transform(req rtsx.MapperRequest) (result rtsx.MapperResult) {
 		// *Segments*) — what `depends` puts in the cache key. Their contents
 		// are not in the key, so they must not reach the result.
 		ReadFile: func(p string) (string, bool) { return "", req.FileExists(p) },
-		Tolerant: true,
+		Tolerant: tolerant,
 	})
 	if err != nil || out.Map == nil {
 		return identity(out, err)

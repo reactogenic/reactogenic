@@ -156,7 +156,7 @@ func TestTransformReadsNoSibling(t *testing.T) {
 		if fmt.Sprint(bits) != "[false true false false false false]" {
 			t.Fatalf("depends bits %v", bits)
 		}
-		results = append(results, transform(req))
+		results = append(results, transform(req, true))
 	}
 	a, b := results[0], results[1]
 	if a.Text != b.Text || fmt.Sprint(a.Spans) != fmt.Sprint(b.Spans) {
@@ -167,7 +167,7 @@ func TestTransformReadsNoSibling(t *testing.T) {
 		t.Errorf("same key, different results: diagnostics %q / %q", codes(fa), codes(fb))
 	}
 	// Existence is still seen: without the sibling, segment-not-found.
-	f := transform(request(map[string]string{"/src/page.rtsx": page}, "/src/page.rtsx")).Extra.(*File)
+	f := transform(request(map[string]string{"/src/page.rtsx": page}, "/src/page.rtsx"), true).Extra.(*File)
 	if codes(f) != "2:16 segment-not-found" {
 		t.Errorf("no sibling: %q", codes(f))
 	}
@@ -190,7 +190,7 @@ func TestPanics(t *testing.T) {
 			_, ok := files[p]
 			return ok
 		}
-		result := transform(req)
+		result := transform(req, true)
 		f := result.Extra.(*File)
 		if !f.Stopped || f.Err != nil || f.Output.Stopped != "pass 4 (segment roots): boom" {
 			t.Errorf("broken %q: stopped %v, err %v, output stopped %q", broken, f.Stopped, f.Err, f.Output.Stopped)
@@ -205,10 +205,52 @@ func TestPanics(t *testing.T) {
 
 	// The last resort: the parser refuses a name that is not normalized.
 	files := map[string]string{"/src/../page.rtsx": "export const a = <b />;\n"}
-	result := transform(request(files, "/src/../page.rtsx"))
+	result := transform(request(files, "/src/../page.rtsx"), true)
 	f := result.Extra.(*File)
 	if !f.Stopped || f.Err == nil || result.Text != files["/src/../page.rtsx"] || len(result.Spans) != 1 {
 		t.Errorf("last resort: stopped %v, err %v, text %q, spans %v", f.Stopped, f.Err, result.Text, result.Spans)
+	}
+}
+
+// Strict, as `reactogenic check` runs it (RegisterStrict): a clean file is
+// transformed exactly as the tolerant transform does it; on a file with a
+// syntax error the passes do not run — it reports its syntax errors only,
+// and its source is its virtual text, stopped. A panic in a pass is caught
+// at the boundary.
+func TestStrict(t *testing.T) {
+	clean := "const size = 1;\nexport const a = <Button size><$Icon>i</$Icon></Button>;\nexport const b = <i><$Orphan /></i>;\n"
+	strict, tolerant := transform(request(map[string]string{"/src/a.rtsx": clean}, "/src/a.rtsx"), false), transform(request(map[string]string{"/src/a.rtsx": clean}, "/src/a.rtsx"), true)
+	fs, ft := strict.Extra.(*File), tolerant.Extra.(*File)
+	if strict.Text != tolerant.Text || fmt.Sprint(strict.Spans) != fmt.Sprint(tolerant.Spans) || codes(fs) != codes(ft) || fs.Stopped || ft.Stopped || codes(fs) != "3:21 orphan-slot" {
+		t.Errorf("a clean file: strict %q (%s), tolerant %q (%s)", strict.Text, codes(fs), tolerant.Text, codes(ft))
+	}
+
+	broken := clean + "export const c = <Button size><$Icon>i</$Icon><b></Button>;\n"
+	result := transform(request(map[string]string{"/src/a.rtsx": broken}, "/src/a.rtsx"), false)
+	f := result.Extra.(*File)
+	if !f.Stopped || f.Err != nil || f.Map != nil || result.Text != broken || len(result.Spans) != 1 {
+		t.Errorf("a syntax error: stopped %v, err %v, text %q, spans %v", f.Stopped, f.Err, result.Text, result.Spans)
+	}
+	if codes(f) != "4:48 TS17008" { // not the orphan slot of line 3: fix the syntax first
+		t.Errorf("a syntax error: diagnostics %q", codes(f))
+	}
+
+	files := map[string]string{"/src/page.rtsx": "export const a = <section #intro />;\n", "/src/intro.rtsx": ""}
+	req := request(files, "/src/page.rtsx")
+	calls := 0
+	req.FileExists = func(p string) bool {
+		if p == "/src/intro.rtsx" {
+			if calls++; calls > 2 { // pass 0 looks twice; then pass 4
+				panic("boom")
+			}
+		}
+		_, ok := files[p]
+		return ok
+	}
+	result = transform(req, false)
+	f = result.Extra.(*File)
+	if !f.Stopped || f.Err == nil || !strings.Contains(f.Err.Error(), "boom") || result.Text != files["/src/page.rtsx"] {
+		t.Errorf("a panic: stopped %v, err %v, text %q", f.Stopped, f.Err, result.Text)
 	}
 }
 
@@ -216,7 +258,7 @@ func TestPanics(t *testing.T) {
 // one: TS's diagnostics for it are not about the author's code.
 func TestDroppedIsStopped(t *testing.T) {
 	src := "import { Switch } from \"@reactogenic/core\";\nexport const a = (s: string, x: string) => <Switch on={s}><$Case>{x}</$Case></Switch>;\n"
-	f := transform(request(map[string]string{"/src/a.rtsx": src}, "/src/a.rtsx")).Extra.(*File)
+	f := transform(request(map[string]string{"/src/a.rtsx": src}, "/src/a.rtsx"), true).Extra.(*File)
 	if !f.Stopped || f.Output.Stopped != "" || !f.Dropped || !strings.Contains(codes(f), "case-no-test") {
 		t.Errorf("stopped %v (%q), dropped %v, diagnostics %q", f.Stopped, f.Output.Stopped, f.Dropped, codes(f))
 	}

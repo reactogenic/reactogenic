@@ -202,7 +202,11 @@ tolerant output equals strict output byte for byte — the map and everything
 exported beside it included.
 
 The build paths stay strict: Vite and `reactogenic check` fail on a syntax
-error as today.
+error as today. `check` registers the same mapper with the passes strict: a
+file with a syntax error reports its syntax errors and is not lowered. Its
+source stands in as its virtual text — the last resort of rule 4, so the file
+is stopped and its importers still find what it exports. Rules 2 and 4 are
+the reporting layer's (*Diagnostics*), the same in both hosts.
 
 ## `reactogenic lsp`
 
@@ -283,15 +287,33 @@ file, it returns the reports for that file.
   layer sees the structured diagnostic — message arguments and chain — and
   the file's notes; a TS error that is not rewritten keeps its numeric code,
   so TS's quick fixes still find it. Suggestions pass through untouched.
-- The cross-file rules: `slot-conditional` and `segment-self`.
+- The cross-file rules: `slot-conditional` (the caller's note, the
+  container's notes, joined by the checker) and `segment-self` through
+  another file (the mounts of the program's `.rtsx` files, followed from
+  their notes; a root that names its own file is the transpiler's).
 - TS5097 on a segment import of a `.tsx` / `.ts` file is dropped: the import
   is the transpiler's (syntax.md, *Segment files*).
+- For a **stopped** file, no TS diagnostic at all (*Tolerance*, rule 4); TS's
+  syntax errors of a virtual text, never (rule 2).
 - **Each mistake once.** Code copied to several virtual places is checked in
   each. Diagnostics with the same range, code and message are merged; a
-  diagnostic in a secondary copy is dropped when another copy of the same
+  diagnostic in a secondary copy — one that answers no feature (*Span map*,
+  *Several copies of one token*) — is dropped when another copy of the same
   source text has one with the same code at the same range (branches narrow
-  differently, so the messages may differ). `check` gains this too: it
-  printed such errors twice.
+  differently, so the messages may differ). Nothing else is merged: two
+  diagnostics on synthesized text share their construct's range without
+  being one mistake, and both copies of a shorthand answer. `check` gains
+  this too: it printed such errors twice.
+
+  ```tsx
+  <b slot={$Label} title={$Label.nope}>Button</b>   // emitted in both branches of a ternary
+  // TS2339 … on type '{ title?: string; … }'       the first copy: reported
+  // TS2339 … on type 'unique symbol'               the fallback's copy: dropped
+  // TS18048 '$Label' is possibly 'undefined'       the fallback's copy only: reported
+  ```
+
+A report carries its source range, severity, code, message, related
+information and — when it came from TS — the structured diagnostic.
 
 In the server the layer sits where the diagnostic is still structured, before
 it becomes an LSP message. Diagnostics are pulled per open document; after a
@@ -664,7 +686,8 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | --- | --- |
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
 | server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent |
-| `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences |
+| reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked; a file with a syntax error in each mode; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside); a report's range is source text; the merge rule, case by case |
+| `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a syntax error in an `.rtsx` and in a `.tsx` file, a warning; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX* against a stand-in server. The suite also runs against a packaged `.vsix` and its bundled binary |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |
