@@ -1086,8 +1086,8 @@ a freshly copied binary runs. A project without `.rtsx` whose imports all
 resolve: nothing. One with 600 files and 13 unresolved imports in each:
 400 → 470 ms to load — each failed import is looked up a second time; 890 ms
 before the lookups of one program build shared a cache.
-*Tests* (`pnpm test`; 463 in the package, the plugin's about 20 s of it on
-an idle machine): 15 on the mapping; 22 scenarios in `tsserver` 5.9.3 and
+*Tests* (`pnpm test`; 465 in the package, the plugin's about 20 s of it on
+an idle machine): 15 on the mapping; 23 scenarios in `tsserver` 5.9.3 and
 6.0.3, loaded as VS Code loads it — beyond the Done when: related
 information, call hierarchy both ways, `references-full`, highlights, file
 references, aliased and `node16` specifiers, auto-import, a file created

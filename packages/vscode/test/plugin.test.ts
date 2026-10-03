@@ -510,6 +510,24 @@ describe.each(VERSIONS)("%s: which binary runs", (alias) => {
     }
   });
 
+  test("a configuration sent before any project is open is the one its first project has", async () => {
+    // As when the extension is active before VS Code starts tsserver: no
+    // binary in the environment, the setting's alone.
+    const dir = project(FILES);
+    const configured = counting(path.join(dir, ".bin"), binary);
+    const server = new TsServer(alias, dir);
+    try {
+      await server.request("configurePlugin", { pluginName: PLUGIN, configuration: { serverPath: configured.path, trusted: true } });
+      server.open("src/main.tsx");
+      expect(await server.codes("src/main.tsx")).toEqual([]);
+      expect(configured.count()).toBe(1);
+      expect(server.pluginLog().join("\n")).not.toContain("reloading");
+    } finally {
+      await server.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a file that yields nothing keeps its last good text, and is made again later", async () => {
     const dir = project(FILES);
     const spawned = counting(path.join(dir, ".bin"), binary);
