@@ -638,8 +638,8 @@ import { Menu } from "@menu";       import { Menu } from "./menu.rtsx";     // "
 - rename not fixed up;
 - the files around a file are the disk's, and a created or deleted segment
   file or import target is seen when the file that names it next changes;
-- no cross-file rules: `slot-conditional`, and a `segment-self` loop through
-  another file (a segment that mounts itself directly is still reported);
+- no `segment-self` for a loop through another file (a segment that mounts
+  itself directly is still reported);
 - `.rtsx` sources are valid UTF-8: the host re-encodes a file that is not,
   and then rejects the answer (TS18069 on its first line);
 - until 7.1 is stable, the "TypeScript 7 Nightly" extension and a trusted
