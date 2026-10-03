@@ -20,6 +20,8 @@ jobs:
         run: go test -race github.com/reactogenic/reactogenic/go/... # tsgo parses files in parallel
       - name: gofmt
         run: test -z "$(gofmt -l go/cmd go/internal)"
+      - name: Every fork file is upstream's or in a patch
+        run: go/scripts/check-patches.sh
       - name: Build without the workspace
         run: GOWORK=off go build ./cmd/reactogenic # go/ is a module on its own (RGP1-003)
         working-directory: go

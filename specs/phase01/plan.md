@@ -596,6 +596,12 @@ The fork's pin is frozen through M8 (RGP1-114 re-vendors). No release before
 ide.md, this milestone, decisions.md.
 
 ### RGP1-101 — Patch tooling · S · done
+Revised after review: abc39c1 committed two fork files that were in no
+patch — regenerating 0006 from `HEAD`'s file list had dropped them, and the
+script said nothing. The script now also reads the working-tree patch's file
+list, knows which files are ours from a manifest of upstream
+(`UPSTREAM.sha256`), refuses a mistyped path and a file with no difference,
+and `check-patches.sh` verifies the whole tree offline (CI runs it).
 M8 raises the patched upstream files from one to about a dozen; the scripts
 were built for patches that add files.
 - `regen-patch.sh`: file list from the patch's own headers plus arguments;

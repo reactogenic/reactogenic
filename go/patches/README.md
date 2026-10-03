@@ -27,10 +27,17 @@ every change we make to it.
    go/scripts/regen-patch.sh 0004-resolver.patch internal/module/resolver.go   # a new patch
    ```
 
-   The script diffs the files against pristine upstream, which it rebuilds
-   from `HEAD` (the committed file minus the committed patch), and checks
-   that pristine plus the new patch is the working tree.
-3. Commit the tree and the patch together. CI's `vendor` job re-vendors and
+   The script diffs the files against pristine upstream: empty for a file
+   that is not in `UPSTREAM.sha256` (the manifest `sync-tsgo.sh` writes — the
+   file is ours), else `HEAD`'s copy minus the committed patch, which must
+   hash as the manifest says. It refuses a path that exists nowhere and a
+   file that does not differ from upstream, and checks that pristine plus the
+   new patch is the working tree.
+3. `go/scripts/check-patches.sh` (run by the script, and by CI) checks the
+   whole tree offline: every file is upstream's, byte for byte, or listed in
+   exactly one patch. A new fork file that no patch lists fails here — the
+   next re-vendor would delete it.
+4. Commit the tree and the patch together. CI's `vendor` job re-vendors and
    compares (`pnpm vendor:check`, which fetches upstream).
 
 **One patch owns a given upstream file.** A change to a file that an existing

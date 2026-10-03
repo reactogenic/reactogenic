@@ -33,6 +33,12 @@ cp "$tmp/ts/NOTICE.txt" "$dest/NOTICE.txt"
   echo "date: $(git -C "$tmp/ts" log -1 --format=%cs)"
 } > "$dest/UPSTREAM"
 
+# The manifest of pristine upstream: what regen-patch.sh and check-patches.sh
+# compare the tree with, offline.
+(cd "$dest" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+  printf '%s  %s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$f"
+done) > "$go_dir/patches/UPSTREAM.sha256"
+
 shopt -s nullglob
 for patch in "$go_dir"/patches/*.patch; do
   echo "applying $(basename "$patch")"

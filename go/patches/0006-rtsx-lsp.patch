@@ -1,3 +1,98 @@
+diff --git a/internal/ls/syntactic.go b/internal/ls/syntactic.go
+new file mode 100644
+index 0000000..ef08918
+--- /dev/null
++++ b/internal/ls/syntactic.go
+@@ -0,0 +1,89 @@
++// Reactogenic: syntactic features on a source file that is in no program —
++// the .rtsx source tree. Not part of upstream: added by
++// go/patches/0006-rtsx-lsp.patch.
++
++package ls
++
++import (
++	"context"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/astnav"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/scanner"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++)
++
++// Syntactic answers the features that need only a tree. A content-mapped
++// file's virtual text cannot answer them for constructs that are lowered
++// away (a slot element has no element there); its source tree can.
++type Syntactic struct {
++	l    *LanguageService
++	file *ast.SourceFile
++}
++
++// NewSyntactic serves file, with positions in encoding.
++func NewSyntactic(file *ast.SourceFile, encoding lsproto.PositionEncodingKind) *Syntactic {
++	lineMap := lsconv.ComputeLSPLineStarts(file.Text())
++	converters := lsconv.NewConverters(encoding, func(string) *lsconv.LSPLineMap { return lineMap })
++	return &Syntactic{l: &LanguageService{converters: converters}, file: file}
++}
++
++// FoldingRanges are TypeScript's folding ranges of the file.
++func (s *Syntactic) FoldingRanges(ctx context.Context, lineFoldingOnly bool) []*lsproto.FoldingRange {
++	ranges := s.l.addNodeOutliningSpans(ctx, s.file)
++	ranges = append(ranges, s.l.addRegionOutliningSpans(ctx, s.file)...)
++	if lineFoldingOnly {
++		ranges = s.l.adjustFoldingEnd(ranges, s.file)
++	}
++	return ranges
++}
++
++// SelectionRanges are TypeScript's smart selection ranges at positions.
++func (s *Syntactic) SelectionRanges(positions []lsproto.Position) []*lsproto.SelectionRange {
++	results := make([]*lsproto.SelectionRange, 0, len(positions))
++	for _, position := range positions {
++		if r := getSmartSelectionRange(s.l, s.file, s.offset(position)); r != nil {
++			results = append(results, r)
++		}
++	}
++	return results
++}
++
++// ClosingTag is the closing tag to insert after a `>` just typed at
++// position: `</name>` for an opening tag that has none, as TypeScript
++// decides it (ProvideOnAutoInsert).
++func (s *Syntactic) ClosingTag(position lsproto.Position) string {
++	token := astnav.FindPrecedingToken(s.file, s.offset(position))
++	if token == nil {
++		return ""
++	}
++	var element *ast.Node
++	if token.Kind == ast.KindGreaterThanToken && ast.IsJsxOpeningElement(token.Parent) {
++		element = token.Parent.Parent
++	} else if ast.IsJsxText(token) && ast.IsJsxElement(token.Parent) {
++		element = token.Parent
++	}
++	if element != nil && isUnclosedTag(element.AsJsxElement()) {
++		return "</" + ast.EntityNameToString(element.AsJsxElement().OpeningElement.TagName(), scanner.GetTextOfNode) + ">"
++	}
++	var fragment *ast.Node
++	if token.Kind == ast.KindGreaterThanToken && ast.IsJsxOpeningFragment(token.Parent) {
++		fragment = token.Parent.Parent
++	} else if ast.IsJsxText(token) && ast.IsJsxFragment(token.Parent) {
++		fragment = token.Parent
++	}
++	if fragment != nil && isUnclosedFragment(fragment.AsJsxFragment()) {
++		return "</>"
++	}
++	return ""
++}
++
++func (s *Syntactic) offset(position lsproto.Position) int {
++	positions := s.l.converters.FromLSPPosition(s.file, position, spanmap.FeatureAll)
++	if len(positions) == 0 {
++		return 0
++	}
++	return int(positions[0].Position)
++}
 diff --git a/internal/lsp/embedder.go b/internal/lsp/embedder.go
 new file mode 100644
 index 0000000..47f3521
@@ -141,4 +236,56 @@ index 0000000..7928a8f
 +		return nil
 +	}
 +	return err
++}
+diff --git a/rtsx/server/syntactic.go b/rtsx/server/syntactic.go
+new file mode 100644
+index 0000000..bc4b018
+--- /dev/null
++++ b/rtsx/server/syntactic.go
+@@ -0,0 +1,46 @@
++package server
++
++import (
++	"context"
++
++	"github.com/microsoft/TypeScript/tsc/internal/json"
++	"github.com/microsoft/TypeScript/tsc/internal/ls"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/rtsx"
++)
++
++// Syntactic answers, for the text of an .rtsx file, the LSP features that
++// need only its tree (specs/phase01/ide.md, *Span map*: syntactic features
++// run on the source tree). Results are LSP JSON, positions in encoding
++// ("utf-16" or "utf-8").
++type Syntactic struct{ s *ls.Syntactic }
++
++// NewSyntactic parses text as .rtsx.
++func NewSyntactic(fileName, text, encoding string) *Syntactic {
++	return &Syntactic{s: ls.NewSyntactic(rtsx.ParseRTSX(fileName, text), lsproto.PositionEncodingKind(encoding))}
++}
++
++// FoldingRanges is the result of textDocument/foldingRange.
++func (s *Syntactic) FoldingRanges(lineFoldingOnly bool) ([]byte, error) {
++	ranges := s.s.FoldingRanges(context.Background(), lineFoldingOnly)
++	if ranges == nil {
++		ranges = []*lsproto.FoldingRange{}
++	}
++	return json.Marshal(ranges)
++}
++
++// SelectionRanges is the result of textDocument/selectionRange for the
++// request's `positions` (JSON).
++func (s *Syntactic) SelectionRanges(positions []byte) ([]byte, error) {
++	var at []lsproto.Position
++	if err := json.Unmarshal(positions, &at); err != nil {
++		return nil, err
++	}
++	return json.Marshal(s.s.SelectionRanges(at))
++}
++
++// ClosingTag is the closing tag to insert after a `>` just typed at the
++// position (line and character, zero-based), or "".
++func (s *Syntactic) ClosingTag(line, character int) string {
++	return s.s.ClosingTag(lsproto.Position{Line: uint32(line), Character: uint32(character)})
 +}
