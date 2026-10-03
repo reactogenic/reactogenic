@@ -432,17 +432,42 @@ loaded by `tsserver` in every TS project, so it costs nothing until an
 ### Stock TypeScript 7.1
 
 The same transform, as a standard content mapper: `reactogenic content-mapper`
-speaks the mapper protocol, and `@reactogenic/cli` declares it
-(`typescript.contentMapper` in its `package.json`). A project that lists it in
-tsconfig `contentMappers` gets `.rtsx` in plain `tsc --runExternalCode` and in
-the TS 7.1 server — for editors without our server.
+speaks the mapper protocol on stdin and stdout, and `@reactogenic/cli`
+declares it (`typescript.contentMapper` in its `package.json`). A project that
+lists it in tsconfig `contentMappers` gets `.rtsx` in plain
+`tsc --runExternalCode` and in the TS 7.1 server — for editors without our
+server.
+
+```jsonc
+// tsconfig.json — `reactogenic check` and `reactogenic lsp` ignore the entry
+"contentMappers": [{ "package": "@reactogenic/cli", "extensions": [".rtsx"] }]
+```
+
+The stock host has none of our hooks, so the mapper does in the result what
+the fork does around it:
+
+| | The mapper |
+| --- | --- |
+| extensionless imports | writes the extension into the virtual text, for an import written in an `.rtsx` file that our resolver would resolve to an `.rtsx` file: relative or through `paths`, after every built-in extension, a file before a directory's `index.rtsx`. A post-pass over the emitted text, its map composed with the passes'; the inserted text is an atom on the specifier |
+| module-ness | appends `export {}` to a file without imports or exports: an `.rtsx` file is always a module |
+| transpiler errors | sends them as mapper diagnostics, source `reactogenic`: a number from a stable table (below 1000, where TS has none), the name leading the message — `error reactogenic101: orphan-slot: …`. The contract makes them syntax errors of the file: while one stands, `tsc` prints no type error of the program |
+| syntax errors | leaves them to TypeScript, which finds them in the virtual text; sends the source parse's — under TS's own number, `reactogenic1003` — only where the virtual text has none (the children of a segment root) |
+| TS5097 on a segment import | drops it with an ignore directive over the specifier of the import generated for a `.tsx` / `.ts` segment, and nothing else |
+| a stopped file, a panic | *Tolerance* 4–5: an ignore directive over the whole virtual text; `internal` on the first line. No transform ends the process — the host never starts a mapper twice |
+
+```tsx
+// page.rtsx                        // virtual TSX
+import { Button } from "./button";  import { Button } from "./button.rtsx";
+import { Card } from "@/card";      import { Card } from "@/card.rtsx";
+```
 
 **Experimental**, with the limits of the contract: raw TS messages (no
 rewrites); explicit `.rtsx` in imports written in `.ts` files; transpiler
-warnings not shown, and a transpiler error hides the project's type errors
-until fixed; rename not fixed up; a created or deleted segment file is seen
-when its mounter next changes; until 7.1 is stable, the "TypeScript 7 Nightly"
-extension and a trusted workspace.
+warnings not shown, and in `tsc` a transpiler error hides the project's type
+errors until fixed; rename not fixed up; the files around a file are the
+disk's, and a created or deleted segment file or import target is seen when
+the file that names it next changes; until 7.1 is stable, the "TypeScript 7
+Nightly" extension and a trusted workspace.
 
 **Not combined with our extension in VS Code**: the TS 7.1 server would also
 answer inside `.rtsx` documents — each hover and each TS error twice.
@@ -464,3 +489,4 @@ deferred tree-sitter grammar (JetBrains takes the TextMate one).
 | grammar | scope assertions per construct; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |
+| stock mapper | a Go test host speaks the protocol over pipes: the handshake, a slot and a shorthand through a valid map, a broken file, a panic, concurrent transforms, the end of input; the corpus through it. `scripts/e2e-stock-mapper.sh` runs `typescript@next`'s `tsc --runExternalCode` on a project — by hand: it needs the network |

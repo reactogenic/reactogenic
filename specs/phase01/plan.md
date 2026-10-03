@@ -788,7 +788,24 @@ mutants: none fails.
   without `.rtsx` spawns nothing.
 - Depends on: 104, 110.
 
-### RGP1-112 — Stock content mapper · S
+### RGP1-112 — Stock content mapper · S · done
+`internal/stockmapper`: the protocol on the standard library; the built-in
+transform plus a post-pass that writes `.rtsx` into extensionless imports
+(relative and `paths`) and `export {}` into a file that is not a module; 28
+numbered codes below 1000 (a syntax error keeps TS's number, and is sent only
+where the virtual text parses: TypeScript reports the others itself); two
+ignore directives. Measured with `typescript@7.1.0-dev.20261003.1`
+(`scripts/e2e-stock-mapper.sh`, eight `tsc --runExternalCode` runs): a clean
+project with a `.tsx` segment exits 0; type errors at `page.rtsx(11,15)`,
+`(16,14)` and `button.rtsx(15,7)`; `reactogenic101` at `(16,7)` hides the
+type error next to it; 0.044 s to start through the Node launcher, 0.003 s
+for four transforms. By hand, the same project in `tsc --lsp`: hover,
+definition, references, and completion after `status.`, at source positions.
+Left: `reactogenic check` still reports TS18068 on the tsconfig entry until
+106 registers the mapper (the mapped program and the server ignore it —
+tested); Windows and VS Code's own client were not run; in the stock server,
+go to definition on a `paths` specifier of a mapped file returns nothing —
+also for one written in a `.tsx` file.
 - `reactogenic content-mapper` and the manifest in `@reactogenic/cli`
   (ide.md, *Stock TypeScript 7.1*): numeric codes for transpiler
   diagnostics, `recover` around every transform, an ignore directive on the
