@@ -1,0 +1,35 @@
+Files in this directory are unmodified copies. Never edit them: change
+../generate.mjs, which reads them and writes everything generated in this
+package. To update, copy the files again from a newer VS Code, update this
+note, and run `pnpm generate` — the generator fails if a rule it patches has
+changed shape.
+
+Copied from: Visual Studio Code 1.140.0 (macOS install)
+  repository: https://github.com/microsoft/vscode
+  commit: 07f806f999227108933c2e30515b26eecc1fda74
+  date: 2026-09-30
+  copied: 2026-10-03
+
+TypeScriptReact.tmLanguage.json
+  from: extensions/typescript-basics/syntaxes/TypeScriptReact.tmLanguage.json
+  sha256: 6873461fb8e634046ee0cfafb41aa8ccdf87ec2f8c201bf2cac0a941e058280a
+  origin: https://github.com/microsoft/TypeScript-TmLanguage
+    (TypeScriptReact.tmLanguage, converted to JSON by VS Code)
+  commit: 48f608692aa6d6ad7bd65b478187906c798234a8
+  date: 2024-10-24
+  licence: MIT — LICENSE.txt and ThirdPartyNotices.txt, copied from that
+    commit (babel-sublime and language-javascript, both MIT)
+
+vscode/language-configuration.json
+  from: extensions/typescript-basics/language-configuration.json
+vscode/tags-language-configuration.json
+  from: extensions/javascript/tags-language-configuration.json
+vscode/typescript.code-snippets
+  from: extensions/typescript-basics/snippets/typescript.code-snippets
+vscode/typescript-basics.package.json
+  from: extensions/typescript-basics/package.json
+  licence (all four): MIT — vscode/LICENSE.txt, microsoft/vscode's LICENSE.txt
+    at the commit above
+
+The install ships these files with comments stripped and on one line; the
+sources in microsoft/vscode are the same data as JSON with comments.

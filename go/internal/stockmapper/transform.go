@@ -77,7 +77,7 @@ func (s *server) transform(p transformParams, proj *project) (result transformRe
 	if s.opts.beforeTransform != nil {
 		s.opts.beforeTransform(p.FileName)
 	}
-	text, file := mapper.Transform(p.FileName, p.Content, s.opts.ReadFile)
+	text, file := mapper.Transform(p.FileName, p.Content, s.opts.FileExists)
 	toSource := file.Map
 	if toSource == nil {
 		toSource = emit.Identity(len(text))

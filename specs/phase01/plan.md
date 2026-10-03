@@ -925,7 +925,32 @@ every item of a mapped file, and indexed past a text with no statement
   fixture project leaves it with a new diagnostic.
 - Depends on: 107.
 
-### RGP1-109 — Grammar · M
+### RGP1-109 — Grammar · M · done
+`packages/vscode` (package `rtsx`, private): the TSX grammar of VS Code
+1.140.0 (TypeScript-TmLanguage `48f6086`) vendored with its notices, and
+`grammar/generate.mjs`, which writes the grammar (6 rules added, 3 changed),
+the Markdown fence injection, both language configurations, the snippets and
+`ThirdPartyNotices.txt`; 17 upstream changes are tested to fail it. Beyond
+the research: a sigil followed by a non-name stops before the tag end; a
+line comment after `=` and a comment line before a multi-line spread
+tokenize as in TSX.
+*Tests* (316): 101 scope cases, each checking that the next line is code
+again; equality with `source.tsx`, whitespace included, on the repo's 29
+`.tsx` files and 34 snippets; no `invalid.*` token and no open tag in the 58
+`.rtsx` files and 29 syntax.md examples (20 of the 87 fail under the TSX
+grammar).
+*Measured once, outside the suite*: none of the upstream grammar's 466 test
+inputs differs; of 1,073 local `.tsx` files only an intermediate-pass
+fixture that still holds `.rtsx` forms; of 360 TypeScript test files 4 —
+element-valued attributes (2), invalid TSX (1), a generic arrow the TSX
+grammar itself reads as a tag (1). In a running VS Code 1.140.0 (isolated
+profile): language `rtsx`, the scopes with bare sigils, Emmet, a TSX
+snippet, the Markdown fence; `vsce package` accepts the manifest.
+*Left*: Enter between slot tags and comment toggling were not re-run in the
+editor (its window had no focus; the research ran both on the same two
+configurations) — 110's editor suite has the comment toggle, not yet the
+Enter. `.vscodeignore` and the manifest's commands, task and matcher are
+110's. `x=` typed directly before `>`, and an unclosed `{`, derail as in TSX.
 - Vendored TSX grammar with its notices, the generator, the generated
   `rtsx.tmLanguage.json`, the two language configurations. A `grammar` step
   in CI's `js` job.
@@ -935,7 +960,80 @@ every item of a mapped file, and indexed past a text with no statement
   nothing.
 - Depends on: 100.
 
-### RGP1-110 — VS Code extension · L
+### RGP1-110 — VS Code extension · L · done (the slot-term diagnostic test waits for 107; *Show transpiled TSX* for 108)
+Built ahead of 107 and 108, against the server of 105. `src/` (eight files,
+one 450 KiB CommonJS bundle): the client over stdio, attached to `rtsx` on
+`file` and `untitled`; the resolver of ide.md's table, without a `vscode`
+import; the status item; restarts; closing tags; the two commands; the
+`check` task and `$reactogenic`. The server's pull diagnostics and the
+matcher share one owner, so an opened document's diagnostics replace what
+the task left for it. No binary found (the universal `.vsix` in a project
+without the CLI) is a quiet state — the status item says so, no notification
+— and was not run in the editor.
+*Unit tests* (61, in `pnpm test`): the order of the table; a missing explicit
+path is an error; the walk up through npm's and pnpm's layouts and this
+repository's own install; the version gate (`alpha.10` > `alpha.9`, 19
+pairs); trust; the Windows copy (platform injected, on macOS); the matcher
+against the output of `reactogenic check --pretty=false` on `test/fixture`,
+built from the checkout. Eight mutants of the resolver: all killed.
+*Editor suite* (`pnpm test:editor`; VS Code 1.140.0, macOS arm64, isolated
+profile, two windows, about 10 s): trusted — 13 pass, 1 skipped: language id;
+one server process (counted with `ps`), named by the status item; exactly one
+hover and one definition at `<$Icon`; `>` after `<$Icon { size }` inserts
+`</$Icon>` with the cursor between; nothing with the setting off; Toggle Line
+Comment writes `{/* some text */}`; the task reports `undeclared-slot` at 9:10
+of a closed document; TS2322 from the server at its `.rtsx` position; a
+setting change, a lockfile change and the command each restart; a missing
+path, and a binary without `lsp`, are errors. Untrusted — 3 pass: restricted
+mode, language id `rtsx`, no server process, also after *Restart Server*.
+The same suite passes against the packaged darwin-arm64 `.vsix` with its
+bundled binary.
+*Packaging* (`pnpm package`): built and inspected for darwin-arm64 (9.5 MB;
+the binary 28.3 MB, executable bit kept, `TargetPlatform` set) and universal
+(135 KB, no binary); each staged in a clean folder with `LICENSE`, the
+grammar's and the bundle's notices (nine npm packages), and — with a binary —
+tsgo's `LICENSE` and `NOTICE`.
+*Found on the way*: the fork answers an unknown method with InvalidRequest
+(-32600), not MethodNotFound — the client reads both as "too old";
+`@vscode/test-electron`'s runner always disables workspace trust, so the
+suite launches VS Code itself; after a snippet inserted at the cursor,
+`editor.selection` in the extension host lags, so the test types the next
+character instead.
+*Left*: the skipped test `TODO(RGP1-107)` (the server reports TS2322 at
+`$Badge` today, not `undeclared-slot`); the "shown" branch of *Show
+transpiled TSX*, never run (108); the `vscode` CI job and Linux under `xvfb`
+were never run — nothing is pushed; the other five platform `.vsix` were not
+built; the Windows copy was not run on Windows; the restart on a trust grant
+is wired and not tested (no API grants trust); `MIN_CLI_VERSION` is
+`0.1.0-alpha.1`, to be the first release with `lsp` (113); the Go modules'
+notices are missing from the binary's licences, as in the npm packages; the
+Marketplace page (README for users, icon, changelog) is 113's.
+*After review* (one major, nine minor findings; each reproduced by a test
+that failed, then fixed): an untitled `rtsx` document was parsed as plain
+TypeScript — the server's front now serves a document that is `rtsx` by
+language id alone under a name ending in `.rtsx` (`internal/lsp/alias.go`,
+no patch to the fork); a restart cleared the task's problems of closed
+documents — the collection of the owner `reactogenic` now lives as long as
+the window; a `.ts` line of `check` showed twice once the file was open —
+a second matcher, `$reactogenic-ts`, owner `typescript`; a document outside
+the workspace chose the binary, for the *check* task too — only a document
+inside a workspace folder decides now, and each start decides again; a
+lockfile above the opened folder was not watched; a binary that never
+answers `initialize` blocked every later restart — the extension now starts
+the process itself, gives a start 10 s, and a restart gives up a start under
+way; the status item named a server that had crashed for good; `--stdio`
+was passed twice; several cursors got one cursor's closing tag — one
+request per cursor, inserted as snippet edits of one workspace edit; the
+transpiled document was TSX, so VS Code's TypeScript reported on it — it is
+`page.transpiled.rtsx`, language `rtsx`. The editor suite is four windows
+now (trusted 21 pass and 1 skipped, untrusted 3, `monorepo` 6, `transpiled`
+4 — the last against a stand-in server with `reactogenic/transpiled`), and
+passes against the packaged darwin-arm64 `.vsix`; 397 unit tests. *Still left*: an untitled document belongs to no project (TS7026,
+TS2875 on its JSX; relative imports do not resolve); the client's own
+"couldn't create connection" notification still shows beside ours when a
+start fails; a server that spawns children is killed without them; the
+no-folder window and the multi-root case have unit tests only; nothing ran
+on Linux or Windows.
 - `packages/vscode`: manifest (ide.md, *Contributes*), client, binary
   resolution, status item, restart triggers, commands, closing-tag
   insertion, the `check` task and matcher, packaging per platform plus

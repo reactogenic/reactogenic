@@ -1,0 +1,16 @@
+import { Button, type Size } from "./button";
+
+export function Page() {
+  const size: Size = "lg";
+  return (
+    <main>
+      some text
+      <Button size>
+        <$Icon className="icon" { size }>
+          {size.toUpperCase()}
+        </$Icon>
+        <$Label>Save</$Label>
+      </Button>
+    </main>
+  );
+}

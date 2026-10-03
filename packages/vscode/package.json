@@ -1,0 +1,290 @@
+{
+  "//": "The one package outside the @reactogenic scope: vsce rejects scoped names, and the Marketplace id is publisher.name = reactogenic.rtsx. Not published to npm.",
+  "name": "rtsx",
+  "private": true,
+  "publisher": "reactogenic",
+  "displayName": "Reactogenic (.rtsx)",
+  "description": "Language support for Reactogenic's .rtsx files.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reactogenic/reactogenic.git",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://github.com/reactogenic/reactogenic#readme",
+  "bugs": "https://github.com/reactogenic/reactogenic/issues",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted workspace only syntax highlighting works: the language server reads tsconfig and can run a binary from node_modules, so it is not started.",
+      "restrictedConfigurations": [
+        "reactogenic.server.path"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "Syntax highlighting only: the language server needs the project on disk."
+    }
+  },
+  "activationEvents": [],
+  "scripts": {
+    "generate": "node grammar/generate.mjs",
+    "generate:check": "node grammar/generate.mjs --check",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:editor": "node scripts/test-editor.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Reactogenic",
+      "properties": {
+        "reactogenic.server.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the `reactogenic` binary that runs the language server. Unset: `$REACTOGENIC_BINARY`, then the workspace's `@reactogenic/cli`, then the binary bundled with the extension. A path that does not exist is an error."
+        },
+        "reactogenic.autoClosingTags": {
+          "type": "boolean",
+          "default": true,
+          "scope": "language-overridable",
+          "markdownDescription": "Insert the closing tag when `>` is typed after an opening tag, slot tags (`<$Icon>`) included."
+        },
+        "reactogenic.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "scope": "window",
+          "description": "Trace the messages between VS Code and the language server in the Reactogenic output channel."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "reactogenic.restartServer",
+        "title": "Restart Server",
+        "category": "Reactogenic"
+      },
+      {
+        "command": "reactogenic.showTranspiled",
+        "title": "Show Transpiled TSX",
+        "category": "Reactogenic",
+        "enablement": "editorLangId == rtsx && resourceScheme != reactogenic-transpiled"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "reactogenic.showTranspiled",
+          "when": "editorLangId == rtsx && resourceScheme != reactogenic-transpiled"
+        }
+      ]
+    },
+    "taskDefinitions": [
+      {
+        "type": "reactogenic",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "check"
+            ],
+            "description": "The reactogenic command to run."
+          },
+          "project": {
+            "type": "string",
+            "description": "A tsconfig.json, or a directory holding one (-p). Default: the workspace folder."
+          }
+        }
+      }
+    ],
+    "problemPatterns": [
+      {
+        "name": "reactogenic",
+        "regexp": "^(\\S(?:(?!\\(\\d+,\\d+\\): (?:error|warning) ).)*(?<=\\.rtsx))\\((\\d+),(\\d+)\\): (error|warning) ([^\\s:]+): (.*)$",
+        "file": 1,
+        "line": 2,
+        "column": 3,
+        "severity": 4,
+        "code": 5,
+        "message": 6
+      },
+      {
+        "name": "reactogenic-ts",
+        "regexp": "^(\\S(?:(?!\\(\\d+,\\d+\\): (?:error|warning) ).)*(?<!\\.rtsx))\\((\\d+),(\\d+)\\): (error|warning) TS(\\d+): (.*)$",
+        "file": 1,
+        "line": 2,
+        "column": 3,
+        "severity": 4,
+        "code": 5,
+        "message": 6
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "reactogenic",
+        "label": "reactogenic check: .rtsx files",
+        "owner": "reactogenic",
+        "source": "reactogenic",
+        "applyTo": "closedDocuments",
+        "fileLocation": [
+          "autoDetect",
+          "${cwd}"
+        ],
+        "pattern": "$reactogenic"
+      },
+      {
+        "name": "reactogenic-ts",
+        "label": "reactogenic check: TypeScript files",
+        "owner": "typescript",
+        "source": "ts",
+        "applyTo": "closedDocuments",
+        "fileLocation": [
+          "autoDetect",
+          "${cwd}"
+        ],
+        "pattern": "$reactogenic-ts"
+      }
+    ],
+    "languages": [
+      {
+        "id": "rtsx",
+        "aliases": [
+          "Reactogenic TSX",
+          "RTSX",
+          "rtsx"
+        ],
+        "extensions": [
+          ".rtsx"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "rtsx-tags",
+        "aliases": [],
+        "configuration": "./tags-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rtsx",
+        "scopeName": "source.tsx.rtsx",
+        "path": "./syntaxes/rtsx.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational",
+          "storage.type.function.arrow",
+          "keyword.operator.bitwise.shift",
+          "punctuation.definition.tag",
+          "keyword.operator.assignment.compound.bitwise.ts"
+        ],
+        "embeddedLanguages": {
+          "meta.tag.tsx": "rtsx-tags",
+          "meta.tag.without-attributes.tsx": "rtsx-tags",
+          "meta.tag.attributes.tsx": "rtsx",
+          "meta.embedded.expression.tsx": "rtsx"
+        },
+        "tokenTypes": {
+          "punctuation.definition.template-expression": "other",
+          "entity.name.type.instance.jsdoc": "other",
+          "entity.name.function.tagged-template": "other",
+          "meta.import string.quoted": "other",
+          "variable.other.jsdoc": "other"
+        }
+      },
+      {
+        "scopeName": "markdown.rtsx.codeblock",
+        "path": "./syntaxes/rtsx.markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.rtsx": "rtsx"
+        }
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "rtsx",
+        "scopes": {
+          "property": [
+            "variable.other.property.tsx"
+          ],
+          "property.readonly": [
+            "variable.other.constant.property.tsx"
+          ],
+          "variable": [
+            "variable.other.readwrite.tsx"
+          ],
+          "variable.readonly": [
+            "variable.other.constant.object.tsx"
+          ],
+          "function": [
+            "entity.name.function.tsx"
+          ],
+          "namespace": [
+            "entity.name.type.module.tsx"
+          ],
+          "variable.defaultLibrary": [
+            "support.variable.tsx"
+          ],
+          "function.defaultLibrary": [
+            "support.function.tsx"
+          ]
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "rtsx",
+        "path": "./snippets/typescript.code-snippets"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "rtsx"
+      }
+    ],
+    "configurationDefaults": {
+      "emmet.includeLanguages": {
+        "rtsx": "typescriptreact"
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "~1.91.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "mocha": "^11.7.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0",
+    "vscode-languageclient": "^10.1.2",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

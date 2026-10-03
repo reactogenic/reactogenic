@@ -83,10 +83,10 @@ func TestExit(t *testing.T) {
 	}
 }
 
-// Documents the client should not have sent (ide.md: the client attaches
-// to `file` documents of language rtsx) end nothing. One whose URI ends in
-// .rtsx is the front's as any other — its URI is never a file name; one
-// that does not is not ours: TypeScript's answers, whatever they are.
+// Documents that are not plain files end nothing. One whose URI ends in
+// .rtsx is the front's as any other — its URI is never a file name. One
+// without a name, opened with the language id rtsx, is the front's too
+// (ide.md, *A document without a file name*).
 func TestOddDocuments(t *testing.T) {
 	c := start(t, app)
 	text := app["src/page.rtsx"]
@@ -107,7 +107,7 @@ func TestOddDocuments(t *testing.T) {
 		{"file:" + c.Root + "/src/page.rtsx", true}, // one slash, as Java clients write it
 		{"file://" + c.Root + "/src/./page.rtsx", true},
 		{"git:" + c.Root + "/src/page.rtsx", true},
-		{"untitled:Untitled-1", false}, // a new buffer, language mode rtsx
+		{"untitled:Untitled-1", true}, // a new buffer, language mode rtsx
 	} {
 		doc := map[string]any{"uri": d.uri}
 		at := c.At("src/page.rtsx", "<$Icon", 1, 3)

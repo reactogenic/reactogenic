@@ -39,7 +39,7 @@ func TestContentMappersEntryIgnored(t *testing.T) {
 		}
 		client.Open("tsconfig.json")
 		got = append(got, "tsconfig: "+strings.Join(lsptest.Lines(client.Diagnostics("tsconfig.json")), ", "))
-		for _, r := range client.Registrations {
+		for _, r := range client.Registrations() {
 			if strings.Contains(r, "content-mapper") {
 				t.Errorf("dynamic registration for a mapped extension: %s", r)
 			}

@@ -28,6 +28,9 @@ type front struct {
 	outgoing *queue
 	log      io.Writer
 
+	// names renames the documents that are rtsx by language id only.
+	names aliases
+
 	mu              sync.Mutex
 	docs            map[string]string  // open .rtsx documents, by URI
 	pending         map[string]request // forwarded requests whose answers we rewrite, by id
@@ -199,6 +202,7 @@ func (f *front) readClient(in io.Reader, toServer io.Writer) error {
 		if err != nil {
 			return err
 		}
+		body = f.names.fromClient(body)
 		var msg message
 		if json.Unmarshal(body, &msg) == nil && msg.Method != "" {
 			if msg.Method == "exit" {
@@ -386,6 +390,7 @@ func (f *front) fromServer(out io.Reader) error {
 		if err != nil {
 			return err
 		}
+		body = f.names.fromServer(body)
 		var msg message
 		if json.Unmarshal(body, &msg) == nil && msg.Method == "" && msg.ID != nil {
 			// Whatever the answer — a result, null, an error — the request is
