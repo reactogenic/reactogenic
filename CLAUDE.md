@@ -157,7 +157,7 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
 | `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
-| `phase01/ide.md` | specified; M8 (RGP1-100–112) in progress |
+| `phase01/ide.md` | specified; M8 (RGP1-100–114) in progress |
 | `later/layout.md`, `later/persistent-state.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 

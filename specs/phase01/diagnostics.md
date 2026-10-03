@@ -38,7 +38,7 @@ terminal and CI.
    engine*). Imports resolve with or without the extension: `./button` finds
    `button.rtsx` after the built-in extensions; a segment import names its
    file (`./about-us.rtsx`).
-   > Until RGP1-104: `check` serves `Button.rtsx` as an in-memory
+   > Until RGP1-106: `check` serves `Button.rtsx` as an in-memory
    > `Button.tsx` through an overlay, with an `about-us.rtsx.tsx` alias for
    > segment imports.
 3. Check the program. Diagnostics in virtual files are mapped back (*Mapping*);
@@ -51,6 +51,9 @@ terminal and CI.
 src/Page.rtsx:12:5 - error TS2322: Type 'number' is not assignable to type 'string'.
 src/Page.rtsx:18:3 - error missing-slot: `Card` requires `$Title`.
 ```
+
+A tsconfig with `references` and no files of its own (Vite's template) is
+checked through its references, each file reported once.
 
 `--watch` re-checks on change, as `tsc --watch` does.
 

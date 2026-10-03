@@ -341,17 +341,54 @@ was run or read, then re-checked by a second pass.
    program — the editor and the CLI cannot disagree, and the duplicate goes.
 3. **One emission.** Names are copied so TS reaches them; no IDE-only output.
 4. **Tolerant in the editor, strict in builds.**
-5. **Rename is correct or refused.**
+5. **Rename is correct or refused**, for a rename started in an `.rtsx`
+   document.
 6. **Highlighting is a generated fork of the TSX grammar**, not injections.
 7. **The `.ts` side**: a TS server plugin for `tsserver` (TS ≤ 6), the stock
    content mapper for TS 7.1+. Our server attaches to `.rtsx` only — taking
    over `.ts` files would mean disabling VS Code's TypeScript per workspace
-   (Vue's abandoned "takeover mode").
+   (Vue's abandoned "takeover mode"). A rename started in a `.ts` file that
+   reaches `.rtsx` is refused by the plugin: the fix-ups live in our server.
 8. **The stock content mapper is a by-product**, experimental until 7.1 is
    stable; revisit making it the default path when 7.1 ships, upstream
    resolves extensionless imports, and the client middleware
    (`registerLspMiddleware`, merged 2026-10-02) is released.
 
-**Cost accepted:** the binary grows by roughly a third with the language
-service linked in; patches to the fork's resolver, config parsing and
-diagnostics path must be rebased when the pin moves.
+9. **Syntactic features come from the source tree** (folding, selection
+   ranges, closing tags): slot elements have no element in the virtual text.
+10. **Static capabilities only; attached to `.rtsx` only.** The fork
+    registers 26 capabilities dynamically per mapped extension; a client with
+    its own selector would answer everything twice.
+11. **The pin is frozen through M8.** TypeScript 7.1's beta is three days
+    after the research; re-vendoring mid-milestone, with a dozen patched
+    files, is the expensive case. RGP1-114 re-vendors.
+
+**Review (2026-10-03).** Five lenses over the first draft, each serious
+finding validated against the code: 42 findings, 5 blocking. What changed:
+the sibling re-transform had no seam (the cache key ignores siblings; a
+mapper has no file system) — now the directory listing is in the key and
+`segment-self` is a cross-file rule; rename fix-ups cannot work on the edit
+the fork returns (the two copies of a shorthand are one source range) — the
+server builds the edits from virtual positions; "closing tag copied" fails
+when the element is emitted self-closing — tags are paired on the source
+tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
+server only after migrating `check` — a bare server now comes first.
+
+**Patched upstream files** (about 130 lines; all in fast-moving packages):
+
+| File | Change |
+| --- | --- |
+| `module/resolver.go` | mapped extensions for extensionless imports |
+| `tsoptions/tsconfigparsing.go` | built-in mappers; user `.rtsx` entries dropped |
+| `project/project.go`, `session.go` | built-in mappers in inferred projects; a mapper host without `runExternalCode` |
+| `project/compilerhost.go`, `contentmapper/host.go` | the file system to the transform; the directory listing in the cache key |
+| `contentmapper/transform.go`, `ast/ast.go` | `Extra` with the parsed file; module-ness |
+| `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
+| `ls/diagnostics.go` | the reporting hook |
+| `ls/rename.go` | rename locations before write-back |
+| `ls/folding.go`, `ls/selectionranges.go` | entry points on a source file |
+| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info |
+
+**Cost accepted:** the stripped binary grows about 45% with the language
+service linked in (19 → 28 MB, darwin-arm64); the patches above must be
+rebased when the pin moves.
