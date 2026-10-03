@@ -7,7 +7,7 @@ interface ListProps {
   options: { value: string; label: string }[];
   selected: string;
   $Title?: Slot<{ className?: string; children?: ReactNode }>;
-  $Option?: Slot<{ className?: string }, { label: string; selected: boolean }>;
+  $Option?: Slot<{ className?: string }, { className: string; label: string; selected: boolean }>;
 }
 
 function List({ options, selected, $Title, $Option }: ListProps) {

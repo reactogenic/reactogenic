@@ -1,0 +1,1 @@
+src/table.rtsx(17,26): error TS2561: Object literal may only specify known properties, but 'widht' does not exist in type '{ width?: number | undefined; children?: string | undefined; }'. Did you mean to write 'width'?

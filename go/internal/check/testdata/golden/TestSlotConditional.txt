@@ -1,0 +1,1 @@
+src/page.rtsx(6,5): error slot-conditional: Required slot without fallback cannot be conditional: `$Title` of `Card`

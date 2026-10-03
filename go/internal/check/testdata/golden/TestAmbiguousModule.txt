@@ -1,0 +1,1 @@
+src/card.rtsx(1,1): error ambiguous-module: `card.tsx` and `card.rtsx` side by side: an import of `./card` is ambiguous, and the `.rtsx` is not checked

@@ -50,6 +50,7 @@ func TestCheck(t *testing.T) {
 		"src/c.tsx":  "export function C(p: { label: string }) {\n  return <div>{p.label}</div>;\n}\nexport const n: number = \"x\";\n",
 	})
 	reports := Run(dir + "/tsconfig.json")
+	golden(t, dir, reports)
 	var got []string
 	for _, r := range reports {
 		got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+":"+strconv.Itoa(r.Col)+" "+r.Code)
@@ -125,8 +126,10 @@ func checkProject(t *testing.T, files map[string]string) []string {
 		files[k] = v
 	}
 	dir := writeProject(t, files)
+	reports := Run(dir + "/tsconfig.json")
+	golden(t, dir, reports)
 	var got []string
-	for _, r := range Run(dir + "/tsconfig.json") {
+	for _, r := range reports {
 		got = append(got, strings.TrimPrefix(r.File, dir+"/")+":"+strconv.Itoa(r.Line)+":"+strconv.Itoa(r.Col)+" "+r.Code)
 	}
 	return got

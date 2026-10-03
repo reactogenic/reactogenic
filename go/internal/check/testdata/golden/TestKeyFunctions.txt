@@ -1,0 +1,3 @@
+src/select.rtsx(23,12): error slot-key-no-args: `$Hint` has no args to key by: its body is not a function
+  src/select.rtsx:5:3 - The expected type comes from property '$Hint' which is declared here on type 'SelectProps'
+src/select.rtsx(28,14): error slot-key-inline: A key of `$Option` is a string or a number; a key function is written inline: `key={(args) => …}`

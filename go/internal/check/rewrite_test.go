@@ -76,5 +76,7 @@ func runFiles(t *testing.T, files map[string]string) []Report {
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, []byte(text), 0o644)
 	}
-	return Run(filepath.ToSlash(dir) + "/tsconfig.json")
+	reports := Run(filepath.ToSlash(dir) + "/tsconfig.json")
+	golden(t, filepath.ToSlash(dir), reports)
+	return reports
 }

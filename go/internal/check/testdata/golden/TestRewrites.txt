@@ -1,0 +1,17 @@
+src/page.rtsx(4,26): error undeclared-slot: `$Nope` is not declared in `Card`
+src/page.rtsx(5,20): error missing-slot: `Must` requires `$Title`
+  src/lib.tsx:4:27 - '$Title' is declared here.
+src/page.rtsx(6,35): error no-values: `$Title` provides no values
+src/page.rtsx(7,41): error content-not-allowed: `$Box` takes no body
+  src/lib.tsx:3:83 - The expected type comes from property '$Box' which is declared here on type '{ $Title?: Slot<{ tone?: string | undefined; children?: ReactNode; }> | undefined; $Box?: Slot<{ color: string; }> | undefined; $Label?: Slot<{ children: ReactNode; }> | undefined; $Icon?: Slot<...> | undefined; }'
+src/page.rtsx(8,26): error slot-type: `$Label` does not match its declaration in `Card`: Type '{}' is not assignable to type 'Slot<{ children: ReactNode; }> | undefined'.
+  src/lib.tsx:3:115 - The expected type comes from property '$Label' which is declared here on type '{ $Title?: Slot<{ tone?: string | undefined; children?: ReactNode; }> | undefined; $Box?: Slot<{ color: string; }> | undefined; $Label?: Slot<{ children: ReactNode; }> | undefined; $Icon?: Slot<...> | undefined; }'
+src/page.rtsx(9,32): error params-required: `$Icon` requires params: its body is a function of the attachment's args
+src/page.rtsx(10,19): error switch-missing-case: Missing `"b"`, `"c"`
+src/page.rtsx(11,24): error segment-not-component: The segment `num` has no default component
+src/page.rtsx(12,24): error segment-props: A segment takes no props: `props` requires `x`
+  src/props.rtsx.tsx:1:32 - 'x' is declared here.
+src/page.rtsx(13,27): error segment-root-props: `Plain` must accept `id` and `children` to be a segment root
+src/page.rtsx(14,27): error TS2322: Type 'boolean' is not assignable to type 'string'.
+  No `value` in scope: a bare attribute is `true`. Did you mean `value={value}`?
+  src/lib.tsx:6:28 - The expected type comes from property 'value' which is declared here on type '{ value: string; }'
