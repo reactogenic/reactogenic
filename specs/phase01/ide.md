@@ -458,19 +458,41 @@ attributes. So highlighting needs its own rules, not just a language id.
 | segment root `#about-us` | `support.class.component.segment.rtsx` | component colour |
 
 - The generator patches three things: the attribute list (args, segment
-  roots, params), the tag-name pattern (`$name`), the root scope. It asserts
-  the shape of each rule it patches, so an upstream change fails loudly.
+  roots, params; what ends an attribute name), the tag-name pattern
+  (`$name`), the root scope. It asserts the shape of each rule it patches, so
+  an upstream change fails loudly.
 - The root scope is `source.tsx.rtsx`: editors find injections (JSDoc,
   styled-components, …) by scope prefix; `source.rtsx` would lose them.
 - Plain `.tsx` code tokenizes identically to `source.tsx` — tested on the
   repo's `.tsx` files, and measured once on the upstream grammar's own test
-  inputs (plan.md, RGP1-109). One intended exception: an element as an
-  attribute value (`footer=<Match …>`), valid JSX that the TSX grammar marks
-  illegal.
+  inputs (plan.md, RGP1-109). Three exceptions on valid TSX, each tested:
+  - a tag that starts with `$` (`<$Modal>`) is a slot tag — by design, the
+    exception of syntax.md: `entity.name.function.slot.rtsx` on its name,
+    where TSX has `support.class.component.tsx`; nothing else differs.
+    `<$ns.Comp>` stays a component;
+  - an element as an attribute value (`footer=<Match …>`) is tokenized: the
+    TSX grammar marks it illegal;
+  - an attribute name directly before a spread (`<A x{...p}>`) is a name and
+    a spread: the TSX grammar derails on it.
+- Params whose `{` ends its line (comments aside) keep TSX's brace scopes,
+  `punctuation.section.embedded.begin/end.tsx`, and only what is inside
+  carries `meta.slot-params.rtsx`: a regex cannot look at the next line, so
+  such a `{` is TSX's `{…}` until the first thing inside that is not a
+  comment decides — `...` makes it a spread, anything else params. On one
+  line the braces are `punctuation.definition.binding-pattern.object.tsx`
+  inside `meta.slot-params.rtsx`.
+- No whitespace is needed between two forms, as in the transpiler: a name —
+  of an attribute, an arg or a segment root — ends before `{`, `&` and `#`
+  (`items{ item }`, `value&size`, `&size{...p}`). So a name typed directly
+  in front of existing params, a spread, an arg or a segment root never
+  derails the file.
 - A sigil without a name yet (`&`, `#` right after typing) must not derail
-  the file: the name is optional in the rules. A sigil followed by something
-  that is not a name (`&a:b`, `#404`) is `invalid.illegal`, up to the tag end
-  and not through it.
+  the file: the name is optional in the rules, also directly before `{`. A
+  sigil followed by something that is not a name (`&a:b`, `#404`, `&&&x`) is
+  `invalid.illegal`, up to the tag end or a `{` and not through it.
+- ` ```rtsx ` fences in Markdown: the rule VS Code's Markdown grammar has for
+  ` ```tsx `, with our language, as an injection — generated from the
+  vendored copy of that grammar like everything else.
 - Language configuration: TSX's, plus `$` allowed in tag names (indent after
   `<$Slot>`) and in the word pattern (completing `<$Ic` replaces the `$`).
 

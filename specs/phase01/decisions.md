@@ -200,7 +200,7 @@ downloads that toolchain on demand (`GOTOOLCHAIN=auto`, the default).
 | `Slot<Children, Options>` helper | deferred | syntax.md, *Slots → Typing behaviour* |
 | Iterables in `Each` | rejected: arrays only, so `index` is always a `number` position | syntax.md, *Iteration* |
 | Scope for shorthand props | tsgo's binder, no resolver of our own; a same-named binding of the wrong type is an ordinary TS error | syntax.md, *Shorthand props*; RGP1-032 |
-| Package names | all scoped to the `@reactogenic` npm org: `core`, `vite`, `cli`, `cli-<os>-<arch>` | vite.md, *Runtime* |
+| Package names | all scoped to the `@reactogenic` npm org: `core`, `vite`, `cli`, `cli-<os>-<arch>`. One exception since RGP1-109: `packages/vscode` is `rtsx`, unscoped and private — `vsce` rejects scoped names, and it never goes to npm | vite.md, *Runtime*; ide.md, *VS Code extension* |
 
 ## RGP1-020 — No new node kinds, no new script kind
 
