@@ -24,6 +24,9 @@ type front struct {
 	// and each side would wait for the other to read.
 	outgoing *queue
 
+	// names renames the documents that are rtsx by language id only.
+	names aliases
+
 	mu              sync.Mutex
 	docs            map[string]string  // open .rtsx documents, by URI
 	pending         map[string]request // forwarded requests whose answers we rewrite, by id
@@ -99,6 +102,15 @@ func (q *queue) drain(w io.Writer) error {
 
 func isRTSX(uri string) bool { return strings.HasSuffix(uri, ".rtsx") }
 
+// sourceName names a document for the source parse, which wants an absolute
+// name and reads nothing from it: a document that is not a file has none.
+func sourceName(uri string) string {
+	if strings.HasPrefix(uri, "file://") {
+		return uri
+	}
+	return "/untitled.rtsx"
+}
+
 // readFrame reads one LSP message body.
 func readFrame(r *bufio.Reader) ([]byte, error) {
 	length := -1
@@ -158,6 +170,7 @@ func (f *front) fromClient(in io.Reader, toServer io.WriteCloser) error {
 		if err != nil {
 			return err
 		}
+		body = f.names.fromClient(body)
 		var msg message
 		if json.Unmarshal(body, &msg) == nil && msg.Method != "" {
 			handled, err := f.clientMessage(msg)
@@ -244,7 +257,7 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 		f.mu.Unlock()
 	case "textDocument/foldingRange":
 		if open && msg.ID != nil {
-			result, err := server.NewSyntactic(uri, text, encoding).FoldingRanges(lineFoldingOnly)
+			result, err := server.NewSyntactic(sourceName(uri), text, encoding).FoldingRanges(lineFoldingOnly)
 			if err != nil {
 				return false, nil
 			}
@@ -256,7 +269,7 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 				Positions json.RawMessage `json:"positions"`
 			}
 			json.Unmarshal(msg.Params, &p)
-			result, err := server.NewSyntactic(uri, text, encoding).SelectionRanges(p.Positions)
+			result, err := server.NewSyntactic(sourceName(uri), text, encoding).SelectionRanges(p.Positions)
 			if err != nil {
 				return false, nil
 			}
@@ -276,7 +289,7 @@ func (f *front) clientMessage(msg message) (handled bool, err error) {
 		f.mu.Unlock()
 		if open && msg.ID != nil {
 			var result any
-			if closing := server.NewSyntactic(p.Doc.URI, text, encoding).ClosingTag(p.Position.Line, p.Position.Character); p.Ch == ">" && closing != "" {
+			if closing := server.NewSyntactic(sourceName(p.Doc.URI), text, encoding).ClosingTag(p.Position.Line, p.Position.Character); p.Ch == ">" && closing != "" {
 				at := map[string]int{"line": p.Position.Line, "character": p.Position.Character}
 				result = map[string]any{
 					"_vs_textEditFormat": 2, // a snippet: `$0` keeps the cursor before the tag
@@ -308,6 +321,7 @@ func (f *front) fromServer(out io.Reader) error {
 		if err != nil {
 			return err
 		}
+		body = f.names.fromServer(body)
 		var msg message
 		if json.Unmarshal(body, &msg) == nil && msg.Method == "" && msg.ID != nil && msg.Result != nil {
 			f.mu.Lock()
