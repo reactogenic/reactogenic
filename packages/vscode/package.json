@@ -1,0 +1,138 @@
+{
+  "//": "The one package outside the @reactogenic scope: vsce rejects scoped names, and the Marketplace id is publisher.name = reactogenic.rtsx. Not published to npm.",
+  "name": "rtsx",
+  "private": true,
+  "publisher": "reactogenic",
+  "displayName": "Reactogenic (.rtsx)",
+  "description": "Language support for Reactogenic's .rtsx files.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reactogenic/reactogenic.git",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://github.com/reactogenic/reactogenic#readme",
+  "bugs": "https://github.com/reactogenic/reactogenic/issues",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "scripts": {
+    "generate": "node grammar/generate.mjs",
+    "generate:check": "node grammar/generate.mjs --check",
+    "test": "vitest run"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "rtsx",
+        "aliases": [
+          "Reactogenic TSX",
+          "RTSX",
+          "rtsx"
+        ],
+        "extensions": [
+          ".rtsx"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "rtsx-tags",
+        "aliases": [],
+        "configuration": "./tags-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rtsx",
+        "scopeName": "source.tsx.rtsx",
+        "path": "./syntaxes/rtsx.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational",
+          "storage.type.function.arrow",
+          "keyword.operator.bitwise.shift",
+          "punctuation.definition.tag",
+          "keyword.operator.assignment.compound.bitwise.ts"
+        ],
+        "embeddedLanguages": {
+          "meta.tag.tsx": "rtsx-tags",
+          "meta.tag.without-attributes.tsx": "rtsx-tags",
+          "meta.tag.attributes.tsx": "rtsx",
+          "meta.embedded.expression.tsx": "rtsx"
+        },
+        "tokenTypes": {
+          "punctuation.definition.template-expression": "other",
+          "entity.name.type.instance.jsdoc": "other",
+          "entity.name.function.tagged-template": "other",
+          "meta.import string.quoted": "other",
+          "variable.other.jsdoc": "other"
+        }
+      },
+      {
+        "scopeName": "markdown.rtsx.codeblock",
+        "path": "./syntaxes/rtsx.markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.rtsx": "rtsx"
+        }
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "rtsx",
+        "scopes": {
+          "property": [
+            "variable.other.property.tsx"
+          ],
+          "property.readonly": [
+            "variable.other.constant.property.tsx"
+          ],
+          "variable": [
+            "variable.other.readwrite.tsx"
+          ],
+          "variable.readonly": [
+            "variable.other.constant.object.tsx"
+          ],
+          "function": [
+            "entity.name.function.tsx"
+          ],
+          "namespace": [
+            "entity.name.type.module.tsx"
+          ],
+          "variable.defaultLibrary": [
+            "support.variable.tsx"
+          ],
+          "function.defaultLibrary": [
+            "support.function.tsx"
+          ]
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "rtsx",
+        "path": "./snippets/typescript.code-snippets"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "rtsx"
+      }
+    ],
+    "configurationDefaults": {
+      "emmet.includeLanguages": {
+        "rtsx": "typescriptreact"
+      }
+    }
+  },
+  "devDependencies": {
+    "vitest": "^4.0.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

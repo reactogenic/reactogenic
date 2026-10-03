@@ -342,9 +342,14 @@ attributes. So highlighting needs its own rules, not just a language id.
 - The root scope is `source.tsx.rtsx`: editors find injections (JSDoc,
   styled-components, …) by scope prefix; `source.rtsx` would lose them.
 - Plain `.tsx` code tokenizes identically to `source.tsx` — tested on the
-  upstream grammar's own test inputs.
+  repo's `.tsx` files, and measured once on the upstream grammar's own test
+  inputs (plan.md, RGP1-109). One intended exception: an element as an
+  attribute value (`footer=<Match …>`), valid JSX that the TSX grammar marks
+  illegal.
 - A sigil without a name yet (`&`, `#` right after typing) must not derail
-  the file: the name is optional in the rules.
+  the file: the name is optional in the rules. A sigil followed by something
+  that is not a name (`&a:b`, `#404`) is `invalid.illegal`, up to the tag end
+  and not through it.
 - Language configuration: TSX's, plus `$` allowed in tag names (indent after
   `<$Slot>`) and in the word pattern (completing `<$Ic` replaces the `$`).
 
@@ -359,7 +364,9 @@ from a package when the docs site needs it).
 
 ## VS Code extension
 
-`packages/vscode` — marketplace id `reactogenic.rtsx`.
+`packages/vscode` — marketplace id `reactogenic.rtsx`. The package is named
+`rtsx`, unscoped and private: `vsce` rejects scoped names, and it is never
+published to npm.
 
 - **Contributes**: the languages `rtsx` (`.rtsx`) and `rtsx-tags` (inside
   tags: `{/* */}` comments, indent after `<$Slot>`); the grammar, with what
@@ -461,6 +468,6 @@ deferred tree-sitter grammar (JetBrains takes the TextMate one).
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
 | server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus one smoke scenario through the built binary. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events; it fails the test on a server request it did not answer |
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences |
-| grammar | scope assertions per construct; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo |
+| grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |

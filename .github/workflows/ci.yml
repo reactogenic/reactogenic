@@ -47,5 +47,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: grammar # the committed .rtsx grammar is what its generator writes (RGP1-109)
+        run: pnpm --filter rtsx generate:check
       - run: pnpm typecheck
       - run: pnpm test:js

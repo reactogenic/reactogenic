@@ -752,7 +752,32 @@ mutants: none fails.
   fixture project leaves it with a new diagnostic.
 - Depends on: 107.
 
-### RGP1-109 — Grammar · M
+### RGP1-109 — Grammar · M · done
+`packages/vscode` (package `rtsx`, private): the TSX grammar of VS Code
+1.140.0 (TypeScript-TmLanguage `48f6086`) vendored with its notices, and
+`grammar/generate.mjs`, which writes the grammar (6 rules added, 3 changed),
+the Markdown fence injection, both language configurations, the snippets and
+`ThirdPartyNotices.txt`; 17 upstream changes are tested to fail it. Beyond
+the research: a sigil followed by a non-name stops before the tag end; a
+line comment after `=` and a comment line before a multi-line spread
+tokenize as in TSX.
+*Tests* (316): 101 scope cases, each checking that the next line is code
+again; equality with `source.tsx`, whitespace included, on the repo's 29
+`.tsx` files and 34 snippets; no `invalid.*` token and no open tag in the 58
+`.rtsx` files and 29 syntax.md examples (20 of the 87 fail under the TSX
+grammar).
+*Measured once, outside the suite*: none of the upstream grammar's 466 test
+inputs differs; of 1,073 local `.tsx` files only an intermediate-pass
+fixture that still holds `.rtsx` forms; of 360 TypeScript test files 4 —
+element-valued attributes (2), invalid TSX (1), a generic arrow the TSX
+grammar itself reads as a tag (1). In a running VS Code 1.140.0 (isolated
+profile): language `rtsx`, the scopes with bare sigils, Emmet, a TSX
+snippet, the Markdown fence; `vsce package` accepts the manifest.
+*Left*: Enter between slot tags and comment toggling were not re-run in the
+editor (its window had no focus; the research ran both on the same two
+configurations) — 110's editor suite has the comment toggle, not yet the
+Enter. `.vscodeignore` and the manifest's commands, task and matcher are
+110's. `x=` typed directly before `>`, and an unclosed `{`, derail as in TSX.
 - Vendored TSX grammar with its notices, the generator, the generated
   `rtsx.tmLanguage.json`, the two language configurations. A `grammar` step
   in CI's `js` job.
