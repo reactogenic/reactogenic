@@ -1,8 +1,11 @@
 // Package lsptest is an LSP client for tests (specs/phase01/ide.md,
 // *Testing*): it runs a server in-process over a pipe — so the race
 // detector sees it — and behaves as VS Code does: UTF-16 positions, pull
-// diagnostics with refresh, watched-file events it sends itself. A server
-// request it does not know fails the test.
+// diagnostics with refresh, watched-file events it sends itself, the
+// capabilities that change a server's answers (hierarchical symbols, line
+// folding, resolved completion items, code action literals, document
+// changes), the user's settings on workspace/configuration, and `exit` with
+// the pipes still open. A server request it does not know fails the test.
 package lsptest
 
 import (
@@ -37,7 +40,9 @@ type Client struct {
 	pending       map[int]chan response
 	docs          map[string]string // open documents, by path relative to Root
 	versions      map[string]int
-	Registrations []string // methods the server registered dynamically
+	options       Options
+	registrations []string // what the server registered dynamically: `method id`
+	asked         []string // the methods of the server's requests
 	Refreshes     int      // workspace/diagnostic/refresh requests received
 	// Initialized is the server's answer to initialize.
 	Initialized struct {
@@ -58,12 +63,32 @@ type response struct {
 	}
 }
 
+// Options vary a session from VS Code's.
+type Options struct {
+	// Settings are the user's settings, by section ("typescript", "editor",
+	// …): the answers to workspace/configuration.
+	Settings map[string]any
+	// Capabilities edits the client capabilities before initialize: another
+	// editor.
+	Capabilities func(capabilities map[string]any)
+	// Silent names the server requests this client never answers.
+	Silent func(method string) bool
+	// ProcessID is the client's process id in initialize; 0 is null.
+	ProcessID int
+}
+
 // Start runs serve on root and performs the initialize handshake.
 func Start(t *testing.T, root string, serve Serve) *Client {
 	t.Helper()
+	return StartWith(t, root, serve, Options{})
+}
+
+// StartWith is Start for a client that differs from VS Code.
+func StartWith(t *testing.T, root string, serve Serve, options Options) *Client {
+	t.Helper()
 	toServer, clientW := io.Pipe()
 	clientR, fromServer := io.Pipe()
-	c := &Client{t: t, Root: filepath.ToSlash(root), w: clientW, pending: map[int]chan response{}, docs: map[string]string{}, versions: map[string]int{}, done: make(chan error, 1)}
+	c := &Client{t: t, Root: filepath.ToSlash(root), w: clientW, pending: map[int]chan response{}, docs: map[string]string{}, versions: map[string]int{}, options: options, done: make(chan error, 1)}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		c.done <- serve(ctx, toServer, fromServer, io.Discard, c.Root)
@@ -71,50 +96,97 @@ func Start(t *testing.T, root string, serve Serve) *Client {
 	}()
 	go c.read(bufio.NewReader(clientR))
 	t.Cleanup(func() {
-		c.Request("shutdown", nil, nil)
+		// As an editor stops a server: shutdown, exit, and only then — the
+		// server gone — the pipes.
+		if err := c.Try("shutdown", nil, nil); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
 		c.Notify("exit", nil)
-		clientW.Close()
 		select {
-		case <-c.done:
+		case err := <-c.done:
+			if err != nil {
+				t.Errorf("the server ended with %v", err)
+			}
 		case <-time.After(10 * time.Second):
 			t.Error("the server did not stop after exit")
 		}
+		clientW.Close()
 		cancel()
 	})
 
-	c.Request("initialize", map[string]any{
-		"processId":        nil,
-		"rootUri":          c.URI(""),
-		"workspaceFolders": []any{map[string]any{"uri": c.URI(""), "name": "test"}},
-		"capabilities": map[string]any{
-			"general": map[string]any{"positionEncodings": []string{"utf-16"}},
-			"window":  map[string]any{"workDoneProgress": true},
-			"workspace": map[string]any{
-				"configuration":         true,
-				"workspaceFolders":      true,
-				"didChangeWatchedFiles": map[string]any{"dynamicRegistration": true},
-				"diagnostics":           map[string]any{"refreshSupport": true},
-			},
-			"textDocument": map[string]any{
-				"synchronization": map[string]any{"dynamicRegistration": true},
-				"diagnostic":      map[string]any{"dynamicRegistration": true},
-				"hover":           map[string]any{"dynamicRegistration": true, "contentFormat": []string{"markdown", "plaintext"}},
-				"completion":      map[string]any{"dynamicRegistration": true},
-				"definition":      map[string]any{"dynamicRegistration": true, "linkSupport": true},
-				"rename":          map[string]any{"dynamicRegistration": true, "prepareSupport": true},
-				"foldingRange":    map[string]any{"dynamicRegistration": true},
-				"semanticTokens": map[string]any{
-					"dynamicRegistration": true,
-					"requests":            map[string]any{"full": true, "range": true},
-					"formats":             []string{"relative"},
-					"tokenTypes":          []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
-					"tokenModifiers":      []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
-				},
+	capabilities := map[string]any{
+		"general": map[string]any{"positionEncodings": []string{"utf-16"}},
+		"window":  map[string]any{"workDoneProgress": true},
+		"workspace": map[string]any{
+			"configuration":          true,
+			"workspaceFolders":       true,
+			"didChangeConfiguration": map[string]any{"dynamicRegistration": true},
+			"didChangeWatchedFiles":  map[string]any{"dynamicRegistration": true},
+			"diagnostics":            map[string]any{"refreshSupport": true},
+			"workspaceEdit":          map[string]any{"documentChanges": true},
+		},
+		"textDocument": map[string]any{
+			"synchronization": map[string]any{"dynamicRegistration": true},
+			"diagnostic":      map[string]any{"dynamicRegistration": true},
+			"hover":           map[string]any{"dynamicRegistration": true, "contentFormat": []string{"markdown", "plaintext"}},
+			"completion": map[string]any{"dynamicRegistration": true, "completionItem": map[string]any{
+				"resolveSupport": map[string]any{"properties": []string{"documentation", "detail", "additionalTextEdits"}},
+			}},
+			"definition":     map[string]any{"dynamicRegistration": true, "linkSupport": true},
+			"rename":         map[string]any{"dynamicRegistration": true, "prepareSupport": true},
+			"documentSymbol": map[string]any{"dynamicRegistration": true, "hierarchicalDocumentSymbolSupport": true},
+			"foldingRange":   map[string]any{"dynamicRegistration": true, "lineFoldingOnly": true},
+			"codeAction": map[string]any{"dynamicRegistration": true, "codeActionLiteralSupport": map[string]any{"codeActionKind": map[string]any{
+				"valueSet": []string{"", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"},
+			}}},
+			"semanticTokens": map[string]any{
+				"dynamicRegistration": true,
+				"requests":            map[string]any{"full": true, "range": true},
+				"formats":             []string{"relative"},
+				"tokenTypes":          []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
+				"tokenModifiers":      []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
 			},
 		},
+	}
+	if options.Capabilities != nil {
+		options.Capabilities(capabilities)
+	}
+	var processID any
+	if options.ProcessID != 0 {
+		processID = options.ProcessID
+	}
+	c.Request("initialize", map[string]any{
+		"processId":        processID,
+		"rootUri":          c.URI(""),
+		"workspaceFolders": []any{map[string]any{"uri": c.URI(""), "name": "test"}},
+		"capabilities":     capabilities,
 	}, &c.Initialized)
 	c.Notify("initialized", map[string]any{})
 	return c
+}
+
+// Registrations is what the server has registered dynamically so far, as
+// `method id`.
+func (c *Client) Registrations() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.registrations...)
+}
+
+// Asked is the methods of the requests the server has sent so far.
+func (c *Client) Asked() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.asked...)
+}
+
+// Configure changes the user's settings, as the editor does: the server is
+// told, and asks again.
+func (c *Client) Configure(settings map[string]any) {
+	c.mu.Lock()
+	c.options.Settings = settings
+	c.mu.Unlock()
+	c.Notify("workspace/didChangeConfiguration", map[string]any{"settings": settings})
 }
 
 func (c *Client) read(r *bufio.Reader) {
@@ -174,14 +246,28 @@ func (c *Client) read(r *bufio.Reader) {
 
 // serverRequest answers what a server may ask of a client.
 func (c *Client) serverRequest(id json.RawMessage, method string, params json.RawMessage) {
+	c.mu.Lock()
+	c.asked = append(c.asked, method)
+	c.mu.Unlock()
+	if c.options.Silent != nil && c.options.Silent(method) {
+		return
+	}
 	var result any
 	switch method {
 	case "workspace/configuration":
 		var p struct {
-			Items []json.RawMessage `json:"items"`
+			Items []struct {
+				Section string `json:"section"`
+			} `json:"items"`
 		}
 		json.Unmarshal(params, &p)
-		result = make([]any, len(p.Items))
+		sections := make([]any, len(p.Items))
+		c.mu.Lock()
+		for i, item := range p.Items {
+			sections[i] = c.options.Settings[item.Section] // nil: the section is not set
+		}
+		c.mu.Unlock()
+		result = sections
 	case "client/registerCapability":
 		var p struct {
 			Registrations []struct {
@@ -192,7 +278,7 @@ func (c *Client) serverRequest(id json.RawMessage, method string, params json.Ra
 		json.Unmarshal(params, &p)
 		c.mu.Lock()
 		for _, r := range p.Registrations {
-			c.Registrations = append(c.Registrations, r.Method+" "+r.ID)
+			c.registrations = append(c.registrations, r.Method+" "+r.ID)
 		}
 		c.mu.Unlock()
 	case "client/unregisterCapability", "window/workDoneProgress/create",
@@ -248,15 +334,32 @@ func (c *Client) Request(method string, params, result any) {
 // Try is Request, returning the server's error.
 func (c *Client) Try(method string, params, result any) error {
 	c.t.Helper()
+	return c.Start(method, params).Wait(result)
+}
+
+// Pending is a request that is sent and not yet answered.
+type Pending struct {
+	ID     int
+	answer chan response
+}
+
+// Start sends a request without waiting for its answer: what follows may
+// cancel it, or overtake it.
+func (c *Client) Start(method string, params any) *Pending {
 	c.mu.Lock()
 	c.next++
-	id := c.next
-	ch := make(chan response, 1)
-	c.pending[id] = ch
+	p := &Pending{ID: c.next, answer: make(chan response, 1)}
+	c.pending[p.ID] = p.answer
 	c.mu.Unlock()
-	c.send(message(&id, method, params))
+	c.send(message(&p.ID, method, params))
+	return p
+}
+
+// Wait decodes the answer's result into result (may be nil), or returns the
+// server's error.
+func (p *Pending) Wait(result any) error {
 	select {
-	case r, ok := <-ch:
+	case r, ok := <-p.answer:
 		if !ok {
 			return fmt.Errorf("the server closed the connection")
 		}

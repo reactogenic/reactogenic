@@ -166,26 +166,44 @@ error as today.
 ## `reactogenic lsp`
 
 `reactogenic lsp --stdio`: the fork's TS7 language server with the mapper
-built in. Standard LSP with **static capabilities only** — nothing is
-registered dynamically — so any client that attaches it to `*.rtsx` works.
-It advertises what this table lists, and no formatting.
+built in. Standard LSP with **static capabilities**: no feature is
+registered dynamically, so any client that attaches it to `*.rtsx` files
+works; configuration and file watching are, when the client supports it —
+and initialization does not wait for the client's answer. It advertises
+exactly what this table lists: no formatting, no code lens.
 
 A **front** in the same process sits between the client and the fork's
 server. It keeps the text of each open `.rtsx` document (the server asks for
-whole documents on change), answers the source-tree features itself, and
+whole documents on change; a client that sends a range anyway is served — the
+change is applied as the server applies it, and one with a position no
+document has goes no further), answers the source-tree features itself, and
 narrows the workspace-wide answers to what is ours. It never blocks on
-writing to the client: the client may be blocked writing to it.
+writing to the client: the client may be blocked writing to it. A failure
+inside the front answers that request with an error; the process goes on.
+
+**How the process ends** — the front's too, so that it holds in any state
+of the server:
+
+| | Exit status |
+| --- | --- |
+| `exit` after `shutdown` | 0 |
+| `exit` without `shutdown` — also before `initialized`, or before `initialize` | 1 |
+| the input ends | 0 |
+| input that is not LSP (no `Content-Length`, a message cut short) | 1, the reason on stderr |
+| the client's process is gone: the `processId` of `initialize`, or `--clientProcessId <pid>`, probed every 5 s (a killed editor whose pipe another process still holds) | 1 |
 
 | Feature | `.rtsx` support | How |
 | --- | --- | --- |
 | diagnostics | **the same as `reactogenic check`** | *Diagnostics* |
 | hover, signature help | ✓ | TS on virtual text, mapped back |
-| go to definition, type definition, references, highlights | ✓ | TS; `#name` → *Segments* |
+| go to definition, type definition, implementation, references, highlights | ✓ | TS; `#name` → *Segments* |
+| call hierarchy | ✓ — a call in a slot body is the enclosing component's; generated calls are not listed | TS |
 | completion, auto-import | ✓ | TS; slot names → *Slots* |
 | rename | correct or refused | *Rename* |
 | document symbols, semantic tokens, inlay hints | ✓ | TS |
 | folding, selection ranges | ✓ | the source tree |
 | closing-tag insertion | ✓, `$` tags included | *Tags* |
+| linked editing | plain tag pairs; none — rather than a wrong pair — on a tag that has slots, or on a slot tag | TS; *Not in the first release* |
 | code actions, organize imports | only when every edit maps exactly | TS drops the rest |
 | workspace symbols | symbols declared in `.rtsx` files | the rest is the user's TypeScript's |
 | file rename | a renamed `.rtsx`: edits in every importer; a renamed `.ts` / `.tsx`: edits in `.rtsx` importers only | no other server knows `.rtsx` modules |
@@ -296,7 +314,9 @@ beside the source and refreshes it on every edit.
 | rename from a `.ts` file into `.rtsx` | refused there (*The `.ts` side*); start it from the `.rtsx` file |
 | renaming a segment | `#about-us` has no virtual token and its import is generated: the `#name` rename is refused; renaming the file leaves `segment-not-found` on the mounter |
 | unsaved `.ts` edits | reach `.rtsx` files on save |
-| linked editing of slot tag pairs | `editor.linkedEditing` is off by default |
+| unsaved new files | an `untitled:` document is not attached — highlighting only until it is saved. The server knows a document by its file name (the mapper, the project, the directory its imports resolve from). One sent anyway ends nothing: it is answered by the name in its URI — as plain TypeScript when that does not end in `.rtsx` |
+| linked editing of slot tag pairs, and of a tag that has slots | plain pairs work; `editor.linkedEditing` is off by default |
+| code lens (references, implementations) | not advertised: a lens's range is wrong on a declaration that holds rtsx constructs, and its command is filled in by the TypeScript extension's own client. Off by default in VS Code |
 | shorthand inlay hint | `disabled`⟨`={disabled}`⟩ on every bound bare attribute (syntax.md, *Silent flip*) |
 | quick fix for `segment-not-found` | create the file with an empty default component |
 | hover docs on `Switch` / `Match` / `$Case` | they are lowered away; static text |
@@ -369,7 +389,8 @@ from a package when the docs site needs it).
   injection (` ```rtsx `); the commands *Restart server* and *Show
   transpiled TSX*; the *reactogenic: check* task and `$reactogenic` matcher.
 - **Client**: `vscode-languageclient` over stdio; selector language `rtsx`,
-  schemes `file` and `untitled` (not `git:` — the left side of a diff).
+  scheme `file` only — not `untitled:` (an unsaved new file gets highlighting
+  only: *Not in the first release*), not `git:` (the left side of a diff).
 - **Which binary runs**, first match:
 
   | | |
@@ -451,15 +472,18 @@ answer inside `.rtsx` documents — each hover and each TS error twice.
 ## Other editors
 
 `reactogenic lsp --stdio` is a standard server: Neovim (`vim.lsp`), Zed,
-Helix and JetBrains can run it for `*.rtsx`. Highlighting there needs the
-deferred tree-sitter grammar (JetBrains takes the TextMate one).
+Helix and JetBrains can run it for `*.rtsx` files (scheme `file`). A client
+that declares no capability at all is served, and asked nothing;
+`--clientProcessId <pid>` names the editor's process where `initialize`
+does not (*How the process ends*). Highlighting there needs the deferred
+tree-sitter grammar (JetBrains takes the TextMate one).
 
 ## Testing
 
 | Layer | Test |
 | --- | --- |
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
-| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus one smoke scenario through the built binary. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events; it fails the test on a server request it did not answer |
+| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent |
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences |
 | grammar | scope assertions per construct; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo |
 | extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result |

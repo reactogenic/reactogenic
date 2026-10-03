@@ -2,10 +2,15 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"math"
 
+	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/json"
 	"github.com/microsoft/TypeScript/tsc/internal/ls"
+	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
 	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
+	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
 	"github.com/microsoft/TypeScript/tsc/rtsx"
 )
 
@@ -15,9 +20,14 @@ import (
 // ("utf-16" or "utf-8").
 type Syntactic struct{ s *ls.Syntactic }
 
+// documentName is the file name of every syntactic parse. Nothing reads it,
+// and the parser wants a normalized absolute path — which a document's URI
+// (`untitled:new.rtsx`, `file:/single/slash.rtsx`) is not.
+const documentName = "/document.rtsx"
+
 // NewSyntactic parses text as .rtsx.
-func NewSyntactic(fileName, text, encoding string) *Syntactic {
-	return &Syntactic{s: ls.NewSyntactic(rtsx.ParseRTSX(fileName, text), lsproto.PositionEncodingKind(encoding))}
+func NewSyntactic(text, encoding string) *Syntactic {
+	return &Syntactic{s: ls.NewSyntactic(rtsx.ParseRTSX(documentName, text), lsproto.PositionEncodingKind(encoding))}
 }
 
 // FoldingRanges is the result of textDocument/foldingRange.
@@ -36,11 +46,66 @@ func (s *Syntactic) SelectionRanges(positions []byte) ([]byte, error) {
 	if err := json.Unmarshal(positions, &at); err != nil {
 		return nil, err
 	}
+	if err := inRange(at...); err != nil {
+		return nil, err
+	}
 	return json.Marshal(s.s.SelectionRanges(at))
 }
 
 // ClosingTag is the closing tag to insert after a `>` just typed at the
-// position (line and character, zero-based), or "".
-func (s *Syntactic) ClosingTag(line, character int) string {
-	return s.s.ClosingTag(lsproto.Position{Line: uint32(line), Character: uint32(character)})
+// request's `position` (JSON), or "".
+func (s *Syntactic) ClosingTag(position []byte) (string, error) {
+	var at lsproto.Position
+	if err := json.Unmarshal(position, &at); err != nil {
+		return "", err
+	}
+	if err := inRange(at); err != nil {
+		return "", err
+	}
+	return s.s.ClosingTag(at), nil
+}
+
+// inRange refuses a position the server's converters cannot take: they hold
+// lines and characters as int32, and one beyond that would index the line
+// map with a negative number. (A negative one is refused before: it does
+// not decode.)
+func inRange(positions ...lsproto.Position) error {
+	for _, p := range positions {
+		if p.Line > math.MaxInt32 || p.Character > math.MaxInt32 {
+			return fmt.Errorf("position %d:%d is out of range", p.Line, p.Character)
+		}
+	}
+	return nil
+}
+
+// document is a text that is in no program, for the server's converters.
+type document string
+
+func (d document) FileName() string         { return documentName }
+func (d document) OriginalFileName() string { return documentName }
+func (d document) Text() string             { return string(d) }
+func (d document) OriginalText() string     { return string(d) }
+func (document) SpanMap() *spanmap.SpanMap  { return nil }
+
+// ApplyChange applies one ranged content change of textDocument/didChange —
+// `range` as JSON, and the new text — exactly as the server applies it to
+// its own copy of the document: the same line map (a lone `\r` breaks a
+// line), the same clamping of a position past the end of its line. A host
+// that keeps the text of a document stays equal to the server this way. A
+// range the server would reject (a negative position) is an error.
+func ApplyChange(text, encoding string, changeRange []byte, newText string) (string, error) {
+	var r lsproto.Range
+	if err := json.Unmarshal(changeRange, &r); err != nil {
+		return text, err
+	}
+	if err := inRange(r.Start, r.End); err != nil {
+		return text, err
+	}
+	lineMap := lsconv.ComputeLSPLineStarts(text)
+	converters := lsconv.NewConverters(lsproto.PositionEncodingKind(encoding), func(string) *lsconv.LSPLineMap { return lineMap })
+	spans := converters.FromLSPRange(document(text), r, spanmap.FeatureAll)
+	if len(spans) != 1 {
+		return text, fmt.Errorf("a range with %d spans", len(spans))
+	}
+	return core.TextChange{TextRange: spans[0].Span, NewText: newText}.ApplyTo(text), nil
 }

@@ -1760,7 +1760,9 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
 	}
 	s.session.InitializeWithUserConfig(userPreferences)
 
-	_, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
+	if s.embedder != nil { // rtsx: only where the client supports it, and without waiting
+		s.embedder.watchConfiguration(s)
+	} else if _, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
 		Registrations: []*lsproto.Registration{
 			{
 				Id: "typescript-config-watch-id",
@@ -1773,8 +1775,7 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
 				},
 			},
 		},
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("failed to register configuration change watcher: %w", err)
 	}
 

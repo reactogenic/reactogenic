@@ -124,6 +124,13 @@ func TestFeatures(t *testing.T) {
 			t.Errorf("into a .ts file: %q", def)
 		}
 	})
+	t.Run("implementation", func(t *testing.T) {
+		var locations []lsptest.Location
+		c.Request("textDocument/implementation", at("<Button", 1, 2), &locations)
+		if len(locations) != 1 || c.Rel(locations[0].URI) != "src/button.rtsx" || locations[0].Range.String() != "9:17-9:23" {
+			t.Errorf("%+v", locations)
+		}
+	})
 	t.Run("type definition", func(t *testing.T) {
 		var locations []lsptest.Location
 		c.Request("textDocument/typeDefinition", at("options.unit", 1, 1), &locations)
@@ -194,30 +201,47 @@ func TestFeatures(t *testing.T) {
 	})
 	t.Run("auto-import", func(t *testing.T) {
 		c.Change(page, strings.Replace(app[page], "const count = twice(2);", "const count = twice(2); greetin", 1))
-		var list struct {
-			Items []struct {
-				Label string          `json:"label"`
-				Data  json.RawMessage `json:"data"`
-			} `json:"items"`
+		items := c.Completion(page, c.At(page, "greetin", 1, 7))
+		var item *lsptest.CompletionItem
+		for i := range items {
+			if items[i].Label == "greeting" && item == nil {
+				item = &items[i]
+			}
 		}
-		c.Request("textDocument/completion", at("greetin", 1, 7), &list)
-		found := false
-		for _, item := range list.Items {
-			found = found || item.Label == "greeting"
+		if item == nil {
+			t.Fatalf("no auto-import item for an export of util.ts among %d items", len(items))
 		}
-		if !found {
-			t.Errorf("no auto-import item for an export of util.ts among %d items", len(list.Items))
+		// The import is written when the item is accepted: resolved, as the
+		// editor does, and applied with the word completed.
+		c.ApplyTo(page, c.Resolve(*item).AdditionalTextEdits)
+		c.Change(page, strings.Replace(c.Text(page), "; greetin", "; greeting;", 1))
+		if text := c.Text(page); !strings.Contains(text, `import { greeting, twice, type Options } from "./util";`) {
+			t.Errorf("the import written:\n%s", text[:strings.Index(text, "export")])
+		}
+		if got := lsptest.Lines(c.Diagnostics(page)); len(got) != 0 {
+			t.Errorf("after the completion: %q", got)
 		}
 		c.Change(page, app[page])
 	})
 	t.Run("document symbols", func(t *testing.T) {
+		// A tree, as the editor asks for it: the outline.
 		var symbols []struct {
-			Name string `json:"name"`
+			Name           string        `json:"name"`
+			SelectionRange lsptest.Range `json:"selectionRange"`
+			Children       []struct {
+				Name string `json:"name"`
+			} `json:"children"`
 		}
 		c.Request("textDocument/documentSymbol", map[string]any{"textDocument": doc}, &symbols)
 		found := false
 		for _, s := range symbols {
-			found = found || s.Name == "Page"
+			if s.Name == "Page" {
+				children := ""
+				for _, child := range s.Children {
+					children += child.Name + " "
+				}
+				found = s.SelectionRange.String() == "5:17-5:21" && strings.HasPrefix(children, "size count options ")
+			}
 		}
 		if !found {
 			t.Errorf("%+v", symbols)
@@ -249,7 +273,8 @@ func TestFeatures(t *testing.T) {
 		}
 		// A component with slots, a slot element and a Switch: none of them
 		// has an element in the virtual text.
-		for name, lines := range map[string]string{"<Button> with slots": "12-19", "<$Icon>": "13-15", "<Switch>": "20-27", "<$Case>": "21-23"} {
+		// (Whole lines, as the editor folds: the closing tag's line stays.)
+		for name, lines := range map[string]string{"<Button> with slots": "12-18", "<$Icon>": "13-14", "<Switch>": "20-26", "<$Case>": "21-22"} {
 			if !folds[lines] {
 				t.Errorf("%s (lines %s) does not fold: %v", name, lines, folds)
 			}
@@ -290,10 +315,91 @@ func TestFeatures(t *testing.T) {
 		}
 		c.Change(page, app[page])
 	})
+	t.Run("linked editing", func(t *testing.T) {
+		linked := func(needle string, offset int) string {
+			var result *struct {
+				Ranges []lsptest.Range `json:"ranges"`
+			}
+			c.Request("textDocument/linkedEditingRange", at(needle, 1, offset), &result)
+			if result == nil {
+				return "none"
+			}
+			return fmt.Sprint(result.Ranges)
+		}
+		// A plain tag pair. A tag with slots and a slot tag are rebuilt: no
+		// pair, rather than a wrong one (ide.md, *Not in the first release*).
+		for needle, want := range map[string]string{"<main": "[10:6-10:10 28:7-28:11]", "<Button": "none", "<$Icon": "none"} {
+			if got := linked(needle, 2); got != want {
+				t.Errorf("%s: %s, want %s", needle, got, want)
+			}
+		}
+	})
+	t.Run("call hierarchy", func(t *testing.T) {
+		type item struct {
+			Name string `json:"name"`
+			URI  string `json:"uri"`
+		}
+		prepare := func(needle string) json.RawMessage {
+			var items []json.RawMessage
+			c.Request("textDocument/prepareCallHierarchy", at(needle, 1, 1), &items)
+			if len(items) != 1 {
+				t.Fatalf("%s: %d items", needle, len(items))
+			}
+			return items[0]
+		}
+		// Callers: the .tsx module, and Page — at the call's source position.
+		var incoming []struct {
+			From       item            `json:"from"`
+			FromRanges []lsptest.Range `json:"fromRanges"`
+		}
+		c.Request("callHierarchy/incomingCalls", map[string]any{"item": prepare("twice(2")}, &incoming)
+		callers := []string{}
+		for _, call := range incoming {
+			callers = append(callers, fmt.Sprintf("%s %s %v", c.Rel(call.From.URI), strings.TrimPrefix(call.From.Name, c.Root), call.FromRanges))
+		}
+		sort.Strings(callers)
+		if got := strings.Join(callers, ", "); got != "src/main.tsx /src/main.tsx [4:21-4:26], src/page.rtsx Page [7:17-7:22]" {
+			t.Errorf("callers of twice: %s", got)
+		}
+		// Callees: a call in a slot body is the enclosing function's; no
+		// generated call (the slot's render, the Switch) is listed.
+		var outgoing []struct {
+			To item `json:"to"`
+		}
+		c.Request("callHierarchy/outgoingCalls", map[string]any{"item": prepare("Page(")}, &outgoing)
+		callees := []string{}
+		for _, call := range outgoing {
+			callees = append(callees, call.To.Name)
+		}
+		sort.Strings(callees)
+		if got := strings.Join(callees, " "); got != "Button toUpperCase twice" {
+			t.Errorf("callees of Page: %s", got)
+		}
+	})
 	t.Run("code actions", func(t *testing.T) {
-		var actions []json.RawMessage
-		start := c.At(page, "twice(2", 1, 0)
-		c.Request("textDocument/codeAction", map[string]any{"textDocument": doc, "range": map[string]any{"start": start, "end": start}, "context": map[string]any{"diagnostics": []any{}}}, &actions)
+		// A quick fix, as a literal with its edit: the missing import.
+		c.Change(page, strings.Replace(app[page], "const count = twice(2);", "const count = twice(2); greeting;", 1))
+		diagnostics := c.Diagnostics(page)
+		if got := lsptest.Lines(diagnostics); len(got) != 1 || got[0] != "7:27 TS2304" {
+			t.Fatalf("diagnostics: %q", got)
+		}
+		var actions []struct {
+			Title string                `json:"title"`
+			Kind  string                `json:"kind"`
+			Edit  lsptest.WorkspaceEdit `json:"edit"`
+		}
+		c.Request("textDocument/codeAction", map[string]any{"textDocument": doc, "range": diagnostics[0].Range, "context": map[string]any{"diagnostics": diagnostics, "only": []string{"quickfix"}}}, &actions)
+		fixed := false
+		for _, action := range actions {
+			if action.Title == `Update import from "./util"` && action.Kind == "quickfix" && !fixed {
+				c.Apply(action.Edit)
+				fixed = true
+			}
+		}
+		if got := lsptest.Lines(c.Diagnostics(page)); !fixed || len(got) != 0 {
+			t.Errorf("actions %+v; diagnostics after the fix: %q", actions, got)
+		}
+		c.Change(page, app[page])
 	})
 	t.Run("workspace symbols", func(t *testing.T) {
 		var symbols []struct {
@@ -314,31 +420,20 @@ func TestFeatures(t *testing.T) {
 	})
 	t.Run("file rename", func(t *testing.T) {
 		edited := func(oldRel, newRel string) string {
-			var edit struct {
-				Changes map[string][]struct {
-					NewText string `json:"newText"`
-				} `json:"changes"`
-			}
+			var edit lsptest.WorkspaceEdit
 			c.Request("workspace/willRenameFiles", map[string]any{"files": []any{map[string]any{"oldUri": c.URI(oldRel), "newUri": c.URI(newRel)}}}, &edit)
-			var files []string
-			for uri, edits := range edit.Changes {
-				for _, e := range edits {
-					files = append(files, c.Rel(uri)+" "+e.NewText)
-				}
-			}
-			sort.Strings(files)
-			return strings.Join(files, ", ")
+			return strings.Join(c.Edits(edit), ", ")
 		}
 		// A .ts file: its .rtsx importers only; main.tsx is the user's TypeScript's.
-		if got := edited("src/util.ts", "src/helpers.ts"); got != "src/page.rtsx ./helpers" {
+		if got := edited("src/util.ts", "src/helpers.ts"); got != `src/page.rtsx 3:38-3:44 "./helpers"` {
 			t.Errorf("renaming util.ts edits %q", got)
 		}
 		// An .rtsx file: every importer — no other server knows the module —
 		// and without the extension, as the import was written.
-		if got := edited("src/page.rtsx", "src/home.rtsx"); got != "src/main.tsx ./home" {
+		if got := edited("src/page.rtsx", "src/home.rtsx"); got != `src/main.tsx 1:23-1:29 "./home"` {
 			t.Errorf("renaming page.rtsx edits %q", got)
 		}
-		if got := edited("src/button.rtsx", "src/btn.rtsx"); got != "src/page.rtsx ./btn" {
+		if got := edited("src/button.rtsx", "src/btn.rtsx"); got != `src/page.rtsx 2:36-2:44 "./btn"` {
 			t.Errorf("renaming button.rtsx edits %q", got)
 		}
 	})
@@ -409,5 +504,45 @@ func TestAutoImportAtCopyBoundary(t *testing.T) {
 		if !found {
 			t.Errorf("%s: no auto-import among %d items", name, len(list.Items))
 		}
+	}
+}
+
+// The user's settings reach the server (ide.md, *Testing*: the client
+// answers workspace/configuration as VS Code does) — at the start, and when
+// they change.
+func TestSettings(t *testing.T) {
+	returnTypes := func(on bool) map[string]any {
+		return map[string]any{"typescript": map[string]any{"inlayHints": map[string]any{"functionLikeReturnTypes": map[string]any{"enabled": on}}}}
+	}
+	c := lsptest.StartWith(t, lsptest.Project(t, app), serve, lsptest.Options{Settings: returnTypes(true)})
+	const intro = "src/intro.rtsx"
+	c.Open(intro)
+	hints := func() string {
+		var hints []struct {
+			Position lsptest.Position `json:"position"`
+			Label    json.RawMessage  `json:"label"`
+		}
+		whole := map[string]any{"textDocument": map[string]any{"uri": c.URI(intro)}, "range": map[string]any{"start": lsptest.Position{}, "end": lsptest.Position{Line: 3}}}
+		c.Request("textDocument/inlayHint", whole, &hints)
+		out := ""
+		for _, h := range hints {
+			var parts []struct {
+				Value string `json:"value"`
+			}
+			json.Unmarshal(h.Label, &parts)
+			out += fmt.Sprintf("%d:%d", h.Position.Line+1, h.Position.Character+1)
+			for _, part := range parts {
+				out += part.Value
+			}
+			out += "; "
+		}
+		return out
+	}
+	if got := hints(); got != "1:32: Element; " {
+		t.Errorf("hints with return types on: %s", got)
+	}
+	c.Configure(returnTypes(false))
+	if got := hints(); got != "" {
+		t.Errorf("hints with return types off: %s", got)
 	}
 }

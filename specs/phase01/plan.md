@@ -650,6 +650,14 @@ gathers mappers: tsconfig parsing, the session's host, inferred projects.
 `lsp.Embedder` gives the server static capabilities and our server info. All
 three project shapes passed on the first run. `GOWORK=off` builds (CI checks
 it); the binary is 39.6 MB unstripped. Patches 0004–0006.
+Review (4.8, 4.9, 3.6, 3.12): the ends of the process are the front's —
+`exit` in any state, LSP's exit statuses, input that is not LSP reported, a
+watchdog on the client's process (`--clientProcessId`), no goroutine left
+behind. The configuration watcher is registered only with a client that
+declares it, and never awaited. Code lens, `_vs_references` and
+`experimental` are taken out in the bridge; a test holds the capability
+keys to ide.md's table. The test client is VS Code's in what changes a
+server's answers, and a bare connection drives the bad endings.
 The least-proven bet first: the built-in mapper inside the fork's project
 system.
 - Patches (decisions.md, *Patched upstream files*): built-in mappers in
@@ -697,6 +705,14 @@ OPENs of ide.md are settled by patches: specifiers are extensionless
 (0007), and a cursor at the end of copied text maps back exactly, which
 restores auto-import where identifiers are typed. 1,308 requests over typing
 mutants: none fails.
+Review (4.1, 4.2, 4.6, 4.7): the front's parse takes no file name — a
+document's URI is not one, and `untitled:new.rtsx` killed the server — and
+a panic in the front is an error answer. `untitled:` leaves the client's
+selector. An awaited request is forgotten on any answer. A ranged change
+goes through `rtsx/server.ApplyChange`, the server's own line map; one with
+a position no document has is dropped before the server (upstream dies of a
+line beyond int32). Implementation, call hierarchy and linked editing have
+rows in ide.md's table, and scenarios.
 - Folding and selection ranges from the source tree; closing-tag insertion
   (*Tags*); workspace symbols and file rename as in ide.md's table;
   `reactogenic --version`, the same string in `serverInfo` and in the

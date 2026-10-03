@@ -95,10 +95,10 @@ index 0000000..ef08918
 +}
 diff --git a/internal/lsp/embedder.go b/internal/lsp/embedder.go
 new file mode 100644
-index 0000000..47f3521
+index 0000000..f0b2b60
 --- /dev/null
 +++ b/internal/lsp/embedder.go
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,62 @@
 +// Reactogenic: hooks for a host that embeds this server with a built-in
 +// content mapper. Not part of upstream: added by go/patches/0006-rtsx-lsp.patch.
 +
@@ -108,10 +108,11 @@ index 0000000..47f3521
 +	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
 +)
 +
-+// Embedder customizes the server for its host. With one set, the server has
-+// static capabilities only: it registers nothing dynamically for
-+// content-mapped extensions (a client that attaches by language would
-+// otherwise answer every request twice), and it offers no formatting.
++// Embedder customizes the server for its host. With one set, no feature is
++// registered dynamically: nothing for content-mapped extensions (a client
++// that attaches by language would otherwise answer every request twice).
++// Only watching is — files, and the configuration — and only with a client
++// that declared support for it. The server offers no formatting.
 +type Embedder struct {
 +	// Name and Version replace the server info.
 +	Name, Version string
@@ -132,8 +133,36 @@ index 0000000..47f3521
 +		e.Capabilities(c)
 +	}
 +}
++
++// watchConfiguration registers for configuration changes, as upstream does
++// in handleInitialized, with two differences: only with a client that
++// declared workspace.didChangeConfiguration.dynamicRegistration (upstream
++// asks every client), and without waiting for the answer — a client that
++// never answers would otherwise get no reply to any request.
++func (e *Embedder) watchConfiguration(s *Server) {
++	if !s.clientCapabilities.Workspace.DidChangeConfiguration.DynamicRegistration {
++		return
++	}
++	err := s.sendClientRequestFireAndForget(lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
++		Registrations: []*lsproto.Registration{
++			{
++				Id: "typescript-config-watch-id",
++				RegisterOptions: &lsproto.RegisterOptions{
++					WorkspaceDidChangeConfiguration: &lsproto.DidChangeConfigurationRegistrationOptions{
++						Section: &lsproto.StringOrStrings{
++							Strings: &[]string{"js/ts", "typescript", "javascript", "editor"},
++						},
++					},
++				},
++			},
++		},
++	})
++	if err != nil {
++		s.logger.Errorf("failed to register configuration change watcher: %v", err)
++	}
++}
 diff --git a/internal/lsp/server.go b/internal/lsp/server.go
-index 1d32d1e..87b57b6 100644
+index 1d32d1e..dd30ed2 100644
 --- a/internal/lsp/server.go
 +++ b/internal/lsp/server.go
 @@ -55,6 +55,7 @@ type ServerOptions struct {
@@ -179,12 +208,33 @@ index 1d32d1e..87b57b6 100644
  	return response, nil
  }
  
+@@ -1754,7 +1760,9 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
+ 	}
+ 	s.session.InitializeWithUserConfig(userPreferences)
+ 
+-	_, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
++	if s.embedder != nil { // rtsx: only where the client supports it, and without waiting
++		s.embedder.watchConfiguration(s)
++	} else if _, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
+ 		Registrations: []*lsproto.Registration{
+ 			{
+ 				Id: "typescript-config-watch-id",
+@@ -1767,8 +1775,7 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
+ 				},
+ 			},
+ 		},
+-	})
+-	if err != nil {
++	}); err != nil {
+ 		return fmt.Errorf("failed to register configuration change watcher: %w", err)
+ 	}
+ 
 diff --git a/rtsx/server/server.go b/rtsx/server/server.go
 new file mode 100644
-index 0000000..7928a8f
+index 0000000..0d2daf3
 --- /dev/null
 +++ b/rtsx/server/server.go
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,73 @@
 +// Package server runs the language server with whatever content mapper is
 +// registered (rtsx.RegisterMapper) built in (specs/phase01/ide.md,
 +// *reactogenic lsp*). It is its own package so that only a binary that
@@ -199,6 +249,7 @@ index 0000000..7928a8f
 +
 +	"github.com/microsoft/TypeScript/tsc/internal/bundled"
 +	"github.com/microsoft/TypeScript/tsc/internal/lsp"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
 +	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
 +)
 +
@@ -210,6 +261,10 @@ index 0000000..7928a8f
 +	Cwd string
 +	// Name and Version are reported as the server info.
 +	Name, Version string
++	// SetParentProcessID, when set, is called with the processId of the
++	// client's initialize: the process whose end ends the server (upstream's
++	// watchdog hook; the watching itself is the host's).
++	SetParentProcessID func(pid int)
 +}
 +
 +// Run serves LSP until the client exits, In ends or ctx is done. Nothing
@@ -226,8 +281,9 @@ index 0000000..7928a8f
 +		NpmInstall: func(string, []string) ([]byte, error) {
 +			return nil, errors.New("this server does not install packages")
 +		},
-+		ProgressDelay: 250 * time.Millisecond,
-+		Embedder:      &lsp.Embedder{Name: o.Name, Version: o.Version},
++		ProgressDelay:      250 * time.Millisecond,
++		SetParentProcessID: o.SetParentProcessID,
++		Embedder:           &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities},
 +	})
 +	err := s.Run(ctx)
 +	if errors.Is(err, context.Canceled) && ctx.Err() == nil {
@@ -237,20 +293,40 @@ index 0000000..7928a8f
 +	}
 +	return err
 +}
++
++// capabilities takes out what upstream advertises and this server does not
++// offer (specs/phase01/ide.md, the table of *reactogenic lsp*, lists what
++// stays):
++//   - code lens: its ranges are wrong on a declaration that holds mapped
++//     constructs, and the lens's command is filled in by upstream's own VS
++//     Code extension;
++//   - `_vs_references`: Visual Studio's variant of references;
++//   - `experimental`: the custom requests of upstream's VS Code extension
++//     (source definition, multi-document highlights).
++func capabilities(c *lsproto.ServerCapabilities) {
++	c.CodeLensProvider = nil
++	c.VSReferencesProvider = nil
++	c.Experimental = nil
++}
 diff --git a/rtsx/server/syntactic.go b/rtsx/server/syntactic.go
 new file mode 100644
-index 0000000..bc4b018
+index 0000000..1868808
 --- /dev/null
 +++ b/rtsx/server/syntactic.go
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,111 @@
 +package server
 +
 +import (
 +	"context"
++	"fmt"
++	"math"
 +
++	"github.com/microsoft/TypeScript/tsc/internal/core"
 +	"github.com/microsoft/TypeScript/tsc/internal/json"
 +	"github.com/microsoft/TypeScript/tsc/internal/ls"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
 +	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
 +	"github.com/microsoft/TypeScript/tsc/rtsx"
 +)
 +
@@ -260,9 +336,14 @@ index 0000000..bc4b018
 +// ("utf-16" or "utf-8").
 +type Syntactic struct{ s *ls.Syntactic }
 +
++// documentName is the file name of every syntactic parse. Nothing reads it,
++// and the parser wants a normalized absolute path — which a document's URI
++// (`untitled:new.rtsx`, `file:/single/slash.rtsx`) is not.
++const documentName = "/document.rtsx"
++
 +// NewSyntactic parses text as .rtsx.
-+func NewSyntactic(fileName, text, encoding string) *Syntactic {
-+	return &Syntactic{s: ls.NewSyntactic(rtsx.ParseRTSX(fileName, text), lsproto.PositionEncodingKind(encoding))}
++func NewSyntactic(text, encoding string) *Syntactic {
++	return &Syntactic{s: ls.NewSyntactic(rtsx.ParseRTSX(documentName, text), lsproto.PositionEncodingKind(encoding))}
 +}
 +
 +// FoldingRanges is the result of textDocument/foldingRange.
@@ -281,11 +362,66 @@ index 0000000..bc4b018
 +	if err := json.Unmarshal(positions, &at); err != nil {
 +		return nil, err
 +	}
++	if err := inRange(at...); err != nil {
++		return nil, err
++	}
 +	return json.Marshal(s.s.SelectionRanges(at))
 +}
 +
 +// ClosingTag is the closing tag to insert after a `>` just typed at the
-+// position (line and character, zero-based), or "".
-+func (s *Syntactic) ClosingTag(line, character int) string {
-+	return s.s.ClosingTag(lsproto.Position{Line: uint32(line), Character: uint32(character)})
++// request's `position` (JSON), or "".
++func (s *Syntactic) ClosingTag(position []byte) (string, error) {
++	var at lsproto.Position
++	if err := json.Unmarshal(position, &at); err != nil {
++		return "", err
++	}
++	if err := inRange(at); err != nil {
++		return "", err
++	}
++	return s.s.ClosingTag(at), nil
++}
++
++// inRange refuses a position the server's converters cannot take: they hold
++// lines and characters as int32, and one beyond that would index the line
++// map with a negative number. (A negative one is refused before: it does
++// not decode.)
++func inRange(positions ...lsproto.Position) error {
++	for _, p := range positions {
++		if p.Line > math.MaxInt32 || p.Character > math.MaxInt32 {
++			return fmt.Errorf("position %d:%d is out of range", p.Line, p.Character)
++		}
++	}
++	return nil
++}
++
++// document is a text that is in no program, for the server's converters.
++type document string
++
++func (d document) FileName() string         { return documentName }
++func (d document) OriginalFileName() string { return documentName }
++func (d document) Text() string             { return string(d) }
++func (d document) OriginalText() string     { return string(d) }
++func (document) SpanMap() *spanmap.SpanMap  { return nil }
++
++// ApplyChange applies one ranged content change of textDocument/didChange —
++// `range` as JSON, and the new text — exactly as the server applies it to
++// its own copy of the document: the same line map (a lone `\r` breaks a
++// line), the same clamping of a position past the end of its line. A host
++// that keeps the text of a document stays equal to the server this way. A
++// range the server would reject (a negative position) is an error.
++func ApplyChange(text, encoding string, changeRange []byte, newText string) (string, error) {
++	var r lsproto.Range
++	if err := json.Unmarshal(changeRange, &r); err != nil {
++		return text, err
++	}
++	if err := inRange(r.Start, r.End); err != nil {
++		return text, err
++	}
++	lineMap := lsconv.ComputeLSPLineStarts(text)
++	converters := lsconv.NewConverters(lsproto.PositionEncodingKind(encoding), func(string) *lsconv.LSPLineMap { return lineMap })
++	spans := converters.FromLSPRange(document(text), r, spanmap.FeatureAll)
++	if len(spans) != 1 {
++		return text, fmt.Errorf("a range with %d spans", len(spans))
++	}
++	return core.TextChange{TextRange: spans[0].Span, NewText: newText}.ApplyTo(text), nil
 +}
