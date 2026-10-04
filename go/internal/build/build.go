@@ -244,6 +244,13 @@ var rounds = 8
 // stylesheet's own element holds no text there: a sheet is not pruned
 // against itself.
 //
+// Those two elements are the builder's, and the pruner is told which they
+// are (builders): the page's `<script>` is the one whose text it is given —
+// the script was built before the CSS for that — and not "a script of the
+// page's own", which leaves a page unpruned; the `<link>` is the sheet that
+// is pruned, not a stylesheet the builder did not bundle. An author's
+// `<script>` or `<link>` is still the author's.
+//
 // One more round is all it takes, unless a rule selects on the sheet's own
 // URL — which carries the hash of the sheet. Such a page is given its whole
 // sheet after a few rounds: that depends on nothing.
@@ -272,7 +279,8 @@ func prune(opts Options, site []built, sheets []string) (reports []report.Report
 			if round > 0 {
 				head = element(blobs, of[i][0], opts)
 			}
-			served := doctype + document(p.page.HTML, opts.Base, head, element(blobs, of[i][1], opts))
+			body := element(blobs, of[i][1], opts)
+			served := doctype + document(p.page.HTML, opts.Base, head, body)
 			if served == against[i] {
 				continue
 			}
@@ -282,7 +290,7 @@ func prune(opts Options, site []built, sheets []string) (reports []report.Report
 				if err != nil {
 					return nil, err // read before, by Prune
 				}
-				stats.Because = "its rules select on the URL of the stylesheet they are in"
+				stats.Why = "its rules select on the URL of the stylesheet they are in"
 				p.css, p.styles, whole[i] = small(sheets[i]), &stats, true
 				continue
 			}
@@ -290,7 +298,7 @@ func prune(opts Options, site []built, sheets []string) (reports []report.Report
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", p.page.File, err)
 			}
-			pruned, stats, err := cssprune.Prune(sheets[i], doc)
+			pruned, stats, err := cssprune.PruneWith(sheets[i], doc, cssprune.Options{Script: p.js, Builder: builders(doc, head, body)})
 			if err != nil {
 				reports = append(reports, report.Page(p.page.File, p.page.Pathname, "css-bundle", err.Error()))
 				p.css, p.styles, whole[i] = "", nil, true
@@ -316,6 +324,47 @@ func element(blobs []*blob, at int, opts Options) string {
 		b.content = ""
 	}
 	return b.tag(opts.Base, opts.NoSpecialize)
+}
+
+// builders finds in doc, a page as it is served, the elements packaging put
+// there: tags is what it wrote — a blob's element (element), or nothing.
+// The pruner must know them from the page's own (cssprune.Options.Builder):
+// taken for the author's, the builder's `<script>` would leave every page
+// that mounts a behaviour unpruned.
+//
+// An element is the builder's when it is what the builder wrote: the same
+// name, the same attributes, and no text — the pruner's document has the
+// inlined ones empty. An element of the author's that is that too delivers
+// the same blob under the same URL, or nothing at all (an empty `<script>`
+// does not run, an empty `<style>` names nothing): it is rightly taken for
+// one.
+func builders(doc *html.Node, tags ...string) (found []*html.Node) {
+	var wrote []html.Token
+	for _, tag := range tags {
+		z := html.NewTokenizer(strings.NewReader(tag))
+		if z.Next() == html.StartTagToken {
+			wrote = append(wrote, z.Token())
+		}
+	}
+	if len(wrote) == 0 {
+		return nil
+	}
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Namespace == "" {
+			for _, w := range wrote {
+				if n.Data == w.Data && n.FirstChild == nil && slices.Equal(n.Attr, w.Attr) {
+					found = append(found, n)
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return found
 }
 
 // built is a page with what was made for it.

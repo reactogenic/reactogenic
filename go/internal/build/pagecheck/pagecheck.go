@@ -48,7 +48,10 @@ func Check(page render.Page, doc *html.Node, routes []render.Route, files map[st
 			// A template's content is not of the page: its ids are not in
 			// the document, and its references are resolved where it is
 			// cloned (phase 2 emits none).
-			if n.Data == "template" && n.Namespace == "" {
+			// Nor is a noscript's, to a browser that runs scripts — those
+			// the page's behaviours are for: it is text there, whether the
+			// parser that made doc kept it as text or as elements.
+			if (n.Data == "template" || n.Data == "noscript") && n.Namespace == "" {
 				return
 			}
 		}

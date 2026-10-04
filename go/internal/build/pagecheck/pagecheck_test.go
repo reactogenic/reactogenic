@@ -203,6 +203,12 @@ func TestCheck(t *testing.T) {
 			<template><i id="t"></i><i id="t"></i><a href="/gone/">x</a><label for="nope"></label></template>
 			<label for="t"></label>`,
 			[]string{"idref-not-found: `for=\"t\"` on `<label>` names no element of the page"}},
+		// To a browser that runs scripts — every one the page's behaviours
+		// are for — a <noscript> holds text.
+		{"a noscript's content is not of the page", `
+			<noscript><i id="n"></i><i id="n"></i><a href="/gone/">x</a><label for="nope"></label></noscript>
+			<a href="#n">x</a>`,
+			[]string{"idref-not-found: `href=\"#n\"` on `<a>` names no element of the page"}},
 		// As behaviors' mount-no-element has it: getElementById finds it.
 		{"a template itself is an element of the page", `<template id="tp" aria-controls="gone"></template><a href="#tp">x</a><i id="tp"></i>`,
 			[]string{
@@ -297,5 +303,20 @@ func TestRootRelative(t *testing.T) {
 		if got, ok := RootRelative(href); ok {
 			t.Errorf("%q is taken for a root-relative link: %q", href, got)
 		}
+	}
+}
+
+// A <noscript> is read the same however the page was parsed: with scripting
+// off — as a pruner that wants its markup parses it — its content is
+// elements in the tree, and still not of the page.
+func TestNoscript(t *testing.T) {
+	page := render.Page{Route: routes[1], HTML: `<html><head></head><body><noscript><i id="n"></i><i id="n"></i><a href="/gone/">x</a></noscript><a href="#n">x</a></body></html>`}
+	doc, err := html.ParseWithOptions(strings.NewReader(page.HTML), html.ParseOptionEnableScripting(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reports := Check(page, doc, routes, files)
+	if len(reports) != 1 || reports[0].Code != "idref-not-found" || !strings.Contains(reports[0].Message, "`href=\"#n\"`") {
+		t.Errorf("reports: %+v", reports)
 	}
 }

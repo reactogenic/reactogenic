@@ -55,18 +55,27 @@ func TestServed(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := load(t, append([]string{"-p", "served"}, tt.args...)...)
-			for pathname, want := range map[string][]int{"/": tt.home, "/guide/": tt.guide, "/edit/": everything} {
+			for pathname, want := range map[string][]int{"/": tt.home, "/guide/": tt.guide, "/edit/": everything, "/own/": everything} {
 				if got := orders(s.css(t, pathname)); !slices.Equal(got, want) {
 					t.Errorf("%s ships the rules %v, want %v\n%s", pathname, got, want, s.files[s.page(t, pathname).Output])
 				}
 			}
 			// The page the user edits has its whole sheet, and the report
 			// says why.
-			if styles := s.page(t, "/edit/").Styles; styles == nil || !styles.Unpruned || styles.Because != "the page has an element the user edits (`contenteditable`)" || styles.RulesDropped != 0 {
+			if styles := s.page(t, "/edit/").Styles; styles == nil || !styles.Unpruned || styles.Why != "the page has an element the user edits (`contenteditable`)" || styles.RulesDropped != 0 {
 				t.Errorf("/edit/: %+v", styles)
 			}
-			if styles := s.page(t, "/").Styles; styles == nil || styles.Unpruned || styles.Because != "" || styles.Rules != 15 || styles.RulesDropped != 15-len(tt.home) {
+			// The builder's own `<script>` — "/" mounts a behaviour — is
+			// not a script of the page's own: the page is pruned, however
+			// the script is delivered. An author's, beside it, is one.
+			if styles := s.page(t, "/").Styles; styles == nil || styles.Unpruned || styles.Why != "" || styles.Rules != 15 || styles.RulesDropped != 15-len(tt.home) {
 				t.Errorf("/: %+v", styles)
+			}
+			if js := s.js(t, "/"); js == "" || js != s.js(t, "/own/") {
+				t.Errorf("/ and /own/ mount the same behaviour: %q, %q", js, s.js(t, "/own/"))
+			}
+			if styles := s.page(t, "/own/").Styles; styles == nil || !styles.Unpruned || styles.Why != "the page has a script of its own" || styles.RulesDropped != 0 {
+				t.Errorf("/own/: %+v", styles)
 			}
 			// The control ships every rule to every page, whatever is in it.
 			control := load(t, append([]string{"-p", "served", "--no-specialize"}, tt.args...)...)
@@ -96,11 +105,12 @@ func TestServedGivesUp(t *testing.T) {
 			t.Errorf("%s: %+v", p.Pathname, p.Styles)
 		}
 	}
-	if because := s.page(t, "/").Styles.Because; because != "its rules select on the URL of the stylesheet they are in" {
+	if because := s.page(t, "/").Styles.Why; because != "its rules select on the URL of the stylesheet they are in" {
 		t.Errorf("/: because %q", because)
 	}
-	// The three sheets are one now: a file for the site.
-	if len(s.report.Blobs) != 2 || len(s.report.Blobs[0].Pages)+len(s.report.Blobs[1].Pages) != 4 {
+	// The four sheets are one now: a file for the site. And the one script,
+	// of the two pages that mount.
+	if len(s.report.Blobs) != 2 || len(s.report.Blobs[0].Pages)+len(s.report.Blobs[1].Pages) != 6 {
 		t.Errorf("blobs: %+v", s.report.Blobs)
 	}
 }

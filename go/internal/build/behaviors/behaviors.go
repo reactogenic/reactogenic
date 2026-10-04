@@ -85,8 +85,8 @@ const Runtime = "<runtime>"
 // then esbuild's helpers if there are any: the bytes add up to the script.
 //
 // The reports are mount-not-found, mount-no-element (an id is looked up in
-// page.HTML), mount-flag, mount-side-effect and mount-error; with any, there
-// is no script.
+// page.HTML), mount-kind, mount-flag, mount-side-effect and mount-error; with
+// any, there is no script.
 func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, reports []report.Report) {
 	opts = opts.resolved()
 	p := planOf(page)
@@ -373,6 +373,32 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 		said[key] = true
 		return first
 	}
+	// A behaviour is of an element or of the page (builder.md, *Behaviours*,
+	// module): per module — the file, however the mounts spell it — the
+	// first id it is mounted on, and whether it is mounted without one.
+	type kind struct {
+		id   string
+		page bool
+	}
+	kinds := map[string]*kind{}
+	module := func(m render.Mount) string {
+		if file := mods[slices.Index(p.specs, m.Module)].file; file != "" {
+			return "\x00file\x00" + file
+		}
+		return m.Module
+	}
+	for _, m := range page.Mounts {
+		k := kinds[module(m)]
+		if k == nil {
+			k = &kind{}
+			kinds[module(m)] = k
+		}
+		if m.ID == "" {
+			k.page = true
+		} else if k.id == "" {
+			k.id = m.ID
+		}
+	}
 	for _, m := range page.Mounts {
 		mod := mods[slices.Index(p.specs, m.Module)]
 		mount := fmt.Sprintf("`mount(%q)`", m.Module)
@@ -391,6 +417,11 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 		}
 		if m.ID != "" && !ids[m.ID] && once(m.Module+"\x00id\x00"+m.ID) {
 			reports = append(reports, report.Page(page.File, page.Pathname, "mount-no-element", fmt.Sprintf("%s: no element of the page has `id=%q`", mount, m.ID)))
+		}
+		// Its page-level call would hand the function no root: a TypeError
+		// that ends the script, and every mount after it.
+		if k := kinds[module(m)]; k.page && k.id != "" && once(module(m)+"\x00kind") {
+			reports = append(reports, report.Page(page.File, page.Pathname, "mount-kind", fmt.Sprintf("%s: the module is mounted on an element (`%s`) and without one: a behaviour is of an element or of the page", mount, k.id)))
 		}
 		if mod.flags == nil {
 			continue // not read: its flags are not known

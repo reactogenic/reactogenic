@@ -413,7 +413,14 @@ func TestPrune(t *testing.T) {
 // esbuild reads the output.
 func checkPruned(t testing.TB, css, out string, doc *html.Node) {
 	t.Helper()
-	again, stats, err := Prune(out, doc)
+	checkPrunedWith(t, css, out, doc, Options{})
+}
+
+// checkPrunedWith is checkPruned for a page with what the builder made for
+// it: its script, the elements packaging wrote.
+func checkPrunedWith(t testing.TB, css, out string, doc *html.Node, opts Options) {
+	t.Helper()
+	again, stats, err := PruneWith(out, doc, opts)
 	if err != nil {
 		t.Fatalf("the output does not read: %v\n%s", err, out)
 	}
@@ -536,7 +543,7 @@ func TestPruneTemplate(t *testing.T) {
 		"contenteditable, a value of its own": {parsePage(t, `<p class="a"></p><div contenteditable="yes">notes</div>`), "the page has an element the user edits (`contenteditable`)"},
 	} {
 		out, stats := mustPrune(t, css, tt.doc)
-		if out != css || !stats.Unpruned || stats.Because != tt.because || stats.BytesOut != len(css) || stats.Rules != 3 || stats.Selectors != 3 || stats.RulesDropped != 0 {
+		if out != css || !stats.Unpruned || stats.Why != tt.because || stats.BytesOut != len(css) || stats.Rules != 3 || stats.Selectors != 3 || stats.RulesDropped != 0 {
 			t.Errorf("%s: pruned: %q %+v", name, out, stats)
 		}
 	}
@@ -546,7 +553,7 @@ func TestPruneTemplate(t *testing.T) {
 		"another case, and space": `<p class="a"></p><div contenteditable=" FALSE ">notes</div>`,
 		"a data attribute":        `<p class="a"></p><div data-contenteditable="true">notes</div>`,
 	} {
-		if out, stats := mustPrune(t, css, parsePage(t, page)); out != `.a{x:y}` || stats.Unpruned || stats.Because != "" {
+		if out, stats := mustPrune(t, css, parsePage(t, page)); out != `.a{x:y}` || stats.Unpruned || stats.Why != "" {
 			t.Errorf("%s: %q %+v", name, out, stats)
 		}
 	}

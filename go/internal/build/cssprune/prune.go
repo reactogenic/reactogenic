@@ -21,16 +21,29 @@
 //   - The page is served as it was parsed: the document given is the file
 //     that is written — with the base in its links, and with the <style> or
 //     <link> and the <script> the driver puts in it, which a rule may select
-//     as any other element (the driver's own <style> empty: a sheet is not
-//     pruned against itself). Parse it with its doctype: the builder writes
+//     as any other element. Parse it with its doctype: the builder writes
 //     `<!doctype html>`, which makes classes and ids case-sensitive. Without
 //     exactly that doctype the page may be in quirks mode, and they are
 //     matched whatever their case.
-//   - No script adds a class, a data-* attribute or an element
-//     (components.md, *CSS convention*): state is written only where it is
-//     "maybe". Where the browser's tree is not the one written — <template>,
-//     <noscript>, <selectedcontent>, markup inside a <select>, an element
-//     the user edits (`contenteditable`) — the page is not pruned.
+//   - The elements the builder put into the page are named (Options.Builder),
+//     and are not the page's own: the builder's <script> is not "a script of
+//     its own" — its text is Options.Script — and its <link> or <style> is
+//     the sheet that is pruned, not another, and is not read: a sheet is not
+//     pruned against itself.
+//   - The page's built script is given with it (PruneWith): what it names
+//     — a class, an id, an attribute, a custom property, an animation — is
+//     "maybe" too, and a script that changes the tree leaves the page
+//     unpruned. A name the script computes (`"is-" + state`) is not seen:
+//     a behaviour names what it writes (builder.md, *Behaviours*). Without
+//     the script, nothing may write but the attributes that are "maybe".
+//   - A script of the page's own — a <script> the builder did not put there,
+//     an event handler attribute, a `javascript:` URL — is not read: the page
+//     is not pruned. Nor is it where the browser's tree is not the one
+//     written — <template>, <noscript>, <selectedcontent>, markup inside a
+//     <select>, an element the user edits (`contenteditable`).
+//   - A stylesheet the builder did not bundle — a <link> of the page's own,
+//     an @import — may read any custom property and name any animation or
+//     @position-try: they all stay.
 //   - The sheet is valid where validity is positional: an @import or a
 //     @namespace that follows a rule is dead, and stays dead — everything
 //     before it is kept as it is.
@@ -81,6 +94,7 @@ package cssprune
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -97,12 +111,14 @@ type Stats struct {
 	Properties        int // custom property declarations dropped
 	Keyframes         int // @keyframes dropped
 	PositionTries     int // @position-try dropped
-	// Unpruned: the page holds a <template>, a <noscript>, a
-	// <selectedcontent>, a <select> with more than options in it or an
-	// element the user edits, and the sheet came back as it was. Because
-	// says which, as the report words it: "the page has a <template>".
+	// Unpruned: the sheet came back as it was. The page holds a <template>,
+	// a <noscript>, a <selectedcontent>, a <select> with more than options
+	// in it or an element the user edits; or a script of its own; or its
+	// script changes the tree.
 	Unpruned bool
-	Because  string
+	// Why says which, as the report words it: "the page has a <template>".
+	// "" for a page that was pruned.
+	Why string
 	// Sources is the same per source file, when the sheet names them:
 	// esbuild writes `/* path/to/file.css */` before each file of a bundle
 	// unless it minifies whitespace. Empty otherwise.
@@ -120,14 +136,55 @@ type Source struct {
 // Prune returns css without what doc, the parsed page, cannot use. An error
 // means the CSS could not be read (an unbalanced bracket, an unterminated
 // string): nothing was pruned, and out is empty.
+//
+// It is PruneWith for a page without a script.
 func Prune(css string, doc *html.Node) (out string, stats Stats, err error) {
-	return new(pruner).prune(css, doc)
+	return PruneWith(css, doc, Options{})
+}
+
+// Options is what a page has besides its HTML.
+type Options struct {
+	// Script is the page's built script (behaviors.Build); "" for a page
+	// that mounts nothing. A behaviour changes the page after it has loaded,
+	// so what the script names is runtime state (builder.md, CSS): a class,
+	// an id or an attribute it names is "maybe", a custom property or an
+	// animation it names is read; and when it names an API that changes the
+	// tree, the page is not pruned.
+	Script string
+	// Builder is the elements of doc that packaging put there: the
+	// `<script>` that delivers Script, the `<style>` or `<link>` that
+	// delivers the sheet being pruned. A rule may select them as any other
+	// element, and that is all they are to the pruner: such a `<script>` is
+	// not a script of the page's own, such a `<link>` is not a stylesheet
+	// the builder did not bundle, and such a `<style>` is not read for the
+	// names it uses. Every other `<script>`, `<link>` and `<style>` of doc
+	// is the author's.
+	Builder []*html.Node
+}
+
+// PruneWith is Prune for a page and what the builder made for it. doc is
+// the page as it is served (builder.md, *CSS*): a `<script>` in it that
+// Options.Builder does not name is the page's own, and such a page is not
+// pruned.
+func PruneWith(css string, doc *html.Node, opts Options) (out string, stats Stats, err error) {
+	return newPruner(opts).prune(css, doc)
+}
+
+func newPruner(opts Options) *pruner {
+	p := &pruner{script: opts.Script}
+	if len(opts.Builder) > 0 {
+		p.builder = make(map[*html.Node]bool, len(opts.Builder))
+		for _, n := range opts.Builder {
+			p.builder[n] = true
+		}
+	}
+	return p
 }
 
 // Whole is what Prune says of a sheet it gives back as it is, for a caller
 // that has a reason of its own not to prune a page (the driver: a sheet
 // whose rules select on its own URL): the sheet is read and counted. The
-// caller says why, in Because.
+// caller says why, in Why.
 func Whole(css string) (Stats, error) {
 	stats := Stats{BytesIn: len(css), BytesOut: len(css), Unpruned: true}
 	rules, err := parseRules(css, false, 0)
@@ -139,9 +196,19 @@ func Whole(css string) (Stats, error) {
 }
 
 type pruner struct {
-	m     matcher
-	stats Stats
-	anon  int // anonymous layers seen in this round
+	m      matcher
+	stats  Stats
+	anon   int    // anonymous layers seen in this round
+	script string // Options.Script
+
+	// builder: Options.Builder — the elements that are the builder's, not
+	// the page's own.
+	builder map[*html.Node]bool
+
+	// other: a stylesheet the builder did not bundle is on the page — a
+	// <link>, an @import. It may read any custom property and name any
+	// animation or @position-try.
+	other bool
 
 	// What the page itself names: in attributes (style, SVG's presentation
 	// attributes) and in <style> elements.
@@ -165,18 +232,23 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 		return "", p.stats, fmt.Errorf("cssprune: %w", err)
 	}
 	if why := p.page(doc); why != "" {
-		p.stats.Unpruned, p.stats.Because, p.stats.BytesOut = true, "the page has "+why, len(css)
+		p.stats.Unpruned, p.stats.Why, p.stats.BytesOut = true, why, len(css)
 		p.stats.Rules, p.stats.Selectors = count(rules)
 		return css, p.stats, nil
 	}
 	freeze(rules)
 	p.selectors(rules, false)
+	p.other = p.other || imports(rules)
 	// Custom properties and @keyframes, to a fixed point: dropping one may
 	// empty a rule, which may empty an at-rule, whose prelude was the last
-	// to name another. So for @position-try.
+	// to name another. So for @position-try. With a sheet that is not here,
+	// nothing says what is read: none is dropped.
 	for {
 		p.anon = 0
 		p.resolve(rules, "", &layers{})
+		if p.other {
+			break
+		}
 		r := refs{dashed: maps.Clone(p.named.dashed), words: maps.Clone(p.named.words)}
 		p.collect(rules, &r)
 		if !p.sweep(rules, &r) {
@@ -214,7 +286,7 @@ func (p *pruner) page(doc *html.Node) (why string) {
 			why = because
 		}
 	}
-	const markup = "markup in a <select>"
+	const markup = "the page has markup in a <select>"
 	// in: 1 inside a <select>, 2 inside one of its options, where the older
 	// parser keeps text only.
 	var walk func(n *html.Node, in int)
@@ -224,41 +296,59 @@ func (p *pruner) page(doc *html.Node) (why string) {
 				p.m.root = n
 			}
 			p.m.els = append(p.m.els, n)
+			plain := true // an element like any other: not one a <select> may hold
 			switch tag := strings.ToLower(n.Data); tag {
 			case "template", "noscript", "selectedcontent":
-				not("a <" + tag + ">")
-			case "option", "optgroup", "hr", "script":
-				if in >= 2 {
+				not("the page has a <" + tag + ">")
+			case "script":
+				// A script of the page's own: what it writes is not known.
+				// The builder's is the one that was read (Options.Script).
+				if !p.builder[n] && runs(n) {
+					not(ownScript)
+				}
+				plain = false
+			case "option":
+				if plain = false; in == 1 {
+					in = 2
+				} else if in == 2 {
 					not(markup)
 				}
-				if in == 1 && tag == "option" {
-					in = 2
-				}
+			case "optgroup", "hr":
+				plain = false
 			case "select":
 				if in != 0 {
 					not(markup)
 				}
-				in = 1
+				plain, in = false, 1
 			case "style":
-				for c := n.FirstChild; c != nil; c = c.NextSibling {
+				// The builder's own holds the sheet that is pruned: what a
+				// sheet names is no reason to keep it.
+				for c := n.FirstChild; c != nil && !p.builder[n]; c = c.NextSibling {
 					if c.Type == html.TextNode {
 						p.named.all(c.Data)
+						p.other = p.other || strings.Contains(strings.ToLower(c.Data), "@import")
 					}
 				}
-				fallthrough
-			default:
-				if in != 0 {
-					not(markup)
+			case "link":
+				// The builder's own is the sheet that is pruned, not another.
+				if rel, _ := attribute(n, "rel"); !p.builder[n] && slices.ContainsFunc(strings.Fields(rel), func(r string) bool { return strings.EqualFold(r, "stylesheet") }) {
+					p.other = true
 				}
+			}
+			if in != 0 && (plain || in == 2 && n.Data != "option") {
+				not(markup)
 			}
 			for _, a := range n.Attr {
 				if a.Key == "style" || strings.Contains(a.Val, "--") {
 					p.named.all(a.Val)
 				}
+				if handler(a.Key) || urlAttribute[strings.ToLower(a.Key)] && javascriptURL(a.Val) {
+					not(ownScript)
+				}
 				// Any value but "false" is taken for editable: an unknown
 				// one inherits, and what it inherits is not looked up.
 				if a.Namespace == "" && a.Key == "contenteditable" && !strings.EqualFold(strings.TrimSpace(a.Val), "false") {
-					not("an element the user edits (`contenteditable`)")
+					not("the page has an element the user edits (`contenteditable`)")
 				}
 			}
 		}
@@ -268,7 +358,83 @@ func (p *pruner) page(doc *html.Node) (why string) {
 	}
 	walk(doc, 0)
 	p.m.memo = map[memoKey]tri{}
+	if why == "" && p.script != "" {
+		p.m.script = scriptNames(p.script)
+		if p.m.script.changesTree() {
+			not("the page's script changes the tree")
+		}
+		for name := range p.m.script.words {
+			p.named.words[name] = true
+			if strings.HasPrefix(name, "--") {
+				p.named.dashed[name] = true
+			}
+		}
+	}
 	return why
+}
+
+const ownScript = "the page has a script of its own"
+
+// runs reports whether a <script> element is one a browser executes: a
+// classic script, a module — not a data block (`application/ld+json`, an
+// import map), and not an element with no source and nothing in it.
+func runs(script *html.Node) bool {
+	if kind, typed := attribute(script, "type"); typed {
+		switch kind = strings.ToLower(strings.TrimSpace(kind)); {
+		case kind == "" || kind == "module":
+		case strings.Contains(kind, "javascript") || strings.Contains(kind, "ecmascript") ||
+			strings.Contains(kind, "jscript") || strings.Contains(kind, "livescript"):
+		default:
+			return false
+		}
+	}
+	// `xlink:href`, of SVG's script, among them.
+	for _, a := range script.Attr {
+		if k := strings.ToLower(a.Key); k == "src" || k == "href" {
+			return true
+		}
+	}
+	for c := script.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// handler reports whether an attribute may be an event handler: `on` and a
+// name. More than the handlers there are — `<x-list once>` is not one — and
+// that is the safe side.
+func handler(key string) bool {
+	return len(key) > 2 && (key[0] == 'o' || key[0] == 'O') && (key[1] == 'n' || key[1] == 'N')
+}
+
+// The attributes that hold a URL a browser may run.
+var urlAttribute = set("href", "src", "action", "formaction", "data", "ping", "poster", "background", "cite", "longdesc", "manifest")
+
+// javascriptURL: a URL parser drops leading spaces and controls, and tabs
+// and line breaks wherever they are.
+func javascriptURL(value string) bool {
+	value = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return -1
+		}
+		return r
+	}, value)
+	value = strings.TrimLeftFunc(value, func(r rune) bool { return r <= ' ' })
+	const scheme = "javascript:"
+	return len(value) >= len(scheme) && strings.EqualFold(value[:len(scheme)], scheme)
+}
+
+// imports reports whether the sheet still imports another: one the builder
+// did not bundle.
+func imports(rules []*rule) bool {
+	for _, r := range rules {
+		if r.kind == kAt && r.name == "import" || (r.kind == kGroup || r.kind == kLayer) && imports(r.rules) {
+			return true
+		}
+	}
+	return false
 }
 
 // standards reports whether the page is surely not in quirks mode: it starts

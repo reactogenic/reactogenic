@@ -76,11 +76,58 @@ func bundle(t testing.TB, entry string, minify bool) string {
 	return string(r.OutputFiles[0].Contents)
 }
 
-// page is one page of the corpus, as written and parsed.
+// page is one page of the corpus, as written and parsed. A page the builder
+// built is given as the driver gives it: with its script, and with the
+// elements packaging wrote named as the builder's (Options).
 type page struct {
 	name string
 	src  string
 	doc  *html.Node
+	opts Options
+}
+
+// built is what the driver says of a page it built, read back from the
+// output: the elements that deliver a blob of `_rg/`, and the script among
+// them. Without it such a page is one with a script of its own — unpruned —
+// and with a stylesheet nobody bundled.
+func built(t testing.TB, file string, doc *html.Node) (opts Options) {
+	t.Helper()
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			for _, a := range n.Attr {
+				// Under a base too: `/docs/_rg/page-….js`.
+				at := strings.Index(a.Val, "/_rg/page-")
+				if at < 0 || a.Key != "src" && a.Key != "href" {
+					continue
+				}
+				opts.Builder = append(opts.Builder, n)
+				if n.Data == "script" {
+					out := filepath.Dir(file)
+					for !isDir(filepath.Join(out, "_rg")) {
+						if out = filepath.Dir(out); out == "." || out == string(filepath.Separator) {
+							t.Fatalf("%s: no _rg/ above it", file)
+						}
+					}
+					script, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(a.Val[at+1:])))
+					if err != nil {
+						t.Fatal(err)
+					}
+					opts.Script = string(script)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return opts
+}
+
+func isDir(name string) bool {
+	info, err := os.Stat(name)
+	return err == nil && info.IsDir()
 }
 
 // loadPages reads a sheet's pages. A page with a <template> is not pruned,
@@ -97,7 +144,8 @@ func loadPages(t testing.TB, s sheet) []page {
 		if name == "index" { // a built page: named by its directory, `out` for "/"
 			name = filepath.Base(filepath.Dir(file))
 		}
-		out = append(out, page{name, string(src), parsePage(t, string(src))})
+		doc := parsePage(t, string(src))
+		out = append(out, page{name, string(src), doc, built(t, file, doc)})
 		if strings.Contains(string(src), "<template") {
 			doc := parsePage(t, string(src))
 			var strip func(n *html.Node)
@@ -117,7 +165,7 @@ func loadPages(t testing.TB, s sheet) []page {
 			if err := html.Render(&b, doc); err != nil {
 				t.Fatal(err)
 			}
-			out = append(out, page{name + " (no template)", b.String(), doc})
+			out = append(out, page{name + " (no template)", b.String(), doc, Options{}})
 		}
 	}
 	return out
@@ -188,7 +236,7 @@ func TestCorpusSound(t *testing.T) {
 					return false, ok
 				}
 
-				var p pruner
+				p := newPruner(pg.opts)
 				p.onSelector = func(sel string, scoped bool) {
 					n.dropped++
 					matched, ok := matches(sel, scoped)
@@ -210,28 +258,30 @@ func TestCorpusSound(t *testing.T) {
 				if err != nil {
 					t.Fatalf("%s: %v", name, err)
 				}
-				// React writes the attribute as `contentEditable="true"`.
-				if (strings.Contains(pg.src, "<template") || strings.Contains(strings.ToLower(pg.src), "contenteditable")) != stats.Unpruned {
-					t.Errorf("%s: Unpruned = %v", name, stats.Unpruned)
+				// React writes the attribute as `contentEditable="true"`. A
+				// script of the author's is a plain `<script>`; the builder's
+				// is a module, and named (built).
+				if (strings.Contains(pg.src, "<template") || strings.Contains(strings.ToLower(pg.src), "contenteditable") || strings.Contains(pg.src, "<script>")) != stats.Unpruned {
+					t.Errorf("%s: Unpruned = %v (%s)", name, stats.Unpruned, stats.Why)
 				}
 				if stats.Unpruned {
 					if out != css {
-						t.Errorf("%s: a page with a <template>, or one the user edits, was pruned", name)
+						t.Errorf("%s: a page with a <template>, one the user edits or one with a script of its own was pruned", name)
 					}
 					continue
 				}
-				checkPruned(t, css, out, pg.doc)
+				checkPrunedWith(t, css, out, pg.doc, pg.opts)
 
 				// A @position-try dropped is named nowhere in what is left,
 				// nor in the page.
 				for _, try := range tries {
-					if word(out, try) || word(pg.src, try) {
+					if word(out, try) || word(pg.src, try) || word(pg.opts.Script, try) {
 						t.Errorf("%s: dropped @position-try %s, which is still named", name, try)
 					}
 				}
 
 				for _, prop := range props {
-					if word(out, prop) || word(pg.src, prop) {
+					if word(out, prop) || word(pg.src, prop) || word(pg.opts.Script, prop) {
 						t.Errorf("%s: dropped %s, which is still named", name, prop)
 					}
 				}
@@ -241,7 +291,7 @@ func TestCorpusSound(t *testing.T) {
 							t.Errorf("%s: dropped @keyframes %s, which %q names", name, frame, m[0])
 						}
 					}
-					if word(pg.src, frame) {
+					if word(pg.src, frame) || word(pg.opts.Script, frame) {
 						t.Errorf("%s: dropped @keyframes %s, which the page names", name, frame)
 					}
 				}
@@ -324,13 +374,16 @@ func TestCorpusBytes(t *testing.T) {
 			write(t, filepath.Join(dir, s.name, "bundle.css"), css)
 		}
 		for _, pg := range loadPages(t, s) {
-			out, stats := mustPrune(t, css, pg.doc)
+			out, stats, err := PruneWith(css, pg.doc, pg.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if !stats.Unpruned {
 				out = lower(t, out, true)
 			}
 			note := ""
 			if stats.Unpruned {
-				note = "  unpruned: " + stats.Because
+				note = "  unpruned: " + stats.Why
 			}
 			t.Logf("%-12s %-22s %7d %6d %5d%%%s  (rules %d-%d, selectors %d-%d, custom properties -%d, @keyframes -%d, @position-try -%d)",
 				"", pg.name, len(out), gz(out), 100*gz(out)/gz(css), note,

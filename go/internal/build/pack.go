@@ -74,10 +74,17 @@ func pack(site []built, inline string) (blobs []*blob, of [][2]int, err error) {
 	return blobs, of, nil
 }
 
+// request is what a file costs over its content, in bytes: the headers of
+// its request and response (builder.md, *Packaging*: 180–330 B, 250 B in the
+// research's tables).
+const request = 250
+
 // asFile is the `--inline` rule (builder.md, *Packaging*). It is about
-// caching, not size: a file costs a request's headers, so a blob one page
-// uses is cheaper inline, and one many pages share is cheaper as a file from
-// the second page on — when it is large enough to pay for the request.
+// caching, not size: a file costs a request, so a blob one page uses is
+// cheaper inline, and one that pages share is cheaper as a file from a
+// visitor's second page on — when it is larger than the request, as it is
+// sent: gzipped. How many pages share it beyond two does not count: the
+// builder knows the site's pages, not a visitor's.
 func asFile(b *blob, inline string) bool {
 	if !inlinable(b) {
 		return true
@@ -88,7 +95,7 @@ func asFile(b *blob, inline string) bool {
 	case InlineNever:
 		return true
 	}
-	return len(b.pages) > 1 && (len(b.pages)-1)*len(b.content) > 1024
+	return len(b.pages) > 1 && sizeOf(b.content).Gzip > request
 }
 
 // inlinable: the content can stand inside its element. HTML ends a `<style>`

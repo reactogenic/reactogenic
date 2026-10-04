@@ -26,7 +26,7 @@
         "raw": 87,
         "gzip": 105,
         "delivery": "inline",
-        "pages": 1,
+        "pages": 2,
         "blob": "f561d7b7"
       },
       "components": [
@@ -95,7 +95,7 @@
         "raw": 349,
         "gzip": 184,
         "delivery": "inline",
-        "pages": 1,
+        "pages": 2,
         "blob": "03fa1053"
       },
       "components": [
@@ -111,7 +111,7 @@
       "mounts": [],
       "styles": {
         "unpruned": true,
-        "because": "the page has an element the user edits (`contenteditable`)",
+        "why": "the page has an element the user edits (`contenteditable`)",
         "rules": 15,
         "rulesDropped": 0,
         "selectors": 17,
@@ -170,6 +170,76 @@
           }
         ]
       }
+    },
+    {
+      "pathname": "/own/",
+      "file": "pages/own/index.rtsx",
+      "output": "own/index.html",
+      "document": {
+        "raw": 677,
+        "gzip": 378
+      },
+      "html": {
+        "raw": 195,
+        "gzip": 162
+      },
+      "css": {
+        "raw": 349,
+        "gzip": 184,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "03fa1053"
+      },
+      "js": {
+        "raw": 87,
+        "gzip": 105,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "f561d7b7"
+      },
+      "components": [
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "Marked",
+          "count": 1
+        },
+        {
+          "name": "OwnPage",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "./behaviors/mark",
+          "id": "marked"
+        }
+      ],
+      "modules": [
+        {
+          "module": "./behaviors/mark",
+          "path": "behaviors/mark.ts",
+          "bytes": 50
+        },
+        {
+          "path": "<entry>",
+          "bytes": 37
+        }
+      ],
+      "styles": {
+        "unpruned": true,
+        "why": "the page has a script of its own",
+        "rules": 15,
+        "rulesDropped": 0,
+        "selectors": 17,
+        "selectorsDropped": 0,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": []
+      }
     }
   ],
   "blobs": [
@@ -194,7 +264,8 @@
       },
       "delivery": "inline",
       "pages": [
-        "/"
+        "/",
+        "/own/"
       ]
     },
     {
@@ -206,7 +277,8 @@
       },
       "delivery": "inline",
       "pages": [
-        "/edit/"
+        "/edit/",
+        "/own/"
       ]
     },
     {

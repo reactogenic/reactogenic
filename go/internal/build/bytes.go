@@ -97,8 +97,8 @@ type Module struct {
 
 // Styles is cssprune.Stats.
 type Styles struct {
-	Unpruned         bool     `json:"unpruned,omitempty"` // the page's CSS is whole, and Because says why: "the page has a <template>"
-	Because          string   `json:"because,omitempty"`
+	Unpruned         bool     `json:"unpruned,omitempty"` // the page's CSS is whole, and Why says why: "the page has a <template>"
+	Why              string   `json:"why,omitempty"`
 	Rules            int      `json:"rules"`
 	RulesDropped     int      `json:"rulesDropped"`
 	Selectors        int      `json:"selectors"`
@@ -208,7 +208,7 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 		}
 		if s := p.styles; s != nil {
 			page.Styles = &Styles{
-				Unpruned: s.Unpruned, Because: s.Because, Rules: s.Rules, RulesDropped: s.RulesDropped,
+				Unpruned: s.Unpruned, Why: s.Why, Rules: s.Rules, RulesDropped: s.RulesDropped,
 				Selectors: s.Selectors, SelectorsDropped: s.SelectorsDropped,
 				Properties: s.Properties, Keyframes: s.Keyframes, PositionTries: s.PositionTries, Sources: []Source{},
 			}
@@ -364,7 +364,7 @@ func (r *Report) Print(w io.Writer) {
 		if s := p.Styles; s != nil {
 			var sources []string
 			if s.Unpruned {
-				sources = append(sources, "not pruned: "+s.Because)
+				sources = append(sources, "not pruned: "+s.Why)
 			}
 			for _, src := range s.Sources {
 				sources = append(sources, fmt.Sprintf("%3d kept, %3d dropped  %s", src.Rules-src.RulesDropped, src.RulesDropped, src.File))

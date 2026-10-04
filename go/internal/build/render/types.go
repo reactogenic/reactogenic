@@ -3,7 +3,8 @@
 //
 // The pages are bundled by esbuild from the program — its resolutions, its
 // texts — with React's static renderer (bundle.go), and executed in an
-// embedded engine, one per build (engine.go). What a page throws is reported
+// embedded engine, a runtime per page (engine.go): a page's bytes do not
+// depend on the pages rendered before it. What a page throws is reported
 // where the author wrote it (position.go).
 package render
 
@@ -41,4 +42,8 @@ type Options struct {
 	// end — and, the same, the bundle that does not finish loading. 0: thirty
 	// seconds.
 	Timeout time.Duration
+	// Memory ends a page that takes more than that many bytes — a loop that
+	// keeps what it makes fills the machine's memory long before the
+	// timeout. 0: one gibibyte.
+	Memory uintptr
 }

@@ -307,6 +307,7 @@ func TestShellErrors(t *testing.T) {
 		"pages/pragma/index.tsx:7:31 error shell-handler",                // under `@jsxImportSource react`
 		"pages/random/index.rtsx:4:25 error shell-nondeterministic",      // `random`
 		"pages/recursion/index.rtsx:4:10 error shell-error",              // the call that never returns
+		"pages/shell-id/index.tsx:6:14 error shell-error",                // `useShellId` of useShellId("d1"): `d11` would be two ids
 		"pages/spread/index.rtsx:6:22 error shell-handler",               // `<input {...props}>`: the element
 		"pages/throws/index.rtsx:8:15 error shell-error",                 // `Error` of `throw new Error(…)`
 		"pages/type-error/index.rtsx:10:27 error shell-error",            // after three characters outside the BMP: columns are characters

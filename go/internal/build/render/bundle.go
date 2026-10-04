@@ -79,10 +79,10 @@ func entry(routes []Route, v variant) string {
 	var b strings.Builder
 	if v.plain {
 		b.WriteString("import { createElement as root } from \"react\";\n")
-		b.WriteString("const start = () => {}, components = () => ({}), owners = () => ({});\n")
+		b.WriteString("const start = () => {}, components = () => ({}), owners = () => ({}), swallowed = () => null;\n")
 	} else {
 		b.WriteString("import \"" + namespace + ":sandbox\";\n")
-		b.WriteString("import { components, owners, root, start } from \"" + jsxModule + "\";\n")
+		b.WriteString("import { components, owners, root, start, swallowed } from \"" + jsxModule + "\";\n")
 	}
 	b.WriteString("import { renderToStaticMarkup } from \"" + namespace + ":renderer\";\n")
 	for i, route := range routes {
@@ -112,6 +112,9 @@ function render(pathname) {
     pathname,
     id(prefix) {
       const p = prefix ? String(prefix) : "r";
+      // The counter follows the prefix: the first "d1" and the eleventh "d"
+      // would be one id.
+      if (/[0-9]$/.test(p)) throw coded("shell-error", "useShellId(" + JSON.stringify(p) + "): a prefix cannot end in a digit: the counter follows it");
       ids[p] = (ids[p] || 0) + 1;
       return p + ids[p];
     },
@@ -125,7 +128,12 @@ function render(pathname) {
     },
   };
   try {
-    return { html: renderToStaticMarkup(root(page)), mounts, components: components() };
+    const html = renderToStaticMarkup(root(page));
+    // The render ended, and a component had thrown: a boundary rendered its
+    // fallback instead. No page is built around a swallowed error.
+    const lost = swallowed();
+    if (lost !== null) throw lost;
+    return { html, mounts, components: components() };
   } finally {
     delete globalThis.__reactogenic_build;
   }

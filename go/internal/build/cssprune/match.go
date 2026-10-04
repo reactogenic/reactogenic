@@ -64,6 +64,8 @@ type matcher struct {
 	// quirks: the page may be in quirks mode, where classes and ids match
 	// whatever their case.
 	quirks bool
+	// script: what the page's script names (PruneWith); nil without one.
+	script *names
 	memo   map[memoKey]tri
 	work   int // compounds tried, for the tests: matching must stay linear in the page
 }
@@ -257,12 +259,17 @@ func (m *matcher) compound(el *html.Node, c *compound) tri {
 func (m *matcher) simple(el *html.Node, s *simple) tri {
 	switch s.kind {
 	case sClass:
-		return is(hasClass(el, s.name, m.quirks))
+		if hasClass(el, s.name, m.quirks) {
+			return yes
+		}
+		return may(m.script.value(s.name)) // a class the script may add
 	case sID:
-		v, ok := attribute(el, "id")
-		return is(ok && (v == s.name || m.quirks && strings.EqualFold(v, s.name)))
+		if v, ok := attribute(el, "id"); ok && (v == s.name || m.quirks && strings.EqualFold(v, s.name)) {
+			return yes
+		}
+		return may(m.script.value(s.name))
 	case sAttr:
-		if dynamic(s.name) {
+		if dynamic(s.name) || m.script.attribute(s.name) {
 			return maybe
 		}
 		v, ok := attribute(el, s.name)
@@ -306,6 +313,105 @@ func is(b bool) tri {
 		return yes
 	}
 	return no
+}
+
+func may(b bool) tri {
+	if b {
+		return maybe
+	}
+	return no
+}
+
+// names is what a page's script names: the words of its text. A behaviour
+// writes state the HTML does not show, and names what it writes — a class
+// in `classList.add("dark")`, an attribute in `setAttribute("data-x", …)`,
+// a property that reflects one in `e.tabIndex = 0` — so a selector on a name
+// that is in the script never decides anything (builder.md, CSS). A word
+// that is only a variable or a key of the script makes a selector "maybe"
+// for nothing: that is the safe side. What the script computes is not seen.
+type names struct {
+	text   string          // the script, for a name that is not a word (`sm:flex`)
+	words  map[string]bool // as written: for a custom property, an animation
+	folded map[string]bool // lower-cased, hyphens dropped: `tabIndex`, `data-foo-bar`, `fooBar`
+}
+
+func nameChar(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '$' || c >= 0x80
+}
+
+func fold(name string) string {
+	return strings.ReplaceAll(strings.ToLower(name), "-", "")
+}
+
+func scriptNames(script string) *names {
+	n := &names{text: script, words: map[string]bool{}, folded: map[string]bool{}}
+	for i := 0; i < len(script); {
+		if !nameChar(script[i]) {
+			i++
+			continue
+		}
+		j := i
+		for j < len(script) && nameChar(script[j]) {
+			j++
+		}
+		n.words[script[i:j]] = true
+		n.folded[fold(script[i:j])] = true
+		i = j
+	}
+	return n
+}
+
+// value reports whether the script names a class or an id — whatever its
+// case: quirks mode folds it, and folding matches more.
+func (n *names) value(name string) bool {
+	if n == nil {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		if !nameChar(name[i]) { // not one word of the script: anywhere in its text
+			return strings.Contains(strings.ToLower(n.text), strings.ToLower(name))
+		}
+	}
+	return n.folded[fold(name)]
+}
+
+// attribute reports whether the script names an attribute: as it is written
+// (`setAttribute("data-open")`), or as the property that reflects it —
+// `tabIndex` for tabindex, `dataset.fooBar` for data-foo-bar, `className`
+// and `classList` for class, `htmlFor` for for.
+func (n *names) attribute(name string) bool {
+	if n == nil {
+		return false
+	}
+	switch name = strings.ToLower(name); {
+	case n.folded[fold(name)]:
+		return true
+	case name == "class":
+		return n.words["className"] || n.words["classList"]
+	case name == "for":
+		return n.words["htmlFor"]
+	}
+	rest, data := strings.CutPrefix(name, "data-")
+	return data && n.folded[fold(rest)]
+}
+
+// treeWriters are the DOM's ways to add, move or remove an element. A script
+// that names one changes what stands next to what: no selector with a
+// combinator is decided by the page as it was written.
+var treeWriters = []string{
+	"createElement", "createElementNS", "innerHTML", "outerHTML", "insertAdjacentHTML", "insertAdjacentElement",
+	"setHTMLUnsafe", "setHTML", "createContextualFragment", "DOMParser", "parseHTMLUnsafe", "cloneNode", "importNode",
+	"adoptNode", "appendChild", "insertBefore", "replaceChild", "removeChild", "replaceChildren", "replaceWith",
+	"append", "prepend", "before", "after", "remove", "moveBefore", "attachShadow", "write", "writeln",
+}
+
+func (n *names) changesTree() bool {
+	for _, name := range treeWriters {
+		if n.words[name] {
+			return true
+		}
+	}
+	return false
 }
 
 // attribute finds an attribute by name. HTML's parser lower-cased the names

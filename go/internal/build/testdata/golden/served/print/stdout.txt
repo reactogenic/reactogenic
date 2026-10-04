@@ -2,7 +2,7 @@
                   raw     gzip
   HTML            159      140
   CSS             131       93   inline
-  JS               87      105   inline
+  JS               87      105   inline, the same on 2 pages
   document        423      284   index.html
   components HomePage ×1, Layout ×1, Marked ×1
   behaviours ./behaviors/mark #marked
@@ -13,7 +13,7 @@
 /edit/  pages/edit/index.rtsx
                   raw     gzip
   HTML            172      146
-  CSS             349      184   inline
+  CSS             349      184   inline, the same on 2 pages
   JS                -        -   none
   document        536      295   edit/index.html
   components EditPage ×1, Layout ×1
@@ -28,8 +28,20 @@
   components GuidePage ×1, Layout ×1
   CSS rules    3 kept,  12 dropped  site.css
 
+/own/  pages/own/index.rtsx
+                  raw     gzip
+  HTML            195      162
+  CSS             349      184   inline, the same on 2 pages
+  JS               87      105   inline, the same on 2 pages
+  document        677      378   own/index.html
+  components Layout ×1, Marked ×1, OwnPage ×1
+  behaviours ./behaviors/mark #marked
+  JS bytes       50 B  behaviors/mark.ts
+                 37 B  <entry>  the mount calls
+  CSS rules  not pruned: the page has a script of its own
+
 css  47835ec0      131       93   inline                   /
-js   f561d7b7       87      105   inline                   /
-css  03fa1053      349      184   inline                   /edit/
+js   f561d7b7       87      105   inline                   / /own/
+css  03fa1053      349      184   inline                   /edit/ /own/
 css  face0336       44       50   inline                   /guide/
-3 pages written to <out>
+4 pages written to <out>

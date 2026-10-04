@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"maps"
@@ -346,6 +347,15 @@ func TestShips(t *testing.T) {
 			if !slices.Equal(pathnames, everything) {
 				t.Fatalf("pages: %q", pathnames)
 			}
+			// Every page is pruned — the ones with a script too: the
+			// `<script>` in them is the builder's (builder.md, *CSS*, *The
+			// builder's own elements*). Unpruned, the CSS half of the bet
+			// is lost and nothing else fails.
+			for _, p := range s.report.Pages {
+				if p.Styles == nil || p.Styles.Unpruned || p.Styles.Why != "" {
+					t.Errorf("%s is not pruned: %+v", p.Pathname, p.Styles)
+				}
+			}
 
 			// The script: the behaviours the page mounted, and nothing else.
 			scripts := []struct {
@@ -457,23 +467,26 @@ func TestInline(t *testing.T) {
 	})
 	t.Run("auto", func(t *testing.T) {
 		s := load(t, "-p", "site")
-		inline, file := 0, 0
+		inline, file, shared := 0, 0, 0
 		for _, b := range s.report.Blobs {
-			// A file when it serves several pages and saves more than a
-			// request costs.
+			// A file when it serves two pages or more and is larger than
+			// a request, as it is sent: gzipped.
 			want := "inline"
-			if len(b.Pages) > 1 && (len(b.Pages)-1)*b.Size.Raw > 1024 {
+			if len(b.Pages) > 1 && b.Size.Gzip > 250 {
 				want = "file"
 				file++
 			} else {
 				inline++
 			}
 			if b.Delivery != want {
-				t.Errorf("blob %s (%d B, %d pages) is %s, want %s", b.Hash, b.Size.Raw, len(b.Pages), b.Delivery, want)
+				t.Errorf("blob %s (%d B, %d gzipped, %d pages) is %s, want %s", b.Hash, b.Size.Raw, b.Size.Gzip, len(b.Pages), b.Delivery, want)
+			}
+			if len(b.Pages) > 1 && want == "inline" {
+				shared++
 			}
 		}
-		if inline == 0 || file == 0 {
-			t.Errorf("the fixture has %d inlined blobs and %d files: it tests one side of the rule only", inline, file)
+		if inline == 0 || file == 0 || shared == 0 {
+			t.Errorf("the fixture has %d inlined blobs (%d of them shared) and %d files: it tests one side of the rule only", inline, shared, file)
 		}
 	})
 }
@@ -653,7 +666,17 @@ func TestDocument(t *testing.T) {
 // TestPack: identical content is one blob, by kind; the rule of `auto`; a
 // blob that cannot stand in its element is a file.
 func TestPack(t *testing.T) {
-	big := strings.Repeat("a{color:red}", 100) // 1200 B
+	// The rule of `auto` counts what is sent: 1200 B of one rule repeated
+	// are under 250 B gzipped, 200 rules that differ are over.
+	repeated := strings.Repeat("a{color:red}", 100)
+	var rules strings.Builder
+	for i := range 200 {
+		fmt.Fprintf(&rules, ".c%x{order:%d}", i*40503%65536, i*7919%1000)
+	}
+	big := rules.String()
+	if raw, sent := sizeOf(repeated), sizeOf(big); raw.Gzip > request || sent.Gzip <= request {
+		t.Fatalf("the blobs do not straddle the rule: %+v, %+v", raw, sent)
+	}
 	pages := []built{
 		{css: "p{}", js: "a()"},
 		{css: "p{}"},
@@ -662,6 +685,8 @@ func TestPack(t *testing.T) {
 		{js: "p{}"}, // the same text, another kind
 		{css: `a{content:"</STYLE>"}`},
 		{},
+		{css: repeated},
+		{css: repeated},
 	}
 	type delivery struct {
 		kind  string
@@ -672,9 +697,9 @@ func TestPack(t *testing.T) {
 		inline string
 		want   []delivery
 	}{
-		{InlineAuto, []delivery{{"css", []int{0, 1}, false}, {"js", []int{0, 2}, false}, {"css", []int{2, 3}, true}, {"js", []int{3}, true}, {"js", []int{4}, false}, {"css", []int{5}, true}}},
-		{InlineAlways, []delivery{{"css", []int{0, 1}, false}, {"js", []int{0, 2}, false}, {"css", []int{2, 3}, false}, {"js", []int{3}, true}, {"js", []int{4}, false}, {"css", []int{5}, true}}},
-		{InlineNever, []delivery{{"css", []int{0, 1}, true}, {"js", []int{0, 2}, true}, {"css", []int{2, 3}, true}, {"js", []int{3}, true}, {"js", []int{4}, true}, {"css", []int{5}, true}}},
+		{InlineAuto, []delivery{{"css", []int{0, 1}, false}, {"js", []int{0, 2}, false}, {"css", []int{2, 3}, true}, {"js", []int{3}, true}, {"js", []int{4}, false}, {"css", []int{5}, true}, {"css", []int{7, 8}, false}}},
+		{InlineAlways, []delivery{{"css", []int{0, 1}, false}, {"js", []int{0, 2}, false}, {"css", []int{2, 3}, false}, {"js", []int{3}, true}, {"js", []int{4}, false}, {"css", []int{5}, true}, {"css", []int{7, 8}, false}}},
+		{InlineNever, []delivery{{"css", []int{0, 1}, true}, {"js", []int{0, 2}, true}, {"css", []int{2, 3}, true}, {"js", []int{3}, true}, {"js", []int{4}, true}, {"css", []int{5}, true}, {"css", []int{7, 8}, true}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.inline, func(t *testing.T) {

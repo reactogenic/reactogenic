@@ -13,12 +13,18 @@ components it can ridiculously optimise the output build*.
 
 Out of scope: a dev server, view transitions, islands.
 
+> OPEN (for the owner, decisions.md): loop-produced slot items (`Each`
+> around slot elements) are "phase 2" in CLAUDE.md and in
+> phase01/syntax.md's roadmap note; no task here has them, and the site's
+> menu is written out as slot elements.
+
+What each task waits for — the *Depends on* lines, in one place:
+
 ```
-001 ─▶ 002 ─┬─▶ 010 ─▶ 011 ─┐
-            ├─▶ 012 ────────┤
-            ├─▶ 020 ────────┼─▶ 030 ─▶ 040 ─▶ 050 ─▶ 060
-            ├─▶ 021 ─ 022 ──┤
-            └─▶ 025 ────────┘
+001 ─▶ 002 ─▶ 010, 012, 020, 021, 022
+010, 012 ─▶ 011              012 ─▶ 025
+011, 020, 021, 022 ─▶ 030
+025, 030 ─▶ 040 ─▶ 050 ─▶ 060
 ```
 
 ## M0 — Research and spec
@@ -48,11 +54,12 @@ type Page struct {
 	Route
 	HTML       string         // as rendered, without the doctype
 	Mounts     []Mount        // in render order, duplicates kept
-	Components map[string]int // function components rendered, by name
+	Components map[string]int // function components React called, by the function's name
 }
 type Options struct {
 	Dir     string        // the project's directory: react and react-dom are resolved from it; "": the program's
 	Timeout time.Duration // of one page; 0: 30 s
+	Memory  uintptr       // of one page's runtime, in bytes; 0: 1 GiB
 }
 func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []report.Report)
 // Pages: those that rendered, in the order of routes. Reports: errors (the caller
@@ -60,7 +67,11 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 // passed, `false` included; nil when it passed none.
 
 // cssprune — RGP2-020
-func Prune(css string, doc *html.Node) (out string, stats Stats, err error)
+type Options struct{ Script string }  // the page's built script (behaviors.Build): what it names is "maybe"
+func PruneWith(css string, doc *html.Node, opts Options) (out string, stats Stats, err error)
+func Prune(css string, doc *html.Node) (out string, stats Stats, err error)   // PruneWith for a page without a script
+// doc: the page as rendered, with `<!doctype html>` — before packaging: a <script> in it is the page's own,
+// and such a page is not pruned (Stats.Unpruned, Stats.Why)
 
 // pagecheck — RGP2-021
 func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report
@@ -113,7 +124,8 @@ it is there (builder.md, *What shell code can ask the builder*). Its absence
 means React: `location.pathname`, `React.useId()`, nothing.
 
 - `id(prefix)` is the prefix and a counter per prefix, per page, from 1:
-  `d1`, `d2`, `m1`. No prefix (`""`, `undefined`): `r`.
+  `d1`, `d2`, `m1`. No prefix (`""`, `undefined`): `r`. A prefix that ends
+  in a digit throws (shell-error): `d1` + `1` is also the eleventh `d`.
 - It is there only while a page renders: not while a module loads.
 - The render bundle's own globals: `__reactogenic_render(pathname)` returns
   `{ html, mounts, components }` or throws; `__reactogenic_render_json` is
@@ -166,11 +178,20 @@ React's static renderer and exposes `render(pathname)`.
     it loads is reported at the project's import.
 
 ### RGP2-011 — Execution · L · done
-`modernc.org/quickjs`, one runtime per build: the sandbox prelude, the
-bundle, then `render(pathname)` per route.
-- The prelude makes `Date.now`, argument-less `new Date()`, `Math.random`,
-  `crypto.getRandomValues`, `performance.now` throw shell-nondeterministic;
-  `console` is collected and printed as warnings.
+`modernc.org/quickjs`, **a runtime per page**: the bundle — the sandbox
+prelude first — is compiled to the engine's bytecode once, and each route
+gets a new runtime that loads it and calls `render(pathname)`. Module-level
+state does not cross pages (builder.md, *Shell code in phase 2*).
+- The prelude makes `Date.now`, argument-less `new Date()`, `Date()`,
+  `Math.random`, `crypto.getRandomValues`, `crypto.randomUUID`,
+  `performance.now` throw shell-nondeterministic; `WeakRef` and
+  `FinalizationRegistry` are removed; `console` is collected and printed as
+  warnings.
+- A page has a timeout (30 s) and a memory limit (1 GiB): shell-error.
+- Nothing suspends and nothing swallows an error: `Suspense`, `lazy`, `use`
+  of a promise and an `async` component are shell-react; a render that ends
+  after a component threw is that component's error. A class component with
+  an effect (`componentDidMount`, …) is shell-react too.
 - The prelude pins the time zone to UTC and makes what needs `Intl` throw
   (builder.md, *The engine*).
 - An exception becomes a diagnostic at the source position: the engine's
@@ -179,16 +200,20 @@ bundle, then `render(pathname)` per route.
   stack as related lines.
 - Differential test, in CI: every fixture page rendered by the engine equals
   the same bundle rendered by Node with `react-dom/server` — including the
-  36 attribute cases of research/evaluation.md that a hand-written serializer
-  got wrong.
+  36 variant cases of research/evaluation.md (*Variant cases*: a
+  hand-written serializer got 16 of them wrong, the Go evaluator 19).
 - The six release targets build with `CGO_ENABLED=0`
   (`scripts/build-binaries.sh`).
 - **Done when:** fixture pages with slots, `Each`, `Match`, segments and the
-  three intrinsics render; each shell-* error is reported at its `.rtsx`
-  line and column; the differential test passes.
-- Depends on: 010.
+  three build-time functions (`pathname`, `useShellId`, `mount`: RGP2-012)
+  render; each shell-* error is reported at its `.rtsx` line and column; the
+  differential test passes.
+- Depends on: 010, 012.
 - **Done:** `engine.go`, `position.go`, `js/`. Measured, darwin-arm64: the
   four-page fixture is checked, bundled and rendered in ≈ 0.1 s.
+  - A runtime per page costs 2.9 ms from the bytecode (27.6 ms from the
+    bundle's text, 388 kB); compiling it, once, 29 ms. The eight pages of
+    the fixture site render in 80 ms, the bundle's build included.
   - The differential test compares three renderings of every fixture page:
     the engine; the same bundle in Node under `TZ=Asia/Tokyo`; and an oracle
     in Node under `TZ=UTC` — the same pages with the public
@@ -205,9 +230,10 @@ bundle, then `render(pathname)` per route.
     stack, which is fatal to the process — no `recover`. Bounded, it is
     shell-error at the call.
   - The six targets, `CGO_ENABLED=0`, stripped, with the package linked
-    (`scripts/build-binaries.sh`): darwin-arm64 27.3 → 34.5 MB, darwin-x64
-    28.6 → 36.5, linux-arm64 26.4 → 33.7, linux-x64 27.9 → 35.9, win32-arm64
-    26.5 → 33.7, win32-x64 28.2 → 36.3 (+26–29%).
+    (`scripts/build-binaries.sh`, which prints "MB" for bytes / 2²⁰: MiB):
+    darwin-arm64 27.3 → 34.5 MiB, darwin-x64 28.6 → 36.5, linux-arm64 26.4 →
+    33.7, linux-x64 27.9 → 35.9, win32-arm64 26.5 → 33.7, win32-x64 28.2 →
+    36.3 (+26–29%).
   - Not verified: Windows paths (the six targets build; the tests ran on
     macOS); React other than 19.3 — its static renderer reads no clock, so
     the sandbox has no exemption for React's own code, and the builder
@@ -236,7 +262,13 @@ esbuild's public API produces.
   to "maybe".
 - Soundness test: for a corpus of pages and stylesheets, every selector the
   pruner drops matches no element under cascadia once its "maybe" parts are
-  removed; and pruning is idempotent.
+  removed; and pruning is idempotent. cascadia knows nothing of HTML's case
+  rules, SVG's names or `<noscript>`: each of those has a test of its own.
+- The page's script (builder.md, *CSS*): what it names is "maybe"; a page
+  with a script of its own, or whose script changes the tree, is not pruned;
+  with a stylesheet the builder did not bundle, no custom property and no
+  `@keyframes` is dropped. A test builds `@reactogenic/ui`'s behaviours and
+  finds no tree-changing API in them.
 - **Done when:** the corpus passes, with the design system's CSS and a page
   of each kind among it.
 - **Done:** the corpus passes on the two modelled design systems of the
@@ -260,7 +292,9 @@ esbuild's public API produces.
 
 ### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
-(builder.md, *Checks on the page*), on `golang.org/x/net/html`.
+(builder.md, *Checks on the page*), on `golang.org/x/net/html`. The content
+of a `<template>` and of a `<noscript>` is not of the page, however the
+document was parsed.
 
 ### RGP2-022 — Behaviours: the page's JS · M · done
 `behaviors`: the generated entry from a page's mounts, one `api.Build` per
@@ -269,7 +303,7 @@ page with the page's `Define`s, the metafile's bytes per module.
   modules it imports, is defined — found by a `Transform` of each file with
   the names defined as markers; the built script is asked again, as the
   backstop; the union over mounts; mount-not-found, mount-no-element,
-  mount-flag.
+  mount-kind, mount-flag.
 - The read of a module (builder.md, *Behaviours*): a build of
   `import "<module>"` alone, before the page's — `Define` is fixed when a
   build starts. It gives the files, and mount-side-effect: what is left of a
@@ -297,7 +331,10 @@ their CSS, the three behaviours, the JSX augmentation (components.md).
   scrim close it and focus returns; a menu is anchored and flips; arrow keys
   in an action menu; the drawer opens, closes on its backdrop without
   activating what is behind, and is a column above the breakpoint; Back does
-  not restore an open overlay.
+  not restore an open overlay. The behaviours are bundled for them by a test
+  helper that defines every `RG_…` flag — an undefined one is a
+  `ReferenceError` in the browser, not a build error (esbuild is a
+  devDependency); the builder's own bundling is RGP2-022's.
 - Private for now: publishing it is a decision of its own.
 - Depends on: 012.
 
@@ -306,14 +343,22 @@ their CSS, the three behaviours, the JSX augmentation (components.md).
 ### RGP2-030 — `reactogenic build` · L · done
 `go/internal/build`: routes, the pipeline of builder.md, packaging, the
 report, the command in `go/cmd/reactogenic`.
-- The page's CSS: one esbuild build with every page as an entry (CSS in
-  import order per entry; the JS outputs are discarded), then `cssprune`.
+- The page's JS first (`behaviors.Build`), then its CSS: one esbuild build
+  with every page as an entry (CSS in import order per entry; the JS
+  outputs are discarded), then `cssprune.PruneWith` — the page as rendered,
+  and its script.
+- `--out`: only a build's own output is emptied (builder.md, *The output
+  directory*).
 - `--inline`, `--base`, `--no-specialize`, `--report`; `public/` copied.
+  `--inline auto` measures a blob with `compress/gzip`; the report has raw
+  and gzip.
   `--base`: `pagecheck.Check` first, on the page as rendered; then the base
   is prefixed to the root-relative `href`s (builder.md, *Packaging*).
-- Golden tests: a fixture site's whole `dist/`, both modes.
+- Golden tests: a fixture site's whole `dist/`, both modes. Among the
+  fixture's pages: one with nothing that opens — no `<script>` in it.
 - The binary's size is printed by `build-binaries.sh`; the growth (esbuild +
-  the engine, measured ≈ +7.3 MB on 27.4) goes into decisions.md.
+  the engine: +7.10 MiB on 27.36 in the research, measured together) goes
+  into decisions.md.
 - Depends on: 011, 020, 021, 022.
 - **Done:** `go/internal/build` (`build.Main` is the command, `build.Run`
   the build), `go/cmd/reactogenic`. The fixture site
@@ -405,8 +450,9 @@ The layout carries the `SideMenu` (nested groups, the current page marked)
 and a `DropdownMenu` of links in the header. So the pages differ in what they
 ship: `/guide/` and `/reference/cli/` need `overlays` alone, `/` adds
 `invokers`, `/syntax/` adds `menu-keys`.
-- No `<script>`, no hand-written JS, no per-page list of styles or
-  behaviours in the site's source.
+- **The authoring rule:** no `<script>`, no hand-written JS, no per-page
+  list of styles or behaviours in the site's source. A script in a page
+  would also turn its CSS pruning off (builder.md, *CSS*).
 - CI builds it (`reactogenic build`) and fails on any diagnostic.
 - Depends on: 025, 030.
 
@@ -416,7 +462,9 @@ ship: `/guide/` and `/reference/cli/` need `overlays` alone, `/` adds
 `bench/`: the measuring scripts of the research (bytes raw / gzip / brotli
 per page, requests, JS to parse, a warm 4-page session), run on three builds
 of the site: the default; `--inline always`; and the control,
-`--no-specialize`. Browser checks of the built site (Playwright): the
+`--no-specialize` — its pathname table's bytes reported apart from its
+behaviours'. Brotli is measured here (Node's zlib): the builder's own report
+has raw and gzip. Browser checks of the built site (Playwright): the
 behaviour list of RGP2-025 on real output, and the computed-style comparison
 of pruned against unpruned CSS on every page. With it, the validity probe of
 RGP2-020 in Chromium, Firefox and WebKit: for every name of
@@ -431,14 +479,22 @@ fails:
 
 | | Threshold | |
 | --- | --- | --- |
-| T1 runtime | 0 bytes of React or of any generic runtime: every JS byte belongs to a behaviour mounted on that page | refutes |
-| T2 JS per page | ≤ 1.5 KB raw (≈ 0.7 KB brotli) on the heaviest page; a page with nothing that opens ships no script | refutes above 5 KB brotli — a micro-runtime, not compilation |
+| T1 runtime | 0 bytes of React or of any generic runtime: every JS byte of a page is in a row of its report — a behaviour mounted on that page, a file it imports, or the generated entry (`<entry>`: the mount calls) — and there is no `<runtime>` row | refutes |
+| T2 JS per page | ≤ 1.5 KB raw (≈ 0.7 KB brotli) on the heaviest page | refutes above 5 KB brotli — a micro-runtime, not compilation |
 | T3 against React | ≥ 100× below the best React build of an equivalent site (Astro + React islands + Radix: 317 KB raw, measured in research/baselines.md) | |
-| T4 precision | deleting the dialog from `/syntax/` removes exactly its markup, its CSS rules and its behaviours from that page, and changes no other page's bytes | refutes |
+| T4 precision | deleting the *Install* dialog from `/` — it has its own `$Trigger`: nothing else refers to it — removes its markup, the CSS rules only it matched and the `invokers` behaviour from that page, and nothing else of it; and every other page's HTML as rendered, CSS and script are the same bytes. Compared under `--inline always`: sharing couples how pages are delivered, not what they are (builder.md, *Packaging*) | refutes |
 | T5 awareness | against the control: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | |
-| T6 authoring | T-authoring of RGP2-040: no hand-written JS, no per-page asset lists | refutes |
+| T6 authoring | the authoring rule of RGP2-040: no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source | refutes |
 | T7 behaviour | the browser checks pass on the built site | refutes |
 | T8 requests | ≤ 3 per page, cold | |
+
+What the table cannot measure on this site, and where it is tested instead:
+
+| | |
+| --- | --- |
+| "a page with nothing that opens ships no script" | every page of the site has the layout's `SideMenu` and `DropdownMenu`, so each mounts `overlays`. RGP2-030's golden fixture has such a page |
+| T4 as first written — deleting the dialog of `/syntax/` | its menu item commands it (`commandfor`): deleting the dialog alone is idref-not-found, and deleting the item with it also takes `menu-keys` and the menu's `role` away |
+| T2 as a multiple of the hand-written floor | none is claimed. The research's floors are of a site with theme, copy and search — 76% of the first floor's JS (research/baselines.md, *Verification*) — which this site does not have (decisions.md, 14); at behaviour parity that floor is 1,584 B raw, 571 B brotli, mean per page. T2 is a budget for this site's three behaviours |
 
 The result, with the tables, is written to `specs/phase02/bet.md`.
 - Depends on: 040.
@@ -449,12 +505,21 @@ A `site` job (build + the byte report as an artifact); getting-started gains
 
 ## Later, noted here so it is not lost
 
-- Keyed slots and integer-like keys (components.md, *Known limits*); the
-  false `segment-children` warning on `<Dialog #install><$Title>…`; the
+- Keyed slots and integer-like keys (components.md, *Known limits*): a menu
+  written `10, 9, 2` renders `2, 9, 10`, and `check` is silent. The
+  research asked for the fix before the site is written; it changes what
+  phase 1 emits, so it is the owner's (decisions.md, *For the owner*).
+  > OPEN: until then the site's keys are not integer-like.
+- The false `segment-children` warning on `<Dialog #install><$Title>…`; the
   opaque TS2559 for a keyed slot element without `key`
   (research/components.md, section 7).
+- Loop-produced slot items (above).
 - A catalog of ~20 components where a page uses 3–5: the scale test of
   per-page precision.
-- Firefox and Safari proper, and touch devices: nobody has run them.
+- Firefox, Safari 26.x (the floor), real key and pointer input in Safari,
+  and every touch device: not run. The platform research's verifier ran
+  Safari 27.0.1, script-driven (research/platform.md, *Verification*).
+- A check of what a behaviour writes to the page (builder.md, *Not in phase
+  2*); hashes of inlined blobs for a `Content-Security-Policy`.
 - Phase 1's leftover: the server's intermittent crash while pushing tsconfig
   diagnostics (phase01/plan.md, RGP1-113).
