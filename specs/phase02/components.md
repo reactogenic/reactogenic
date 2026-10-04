@@ -322,6 +322,7 @@ interface SideMenuProps {
 | | |
 | --- | --- |
 | **the current page is the builder's, not the author's** | the item whose `href` is `pathname()` (trailing slash normalised) gets `aria-current="page"`, and every disclosure around it `open`. CSS styles `[aria-current]`. There is no `current` prop to get wrong; two pages' menus differ in exactly those attributes |
+| a link into a page | `href="/guide/#install"` is not the page `/guide/`: with a fragment or a query an item is never current, and opens no group — which section is shown is run-time state, and six items of one page cannot all be the current one. So a group of a page's sections starts with the page itself (below) |
 | drawer on small screens | **the same `<nav>` is a popover.** Above the breakpoint CSS shows it as a sticky column and hides the toggle and the close button; below it, the toggle opens it in the top layer: backdrop, Esc, focus return — native. One copy of the menu in the HTML |
 | the close button | always emitted, first in the `<nav>`: on iOS 17–18.2 a popover does not close on an outside tap |
 | the backdrop | a tap on it closes the drawer and activates nothing behind it. A popover's own `::backdrop` cannot do that: it lets pointer events through, and light dismiss closes the drawer on `pointerup` — *before* a tap's click is dispatched, which then lands on what was behind. (Measured in Chromium 153 and WebKit 26.6: `pointer-events: none` on `<body>` while the drawer is open stops a mouse click, not a touch tap.) So the drawer has a **scrim** of its own, as the dialog does: the last element of the `<nav>`, a button fixed over the rest of the viewport with `popovertargetaction="hide"`. A tap on it is a tap inside the popover: nothing closes until its click, and nothing behind is reached. It also closes the drawer where an outside tap does not (iOS 17–18.2). The drawer slides by its `left`, not by a transform, which would contain the fixed scrim |
@@ -331,6 +332,26 @@ interface SideMenuProps {
 | what the types exclude | an item with `href` **and** nested `$Item` (`'href' does not exist in type 'SideMenuGroupProps'`, at the `href`); `collapsed` without `title` — a `<summary>` with nothing to click (`Property 'title' is missing … required in type 'SideMenuCollapsibleSectionProps'`). Both are TS errors at the slot element, from `reactogenic check` |
 | JS | `overlays` only |
 | not in phase 2 | icons and badges, an icon-only rail, groups that remember being closed across pages (storage, so JS) |
+
+```tsx
+// layout.rtsx — a page and its sections
+<$Item key="guide">
+  Getting started
+  <$Item key="page" href="/guide/">Overview</$Item>
+  <$Item key="install" href="/guide/#install">Install</$Item>
+</$Item>
+```
+
+```html
+<!-- emitted for the page /guide/: the group is open because of its first item -->
+<details open>
+  <summary>Getting started</summary>
+  <ul>
+    <li><a href="/guide/" aria-current="page">Overview</a></li>
+    <li><a href="/guide/#install">Install</a></li>
+  </ul>
+</details>
+```
 
 ## Behaviours
 
@@ -393,6 +414,16 @@ which covers a site's own `.css` imports too.
 - Rule 7 is about selectors, not inheritance: a component written in a slot
   inherits what CSS inherits there — in `SideMenu`'s `$Footer`, its smaller
   font size.
+- Unlayered author CSS wins over **every** rule of a component, so a bare
+  element selector in it restyles the components' own elements: `h2 { … }`
+  reaches the dialog's title and the side menu's section titles, `a { … }`
+  every button that is a link, `ul { … }` the menus. Text styles are scoped
+  to the page's content, as `site/site.css` does:
+
+  ```css
+  h2 { margin-top: 2.5rem }                             /* also the dialog's title */
+  :is(main, main > section) > h2 { margin-top: 2.5rem } /* the page's headings     */
+  ```
 - A menu item with `href` and `command` is a link: the command is not
   emitted. The types allow the pair.
 - Measured in Chromium 143 / 153, Chrome 154 and Playwright's WebKit 26.0 /
