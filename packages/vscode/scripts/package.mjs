@@ -25,6 +25,7 @@ const out = path.join(repo, "dist/vsix");
 const FILES = [
   "README.md",
   "CHANGELOG.md",
+  "icon.png",
   "language-configuration.json",
   "tags-language-configuration.json",
   "syntaxes/rtsx.tmLanguage.json",

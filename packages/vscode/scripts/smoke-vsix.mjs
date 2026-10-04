@@ -19,6 +19,7 @@ const ALWAYS = [
   "readme.md",
   "changelog.md",
   "LICENSE.txt",
+  "icon.png",
   "ThirdPartyNotices.txt",
   "dist/extension.js",
   "syntaxes/rtsx.tmLanguage.json",

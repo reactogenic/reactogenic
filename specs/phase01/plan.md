@@ -1620,8 +1620,9 @@ binaries, darwin-arm64's started; the editor suite against that `.vsix`
 platform packages on the registry before the lockfile can name them, so it
 is the first step of the release (`release.sh`, the order in its header).
 The `package` workflow has not run (nothing is pushed): the five other
-binaries were never started. No icon — a brand decision. The last two
-lines of *Done when* need the published alpha.
+binaries were never started. The last two lines of *Done when* need the
+published alpha. (The icon, `packages/vscode/icon.png`, 256×256, is the
+owner's.)
 - getting-started (*Editor*), README, a changelog line for the `check`
   changes (moved columns, merged duplicates, project references).
 - Versions: npm `0.1.0-alpha.N`; the extension `0.1.N`, published as a
