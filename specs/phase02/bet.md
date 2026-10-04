@@ -178,6 +178,8 @@ script comes back with it open.
   119 selectors — 40 pseudo-classes, 11 pseudo-elements, the four legacy
   one-colon forms, 16 forms of each of the four `:nth-*()` names — is one
   rule in `SEL, p {}` in both engines. No name leaves the table.
+- **Another packaging**: `node bench/verify.mjs --inline never` — every
+  blob a file — gives the same 688, 8 and 0.
 - **Known**, 8, all WebKit: a dialog opened by a click leaves focus on
   `<body>` when it closes (2; components.md, *Known limits*); Playwright's
   WebKit has no page cache, so Back restores nothing (6).
