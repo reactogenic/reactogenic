@@ -41,6 +41,12 @@ func styles(program *rtsx.Program, dir string, routes []render.Route, site bool)
 				// React holds no stylesheet, and in the render bundle it is
 				// the builder's own: it is not read here.
 				return api.OnResolveResult{Path: args.Path, External: true}, nil
+			case filepath.IsAbs(args.Path) && render.Source(program, args.Path) != nil:
+				// A page, as an entry: under the name the program has for
+				// it, which is the name its text is loaded by. esbuild
+				// would name it by where it is — another file to the
+				// program when the pages are reached through a link.
+				return api.OnResolveResult{Path: args.Path}, nil
 			}
 			return api.OnResolveResult{Path: render.Resolve(program, args.Importer, args.Path)}, nil
 		})

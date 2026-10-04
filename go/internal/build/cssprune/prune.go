@@ -1,7 +1,8 @@
 // Package cssprune removes from a page's CSS what the page cannot use
 // (specs/phase02/builder.md, *CSS*): a rule stays only if some element of the
 // page may match it, a custom property only if something reads it, a
-// @keyframes only if an animation names it.
+// @keyframes only if an animation names it, a @position-try only if
+// something names it.
 //
 // The input is the flat CSS esbuild's public API prints for a page — nesting
 // lowered, minified or not. The output is that CSS with rules, selectors and
@@ -17,15 +18,19 @@
 //
 // # What it assumes
 //
-//   - The page is served as it was parsed. Parse it with its doctype: the
-//     builder writes `<!doctype html>`, which makes classes and ids
-//     case-sensitive. Without exactly that doctype the page may be in quirks
-//     mode, and they are matched whatever their case.
+//   - The page is served as it was parsed: the document given is the file
+//     that is written — with the base in its links, and with the <style> or
+//     <link> and the <script> the driver puts in it, which a rule may select
+//     as any other element (the driver's own <style> empty: a sheet is not
+//     pruned against itself). Parse it with its doctype: the builder writes
+//     `<!doctype html>`, which makes classes and ids case-sensitive. Without
+//     exactly that doctype the page may be in quirks mode, and they are
+//     matched whatever their case.
 //   - No script adds a class, a data-* attribute or an element
 //     (components.md, *CSS convention*): state is written only where it is
 //     "maybe". Where the browser's tree is not the one written — <template>,
-//     <noscript>, <selectedcontent>, markup inside a <select> — the page is
-//     not pruned.
+//     <noscript>, <selectedcontent>, markup inside a <select>, an element
+//     the user edits (`contenteditable`) — the page is not pruned.
 //   - The sheet is valid where validity is positional: an @import or a
 //     @namespace that follows a rule is dead, and stays dead — everything
 //     before it is kept as it is.
@@ -91,17 +96,21 @@ type Stats struct {
 	SelectorsDropped  int
 	Properties        int // custom property declarations dropped
 	Keyframes         int // @keyframes dropped
+	PositionTries     int // @position-try dropped
 	// Unpruned: the page holds a <template>, a <noscript>, a
-	// <selectedcontent> or a <select> with more than options in it, and the
-	// sheet came back as it was.
+	// <selectedcontent>, a <select> with more than options in it or an
+	// element the user edits, and the sheet came back as it was. Because
+	// says which, as the report words it: "the page has a <template>".
 	Unpruned bool
+	Because  string
 	// Sources is the same per source file, when the sheet names them:
 	// esbuild writes `/* path/to/file.css */` before each file of a bundle
 	// unless it minifies whitespace. Empty otherwise.
 	Sources []Source
 }
 
-// Source is the part of a sheet under one source comment.
+// Source is the part of a sheet under one source comment: the file's rules,
+// without the comment that names it.
 type Source struct {
 	Name                string // the comment's text: "ui/dialog.css"; "" before the first one
 	BytesIn, BytesOut   int
@@ -115,6 +124,20 @@ func Prune(css string, doc *html.Node) (out string, stats Stats, err error) {
 	return new(pruner).prune(css, doc)
 }
 
+// Whole is what Prune says of a sheet it gives back as it is, for a caller
+// that has a reason of its own not to prune a page (the driver: a sheet
+// whose rules select on its own URL): the sheet is read and counted. The
+// caller says why, in Because.
+func Whole(css string) (Stats, error) {
+	stats := Stats{BytesIn: len(css), BytesOut: len(css), Unpruned: true}
+	rules, err := parseRules(css, false, 0)
+	if err != nil {
+		return stats, fmt.Errorf("cssprune: %w", err)
+	}
+	stats.Rules, stats.Selectors = count(rules)
+	return stats, nil
+}
+
 type pruner struct {
 	m     matcher
 	stats Stats
@@ -124,10 +147,12 @@ type pruner struct {
 	// attributes) and in <style> elements.
 	named refs
 
-	// For the tests: every selector, custom property and @keyframes dropped.
+	// For the tests: every selector, custom property, @keyframes and
+	// @position-try dropped.
 	onSelector  func(text string, scoped bool)
 	onProperty  func(name string)
 	onKeyframes func(name string)
+	onTry       func(name string)
 }
 
 func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
@@ -139,8 +164,8 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 	if err != nil {
 		return "", p.stats, fmt.Errorf("cssprune: %w", err)
 	}
-	if !p.page(doc) {
-		p.stats.Unpruned, p.stats.BytesOut = true, len(css)
+	if why := p.page(doc); why != "" {
+		p.stats.Unpruned, p.stats.Because, p.stats.BytesOut = true, "the page has "+why, len(css)
 		p.stats.Rules, p.stats.Selectors = count(rules)
 		return css, p.stats, nil
 	}
@@ -148,7 +173,7 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 	p.selectors(rules, false)
 	// Custom properties and @keyframes, to a fixed point: dropping one may
 	// empty a rule, which may empty an at-rule, whose prelude was the last
-	// to name another.
+	// to name another. So for @position-try.
 	for {
 		p.anon = 0
 		p.resolve(rules, "", &layers{})
@@ -164,9 +189,9 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 	return b.String(), p.stats, nil
 }
 
-// page indexes the document. It reports false if the page cannot be pruned
-// (builder.md, CSS), because the tree a browser matches against is not the
-// one written: the content of a <template> is cloned somewhere at run time,
+// page indexes the document. It says why the page cannot be pruned
+// (builder.md, CSS) — "": it can — which is when the tree a browser matches
+// against is not the one written: the content of a <template> is cloned somewhere at run time,
 // so what it matches — and what matches because of it, `.list:has(.row)` —
 // is not known; the content of a <noscript> is elements or text depending on
 // the browser; a <selectedcontent> is filled at load with a copy of the
@@ -176,10 +201,20 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 // Chrome 135, WebKit 26.6) and dropped, with its end tags, by one that does
 // not — where `<select><div><option>` makes `select > option` match. Whether
 // the floor's Firefox and Safari are of the second kind was not checked.
-func (p *pruner) page(doc *html.Node) bool {
+//
+// And an element the user edits — `contenteditable`, unless it is "false" —
+// gets elements no script wrote: Bold puts a <b> around the selection, Enter
+// a <div> after the line, a paste whatever was copied. `.editor b` matches
+// then, and nothing of the page as written said so.
+func (p *pruner) page(doc *html.Node) (why string) {
 	p.named = refs{dashed: map[string]bool{}, words: map[string]bool{}}
 	p.m.quirks = !standards(doc)
-	ok := true
+	not := func(because string) { // the first reason is the one that is said
+		if why == "" {
+			why = because
+		}
+	}
+	const markup = "markup in a <select>"
 	// in: 1 inside a <select>, 2 inside one of its options, where the older
 	// parser keeps text only.
 	var walk func(n *html.Node, in int)
@@ -191,13 +226,19 @@ func (p *pruner) page(doc *html.Node) bool {
 			p.m.els = append(p.m.els, n)
 			switch tag := strings.ToLower(n.Data); tag {
 			case "template", "noscript", "selectedcontent":
-				ok = false
+				not("a <" + tag + ">")
 			case "option", "optgroup", "hr", "script":
-				if ok = ok && in < 2; in == 1 && tag == "option" {
+				if in >= 2 {
+					not(markup)
+				}
+				if in == 1 && tag == "option" {
 					in = 2
 				}
 			case "select":
-				ok, in = ok && in == 0, 1
+				if in != 0 {
+					not(markup)
+				}
+				in = 1
 			case "style":
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					if c.Type == html.TextNode {
@@ -206,11 +247,18 @@ func (p *pruner) page(doc *html.Node) bool {
 				}
 				fallthrough
 			default:
-				ok = ok && in == 0
+				if in != 0 {
+					not(markup)
+				}
 			}
 			for _, a := range n.Attr {
 				if a.Key == "style" || strings.Contains(a.Val, "--") {
 					p.named.all(a.Val)
+				}
+				// Any value but "false" is taken for editable: an unknown
+				// one inherits, and what it inherits is not looked up.
+				if a.Namespace == "" && a.Key == "contenteditable" && !strings.EqualFold(strings.TrimSpace(a.Val), "false") {
+					not("an element the user edits (`contenteditable`)")
 				}
 			}
 		}
@@ -220,7 +268,7 @@ func (p *pruner) page(doc *html.Node) bool {
 	}
 	walk(doc, 0)
 	p.m.memo = map[memoKey]tri{}
-	return ok
+	return why
 }
 
 // standards reports whether the page is surely not in quirks mode: it starts
@@ -382,7 +430,7 @@ func (p *pruner) resolve(rules []*rule, path string, declared *layers) (output, 
 				o = o || !r.dead && !d.dead
 			}
 			s = o
-		case kKeyframes:
+		case kKeyframes, kTry:
 			o, s = !r.dead, !r.dead
 		case kGroup:
 			o, s = p.resolve(r.rules, path, &layers{up: declared})
@@ -493,7 +541,8 @@ func (p *pruner) collect(rules []*rule, into *refs) {
 					into.onlyDashed(d.value)
 				}
 			}
-		case kKeyframes:
+		case kKeyframes, kTry:
+			// Its own name, in its prelude, does not make a rule named.
 			into.onlyDashed(r.body)
 		case kGroup:
 			into.onlyDashed(r.prelude)
@@ -508,8 +557,9 @@ func (p *pruner) collect(rules []*rule, into *refs) {
 	}
 }
 
-// sweep drops the custom properties nothing reads and the @keyframes no
-// animation names (builder.md, CSS). It reports whether it dropped any.
+// sweep drops the custom properties nothing reads, the @keyframes no
+// animation names and the @position-try nothing names (builder.md, CSS). It
+// reports whether it dropped any.
 func (p *pruner) sweep(rules []*rule, r *refs) (changed bool) {
 	for _, rule := range rules {
 		if !rule.live {
@@ -524,6 +574,17 @@ func (p *pruner) sweep(rules []*rule, r *refs) (changed bool) {
 				p.stats.Keyframes++
 				if p.onKeyframes != nil {
 					p.onKeyframes(name)
+				}
+			}
+		case kTry:
+			// A fallback is named by its dashed identifier, in
+			// `position-try-fallbacks` or `position-try` — or in a custom
+			// property those read: wherever it stands, it is in r.dashed.
+			if name := tryName(rule.prelude); !r.dashed[name] {
+				rule.dead, changed = true, true
+				p.stats.PositionTries++
+				if p.onTry != nil {
+					p.onTry(name)
 				}
 			}
 		case kStyle:
@@ -598,14 +659,18 @@ func (p *pruner) print(b *strings.Builder, rules []*rule, top bool) {
 			b.WriteByte('}')
 		case r.kind == kLayer:
 			b.WriteString("@layer " + r.prelude + ";")
-		default: // a comment, a @keyframes, an at-rule or a declaration kept as it is
+		default: // a comment, a @keyframes, a @position-try, an at-rule or a declaration kept as it is
 			b.WriteString(r.raw)
 		}
 		if !named {
 			continue
 		}
 		if r.kind == kComment && !strings.HasPrefix(r.raw, "/*!") {
+			// The comment is esbuild's, not the file's: its bytes are not
+			// counted. They would be the machine's — the file's path from
+			// the project, as long as the way to where the install put it.
 			source(trim(r.raw[2 : len(r.raw)-2]))
+			continue
 		} else if src == nil {
 			source("")
 		}

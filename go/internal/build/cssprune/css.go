@@ -22,6 +22,7 @@ const (
 	kGroup                 // @media, @supports, @container, @scope, @starting-style: pruned inside
 	kLayer                 // @layer name? { … }: pruned inside, and it orders the cascade
 	kKeyframes             // @keyframes name { … }
+	kTry                   // @position-try --name { … }
 	kAt                    // any other at-rule, block or statement: kept as it is
 	kRaw                   // a declaration between rules (@scope may hold them): kept as it is
 )
@@ -46,7 +47,7 @@ type rule struct {
 	block  bool // it has a block: `@layer a{}`, not `@layer a;`
 
 	sels []string // kStyle: the selectors kept, as written
-	dead bool     // kStyle: no selector may match; kKeyframes: no animation names it
+	dead bool     // kStyle: no selector may match; kKeyframes: no animation names it; kTry: nothing names it
 
 	// What resolve decided, anew in every round of the fixed point.
 	live      bool // it is printed
@@ -388,8 +389,24 @@ func parseRules(s string, inBlock bool, depth int) ([]*rule, error) {
 			}
 		case strings.HasSuffix(r.name, "keyframes"): // and -webkit-keyframes
 			r.kind = kKeyframes
+		case r.name == "position-try" && tryName(r.prelude) != "":
+			r.kind = kTry
 		}
 	}
+}
+
+// tryName is the name of a `@position-try` rule, decoded: its prelude, when
+// that is one dashed identifier (`--edge`) and nothing else. "": it is not
+// — a browser drops the rule, and here it is an at-rule kept as it is.
+func tryName(prelude string) string {
+	if !strings.HasPrefix(prelude, "--") {
+		return ""
+	}
+	name, end := readName(prelude, 0)
+	if end != len(prelude) || len(name) < 3 {
+		return ""
+	}
+	return name
 }
 
 // layerName reports whether s names a layer as every browser reads it:

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -35,8 +36,14 @@ func TestMain(m *testing.M) {
 //	        (/plain/, /guide/, /guide/more/), a drawer (/), a menu of links
 //	        (/links/), a dialog (/dialog/), an action menu with typeahead
 //	        that opens a dialog (/actions/); a segment; `public/`
+//	served  three pages for what packaging changes of a page: the base in its
+//	        links, the elements it adds — and a page the user edits
 //	bad     one project, a `--pages` root per mistake
 //	types   a project that does not check
+//	both    `index.rtsx` and `index.tsx` in one directory
+//
+// `site` and `types` also have a `tsconfig.solution.json`: a tsconfig that
+// only references the project's, as Vite's template lays one out.
 func testdata(t testing.TB) string {
 	t.Helper()
 	repo, _ := filepath.Abs("../../..")
@@ -55,9 +62,59 @@ func testdata(t testing.TB) string {
 // run is `reactogenic build` with args, in testdata.
 func run(t testing.TB, args ...string) (stdout, stderr string, status int) {
 	t.Helper()
+	return runIn(t, testdata(t), args...)
+}
+
+// runIn is `reactogenic build` with args, in cwd.
+func runIn(t testing.TB, cwd string, args ...string) (stdout, stderr string, status int) {
+	t.Helper()
 	var out, err bytes.Buffer
-	status = Main(args, testdata(t), &out, &err)
+	status = Main(args, cwd, &out, &err)
 	return out.String(), err.String(), status
+}
+
+// scratch is a directory of the test's own that holds copies of fixtures —
+// and files of its own, by path — and reaches the repository's packages as a
+// project outside it would: through a link to its node_modules. It is where
+// a test builds what may go wrong with the project's own directory, and
+// what it has to change: nothing a failing test empties is the repository's.
+func scratch(t testing.TB, fixtures []string, files map[string]string) string {
+	t.Helper()
+	data := testdata(t)
+	repo, _ := filepath.Abs("../../..")
+	work := real(t.TempDir())
+	if err := os.Symlink(filepath.Join(repo, "node_modules"), filepath.Join(work, "node_modules")); err != nil {
+		t.Skipf("no symbolic links here: %v", err)
+	}
+	for _, name := range fixtures {
+		if err := os.CopyFS(filepath.Join(work, name), os.DirFS(filepath.Join(data, name))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range files {
+		if err := writeFile(work, name, []byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return work
+}
+
+// What a project of a test's own starts from: the fixtures' tsconfig, and a
+// page.
+const (
+	tsconfig = `{
+  "compilerOptions": {
+    "strict": true, "jsx": "react-jsx", "module": "esnext", "moduleResolution": "bundler",
+    "target": "es2022", "lib": ["es2022", "dom"], "types": [], "noEmit": true, "skipLibCheck": true
+  },
+  "include": ["."]
+}
+`
+	cssModule = "declare module \"*.css\";\n"
+)
+
+func pageOf(body string) string {
+	return "export default function Page() {\n  return <html lang=\"en\"><head><title>t</title></head><body>" + body + "</body></html>;\n}\n"
 }
 
 // built runs a build that has to succeed into a new directory, and returns
@@ -141,6 +198,10 @@ var modes = []struct {
 	{"control", []string{"-p", "site", "--no-specialize", "--report"}},
 	{"base", []string{"-p", "site", "--base", "/docs", "--inline", "never"}},
 	{"base-control", []string{"-p", "site", "--base", "/docs/", "--no-specialize"}},
+	// The page as it is served (TestServed).
+	{"served", []string{"-p", "served", "--inline", "always", "--report"}},
+	{"served-base", []string{"-p", "served", "--base", "/docs/", "--inline", "always"}},
+	{"served-files", []string{"-p", "served", "--base", "/docs/", "--inline", "never"}},
 }
 
 // TestGolden: the whole output of the fixture site, in every mode.
@@ -516,6 +577,19 @@ func TestBase(t *testing.T) {
 	if js := control.js(t, "/actions/"); !strings.Contains(js, `"/docs/actions/"`) || strings.Contains(js, `"/actions/"`) {
 		t.Errorf("the control's table is not keyed with the base:\n%s", js)
 	}
+	// A base given percent-encoded is written as given, and is the
+	// directory it encodes: the control's table is keyed by its name, which
+	// is what the script makes of `location.pathname` (builder.md, *The
+	// control*).
+	for _, base := range []string{"/caf%C3%A9/", "/café/"} {
+		encoded := load(t, "-p", "site", "--no-specialize", "--base", base, "--inline", "never")
+		if js := encoded.js(t, "/actions/"); !strings.Contains(js, `"/café/actions/"`) || strings.Contains(js, "%C3") {
+			t.Errorf("--base %s: the control's table is not keyed by the directory's name:\n%s", base, js)
+		}
+		if html := encoded.files["index.html"]; !strings.Contains(html, `<a href="`+base+`guide/">`) || !strings.Contains(html, `src="`+base+`_rg/site-`) {
+			t.Errorf("--base %s: the links of the page:\n%s", base, html)
+		}
+	}
 }
 
 // TestDocument: packaging writes into React's HTML and leaves the rest of it
@@ -642,12 +716,19 @@ func TestPack(t *testing.T) {
 func TestNormalBase(t *testing.T) {
 	for base, want := range map[string]string{
 		"": "/", "/": "/", "docs": "/docs/", "/docs": "/docs/", "/docs/": "/docs/", "docs/": "/docs/", "/a/b": "/a/b/", "/v1.2/~me/": "/v1.2/~me/", "/se%C3%B1or": "/se%C3%B1or/",
+		"/señor/": "/señor/", "/a%20b%25/": "/a%20b%25/", "/caf%c3%a9": "/caf%c3%a9/",
 	} {
 		if got, ok := NormalBase(base); !ok || got != want {
 			t.Errorf("%q: %q, %v; want %q", base, got, ok, want)
 		}
 	}
-	for _, base := range []string{"https://example.com/docs/", "//host/docs", "/docs?x", "/docs#x", "/a//b", "/a b/", `/a"b/`, "/a/../b", "/./", `\docs`, "/a&b/", "/<a>/"} {
+	for _, base := range []string{
+		"https://example.com/docs/", "//host/docs", "/docs?x", "/docs#x", "/a//b", "/a b/", `/a"b/`, "/a/../b", "/./", `\docs`, "/a&b/", "/<a>/",
+		// A `%` that encodes nothing, or no text: the control's script
+		// decodes the pathname, and `decodeURIComponent` throws on it. And
+		// what a browser reads as a dot segment.
+		"/100%/", "/a%zz/", "/a%2", "/%ff/", "/caf%C3/", "/%2e%2e/", "/a/%2E/b",
+	} {
 		if got, ok := NormalBase(base); ok {
 			t.Errorf("%q is taken for a base: %q", base, got)
 		}
@@ -759,7 +840,19 @@ func TestErrors(t *testing.T) {
 			"a file of public/ where the build writes",
 			[]string{"-p", "bad", "--pages", "bad/conflict/pages"},
 			"bad/conflict/public/_rg/mine.css: error public-conflict: `_rg/` is the builder's: a file of `public/` cannot be there\n" +
+				"bad/conflict/public/guide: error public-conflict: The page /guide/ is written to `guide/index.html`: `guide` is a directory of the output, and cannot be a file of `public/`\n" +
 				"bad/conflict/public/index.html: error public-conflict: The page / is written to `index.html`: a file of `public/` cannot be there\n",
+		},
+		{
+			// As `check -p types/tsconfig.solution.json` prints it.
+			"the project does not check, through the tsconfig that references it",
+			[]string{"-p", "types/tsconfig.solution.json"},
+			"types/pages/index.rtsx(2,7): error TS2322: Type 'string' is not assignable to type 'number'.\n",
+		},
+		{
+			"index.rtsx and index.tsx side by side: check's ambiguous-module",
+			[]string{"-p", "both"},
+			"both/pages/index.rtsx(1,1): error ambiguous-module: `index.tsx` and `index.rtsx` side by side: an import of `./index` is ambiguous\n",
 		},
 	}
 	for _, tt := range tests {
@@ -806,75 +899,125 @@ func TestWarning(t *testing.T) {
 
 // TestOut: `--out` is emptied, so it has to be the builder's to empty
 // (builder.md, *The output directory*).
+//
+// Every build here that must be refused is one that would build: were the
+// rule to break, it would empty its `--out`. So the project is a copy, in a
+// directory of the test's own, and whatever is refused is inside it; what is
+// not — the root, the repository's fixture — is asked of CheckOut alone, and
+// never built into.
 func TestOut(t *testing.T) {
-	data := testdata(t)
-	scratch := t.TempDir()
-	stray := filepath.Join(scratch, "stray")
-	if err := writeFile(stray, "notes.txt", []byte("mine")); err != nil {
+	work := scratch(t, []string{"site"}, map[string]string{
+		"stray/notes.txt": "mine",
+		"a-file":          "",
+		// A directory with an `_rg/` and an `index.html` that the builder
+		// did not write: not enough to be taken for an output.
+		"lookalike/index.html":            "mine",
+		"lookalike/_rg/page-00000000.css": "mine",
+	})
+	stray := filepath.Join(work, "stray")
+	link := filepath.Join(work, "link")
+	if err := os.Symlink(filepath.Join(work, "site"), link); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFile(scratch, "a-file", nil); err != nil {
-		t.Fatal(err)
-	}
-	// A directory with an `_rg/` and an `index.html` that the builder did
-	// not write: not enough to be taken for an output.
-	lookalike := filepath.Join(scratch, "lookalike")
-	for _, file := range []string{"index.html", "_rg/page-00000000.css"} {
-		if err := writeFile(lookalike, file, []byte("mine")); err != nil {
-			t.Fatal(err)
-		}
-	}
-	link := filepath.Join(scratch, "link")
-	linked := os.Symlink(filepath.Join(data, "site"), link) == nil
 
-	refused := []struct {
-		name string
-		out  string
-		why  string
-	}{
+	type refusal struct{ name, out, why string }
+	refused := []refusal{
 		{"the project directory", "site", "holds the project"},
 		{"an ancestor of it", ".", "holds the project"},
-		{"the root", string(filepath.Separator), "holds the project"},
 		{"the pages", "site/pages", "holds the pages"},
 		{"inside the pages", "site/pages/dist", "is inside the pages"},
 		{"public/", "site/public", "holds `public/`"},
 		{"inside public/", "site/public/a/b", "is inside `public/`"},
-		{"a file", filepath.Join(scratch, "a-file"), "is not a directory"},
+		{"a file", "a-file", "is not a directory"},
 		{"a directory of something else", stray, "is not empty and is not an output of `reactogenic build`"},
-		{"one that only looks like an output", lookalike, "is not empty and is not an output of `reactogenic build`"},
-	}
-	if linked {
-		refused = append(refused, struct{ name, out, why string }{"the project through a link", link, "holds the project"})
+		{"one that only looks like an output", "lookalike", "is not empty and is not an output of `reactogenic build`"},
+		{"the project through a link", link, "holds the project"},
 	}
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		// Where the file system folds case, another case is the same directory.
-		if _, err := os.Stat(filepath.Join(data, "SITE")); err == nil {
-			refused = append(refused, struct{ name, out, why string }{"the project in another case", "SITE", "holds the project"})
+		if _, err := os.Stat(filepath.Join(work, "SITE")); err == nil {
+			refused = append(refused, refusal{"the project in another case", "SITE", "holds the project"})
 		}
 	}
-	before := tree(t, filepath.Join(data, "site"))
+	// The project, and the directories that are not the builder's.
+	held := func() map[string]string {
+		files := map[string]string{}
+		for _, dir := range []string{"site", "stray", "lookalike"} {
+			for file, content := range tree(t, filepath.Join(work, dir)) {
+				files[dir+"/"+file] = content
+			}
+		}
+		for _, file := range []string{"a-file", "node_modules", "link"} {
+			if _, err := os.Lstat(filepath.Join(work, file)); err == nil {
+				files[file] = "there"
+			}
+		}
+		return files
+	}
+	before := held()
+	if before["stray/notes.txt"] != "mine" || before["lookalike/index.html"] != "mine" || before["site/tsconfig.json"] == "" || len(before) < 20 {
+		t.Fatalf("the test's directory: %v", slices.Sorted(maps.Keys(before)))
+	}
 	for _, tt := range refused {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, status := run(t, "-p", "site", "--out", tt.out)
+			stdout, stderr, status := runIn(t, work, "-p", "site", "--out", tt.out)
 			if status != 2 || stdout != "" || !strings.HasPrefix(stderr, "reactogenic build: --out ") || !strings.Contains(stderr, tt.why) {
 				t.Errorf("status %d, stdout %q, stderr %q; want a refusal that says %q", status, stdout, stderr, tt.why)
 			}
 		})
 	}
-	if !maps.Equal(before, tree(t, filepath.Join(data, "site"))) {
-		t.Fatal("a refused build changed the project")
+	if !maps.Equal(before, held()) {
+		t.Fatal("a refused build changed the project, or a directory that is not the builder's")
 	}
-	if got := tree(t, stray); len(got) != 1 || got["notes.txt"] != "mine" {
-		t.Errorf("a refused build changed the directory: %v", got)
+
+	// Outside the test's directory: the flags are resolved as the command
+	// resolves them, and the rule is asked — nothing is built.
+	data := testdata(t)
+	for _, tt := range []struct {
+		refusal
+		cwd string
+		p   string
+	}{
+		{refusal{"the root", string(filepath.Separator), "holds the project"}, work, "site"},
+		{refusal{"the root, of the repository's fixture", string(filepath.Separator), "holds the project"}, data, "site"},
+		{refusal{"the repository's fixture", "site", "holds the project"}, data, "site"},
+		{refusal{"the fixtures' directory", ".", "holds the project"}, data, "site"},
+		{refusal{"the repository's fixture, from the copy", filepath.Join(data, "site", "pages"), "is not empty and is not an output of `reactogenic build`"}, work, "site"},
+		{refusal{"what holds the test's directory", filepath.Dir(work), "holds the project"}, work, "site"},
+	} {
+		t.Run("asked: "+tt.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			opts, _, status := options([]string{"-p", tt.p, "--out", tt.out}, tt.cwd, &stderr)
+			if status != 0 {
+				t.Fatalf("status %d: %s", status, stderr.String())
+			}
+			if err := CheckOut(opts); err == nil || !strings.HasPrefix(err.Error(), "--out ") || !strings.Contains(err.Error(), tt.why) {
+				t.Errorf("CheckOut: %v; want a refusal that says %q", err, tt.why)
+			}
+		})
 	}
-	if got := tree(t, lookalike); len(got) != 2 {
-		t.Errorf("a refused build changed the directory: %v", got)
-	}
+
+	// The build asks again where it empties: Run is safe for a caller that
+	// did not ask, and for a directory that changed while the site was built.
+	t.Run("Run refuses what CheckOut refuses", func(t *testing.T) {
+		opts, _, status := options([]string{"-p", "site", "--out", stray}, work, io.Discard)
+		if status != 0 {
+			t.Fatalf("status %d", status)
+		}
+		reports, written, err := Run(opts)
+		if err == nil || written != nil || !strings.Contains(err.Error(), "is not empty and is not an output of `reactogenic build`") {
+			t.Errorf("Run: %v, %v, %v", reports, written, err)
+		}
+		if got := tree(t, stray); len(got) != 1 || got["notes.txt"] != "mine" {
+			t.Errorf("Run changed a directory that is not the builder's: %v", got)
+		}
+	})
 
 	t.Run("an output of the builder is emptied", func(t *testing.T) {
 		out, _ := buildSite(t, "-p", "site")
 		built := tree(t, out)
-		for _, file := range []string{"stale.html", "old/index.html", "_rg/page-00000000.css", ".git/HEAD"} {
+		// What an earlier output left, a build that was killed among it.
+		for _, file := range []string{"stale.html", "old/index.html", "_rg/page-00000000.css", "_rg/old/x.css", ".rg-1234/index.html", ".git/HEAD"} {
 			if err := writeFile(out, file, []byte("stale")); err != nil {
 				t.Fatal(err)
 			}
@@ -893,11 +1036,11 @@ func TestOut(t *testing.T) {
 		}
 	})
 	t.Run("an empty directory, and one that is not there", func(t *testing.T) {
-		empty := filepath.Join(scratch, "empty")
+		empty := filepath.Join(work, "empty")
 		if err := os.MkdirAll(filepath.Join(empty, ".git"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		for _, out := range []string{empty, filepath.Join(scratch, "not", "there", "yet")} {
+		for _, out := range []string{empty, filepath.Join(work, "not", "there", "yet")} {
 			if stdout, stderr, status := run(t, "-p", "site", "--out", out); status != 0 {
 				t.Errorf("%s: status %d\n%s%s", out, status, stdout, stderr)
 			}
@@ -919,6 +1062,7 @@ func TestUsage(t *testing.T) {
 		{"no such project", []string{"-p", "nowhere/tsconfig.json"}, "no tsconfig at "},
 		{"--inline", []string{"-p", "site", "--inline", "sometimes"}, "--inline is auto, always or never"},
 		{"--base with a host", []string{"-p", "site", "--base", "https://example.com/docs/"}, "--base is the path the site is served under"},
+		{"--base with a % that encodes nothing", []string{"-p", "site", "--base", "/100%/"}, "--base is the path the site is served under"},
 		{"an argument", []string{"-p", "site", "pages"}, `unexpected argument "pages"`},
 		{"an unknown flag", []string{"-p", "site", "--minify"}, "flag provided but not defined: -minify"},
 	}
@@ -986,9 +1130,30 @@ func TestBinary(t *testing.T) {
 	if want := "bad/idref/index.rtsx: error idref-not-found: Page /: `for=\"email\"` on `<label>` names no element of the page\n"; status != 1 || stderr != "" || stdout != want {
 		t.Errorf("status %d, stderr %q, stdout %q", status, stderr, stdout)
 	}
-	// A usage error: status 2, on stderr.
-	if stdout, stderr, status := command(data, "build", "-p", "site", "--out", "site"); status != 2 || stdout != "" || !strings.Contains(stderr, "holds the project") {
+	// A usage error: status 2, on stderr. Asked of a copy of the project: a
+	// binary that did not refuse would empty its `--out`.
+	work := scratch(t, []string{"site"}, nil)
+	if stdout, stderr, status := command(work, "build", "-p", "site", "--out", "site"); status != 2 || stdout != "" || !strings.Contains(stderr, "holds the project") {
 		t.Errorf("status %d, stderr %q, stdout %q", status, stderr, stdout)
+	}
+	if _, err := os.Stat(filepath.Join(work, "site", "tsconfig.json")); err != nil {
+		t.Fatalf("the refused build emptied the project: %v", err)
+	}
+	// The copy reaches its packages through a link out of the project, and
+	// is on another path: its output is the same bytes, the report too.
+	out = filepath.Join(work, "site", "dist")
+	if stdout, stderr, status := command(filepath.Join(work, "site"), "build", "--report"); status != 0 || stderr != "" {
+		t.Fatalf("status %d\n%s%s", status, stdout, stderr)
+	} else {
+		golden(t, "auto/out", tree(t, out))
+		// `dist`, next to the tsconfig, is named from the working directory.
+		golden(t, "auto/print", map[string]string{"stdout.txt": strings.Replace(stdout, "written to dist\n", "written to <out>\n", 1)})
+	}
+	// A tsconfig that only references the project's, as `check` reads it.
+	if stdout, stderr, status := command(filepath.Join(work, "site"), "build", "-p", "tsconfig.solution.json", "--report"); status != 0 || stderr != "" {
+		t.Fatalf("status %d\n%s%s", status, stdout, stderr)
+	} else {
+		golden(t, "auto/out", tree(t, out))
 	}
 	if _, stderr, status := command(data, "build", "--help"); status != 2 || !strings.Contains(stderr, "usage: reactogenic build") {
 		t.Errorf("--help: status %d, stderr %q", status, stderr)

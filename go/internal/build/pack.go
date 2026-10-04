@@ -121,9 +121,10 @@ func (b *blob) tag(base string, control bool) string {
 	return `<script type="module">` + b.content + "</script>"
 }
 
-// write packages the site and writes it to opts.Out, which it empties first
-// (builder.md, *Packaging*): the byte report, the blobs that are files, each
-// page's `index.html`, and `public/` as it is.
+// write packages the site and writes it to opts.Out in place of what was
+// there (builder.md, *Packaging*, *The output directory*): the byte report,
+// the blobs that are files, each page's `index.html`, and `public/` as it
+// is.
 func write(opts Options, site []built, static []string) (*Report, error) {
 	blobs, of, err := pack(site, opts.Inline)
 	if err != nil {
@@ -148,34 +149,41 @@ func write(opts Options, site []built, static []string) (*Report, error) {
 		return nil, err
 	}
 
-	if err := empty(opts.Out); err != nil {
+	// The directory is emptied: it is asked here, where it is done, whether
+	// it is the builder's to empty — whoever called, and whatever became of
+	// it while the site was built.
+	if err := CheckOut(opts); err != nil {
 		return nil, err
 	}
-	// The report first: a build that fails from here on leaves a directory
-	// that is still known as the builder's, and the next one can empty it.
-	if err := writeFile(opts.Out, reportFile, encoded); err != nil {
-		return nil, err
-	}
-	for _, b := range blobs {
-		if b.file {
-			if err := writeFile(opts.Out, b.path(opts.NoSpecialize), []byte(b.content)); err != nil {
-				return nil, err
+	tree := func(dir string) error {
+		if err := writeFile(dir, reportFile, encoded); err != nil {
+			return err
+		}
+		for _, b := range blobs {
+			if b.file {
+				if err := writeFile(dir, b.path(opts.NoSpecialize), []byte(b.content)); err != nil {
+					return err
+				}
 			}
 		}
+		for _, file := range static {
+			content, err := os.ReadFile(filepath.Join(opts.public(), filepath.FromSlash(file)))
+			if err != nil {
+				return err
+			}
+			if err := writeFile(dir, file, content); err != nil {
+				return err
+			}
+		}
+		for i, p := range site {
+			if err := writeFile(dir, output(p.page.Pathname), []byte(documents[i])); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	for _, file := range static {
-		content, err := os.ReadFile(filepath.Join(opts.public(), filepath.FromSlash(file)))
-		if err != nil {
-			return nil, err
-		}
-		if err := writeFile(opts.Out, file, content); err != nil {
-			return nil, err
-		}
-	}
-	for i, p := range site {
-		if err := writeFile(opts.Out, output(p.page.Pathname), []byte(documents[i])); err != nil {
-			return nil, err
-		}
+	if err := replace(opts.Out, encoded, tree); err != nil {
+		return nil, err
 	}
 	return bytes, nil
 }

@@ -311,6 +311,28 @@ func TestPrune(t *testing.T) {
 			want: `@media (prefers-reduced-motion:no-preference){@keyframes in{to{opacity:1}}.a{animation:in 1s}}@layer m;`,
 		},
 
+		// ---- @position-try ----
+		{
+			// The design system's menu: a page without one kept its fallback.
+			name: "a @position-try stays only if something names it",
+			css: `@position-try --edge{left:.5rem;right:auto}@position-try --viaprop{top:0}@position-try --attr{top:0}@position-try --styled{top:0}` +
+				`@position-try --gone{left:var(--only-here)}@position-try --unnamed{top:0}@position-try --esc\61ped{top:0}@position-try --Case{top:0}` +
+				`:root{--only-here: 1px;--fallback: --viaprop}` +
+				`.menu{position-try-fallbacks:flip-block,--edge}.menu:hover{position-try:var(--fallback)}.menu:focus{position-try-fallbacks:--escaped,--case}` +
+				`.gone{position-try-fallbacks:--gone}`,
+			page: `<div class="menu" style="position-try-fallbacks: --attr"></div><style>.y{position-try: --styled}</style>`,
+			want: `@position-try --edge{left:.5rem;right:auto}@position-try --viaprop{top:0}@position-try --attr{top:0}@position-try --styled{top:0}` +
+				`@position-try --esc\61ped{top:0}` +
+				`:root{--fallback: --viaprop}` +
+				`.menu{position-try-fallbacks:flip-block,--edge}.menu:hover{position-try:var(--fallback)}.menu:focus{position-try-fallbacks:--escaped,--case}`,
+		},
+		{
+			name: "@position-try inside an at-rule; one whose prelude is no name is kept as it is",
+			css:  `@layer c{@position-try --in{top:0}.gone{position-try-fallbacks:--in}}@media print{@position-try --p{top:0}}@position-try edge{top:0}@position-try --a,--b{top:0}@position-try{top:0}`,
+			page: `<p class="a"></p>`,
+			want: `@layer c;@position-try edge{top:0}@position-try --a,--b{top:0}@position-try{top:0}`,
+		},
+
 		// ---- custom properties ----
 		{
 			name: "a custom property nothing reads is dropped, to a fixed point",
@@ -352,7 +374,9 @@ func TestPrune(t *testing.T) {
 				`@property --x{syntax: "<length>"; inherits: false; initial-value: 0px}@page{margin:1cm;@top-left{content:"x"}}` +
 				`@counter-style c{system:cyclic;symbols:"*"}@position-try --t{inset:auto}@view-transition{navigation:auto}` +
 				`@unknown foo{bar {baz: 1}}@unknown2 foo;/*! legal */.gone{x:y}`,
-			page: `<p></p>`,
+			// A @position-try is known by now (above): this one stays
+			// because the page names it.
+			page: `<p style="position-try-fallbacks: --t"></p>`,
 			want: `@charset "UTF-8";@import url(x.css) layer(l);@namespace svg url(http://www.w3.org/2000/svg);@font-face{font-family:X;src:url(x.woff2)}` +
 				`@property --x{syntax: "<length>"; inherits: false; initial-value: 0px}@page{margin:1cm;@top-left{content:"x"}}` +
 				`@counter-style c{system:cyclic;symbols:"*"}@position-try --t{inset:auto}@view-transition{navigation:auto}` +
@@ -396,7 +420,7 @@ func checkPruned(t testing.TB, css, out string, doc *html.Node) {
 	if again != out {
 		t.Errorf("not idempotent:\n once: %s\ntwice: %s", out, again)
 	}
-	if stats.RulesDropped+stats.SelectorsDropped+stats.Properties+stats.Keyframes != 0 {
+	if stats.RulesDropped+stats.SelectorsDropped+stats.Properties+stats.Keyframes+stats.PositionTries != 0 {
 		t.Errorf("pruning again dropped something: %+v", stats)
 	}
 	sameDeclarations(t, css, out)
@@ -485,26 +509,59 @@ func TestPruneTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, doc := range map[string]*html.Node{
-		"template":            parsePage(t, `<p class="a"></p><template><div class="row"></div></template>`),
-		"shadow root":         parsePage(t, `<p class="a"></p><div><template shadowrootmode="open"><slot></slot></template></div>`),
-		"noscript, as text":   parsePage(t, `<head><noscript><link rel="stylesheet" href="x.css"></noscript></head><p class="a"></p>`),
-		"noscript, as markup": noscript,
+	const markup = "the page has markup in a <select>"
+	for name, tt := range map[string]struct {
+		doc     *html.Node
+		because string
+	}{
+		"template":            {parsePage(t, `<p class="a"></p><template><div class="row"></div></template>`), "the page has a <template>"},
+		"shadow root":         {parsePage(t, `<p class="a"></p><div><template shadowrootmode="open"><slot></slot></template></div>`), "the page has a <template>"},
+		"noscript, as text":   {parsePage(t, `<head><noscript><link rel="stylesheet" href="x.css"></noscript></head><p class="a"></p>`), "the page has a <noscript>"},
+		"noscript, as markup": {noscript, "the page has a <noscript>"},
 		// The browser clones the selected option's content into it at load:
 		// `selectedcontent .desc` and `button .desc` match there, and nothing
 		// in the page as it was written says so.
-		"selectedcontent": parsePage(t, `<p class="a"></p><select><button><selectedcontent></selectedcontent></button><option><span class="gone">x</span>A</option></select>`),
+		"selectedcontent": {parsePage(t, `<p class="a"></p><select><button><selectedcontent></selectedcontent></button><option><span class="gone">x</span>A</option></select>`), markup},
 		// A parser from before the customizable select drops what a <select>
 		// holds besides its options, and their end tags: there the option
 		// is a child of the select, and the next <p> is not in a <div>.
-		"select, markup around the options": parsePage(t, `<p class="a"></p><select><div><option>A</option></div></select>`),
-		"select, markup in an option":       parsePage(t, `<p class="a"></p><select><optgroup label="g"><option><b>A</b></option></optgroup></select>`),
-		"selectedcontent, on its own":       parsePage(t, `<p class="a"></p><selectedcontent></selectedcontent>`),
+		"select, markup around the options": {parsePage(t, `<p class="a"></p><select><div><option>A</option></div></select>`), markup},
+		"select, markup in an option":       {parsePage(t, `<p class="a"></p><select><optgroup label="g"><option><b>A</b></option></optgroup></select>`), markup},
+		"selectedcontent, on its own":       {parsePage(t, `<p class="a"></p><selectedcontent></selectedcontent>`), "the page has a <selectedcontent>"},
+		// What the user's editing creates is of no script: Bold makes a <b>,
+		// Enter a <div> — `.gone` may be the class of what was pasted.
+		"contenteditable":                     {parsePage(t, `<p class="a"></p><div contenteditable>notes</div>`), "the page has an element the user edits (`contenteditable`)"},
+		"contenteditable, as React writes":    {parsePage(t, `<p class="a"></p><div contenteditable="true">notes</div>`), "the page has an element the user edits (`contenteditable`)"},
+		"contenteditable, plain text":         {parsePage(t, `<p class="a"></p><div ContentEditable="plaintext-only">notes</div>`), "the page has an element the user edits (`contenteditable`)"},
+		"contenteditable, a value of its own": {parsePage(t, `<p class="a"></p><div contenteditable="yes">notes</div>`), "the page has an element the user edits (`contenteditable`)"},
 	} {
-		out, stats := mustPrune(t, css, doc)
-		if out != css || !stats.Unpruned || stats.BytesOut != len(css) || stats.Rules != 3 || stats.Selectors != 3 || stats.RulesDropped != 0 {
+		out, stats := mustPrune(t, css, tt.doc)
+		if out != css || !stats.Unpruned || stats.Because != tt.because || stats.BytesOut != len(css) || stats.Rules != 3 || stats.Selectors != 3 || stats.RulesDropped != 0 {
 			t.Errorf("%s: pruned: %q %+v", name, out, stats)
 		}
+	}
+	// An element that says it is not edited is as any other.
+	for name, page := range map[string]string{
+		"contenteditable=false":   `<p class="a"></p><div contenteditable="false">notes</div>`,
+		"another case, and space": `<p class="a"></p><div contenteditable=" FALSE ">notes</div>`,
+		"a data attribute":        `<p class="a"></p><div data-contenteditable="true">notes</div>`,
+	} {
+		if out, stats := mustPrune(t, css, parsePage(t, page)); out != `.a{x:y}` || stats.Unpruned || stats.Because != "" {
+			t.Errorf("%s: %q %+v", name, out, stats)
+		}
+	}
+}
+
+// TestWhole: a sheet the driver does not prune, counted as Prune counts one
+// it gives back.
+func TestWhole(t *testing.T) {
+	const css = `.a{x:y}.gone,.b{x:y}@media print{:root{--unused: 1}}@keyframes k{to{x:y}}`
+	stats, err := Whole(css)
+	if want := (Stats{BytesIn: len(css), BytesOut: len(css), Rules: 3, Selectors: 4, Unpruned: true}); err != nil || fmt.Sprint(stats) != fmt.Sprint(want) {
+		t.Errorf("%+v, %v; want %+v", stats, err, want)
+	}
+	if _, err := Whole(`.a{x:y`); err == nil {
+		t.Error("CSS that does not read is counted")
 	}
 }
 
@@ -580,10 +637,12 @@ func TestPruneStats(t *testing.T) {
 	wantStats := Stats{
 		BytesIn: len(css), BytesOut: len(want),
 		Rules: 4, RulesDropped: 2, Selectors: 5, SelectorsDropped: 3, Properties: 1, Keyframes: 1,
+		// A file's bytes are its rules': not the comment that names it,
+		// which is as long as the path to the file on this machine.
 		Sources: []Source{
-			{Name: "ds/tokens.css", BytesIn: 57, BytesOut: 34, Rules: 1},
-			{Name: "ds/button.css", BytesIn: 176, BytesOut: 43, Rules: 3, RulesDropped: 2},
-			{Name: "ds/empty.css", BytesIn: 30, BytesOut: 30},
+			{Name: "ds/tokens.css", BytesIn: 57 - len("/* ds/tokens.css */"), BytesOut: 34 - len("/* ds/tokens.css */"), Rules: 1},
+			{Name: "ds/button.css", BytesIn: 176 - len("/* ds/button.css */"), BytesOut: 43 - len("/* ds/button.css */"), Rules: 3, RulesDropped: 2},
+			{Name: "ds/empty.css", BytesIn: len("/*! legal */"), BytesOut: len("/*! legal */")},
 		},
 	}
 	if got, want := sprint(stats), sprint(wantStats); got != want {

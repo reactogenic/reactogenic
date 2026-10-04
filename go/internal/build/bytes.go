@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -18,8 +19,8 @@ import (
 // page ships, how, and why each byte is there. It is written to
 // `<out>/_rg/report.json`, and `--report` prints it.
 //
-// Nothing in it names the machine: files are named from the project
-// directory, as esbuild names them.
+// Nothing in it names the machine: a file of the project is named from the
+// project directory, a file of a package by the package (naming).
 type Report struct {
 	Base       string       `json:"base"`
 	Inline     string       `json:"inline"`
@@ -29,9 +30,13 @@ type Report struct {
 	Public     []string     `json:"public"` // the files copied from `public/`
 }
 
-// Size is a number of bytes as written, and after gzip (level 9). Brotli is
-// not here: Go has no encoder for it, and the builder takes no dependency to
-// count with — the measuring scripts have it (plan.md, RGP2-050).
+// Size is a number of bytes as written, and after gzip: the gzip stream Go's
+// compress/gzip writes at its level 9. That is DEFLATE by another encoder
+// than zlib's, so not to the byte what `gzip -9` gives — a few bytes more on
+// what a page ships, under 1%; the measuring scripts have the reference
+// numbers. Brotli is not here: Go has no encoder for it, and the builder
+// takes no dependency to count with — they have that too (plan.md,
+// RGP2-050).
 type Size struct {
 	Raw  int `json:"raw"`
 	Gzip int `json:"gzip"`
@@ -92,13 +97,15 @@ type Module struct {
 
 // Styles is cssprune.Stats.
 type Styles struct {
-	Unpruned         bool     `json:"unpruned,omitempty"` // the page has a `<template>` or the like: its CSS is whole
+	Unpruned         bool     `json:"unpruned,omitempty"` // the page's CSS is whole, and Because says why: "the page has a <template>"
+	Because          string   `json:"because,omitempty"`
 	Rules            int      `json:"rules"`
 	RulesDropped     int      `json:"rulesDropped"`
 	Selectors        int      `json:"selectors"`
 	SelectorsDropped int      `json:"selectorsDropped"`
 	Properties       int      `json:"customPropertiesDropped"`
 	Keyframes        int      `json:"keyframesDropped"`
+	PositionTries    int      `json:"positionTryDropped"`
 	Sources          []Source `json:"sources"`
 }
 
@@ -165,6 +172,7 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 		}
 		return a
 	}
+	names := naming{dir: opts.dir(), packages: map[string]string{}}
 	for i, p := range site {
 		file := p.page.File
 		if rel, err := filepath.Rel(opts.dir(), filepath.FromSlash(file)); err == nil {
@@ -196,25 +204,80 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 			}
 		}
 		for _, m := range p.modules {
-			page.Modules = append(page.Modules, Module{m.Module, m.Path, m.Bytes})
+			page.Modules = append(page.Modules, Module{m.Module, names.of(m.Path), m.Bytes})
 		}
 		if s := p.styles; s != nil {
 			page.Styles = &Styles{
-				Unpruned: s.Unpruned, Rules: s.Rules, RulesDropped: s.RulesDropped,
+				Unpruned: s.Unpruned, Because: s.Because, Rules: s.Rules, RulesDropped: s.RulesDropped,
 				Selectors: s.Selectors, SelectorsDropped: s.SelectorsDropped,
-				Properties: s.Properties, Keyframes: s.Keyframes, Sources: []Source{},
+				Properties: s.Properties, Keyframes: s.Keyframes, PositionTries: s.PositionTries, Sources: []Source{},
 			}
 			for _, src := range s.Sources {
 				// Before the first source comment there is nothing of a file.
 				if src.Name == "" && src.Rules == 0 {
 					continue
 				}
-				page.Styles.Sources = append(page.Styles.Sources, Source{src.Name, src.Rules, src.RulesDropped, src.BytesIn, src.BytesOut})
+				page.Styles.Sources = append(page.Styles.Sources, Source{names.of(src.Name), src.Rules, src.RulesDropped, src.BytesIn, src.BytesOut})
 			}
 		}
 		r.Pages = append(r.Pages, page)
 	}
 	return r
+}
+
+// naming names the files of the report: the inputs of a script, the source
+// files of a sheet (builder.md, *The report*: files).
+//
+// esbuild names a file from the project directory, by where it is — links
+// resolved. That is the file's name while it is the project's own
+// (`site.css`). A package's file is somewhere of the install's choosing:
+// `../../packages/ui/src/…` through a workspace's link,
+// `node_modules/.pnpm/…` in pnpm's store, and through a link out of the
+// project a chain of `../` to a path of this machine. So it is named by
+// what it is on every machine: its package, and its path in the package —
+// `@reactogenic/ui/src/dialog.css`.
+type naming struct {
+	dir      string            // the project directory
+	packages map[string]string // a directory → the name of the package it is the root of; "": of none
+}
+
+// of is the name of a file that esbuild names name.
+func (s *naming) of(name string) string {
+	if name == behaviors.Entry || name == behaviors.Runtime {
+		return name
+	}
+	file := filepath.FromSlash(name)
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(s.dir, file)
+	}
+	rel, err := filepath.Rel(s.dir, file)
+	if err != nil {
+		rel = file // another volume
+	}
+	rel = filepath.ToSlash(rel)
+	if filepath.IsLocal(filepath.FromSlash(rel)) && !slices.Contains(strings.Split(rel, "/"), "node_modules") {
+		return rel // the project's own
+	}
+	for dir := filepath.Dir(file); ; dir = filepath.Dir(dir) {
+		pkg, known := s.packages[dir]
+		if !known {
+			var manifest struct {
+				Name string `json:"name"`
+			}
+			if text, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil && json.Unmarshal(text, &manifest) == nil {
+				pkg = manifest.Name
+			}
+			s.packages[dir] = pkg
+		}
+		if pkg != "" {
+			inside, _ := filepath.Rel(dir, file)
+			return pkg + "/" + filepath.ToSlash(inside)
+		}
+		if filepath.Dir(dir) == dir {
+			// Of no package, and not the project's: where it is.
+			return rel
+		}
+	}
 }
 
 // JSON is the report as `<out>/_rg/report.json` holds it.
@@ -301,7 +364,7 @@ func (r *Report) Print(w io.Writer) {
 		if s := p.Styles; s != nil {
 			var sources []string
 			if s.Unpruned {
-				sources = append(sources, "not pruned: the page has a <template>, a <noscript> or markup in a <select>")
+				sources = append(sources, "not pruned: "+s.Because)
 			}
 			for _, src := range s.Sources {
 				sources = append(sources, fmt.Sprintf("%3d kept, %3d dropped  %s", src.Rules-src.RulesDropped, src.RulesDropped, src.File))

@@ -1,0 +1,17 @@
+// "/": a link to another page, and a behaviour — so the page has a script.
+import { mount } from "@reactogenic/core";
+import { Layout } from "../layout.tsx";
+
+function Marked() {
+  mount("./behaviors/mark", "marked");
+  return <p id="marked">Marked.</p>;
+}
+
+export default function HomePage() {
+  return (
+    <Layout title="Home">
+      <a href="/guide/">Guide</a>
+      <Marked />
+    </Layout>
+  );
+}
