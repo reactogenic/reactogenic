@@ -25,6 +25,24 @@ are a matter of taste.
 
 ## Binary size
 
-> To fill in with RGP2-030: the six stripped sizes with esbuild and the
-> engine linked (measured in research: darwin-arm64 27.4 → ≈ 34.7 MB, +27%).
-> Over the 10% line of `scripts/build-binaries.sh`; accepted for the builder.
+With `reactogenic build` in the binary (RGP2-030) — esbuild, the engine, the
+HTML parser and the builder's own packages — `scripts/build-binaries.sh
+0.0.0-dev`, stripped, `CGO_ENABLED=0`:
+
+| Target | Phase 1 | With the builder | |
+| --- | --- | --- | --- |
+| darwin-arm64 | 27.3 MB | 35.1 MB | +7.8, +29% |
+| darwin-x64 | 28.6 MB | 37.1 MB | +8.5, +30% |
+| linux-arm64 | 26.4 MB | 34.3 MB | +7.9, +30% |
+| linux-x64 | 27.9 MB | 36.5 MB | +8.6, +31% |
+| win32-arm64 | 26.5 MB | 34.3 MB | +7.8, +29% |
+| win32-x64 | 28.2 MB | 36.9 MB | +8.7, +31% |
+
+- Over the 10% line of `scripts/build-binaries.sh`; accepted for the builder:
+  it is the linker and the engine, and neither can be had smaller (decisions
+  1, 2). The research measured darwin-arm64 at ≈ 34.7 MB.
+- Of the growth, ≈ 7.2 MB came with the engine and esbuild (plan.md,
+  RGP2-011: 34.5 MB on darwin-arm64); the driver, the pruner, the page checks
+  and the behaviours add ≈ 0.6 MB.
+- No `text/template`, no `html/template`: the binary has no symbol of
+  either (decision 6).
