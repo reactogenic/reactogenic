@@ -11,6 +11,7 @@ package behaviors
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -31,6 +32,8 @@ type Options struct {
 	Dir string
 	// Base is `--base`, the path the site is served under: the control
 	// looks a page up by `location.pathname`, which carries it. "" is "/".
+	// Percent-encoded or not: the table is keyed by the names of the
+	// directories, as the script decodes the pathname.
 	Base string
 	// Cache keeps what is learned of a behaviour module for the next page
 	// that mounts it. Optional: without one, each call learns it again.
@@ -200,7 +203,14 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 			continue
 		}
 		p, mods = p.byFile(mods)
-		r := row{pathname: strings.TrimSuffix(base(opts.Base), "/") + page.Pathname}
+		// The key is what the script makes of `location.pathname`: decoded.
+		// So the base is — `/caf%C3%A9/` and `/café/` are one directory, and
+		// the browser reports either as the first.
+		under := strings.TrimSuffix(base(opts.Base), "/")
+		if decoded, err := url.PathUnescape(under); err == nil {
+			under = decoded
+		}
+		r := row{pathname: under + page.Pathname}
 		for _, c := range p.calls {
 			i := slices.Index(files, mods[c.module].file)
 			if i < 0 {

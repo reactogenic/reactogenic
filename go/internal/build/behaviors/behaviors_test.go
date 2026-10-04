@@ -457,6 +457,15 @@ func TestControl(t *testing.T) {
 			t.Errorf("base %q:\n%s", base, js)
 		}
 	}
+	// …decoded, as the script decodes it: a base given percent-encoded is
+	// the directory it encodes, and the browser reports either spelling the
+	// same way.
+	for _, base := range []string{"/caf%C3%A9/", "/café/", "caf%c3%a9"} {
+		opts.Base = base
+		if js, _ := BuildControl(pages, opts); !strings.Contains(js, `"/café/":`) || !strings.Contains(js, `"/café/guide/":`) || strings.Contains(js, `"/caf%`) {
+			t.Errorf("base %q:\n%s", base, js)
+		}
+	}
 	if js, reports := BuildControl([]render.Page{cli}, opts); js != "" || reports != nil {
 		t.Errorf("a site that mounts nothing: %q %v", js, reports)
 	}
@@ -829,6 +838,20 @@ func TestRun(t *testing.T) {
 	for _, pathname := range []string{"/docs/se%C3%B1or/", "/docs/se%c3%b1or", "/docs/señor/index.html", "/docs/a%20b%25/", "/docs/a%20b%25/index.html"} {
 		if got := node(t, control, pathname, "m1"); !slices.Equal(got.Added, []string{"m1:keydown", "m1:keydown"}) {
 			t.Errorf("the control at %s: %+v", pathname, got)
+		}
+	}
+	// So is the base in it, however `--base` spelt it: the table is keyed
+	// by the directory's name.
+	for _, base := range []string{"/caf%C3%A9/", "/café"} {
+		opts.Base = base
+		encoded, reports := BuildControl(pages, opts)
+		if len(reports) > 0 {
+			t.Fatalf("base %s: %+v", base, reports)
+		}
+		for _, pathname := range []string{"/caf%C3%A9/se%C3%B1or/", "/caf%c3%a9/se%C3%B1or/index.html"} {
+			if got := node(t, encoded, pathname, "m1"); !slices.Equal(got.Added, []string{"m1:keydown", "m1:keydown"}) {
+				t.Errorf("base %s: the control at %s: %+v", base, pathname, got)
+			}
 		}
 	}
 	// On a page that mounts nothing, and on one that is not the site's, the
