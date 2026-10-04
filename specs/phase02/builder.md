@@ -161,9 +161,29 @@ page can check:
 | command-target | `command="show-modal"`, `close` or `request-close` whose target is not a `<dialog>`; `show-popover`, `hide-popover`, `toggle-popover`, or any `popovertarget`, whose target has no `popover` |
 | link-not-found | a root-relative `href` (`/guide/slot/`) that is neither a page nor a file of the output; `#fragment` and query are ignored for the match |
 
+| | Rule |
+| --- | --- |
+| an id | compared as written (case-sensitive); `id=""` is none |
+| one id | `commandfor`, `popovertarget`, `anchor`, `for` on a `<label>`; empty, it names nothing: reported |
+| a list of ids | `aria-labelledby`, `aria-describedby`, `aria-controls`, `for` on an `<output>`: space-separated, each checked; an empty list is no mistake |
+| `href="#x"` | an id — as written or percent-decoded — or an `<a name>`. `#`, `#top` and a text directive (`#:~:text=…`) are not references |
+| a command | the six keywords, case-insensitive; a custom command (`--x`) is the page's own. A keyword without `commandfor` commands nothing: command-target |
+| a missing target | idref-not-found alone, not command-target as well |
+| a root-relative link | `href` of any element but `<base>`, starting with one `/`. Dot segments resolved, percent-decoded. It is a route — `/guide/`, also written `/guide` (the host redirects) or `/guide/index.html` (the file) — or a file of the output: `/favicon.svg`, `/demo/` for `demo/index.html` |
+| not checked | a URL with a scheme or a host (`https:`, `mailto:`, `//host`); a relative one (`slot/`, `../x/`, `?tab=2`) |
+| `--base /docs/` | a link under the base is the site's, matched without it: `/docs/guide/` → `/guide/`. One outside it is another site of the origin: not checked |
+| `<template>` | its content is not of the page: neither its ids nor its references |
+| repeated | one report per page for the same attribute on the same element name: a link of the layout is on every item of a list |
+
 They are reported at the page (file and pathname) with the offending
 attribute's text; mapping an attribute back to its `.rtsx` position needs
 provenance the renderer does not carry (*Not in phase 2*).
+
+```
+pages/guide/index.rtsx: error idref-not-found: Page /guide/: `commandfor="install"` on `<button>` names no element of the page
+pages/guide/index.rtsx: error command-target: Page /guide/: `command="show-modal"` on `<button>` needs a `<dialog>`: `commandfor="nav"` is a `<nav>`
+pages/guide/index.rtsx: error link-not-found: Page /guide/: `href="/guide/slot/"` on `<a>` is neither a page nor a file of the output
+```
 
 ## CSS
 
@@ -229,19 +249,22 @@ if (hasAction) mount("@reactogenic/ui/behaviors/menu-keys", id, { RG_MENU_TYPEAH
 
 ```js
 // generated entry for a page whose record holds two such mounts
-import a from "@reactogenic/ui/behaviors/menu-keys";
-import b from "@reactogenic/ui/behaviors/overlays";
-a(document.getElementById("m1")); a(document.getElementById("m2")); b();
+import m0 from "@reactogenic/ui/behaviors/menu-keys";
+import m1 from "@reactogenic/ui/behaviors/overlays";
+m0(document.getElementById("m1"));
+m0(document.getElementById("m2"));
+m1();
 ```
 
 | | Rule |
 | --- | --- |
 | module | the default export is `(root: HTMLElement) => void`, or `() => void` for a page-level behaviour (mounted without an id; run once per page however often it is mounted) |
+| the entry | one import per distinct module, in the order they are first mounted, resolved by esbuild from the project directory; one call per mount, in render order. One module on one element twice is one call |
 | flags | bare `declare const RG_…: boolean` identifiers — never an options object, an imported constant or a class member: esbuild removes code only on parser-time constants (research.md) |
 | a page's flags | per module, the **union** over the page's mounts. So a flag only *adds* behaviour. What must differ between two use sites on one page is an attribute on the root, read at run time |
-| every flag is defined | the builder defines each `RG_…` identifier found in the module's source — `false` unless a mount set it. A flag the builder did not see would be a `ReferenceError` at run time |
-| no top-level side effects | a module that should have been dropped must be absent from the metafile; the builder checks it |
-| build | one `api.Build` per page: generated entry, `Bundle`, minify, ES modules, `Define` = the page's flags, `Metafile`. No splitting |
+| every flag is defined | the builder defines each `RG_[A-Z0-9_]+` identifier found in the text of the module and of every module it imports — `false` unless a mount set it. A flag the builder did not see would be a `ReferenceError` at run time |
+| no top-level side effects | the builder **reads** each module once per site: it bundles `import "<module>"` alone — nothing of it used — ignoring `sideEffects` and `@__PURE__` annotations. Whatever is left in that output ran at the top level: mount-side-effect. State and constants are not code that runs (`let typed = ""`, `new WeakMap()`, a class, an enum); a call is (`["a", "b"].join(",")`, `matchMedia(…)`, `"command" in HTMLButtonElement.prototype`) — it belongs in the function. The same read resolves the module and lists the files whose flags are its own |
+| build | one `api.Build` per page: generated entry, `Bundle`, minify, ES modules, `Define` = the page's flags, `Metafile`. No splitting. Every input of its metafile is a file some mounted module reaches |
 
 `mountX(root)` per use site is layout.md's own design for clones opened from
 islands, so phase 2's behaviours carry over.
@@ -249,8 +272,14 @@ islands, so phase 2's behaviours carry over.
 | Code | Condition |
 | --- | --- |
 | mount-not-found | the module of a `mount()` does not resolve |
-| mount-no-element | the id of a `mount()` is not on the page |
-| mount-flag | a flag passed to `mount()` that the module does not declare |
+| mount-no-element | the id of a `mount()` is not on the page (a `<template>`'s content is not) |
+| mount-flag | a flag passed to `mount()` — on or off — that neither the module nor a module it imports declares |
+| mount-side-effect | a module, or one it imports, runs code when it is imported; reported at that file, with the statement that stays |
+| mount-error | anything else esbuild says of a module — an import of its own that does not resolve, no default export: its message, at its position |
+
+The first three are reported as the page checks are — at the page, naming
+the mount: ``Page /syntax/: `mount("@reactogenic/ui/behaviors/menu-keys")`:
+no element of the page has `id="m9"` ``.
 
 ## Packaging
 
@@ -291,6 +320,24 @@ page rendered would: same HTML, and
 | --- | --- | --- |
 | CSS | per page, pruned against its HTML | one file for the site: the unpruned bundle of everything any page imports |
 | JS | per page: the modules it mounted, its flags | one file for the site: every behaviour mounted on any page, every flag on, and a table from pathname to that page's mounts |
+
+```js
+// the control's entry: every flag is defined `true`
+import m0 from "@reactogenic/ui/behaviors/overlays";
+import m1 from "@reactogenic/ui/behaviors/menu-keys";
+const m = [m0, m1], t = {
+  "/": [[0]],
+  "/syntax/": [[0], [1, "m1"], [1, "m2"]],
+};
+for (const [i, id] of t[location.pathname.replace(/(\/index\.html|\/)?$/, "/")] || [])
+  id ? m[i](document.getElementById(id)) : m[i]();
+```
+
+- The table's keys carry `--base` (`/docs/syntax/`): they are what
+  `location.pathname` is. A page answers to `/syntax/`, `/syntax` and
+  `/syntax/index.html` — as its own script does, which is in the page
+  wherever it is served. A page that mounts nothing is not in the table.
+- The mount-* reports are those of the default build, page by page.
 
 The difference between the two builds is what component awareness is worth
 (plan.md, RGP2-050).

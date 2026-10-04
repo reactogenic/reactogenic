@@ -57,10 +57,23 @@ func Prune(css string, doc *html.Node) (out string, stats Stats, err error)
 
 // pagecheck — RGP2-021
 func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report
+func (Options) Check(…) []report.Report            // the same under --base: Options{Base: "/docs/"}
+// files: the output's other files, by their path from its root ("/favicon.svg")
 
 // behaviors — RGP2-022
+type Options struct {
+	Dir   string // the project directory: `mount()` specifiers resolve from it
+	Base  string // --base, for the control's table
+	Cache *Cache // optional: a module is read once per site (&behaviors.Cache{}, shared by the pages' builds)
+}
+type ModuleBytes struct{ Module, Path string; Bytes int } // an input of the script: the mount's specifier, the file, its bytes
 func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, reports []report.Report)
 func BuildControl(pages []render.Page, opts Options) (js string, reports []report.Report)   // --no-specialize
+// mount-no-element reads the ids off page.HTML: no parsed document is passed
+
+// report — a diagnostic of a page as a whole: its file, no position; check.Print writes
+// `pages/guide/index.rtsx: error idref-not-found: Page /guide/: …`
+func Page(file, pathname, code, message string) Report
 ```
 
 **The build-time protocol** between the engine and `@reactogenic/core`: while
@@ -143,17 +156,25 @@ esbuild's public API produces.
 - **Done when:** the corpus passes, with the design system's CSS and a page
   of each kind among it.
 
-### RGP2-021 — Page checks · S
+### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
 (builder.md, *Checks on the page*), on `golang.org/x/net/html`.
 
-### RGP2-022 — Behaviours: the page's JS · M
+### RGP2-022 — Behaviours: the page's JS · M · done
 `behaviors`: the generated entry from a page's mounts, one `api.Build` per
 page with the page's `Define`s, the metafile's bytes per module.
-- Every `RG_…` identifier of a mounted module's source is defined; the union
-  over mounts; mount-not-found, mount-no-element, mount-flag.
-- The metafile check that an unmounted module is absent.
+- Every `RG_…` identifier of a mounted module's source, and of the modules
+  it imports, is defined; the union over mounts; mount-not-found,
+  mount-no-element, mount-flag.
+- The read of a module (builder.md, *Behaviours*): a build of
+  `import "<module>"` alone, before the page's — `Define` is fixed when a
+  build starts. It gives the flags, and mount-side-effect: what is left of a
+  module nobody uses.
+- The metafile check: every input of a page's script is a file a mounted
+  module reaches.
 - `--no-specialize` (builder.md, *The control*): one script for the site.
+- The fixture's scripts run in Node against a fake `document`
+  (`go test`), and in Chrome with `RG_TEST_CHROME=<binary>`.
 - **Done when:** a fixture with three behaviour modules gives, per page, a
   script that holds only what was mounted, and a flag off removes its code.
 
