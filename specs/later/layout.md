@@ -36,6 +36,10 @@ The design system is authored in plain `.tsx` for exactly this reason: the
 same component is *executed* by the compiler in shell code and *rendered* by
 React in island code.
 
+> Phase 2: `@reactogenic/ui` is authored in `.rtsx` — plain `.tsx` once
+> phase 1's transpiler has run, which is what the builder executes
+> ([phase02/decisions.md](../phase02/decisions.md), 5: **for review**).
+
 **The boundary is explicit, never inferred.** Code is shell code unless it is
 inside a marked island. Reasons:
 
@@ -61,6 +65,10 @@ import { Dynamic } from "reactogenic";
 
 <Dynamic #counter />                       // is a segment root: mounts +counter.rtsx
 ```
+
+> Note: there is no package `"reactogenic"`. Phase 1's runtime is
+> `@reactogenic/core`; which package exports `Dynamic` is settled with
+> islands.
 
 Both can be combined with everything a component allows — for instance
 `<Dynamic><section #cart /></Dynamic>`: inside an island a segment root is
@@ -108,8 +116,11 @@ shell-react at the use site (shell-dynamic-code). No per-file annotation.
 
 > Phase 2 builds shells by *executing* shell code once per pathname
 > ([phase02/builder.md](../phase02/builder.md), *Shell code in phase 2*):
-> S2 is read there as "no **runtime** variance". The table below is the
-> original statement.
+> S2 is read there as "no **runtime** variance", S3 as "whatever execution
+> yields", and S1 admits context — it is resolved while the page executes —
+> and nothing that suspends; S4 is enforced by the engine. The table below
+> is the original statement; which reading stands is the owner's
+> ([phase02/decisions.md](../phase02/decisions.md), 4: **for review**).
 
 Shell code must be **shell-safe**:
 
@@ -134,12 +145,22 @@ compile time, with compile-time args.
 > OPEN: loops over constants. `<Each items={NAV_LINKS}>` is deterministic and
 > could be unrolled by the compiler. Allow `Each` / `.map()` in shell code when
 > `items` is a compile-time constant (S3), or keep S2 absolute?
+>
+> Phase 2 allows them: the page is executed, so the loop is a compile-time
+> value (decisions.md, 4: **for review**). Not what it produces as *slot*
+> elements: `Each` around `<$Item>` is still orphan-slot (decisions.md, *For
+> the owner*, A).
 
 The shell's raw JS comes from the design system's shell components — see
 *Shell components*.
 
 > OPEN: can page authors contribute shell behaviour without React, or is raw
 > JS reserved to the design system?
+>
+> Phase 2 does not answer it. A behaviour is a module a component `mount()`s
+> (builder.md, *Behaviours*), and the design system's are the only ones
+> specified; a page's own `<script>` is built as written and turns that
+> page's CSS pruning off (decisions.md, 19; *For the owner*, E).
 
 ## Island rules
 
@@ -189,6 +210,13 @@ dialog.open("Dialog-a1", {
 
 React never renders `Dialog`. The element in the island is a **remote
 control** for DOM that belongs to the shell.
+
+> OPEN (for the owner, [phase02/decisions.md](../phase02/decisions.md), B):
+> phase 2's `Dialog` takes its body as `children`
+> ([phase02/components.md](../phase02/components.md), *Dialog*), not as
+> `<$Contents>`, and holes are defined below for slot bodies only.
+> Recommended there: `children` stays, and is a body with holes too when
+> islands arrive — this section is amended then.
 
 Render must stay pure (and runs twice under StrictMode), so the call is not
 made during render. The compiler emits a bridge component that drives the
@@ -277,6 +305,12 @@ A shell component is three artifacts, like the rest of the shell:
 | CSS | part of the per-route CSS |
 | JS (`open` / `update` / `close`) | raw JS in the shared runtime, React-free |
 
+> Phase 2 has no shared runtime: a page's JS is the behaviours its
+> components mounted, built per page (builder.md, *Behaviours*). Of that,
+> the `(root)` signature of `mountDialog` below carries over to islands; the
+> entry that mounts by id at load, a behaviour that returns nothing and the
+> record of execution do not (decisions.md, *For the owner*, C).
+
 So yes, a `DocumentFragment` — but the browser builds it, not our JS:
 `template.content` *is* an inert fragment, parsed with the document, costing
 nothing until used (no scripts run, no images load, no styles apply).
@@ -363,6 +397,12 @@ dynamic-props rule applies to roots, not portals.
 
 > OPEN: a shell component used directly in **shell code** (a static dialog in
 > a page) — who opens it, with no island around?
+>
+> Phase 2: nobody has to. It is a live `<dialog>` in the page, opened by a
+> button's `command` / `commandfor` — no JS at the browser floor, no holes —
+> which is the alternative listed above as not chosen ("one live, hidden
+> `<dialog>`"). `<template>` + clone stays for a dialog with holes
+> (components.md, *Dialog*; decisions.md, 17: **for review**).
 
 > OPEN: mount/unmount as open/close is inferred from the sketch. The
 > alternative is an explicit `open` prop on an always-mounted element.
@@ -436,6 +476,13 @@ the params line up with the input's prop names on purpose.
 
 - `$Field` is filled once per field, so it is a **list slot**
   ([syntax.md](../phase01/syntax.md#list-slots)): `Form` declares `$Field: {…}[]`.
+
+  > OPEN: syntax.md has no *List slots*: a slot typed as an array is an
+  > error there (slot-list), and many values of one kind are a `KeyedSlot`
+  > (syntax.md, *Keyed slots*; phase02/components.md, rule 4). So `$Field:
+  > KeyedSlot<…>` — and is the entry's `key` the field's `name`, or written
+  > beside it?
+
 - Two fields with the same `name` → form-duplicate-field.
 
 - `<Match on={invalid}><$Hint>…` is a conditional slot
@@ -521,6 +568,12 @@ an island; islands reach everything else through
 
 Every rule is reported three ways: compiler error, language-service
 diagnostic (as you type), ESLint rule (for CI without a build).
+
+> Phase 2 reports shell-react, shell-handler and shell-nondeterministic —
+> and shell-error, for whatever else a page throws — from `build` alone:
+> each is found by executing the page, so `check` and the editor do not see
+> them (builder.md, *Not in phase 2*). shell-conditional, shell-loop and
+> shell-dynamic-value have nothing to report under its reading of S2 and S3.
 
 | Code | Message | Rule |
 | --- | --- | --- |

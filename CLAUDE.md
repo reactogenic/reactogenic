@@ -11,9 +11,11 @@ module (`go/internal/`, `go/cmd/reactogenic/`), vendored tsgo in
 `go/third_party/tsgo` (never edit without adding a patch to `go/patches/`);
 `packages/` — pnpm workspace, every package scoped `@reactogenic/*` except
 `packages/vscode` (named `rtsx`, private: `vsce` rejects scoped names — the
-extension `reactogenic.rtsx`); `go.work` and `package.json` at the root tie
-them together. Run Go commands on `github.com/reactogenic/reactogenic/go/...`,
-not `./go/...`. tsgo is reached only through its `rtsx` bridge package.
+extension `reactogenic.rtsx`); `site/` — the docs site, a private workspace
+package; `bench/` — the measuring script and its baselines; `go.work` and
+`package.json` at the root tie them together. Run Go commands on
+`github.com/reactogenic/reactogenic/go/...`, not `./go/...`. tsgo is reached
+only through its `rtsx` bridge package.
 Conformance: `go/internal/conformance` runs the syntax.md examples plus
 `fixtures/`, with a ratchet in `testdata/passing.txt` (`fixtures/README.md`).
 
@@ -25,17 +27,47 @@ spec wins; update this file.
 The builder: `reactogenic build` compiles pages in `.rtsx` plus the layout
 components of `@reactogenic/ui` (`SideMenu`, `Dialog`, `DropdownMenu`) into
 per-page plain HTML + CSS + minimal JS, **no React in the output**; the proof
-is a four-page docs site (`site/`) and a measured bet (`plan.md`, RGP2-050).
+is a four-page docs site (`site/`) and a measured bet — thresholds T1–T8 in
+`plan.md` (RGP2-050), the result in `specs/phase02/bet.md`.
 No islands, no dev server, no view transitions.
 
 - `research.md` — esbuild is the linker (public Go API, in-process, never
   forked); our compiler sits in front and executes pages in an embedded
   engine (`modernc.org/quickjs`) with React's own static renderer.
 - `builder.md` — the pipeline: routes, the record of execution, page checks,
-  CSS pruned per page, behaviours (`mount()` + `Define` flags), packaging.
-- `components.md` — the three components on platform primitives.
-- `decisions.md` — what was decided, and what is **for review**.
-- Never link `text/template` / `html/template` into the binary: +18.6 MB.
+  CSS pruned per page, behaviours (`mount()` + `Define` flags), packaging,
+  the report, the control (`--no-specialize`).
+- `components.md` — the three components (and `Button`) on platform
+  primitives.
+- `decisions.md` — what was decided, what is **for review**, what waits
+  *For the owner* (A–J), the binary's size.
+- `plan.md` — tasks `RGP2-xxx`, each with what was measured, what was not
+  done and what was not verified.
+
+What exists:
+
+- `go/internal/build` — the driver: `build.Main` is the command, `build.Run`
+  the build. A stage per package under it: `render` (the render bundle;
+  each page executed in a runtime of its own), `pagecheck` (ids, references,
+  commands, links), `cssprune` (a page's CSS against the page as served),
+  `behaviors` (a page's script from its `mount()`s; the control). Each
+  package's doc comment says what it guarantees.
+- Its tests build fixture sites (`testdata/`: the whole output golden in six
+  modes — `-update` rewrites it, and cssprune's corpus reads it) and `site/`
+  itself. They need `pnpm install` at the root and `node`.
+- `packages/core` — `pathname`, `useShellId`, `mount`: what a component asks
+  the builder. `packages/ui` — the components in `.rtsx`, their CSS, the
+  behaviours (`src/behaviors/`); private, not published. Browser suites
+  (Playwright, Chromium and WebKit): `pnpm --filter @reactogenic/ui
+  test:browser`, `pnpm --filter @reactogenic/site test:browser`.
+- `site/` — built by `reactogenic build` (`$REACTOGENIC_BINARY`:
+  `site/README.md`); CI's `site` job builds it, fails on any diagnostic and
+  keeps the byte report. No `<script>`, no hand-written JS, no list of
+  styles or behaviours in its source (T6).
+- `bench/measure.mjs` — what a page costs the browser; `bench/baselines/`.
+- Never link `text/template` / `html/template` into the binary: +18.6 MiB.
+- Docs for users: *Build* in `docs/getting-started.md`; `CHANGELOG.md`,
+  *Unreleased*.
 
 ## Phase 1 (`specs/phase01/`) — released
 
@@ -97,6 +129,32 @@ them, so each screen ships exactly the HTML, CSS and JS it needs."
   `<Switch on={query.status} exhaustive>` with `$Case`s is all the flow
   control there is. No "empty" state — emptiness is the user's business.
 
+## Open with the owner
+
+Phase 2 was decided while the owner was away
+(`specs/phase02/decisions.md`), and some of it reads against this file.
+Nothing here is rewritten for it: the statements of this file stand as
+written, the phase 2 code is as decisions.md has it, and which side gives
+way is the owner's to rule on — the rows marked **for review**, and the
+list *For the owner*:
+
+- **"The design system's core catalog is authored in plain `.tsx`"** —
+  `@reactogenic/ui` is authored in `.rtsx` (decision 5, **for review**).
+- **"Go templates for shells"** — no `text/template` in the binary; HTML is
+  written as strings (decision 6, **for review**).
+- **"Loop-produced slot items (`Each` around slot elements — phase 2)"**
+  (*Deferred*) — no task of `plan.md` has them; the site writes its menu out
+  (*For the owner*, A).
+- **"Loops over constants in the shell"** (*Deferred*) — phase 2 executes
+  shell code, so they work: S2 reads "no *runtime* variance" (decision 4,
+  **for review**).
+- Also for review: 2 (the embedded engine), 11 (the browser floor), 16
+  (`pathname()` is public), 17 (a dialog in shell code is a live `<dialog>`,
+  not a `<template>`). *For the owner*, B–J: `children` vs `$Contents`, what
+  islands need, integer-like keys, a page's own `<script>`, T2's budget, the
+  close button's name, a dialog under a popover, disabled menu items, links
+  into the current page.
+
 ## Governing syntax rule
 
 New meaning may only be given to forms that are **syntax errors in today's
@@ -150,8 +208,11 @@ grammar, the VS Code extension (`packages/vscode`).
 `specs/phase01/plan.md` — tasks `RGP1-xxx`; `specs/phase01/decisions.md` —
 one section per decided task.
 
+`specs/phase02/` — the builder: see *Current phase* above.
+
 Parked in `specs/later/`: `layout.md` (shell vs island rules, `Dynamic`,
-shell components, `Form` / `$Field`), `persistent-state.md`.
+shell components, `Form` / `$Field`; notes mark where phase 2 reads it
+otherwise), `persistent-state.md`.
 
 ## Rejected (do not propose again)
 
@@ -179,7 +240,10 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
 | `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
 | `phase01/ide.md` | implemented and released (RGP1-100–113: npm 0.1.0-alpha.1, the extension 0.1.1); 114 (re-vendor) later |
-| `phase02/*` | research and spec done (RGP2-001, 002); the builder in progress |
+| `phase02/research.md`, `phase02/research/` | done (RGP2-001) |
+| `phase02/builder.md`, `phase02/components.md` | implemented (RGP2-010–040): `reactogenic build`, `@reactogenic/ui`, `site/`; `> OPEN:` notes inside |
+| `phase02/plan.md`, `phase02/decisions.md` | RGP2-001–040 and 060 done; 050 (measure) is the last. Decisions **for review** and *For the owner*: not ruled on |
+| `phase02/bet.md` | the measured bet, written by RGP2-050 |
 | `later/layout.md`, `later/persistent-state.md` | parked; phase 2 reads the shell rules as in `phase02/builder.md` |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 

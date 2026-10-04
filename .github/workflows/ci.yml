@@ -12,9 +12,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-      # The builder's tests (go/internal/build/render) render fixture pages
-      # with the root's react and react-dom, and again in Node: the
-      # differential test (specs/phase02/plan.md, RGP2-011).
+      # The builder's tests (go/internal/build/...) resolve react, react-dom and
+      # @reactogenic/ui from the root's node_modules, build the docs site
+      # (site/), and run what they built in Node: the differential test of
+      # the renderer (specs/phase02/plan.md, RGP2-011), the behaviours'
+      # scripts (RGP2-022).
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -26,7 +28,9 @@ jobs:
       - name: Vet
         run: go vet github.com/reactogenic/reactogenic/go/...
       - name: Test
-        run: go test -race github.com/reactogenic/reactogenic/go/... # tsgo parses files in parallel
+        # -race: tsgo parses files in parallel. -timeout: the builder's packages
+        # run an interpreter (the embedded engine) under the race detector.
+        run: go test -race -timeout 30m github.com/reactogenic/reactogenic/go/...
       - name: gofmt
         run: test -z "$(gofmt -l go/cmd go/internal)"
       - name: Every fork file is upstream's or in a patch
@@ -86,3 +90,47 @@ jobs:
         run: xvfb-run -a pnpm --filter rtsx test:editor # VS Code needs a display
         env:
           REACTOGENIC_BINARY: ${{ runner.temp }}/reactogenic
+
+  site:
+    # The docs site, built by the builder of this commit (specs/phase02/plan.md,
+    # RGP2-040 and RGP2-060): any diagnostic fails the job, and the byte report
+    # is its artifact. Not a required check of the `main` ruleset.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash # named, so that a step fails when the left side of a pipe does
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # The build resolves react, react-dom and @reactogenic/ui from the site's
+      # node_modules; it runs no Node.
+      - run: pnpm install --frozen-lockfile
+      - name: Build the binary
+        run: go build -o "$RUNNER_TEMP/reactogenic" ./cmd/reactogenic
+        working-directory: go
+      # Without --report the build prints its diagnostics and then one line,
+      # "4 pages written to dist" (builder.md): a second line is a diagnostic.
+      # The exit status alone would let a warning through — it is 0 with one.
+      - name: Build the site, with no diagnostic
+        run: |
+          "$RUNNER_TEMP/reactogenic" build | tee "$RUNNER_TEMP/build.txt"
+          test "$(wc -l < "$RUNNER_TEMP/build.txt")" -eq 1
+        working-directory: site
+      - name: The byte report
+        run: |
+          mkdir "$RUNNER_TEMP/site-report"
+          "$RUNNER_TEMP/reactogenic" build --report | tee "$RUNNER_TEMP/site-report/report.txt"
+          cp dist/_rg/report.json "$RUNNER_TEMP/site-report/"
+        working-directory: site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-report # report.json as the build wrote it, report.txt as --report printed it
+          path: ${{ runner.temp }}/site-report
+          if-no-files-found: error

@@ -666,9 +666,45 @@ The result, with the tables, is written to `specs/phase02/bet.md`.
     floor *of this site* — T3 is against the research's site, and no ratio
     to a floor is claimed; a catalog of ~20 components (*Later*).
 
-### RGP2-060 — CI and docs · S
+### RGP2-060 — CI and docs · S · done
 A `site` job (build + the byte report as an artifact); getting-started gains
 *Build*; CHANGELOG; CLAUDE.md.
+- **Done:**
+  - CI, `.github/workflows/ci.yml`, job `site`: the binary of the commit,
+    then `reactogenic build` in `site/`. **Any diagnostic fails it**: the
+    build prints its diagnostics and one last line (`4 pages written to
+    dist`), so a second line is one — the exit status would let a warning
+    through (shell-console, css-warning: 0). Then `--report`; the artifact
+    `site-report` is what it printed (`report.txt`) and `_rg/report.json`.
+    Not a required check of the `main` ruleset, as `vscode` is not.
+  - The `go` job already had Node and `pnpm install` before `go test`; it
+    gains `-timeout 30m`.
+  - docs/getting-started.md, *Build*: the `pages/` convention, the layout as
+    a component, `@reactogenic/ui`, the output, `--report`, the browser
+    floor, what phase 2 lacks. Every output shown there is a run of the
+    binary on that example. The `check` sample said `error TS2322` for a
+    prop of a slot element; the binary says slot-type, and so does the doc.
+  - CHANGELOG.md, *Unreleased*; README.md; CLAUDE.md (*Current phase*,
+    *Open with the owner*, *Deliverables*); later/layout.md: notes and OPENs
+    where phase 2 reads it otherwise.
+  - The extension's grammar test (`packages/vscode/test/repo-rtsx.test.mjs`:
+    no `invalid.*` token in any `.rtsx` of the repository) now also walks
+    `site/` and `go/internal`: 75 more files, none with a problem.
+- **Not verified:**
+  - GitHub Actions did not run: nothing was pushed. The `site` job's `run`
+    steps were executed as its `shell: bash` runs them, with the binary
+    built here: they pass, and a `console.log` in a page (a warning) and a
+    `Date.now()` (an error) each fail the build step.
+  - **The builder's packages have never run under `-race`**, which the `go`
+    job uses: not here (the instruction of this phase: no `-race`, for the
+    cache it fills), not in CI. `modernc.org/quickjs` under the race
+    detector is the unknown — its time, which the timeout allows for, and
+    whether its transpiled C passes `checkptr`.
+  - With CI's Node: `go test` of `internal/build/...` passes with Node
+    22.21.1 on the PATH, as with 25.2.1. On macOS; CI is Linux.
+- The site's own pages (`site/pages/guide/`) were written from
+  getting-started before it had *Build*; they have `build` on
+  `/reference/cli/` only.
 
 ## Later, noted here so it is not lost
 
@@ -688,5 +724,12 @@ A `site` job (build + the byte report as an artifact); getting-started gains
   Safari 27.0.1, script-driven (research/platform.md, *Verification*).
 - A check of what a behaviour writes to the page (builder.md, *Not in phase
   2*); hashes of inlined blobs for a `Content-Security-Policy`.
+- **Before the next release**: the notices of what the binary now links.
+  `scripts/build-binaries.sh` puts tsgo's licence and notice into each
+  platform package, and nothing else; since RGP2-030 the binary also holds
+  esbuild, `modernc.org/quickjs` (QuickJS, with modernc's libc) and
+  `golang.org/x/net`. The extension bundles the same binary
+  (`packages/vscode`, `ThirdPartyNotices.txt`). Found with RGP2-060; nobody
+  has read the licences for what they ask.
 - Phase 1's leftover: the server's intermittent crash while pushing tsconfig
   diagnostics (phase01/plan.md, RGP1-113).

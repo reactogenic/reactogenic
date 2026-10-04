@@ -4,6 +4,45 @@ The npm packages (`@reactogenic/core`, `@reactogenic/vite`, `@reactogenic/cli`
 and its six platform packages) share one version. The VS Code extension has
 its own: [packages/vscode/CHANGELOG.md](packages/vscode/CHANGELOG.md).
 
+## Unreleased
+
+The builder (specs/phase02/builder.md). In the repository; not published.
+
+**New**
+
+- `reactogenic build` — the pages of a site (`pages/**/index.rtsx`, each
+  rendering its document from `<html>`) become, per page, plain HTML, the
+  CSS that page can use and the JS of the behaviours its components mounted.
+  No React in the output. `--out`, `--pages`, `--base /docs/`, `--inline
+  auto|always|never`; `--report` prints the bytes of every page, always
+  written to `<out>/_rg/report.json`; `--no-specialize` builds the control
+  of the measurement. Any error of `check` stops the build, and so does
+  what only a built page shows: a handler, a hook of state or an effect, the
+  clock (`shell-*`), an id or a link that names nothing (`idref-not-found`,
+  `link-not-found`, …). Docs: *Build* in docs/getting-started.md.
+- `@reactogenic/core`: `pathname()`, `useShellId(prefix?)` and
+  `mount(module, id?, flags?)` — what a component asks the builder: the page
+  being built, an id that reads well in view-source (`d1`, `m2`), a
+  behaviour for the page. In React (Vite) they are `location.pathname`,
+  `useId()` and nothing. With `useShellId` the package imports `react` at
+  run time, no longer its types alone; it was a peer dependency already.
+- `@reactogenic/ui` — `Button`, `Dialog`, `DropdownMenu`, `SideMenu`
+  (specs/phase02/components.md). Private: it is not published, the
+  components live in `packages/ui`.
+
+**The binary** is 29–31% larger: it holds esbuild and a JavaScript engine,
+which execute the pages. Stripped, in MiB (specs/phase02/decisions.md,
+*Binary size*):
+
+| | 0.1.0-alpha.1 | with `build` |
+| --- | --- | --- |
+| darwin-arm64 | 27.3 | 35.1 |
+| darwin-x64 | 28.6 | 37.1 |
+| linux-arm64 | 26.4 | 34.3 |
+| linux-x64 | 27.9 | 36.5 |
+| win32-arm64 | 26.5 | 34.3 |
+| win32-x64 | 28.2 | 36.9 |
+
 ## 0.1.0-alpha.1 — 2026-10-04
 
 IDE support (specs/phase01/ide.md).
