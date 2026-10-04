@@ -21,23 +21,23 @@ importers:
         version: 4.1.11(@types/node@24.19.0)(vite@8.3.1(@types/node@24.19.0)(esbuild@0.28.2))
     optionalDependencies:
       '@reactogenic/cli-darwin-arm64':
-        specifier: 0.1.0-alpha.0
-        version: 0.1.0-alpha.0
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1
       '@reactogenic/cli-darwin-x64':
-        specifier: 0.1.0-alpha.0
-        version: 0.1.0-alpha.0
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1
       '@reactogenic/cli-linux-arm64':
-        specifier: 0.1.0-alpha.0
-        version: 0.1.0-alpha.0
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1
       '@reactogenic/cli-linux-x64':
-        specifier: 0.1.0-alpha.0
-        version: 0.1.0-alpha.0
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1
       '@reactogenic/cli-win32-arm64':
-        specifier: 0.1.0-alpha.0
-        version: 0.1.0-alpha.0
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1
       '@reactogenic/cli-win32-x64':
-        specifier: 0.1.0-alpha.0
-        version: 0.1.0-alpha.0
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1
 
   packages/core:
     devDependencies:
@@ -535,33 +535,33 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@reactogenic/cli-darwin-arm64@0.1.0-alpha.0':
-    resolution: {integrity: sha512-gSe51GJ6y0hClR6dFE/higa1u3cmimjj5wDtg8v4LpfOz8vPU/UuH9RUmSt8tqKZ0hElFHKuBqQIZaf65dSwBg==}
+  '@reactogenic/cli-darwin-arm64@0.1.0-alpha.1':
+    resolution: {integrity: sha512-FTNMvR9U9QHFvXrxmVk9F52QH/iZ0+KllrKzBQ00+oY0Tj1UIwim7RI9Nco8z+pylVpV2BMBL2a9tYLE38cwLg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@reactogenic/cli-darwin-x64@0.1.0-alpha.0':
-    resolution: {integrity: sha512-zJeNVAegrKJo85WU3gXyVsCNBnaOEjZL15W4Qg1vlh9dcu8+GDgVW41LvDVFT/JjHIdZywaSegOgK/JWDUPTQw==}
+  '@reactogenic/cli-darwin-x64@0.1.0-alpha.1':
+    resolution: {integrity: sha512-suk64Seb5EcnWlztFFIFGTaXMkRXfufi8mLrXCr58KggVkzZh2MPg84jmci1kj0qGuoVOmWN6UFJEw6NYl6XMg==}
     cpu: [x64]
     os: [darwin]
 
-  '@reactogenic/cli-linux-arm64@0.1.0-alpha.0':
-    resolution: {integrity: sha512-5OIxfeXxRYNBbSmN7NvRCZwmcwQH2rC5hShWI6c2fyYypxlp3XLkzL3Ct7rAJX/1EBGiOSwh06DGyduMr8Y0/w==}
+  '@reactogenic/cli-linux-arm64@0.1.0-alpha.1':
+    resolution: {integrity: sha512-Dja3hM8tD+9ENlYGnT2R1qQqSwyax637wD02VBx74UXkj35uDp4JgEWxBFvX9u+vC8sZyU/VjRM4FuOZayEppw==}
     cpu: [arm64]
     os: [linux]
 
-  '@reactogenic/cli-linux-x64@0.1.0-alpha.0':
-    resolution: {integrity: sha512-Q2XSBwClZKUldSog2qhwI5E4+Kb9udN2tuYdCps6XpLDJnh6ZZ1aIiYrwxwTEYEy4ZT8yrvf4TfgQezH5O6YMw==}
+  '@reactogenic/cli-linux-x64@0.1.0-alpha.1':
+    resolution: {integrity: sha512-qwvPOezp+Eh9O8LnyLrlna0CR9LWkuozxwui7HqP20XZ/fURaphQMxiQtPvd6H9vXrraOq1/6X6KLKbqpRqPHg==}
     cpu: [x64]
     os: [linux]
 
-  '@reactogenic/cli-win32-arm64@0.1.0-alpha.0':
-    resolution: {integrity: sha512-c4nu8DPmHw8GwJN4phJnvUUFZoSnWmLsmaUgQdl7DDZwEPq30kgsvco1SxeoBQBhq+HelFSOhJiiHfhRR8VrSQ==}
+  '@reactogenic/cli-win32-arm64@0.1.0-alpha.1':
+    resolution: {integrity: sha512-UtXVam7gEyf/obKAFIMzmji2IkfJ/s27VD3W79a+MWqgdXySAlQmcv/Bar/1QlPNbOp4zp242UyfB0zV13Xe9g==}
     cpu: [arm64]
     os: [win32]
 
-  '@reactogenic/cli-win32-x64@0.1.0-alpha.0':
-    resolution: {integrity: sha512-G+sFYoUCacSpbbUUzk/LInuocNGziH7cGeVA5+TWTeLY2i/CoRA6LVwDdf2qWJmu8EJ8IyptUXqvWbxIGiVByg==}
+  '@reactogenic/cli-win32-x64@0.1.0-alpha.1':
+    resolution: {integrity: sha512-gIBaMbwo3yqOLhV1iyhQXowt/YusmY1RC78rrynLepG/WD08c7mfWemnpHnJEJcPyc44pWY9c9goNISFZYN5bw==}
     cpu: [x64]
     os: [win32]
 
@@ -2257,22 +2257,22 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@reactogenic/cli-darwin-arm64@0.1.0-alpha.0':
+  '@reactogenic/cli-darwin-arm64@0.1.0-alpha.1':
     optional: true
 
-  '@reactogenic/cli-darwin-x64@0.1.0-alpha.0':
+  '@reactogenic/cli-darwin-x64@0.1.0-alpha.1':
     optional: true
 
-  '@reactogenic/cli-linux-arm64@0.1.0-alpha.0':
+  '@reactogenic/cli-linux-arm64@0.1.0-alpha.1':
     optional: true
 
-  '@reactogenic/cli-linux-x64@0.1.0-alpha.0':
+  '@reactogenic/cli-linux-x64@0.1.0-alpha.1':
     optional: true
 
-  '@reactogenic/cli-win32-arm64@0.1.0-alpha.0':
+  '@reactogenic/cli-win32-arm64@0.1.0-alpha.1':
     optional: true
 
-  '@reactogenic/cli-win32-x64@0.1.0-alpha.0':
+  '@reactogenic/cli-win32-x64@0.1.0-alpha.1':
     optional: true
 
   '@rolldown/binding-android-arm-eabi@1.2.11':

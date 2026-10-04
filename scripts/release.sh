@@ -5,7 +5,9 @@
 #
 #   scripts/release.sh pack <version>      build and pack all nine into dist/release/
 #   scripts/release.sh publish <otp>       publish dist/release/*.tgz, binaries first
-#   pnpm install                           the lockfile: cli's platform packages exist only now
+#   scripts/release.sh latest <otp>        while there is no stable release: `latest` follows the prerelease
+#   pnpm install                           the lockfile: cli's platform packages exist only now. Wait for
+#                                          `npm view` to show all six: one that lags is left out silently
 #   scripts/release.sh vsix                the seven .vsix in dist/vsix/, from pack's binaries
 #   scripts/release.sh publish-vsix        dist/vsix/*.vsix to the Marketplace ($VSCE_PAT) and Open VSX ($OVSX_PAT)
 #
@@ -73,6 +75,15 @@ publish)
     fi
   done
   ;;
+latest)
+  # `npm install @reactogenic/cli` without a tag takes `latest`, which the
+  # first publish set and a tagged one does not move.
+  otp="${2:?one-time password}"
+  version="$(node -p "require('$root/packages/cli/package.json').version")"
+  for name in "${platforms[@]/#/cli-}" cli core vite; do
+    npm dist-tag add "@reactogenic/$name@$version" latest --otp "$otp"
+  done
+  ;;
 vsix)
   # The binaries pack built — the ones on npm — never rebuilt.
   version="$(node -p "require('$root/packages/cli/package.json').version")"
@@ -99,7 +110,7 @@ publish-vsix)
   done
   ;;
 *)
-  sed -n '2,13p' "$0" >&2
+  sed -n '2,15p' "$0" >&2
   exit 2
   ;;
 esac
