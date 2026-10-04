@@ -1,0 +1,162 @@
+// Package server runs the language server with whatever content mapper is
+// registered (rtsx.RegisterMapper) built in (specs/phase01/ide.md,
+// *reactogenic lsp*). It is its own package so that only a binary that
+// serves LSP links the language service.
+package server
+
+import (
+	"context"
+	"errors"
+	"io"
+	"strings"
+	"time"
+
+	"github.com/microsoft/TypeScript/tsc/internal/ast"
+	"github.com/microsoft/TypeScript/tsc/internal/bundled"
+	"github.com/microsoft/TypeScript/tsc/internal/compiler"
+	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
+	"github.com/microsoft/TypeScript/tsc/internal/ls"
+	"github.com/microsoft/TypeScript/tsc/internal/lsp"
+	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
+	"github.com/microsoft/TypeScript/tsc/internal/tspath"
+	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
+)
+
+// Options configure a run of the server.
+type Options struct {
+	In  io.Reader // LSP messages, framed
+	Out io.Writer
+	Err io.Writer // log output
+	Cwd string
+	// Name and Version are reported as the server info.
+	Name, Version string
+	// SetParentProcessID, when set, is called with the processId of the
+	// client's initialize: the process whose end ends the server (upstream's
+	// watchdog hook; the watching itself is the host's).
+	SetParentProcessID func(pid int)
+	// Diagnostics returns every diagnostic of a mapped file of program, as
+	// its author reads them (specs/phase01/ide.md, *Diagnostics*): the
+	// answer to textDocument/diagnostic for that document. It is asked for
+	// the program and the file, so the compiler's diagnostics are still
+	// structured where it takes them. nil: the compiler's, mapped back by
+	// position.
+	Diagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []Diagnostic
+	// Rename writes a rename's occurrences in mapped files back (ide.md,
+	// *Rename*): it is given each occurrence as the language service found
+	// it in the virtual text — before anything is mapped back — and returns
+	// the complete edits of the mapped files, or the error that refuses the
+	// whole rename. nil: each occurrence mapped back by position, or
+	// dropped.
+	Rename func(ctx context.Context, request RenameRequest) ([]RenameEdit, error)
+	// Requests are the host's own methods, by name (`reactogenic/…`): each
+	// is given the program and the file of the document its params name, and
+	// the params as JSON.
+	Requests map[string]func(ctx context.Context, program *compiler.Program, file *ast.SourceFile, params []byte) (any, error)
+}
+
+type (
+	// RenameRequest is a rename to write back: its occurrences in mapped
+	// files, and the mapped files of the program it started in.
+	RenameRequest = ls.HostRenameRequest
+	// RenameOccurrence is one occurrence, in a virtual text.
+	RenameOccurrence = ls.HostRenameOccurrence
+	// RenameEdit is one edit of a mapped file's source.
+	RenameEdit = ls.HostRenameEdit
+)
+
+// FileNames are the names of the files in directory dir as program's file
+// system has them — the server's, unsaved buffers included.
+func FileNames(program *compiler.Program, dir string) []string {
+	return program.Host().FS().GetAccessibleEntries(dir).Files
+}
+
+type (
+	// Diagnostic is one diagnostic of a mapped document: byte offsets in
+	// its source, a name as its code — or, with TS set and no Code, the
+	// compiler's number and the source "ts", which its quick fixes match
+	// on. The server makes the LSP diagnostic: the range (one character
+	// for a span of no length), the tags and severity of TS, the related
+	// locations.
+	Diagnostic = ls.HostDiagnostic
+	// RelatedInformation is a related location of a Diagnostic.
+	RelatedInformation = ls.HostRelatedInformation
+)
+
+// The severities of a Diagnostic that is not one of the compiler's.
+const (
+	SeverityError       = lsproto.DiagnosticSeverityError
+	SeverityWarning     = lsproto.DiagnosticSeverityWarning
+	SeverityInformation = lsproto.DiagnosticSeverityInformation
+	SeverityHint        = lsproto.DiagnosticSeverityHint
+)
+
+// Run serves LSP until the client exits, In ends or ctx is done. Nothing
+// external runs: no content mapper process, no automatic type acquisition.
+func Run(ctx context.Context, o Options) error {
+	embedder := &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns, Diagnostics: o.Diagnostics, Rename: o.Rename}
+	if len(o.Requests) > 0 {
+		embedder.Requests = make(map[string]lsp.HostRequest, len(o.Requests))
+		for method, handler := range o.Requests {
+			embedder.Requests[method] = handler
+		}
+	}
+	s := lsp.NewServer(&lsp.ServerOptions{
+		In:                 lsp.ToReader(o.In),
+		Out:                lsp.ToWriter(o.Out),
+		Err:                o.Err,
+		Cwd:                o.Cwd,
+		FS:                 bundled.WrapFS(osvfs.FS()),
+		DefaultLibraryPath: bundled.LibPath(),
+		TypingsLocation:    "", // no automatic type acquisition
+		NpmInstall: func(string, []string) ([]byte, error) {
+			return nil, errors.New("this server does not install packages")
+		},
+		ProgressDelay:      250 * time.Millisecond,
+		SetParentProcessID: o.SetParentProcessID,
+		Embedder:           embedder,
+	})
+	err := s.Run(ctx)
+	if errors.Is(err, context.Canceled) && ctx.Err() == nil {
+		// The client's exit: the server's loops stop each other through a
+		// context of their own, and one of them reports that.
+		return nil
+	}
+	return err
+}
+
+// capabilities takes out what upstream advertises and this server does not
+// offer (specs/phase01/ide.md, the table of *reactogenic lsp*, lists what
+// stays):
+//   - code lens: its ranges are wrong on a declaration that holds mapped
+//     constructs, and the lens's command is filled in by upstream's own VS
+//     Code extension;
+//   - `_vs_references`: Visual Studio's variant of references;
+//   - `experimental`: the custom requests of upstream's VS Code extension
+//     (source definition, multi-document highlights).
+//
+// And it adds to the files whose rename the client asks about: the mapped
+// ones, which no other server knows, and folders, which hold them
+// (upstream asks about neither).
+func capabilities(c *lsproto.ServerCapabilities) {
+	c.CodeLensProvider = nil
+	c.VSReferencesProvider = nil
+	c.Experimental = nil
+
+	_, extensions := contentmapper.BuiltInMappers()
+	glob := "**/*.{ts,tsx,js,jsx,cts,cjs,mts,mjs,json" // upstream's fileRenameFilters
+	for _, extension := range extensions {
+		glob += "," + strings.TrimPrefix(extension, ".")
+	}
+	c.Workspace = &lsproto.WorkspaceOptions{FileOperations: &lsproto.FileOperationOptions{WillRename: &lsproto.FileOperationRegistrationOptions{
+		Filters: []*lsproto.FileOperationFilter{
+			{Scheme: new("file"), Pattern: &lsproto.FileOperationPattern{Glob: glob + "}"}},
+			{Scheme: new("file"), Pattern: &lsproto.FileOperationPattern{Glob: "**", Matches: new(lsproto.FileOperationPatternKindFolder)}},
+		},
+	}}}
+}
+
+// owns: the files of the built-in mapper are this server's (lsp.Embedder).
+func owns(fileName string) bool {
+	_, extensions := contentmapper.BuiltInMappers()
+	return tspath.FileExtensionIsOneOf(fileName, extensions)
+}

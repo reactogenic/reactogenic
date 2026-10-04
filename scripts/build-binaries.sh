@@ -20,7 +20,7 @@ for target in "${targets[@]}"; do
   exe=reactogenic; [[ "$platform" == win32 ]] && exe=reactogenic.exe
   out="$root/dist/npm/cli-$target"
   mkdir -p "$out/bin"
-  (cd "$root/go" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$out/bin/$exe" ./cmd/reactogenic)
+  (cd "$root/go" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$out/bin/$exe" ./cmd/reactogenic)
   # The binary holds tsgo (Apache-2.0) as well as our code (MIT).
   cp "$root/LICENSE" "$out/LICENSE"
   cp "$root/go/third_party/tsgo/LICENSE" "$out/LICENSE-typescript-go"
@@ -40,4 +40,11 @@ for target in "${targets[@]}"; do
 }
 JSON
   echo "built $out/bin/$exe"
+done
+
+# The stripped sizes: a growth of more than 10% over the previous release
+# needs a note in specs/phase01/decisions.md (plan.md, RGP1-113).
+for target in "${targets[@]}"; do
+  exe=reactogenic; [[ "$target" == win32-* ]] && exe=reactogenic.exe
+  printf '%-12s %5.1f MB\n' "$target" "$(echo "$(wc -c < "$root/dist/npm/cli-$target/bin/$exe") / 1048576" | bc -l)"
 done

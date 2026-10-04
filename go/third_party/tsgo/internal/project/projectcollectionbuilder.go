@@ -1065,6 +1065,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
 	logger *logging.LogTree,
 ) searchResult {
 	var configs collections.SyncMap[tspath.Path, *tsoptions.ParsedCommandLine]
+	var importers collections.SyncSet[tspath.Path] // rtsx: see listsMappedFile
 	if visited == nil {
 		visited = &collections.SyncSet[searchNodeKey]{}
 	}
@@ -1126,6 +1127,10 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
 
 			if project.Value().containsFile(path) {
 				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path)
+				if isDirectInclusion && !listsMappedFile(config, fileName, path) { // rtsx
+					importers.Add(configFilePath)
+					isDirectInclusion = false
+				}
 				if node.logger != nil {
 					node.logger.Logf("Project contains file %s", core.IfElse(isDirectInclusion, "directly", "as a source of a referenced project"))
 				}
@@ -1164,7 +1169,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
 		}
 	}
 
-	if search.Stopped {
+	if search.Stopped || project != nil && importers.Has(b.toPath(search.Path[0].configFileName)) { // rtsx
 		// Found a project that directly contains the file.
 		return searchResult{
 			project: project,

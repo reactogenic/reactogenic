@@ -9,6 +9,8 @@ type SourceFileParseOptions struct {
 	FileName                       string
 	Path                           tspath.Path
 	ExternalModuleIndicatorOptions ExternalModuleIndicatorOptions
+	// RTSX enables the .rtsx attribute grammar (go/patches/0002-rtsx-parser.patch).
+	RTSX bool
 }
 
 type ExternalModuleIndicatorOptions struct {

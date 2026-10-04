@@ -1,0 +1,21 @@
+// A `$` tag is a slot whatever follows the `$`. A name that is not an
+// identifier is a valid JSX attribute name on the component, and a quoted key
+// in a slot's own object.
+export const a = (
+  <Button>
+    <$icon-start title="t" />
+    <$Icon>
+      <$sub-item title="t" />
+      <$Sub />
+    </$Icon>
+  </Button>
+);
+// It takes params like any slot element.
+export const b = (
+  <Button>
+    <$icon-start { size }>start {size}</$icon-start>
+    <$Icon>
+      <$sub-item { size }>text {size}</$sub-item>
+    </$Icon>
+  </Button>
+);

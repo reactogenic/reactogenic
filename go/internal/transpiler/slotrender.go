@@ -82,18 +82,42 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 			props = append(props, []emit.Piece{c.copy(attr)})
 			continue
 		}
+		if name == "" {
+			continue // a sigil without its name yet: `&` just typed
+		}
 		argKey := name
 		if !identifierName.MatchString(name) {
 			argKey = `"` + name + `"`
 		}
 		c.note(c.span(attr), "slot-arg", c.sourceText(ref), name)
-		args = append(args, append([]emit.Piece{emit.Synth(argKey+": ", c.span(attr))}, c.argValue(attr, name)...))
+		// The arg key is the name the author wrote. A bare `&size` is a
+		// shorthand: the key and the value are two copies of one token.
+		key := []emit.Piece{emit.Synth(argKey+": ", c.span(attr))}
+		bare := attr.Initializer() == nil
+		if argKey == name && name != "" {
+			keyCopy := c.argNameCopy(attr, name).Lacking(emit.FeatureSemanticTokens)
+			if bare {
+				keyCopy = keyCopy.Lacking(nameCopy)
+			}
+			key = []emit.Piece{keyCopy, emit.Synth(": ", c.span(attr))}
+		}
+		val := c.argValue(attr, name)
+		if bare {
+			site := "arg"
+			if kind == syntax.ArgProp {
+				site = "arg-prop"
+			}
+			c.shorthandSite(c.argNameCopy(attr, name).From, site)
+			val = []emit.Piece{c.argNameCopy(attr, name).Lacking(valueCopy)}
+		}
+		args = append(args, append(key, val...))
 		if kind == syntax.ArgProp {
+			// The element's prop is one more copy; the arg answers.
 			prop := []emit.Piece{emit.Synth(name+"=", c.span(attr))}
 			if init := attr.Initializer(); init != nil {
-				prop = append(prop, c.copy(init))
+				prop = append(prop, c.copy(init).Lacking(emit.AllFeatures))
 			} else { // `&&selected` → selected={selected}
-				prop = append(prop, emit.Synth("{", c.span(attr)), c.argNameCopy(attr, name), emit.Synth("}", c.span(attr)))
+				prop = append(prop, emit.Synth("{", c.span(attr)), c.argNameCopy(attr, name).Lacking(emit.AllFeatures), emit.Synth("}", c.span(attr)))
 			}
 			props = append(props, prop)
 		}
@@ -159,7 +183,7 @@ func (c *passContext) renderSlot(el, ref, slotAttr *rtsx.Node) []emit.Edit {
 		} else {
 			out = append(out, emit.Synth(">", origin), emit.Copy(c.text, c.childrenSpan(el)))
 		}
-		return append(out, emit.Synth("</", origin), c.copy(opening.TagName()), emit.Synth(">", origin))
+		return append(out, emit.Synth("</", origin), c.closingName(el, opening), emit.Synth(">", origin))
 	}
 	expr := append([]emit.Piece{emit.Synth(assigned+"(", origin), slot(), emit.Synth(") ? ", origin)}, element(true)...)
 	expr = append(expr, emit.Synth(" : ", origin))
@@ -214,7 +238,7 @@ func (c *passContext) argValue(attr *rtsx.Node, name string) []emit.Piece {
 	case init.Kind == rtsx.KindJsxExpression:
 		return c.operand(init.Expression(), rtsx.PrecedenceComma)
 	default:
-		return []emit.Piece{c.copy(init)}
+		return []emit.Piece{c.copyValue(init)}
 	}
 }
 

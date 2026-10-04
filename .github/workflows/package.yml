@@ -1,0 +1,68 @@
+# The extension as it ships (plan.md, RGP1-113): the six binaries
+# cross-compiled, the seven .vsix files, and — one runner per platform — each
+# bundled binary started and asked `initialize`. Nothing is published: a
+# release is made with scripts/release.sh, from the binaries that went to npm.
+name: package
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/package.yml
+      - scripts/build-binaries.sh
+      - packages/vscode/scripts/**
+      - packages/vscode/package.json
+
+jobs:
+  vsix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the six binaries
+        run: scripts/build-binaries.sh "$(node -p "require('./packages/cli/package.json').version")"
+      - name: Package
+        run: node scripts/package.mjs --pre-release
+        working-directory: packages/vscode
+      - name: Check the files of each
+        run: node packages/vscode/scripts/smoke-vsix.mjs dist/vsix/*.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: dist/vsix/*.vsix
+          if-no-files-found: error
+
+  start:
+    needs: vsix
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-latest, target: darwin-arm64 }
+          - { os: macos-15-intel, target: darwin-x64 }
+          - { os: windows-latest, target: win32-x64 }
+          - { os: windows-11-arm, target: win32-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: vsix
+      - name: The bundled binary answers initialize
+        shell: bash
+        run: node packages/vscode/scripts/smoke-vsix.mjs --run vsix/rtsx-${{ matrix.target }}-*.vsix

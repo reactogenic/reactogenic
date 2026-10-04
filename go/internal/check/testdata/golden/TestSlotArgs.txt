@@ -1,0 +1,7 @@
+src/button.rtsx(13,7): error slot-args-missing: `$Icon` needs `&size`
+  src/button.rtsx:4:42 - 'size' is declared here.
+src/button.rtsx(15,28): error slot-no-args: `$Label` takes no args: its body is not a function
+  node_modules/@reactogenic/core/index.d.ts:17:24 - The expected type comes from this index signature.
+src/button.rtsx(16,7): error slot-list: `$List` is a list; a slot is one value
+src/button.rtsx(17,24): error TS2322: Type 'number' is not assignable to type 'string'.
+  src/button.rtsx:4:42 - The expected type comes from property 'size' which is declared here on type '{ size: string; }'

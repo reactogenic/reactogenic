@@ -1,0 +1,20 @@
+diff --git a/internal/module/resolver.go b/internal/module/resolver.go
+index 367884c..f9e01bf 100644
+--- a/internal/module/resolver.go
++++ b/internal/module/resolver.go
+@@ -1543,6 +1543,15 @@ func (r *resolutionState) tryAddingExtensions(extensionless string, extensions e
+ 				return resolved
+ 			}
+ 		}
++		if originalExtension == "" && !r.isConfigLookup {
++			// rtsx: `./page` finds a content-mapped page.rtsx, after every built-in extension.
++			for _, extra := range r.resolver.extraExtensions {
++				if resolved := r.tryExtension(extra, extensionless, false); !resolved.shouldContinueSearching() {
++					resolved.resolvedUsingExtraExtensions = true
++					return resolved
++				}
++			}
++		}
+ 		return continueSearching()
+ 	default:
+ 		if slices.Contains(r.resolver.extraExtensions, originalExtension) {

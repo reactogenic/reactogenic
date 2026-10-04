@@ -28,11 +28,13 @@ func shorthand(c *passContext) []emit.Edit {
 				if !isSegment && arg == syntax.NotArg && syntax.Binding(n, text) != nil {
 					attr := emit.Span{Pos: rtsx.TokenStart(c.file, n), End: n.End()}
 					nameSpan := emit.Span{Pos: rtsx.TokenStart(c.file, name), End: name.End()}
+					c.shorthandSite(nameSpan, "attr")
 					edits = append(edits, emit.Edit{
-						Span: emit.Span{Pos: nameSpan.End, End: nameSpan.End},
+						Span: nameSpan,
 						Pieces: []emit.Piece{
+							emit.Copy(c.text, nameSpan).Lacking(nameCopy),
 							emit.Synth("={", attr),
-							emit.Copy(c.text, nameSpan),
+							emit.Copy(c.text, nameSpan).Lacking(valueCopy),
 							emit.Synth("}", attr),
 						},
 					})

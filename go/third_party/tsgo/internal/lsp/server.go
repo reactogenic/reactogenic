@@ -55,6 +55,7 @@ type ServerOptions struct {
 	Spawn              func(command []string, dir string, stderr io.Writer) (io.ReadWriteCloser, error)
 	ProgressDelay      time.Duration // delay before showing progress UI; 0 means no delay
 	SetParentProcessID func(parentPID int)
+	Embedder           *Embedder // rtsx: see embedder.go
 }
 
 func NewServer(opts *ServerOptions) *Server {
@@ -80,6 +81,7 @@ func NewServer(opts *ServerOptions) *Server {
 		startWatchdog:         opts.SetParentProcessID,
 		initComplete:          make(chan struct{}),
 		progressDelay:         opts.ProgressDelay,
+		embedder:              opts.Embedder,
 	}
 	s.logger = newLogger(s)
 
@@ -189,6 +191,7 @@ type Server struct {
 	fs                 vfs.FS
 	defaultLibraryPath string
 	typingsLocation    string
+	embedder           *Embedder // rtsx
 
 	initializeParams      *lsproto.InitializeParams
 	initializationOptions *lsproto.InitializationOptions
@@ -420,7 +423,7 @@ func (s *Server) supportsContentMapperRegistration(id string) bool {
 // open/change/close notifications to the server and requests diagnostics for them. It is called with the
 // full desired set each time it changes; an empty slice removes any prior registration.
 func (s *Server) RegisterContentMapperExtensions(ctx context.Context, extensions []string) error {
-	if !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration {
+	if s.embedder != nil || !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration { // rtsx: static capabilities only
 		return nil
 	}
 
@@ -1144,6 +1147,9 @@ func (s *Server) send(msg *lsproto.Message) error {
 func (s *Server) handleRequestOrNotification(ctx context.Context, req *lsproto.RequestMessage) (func() error, error) {
 	ctx = lsproto.WithClientCapabilities(ctx, &s.clientCapabilities)
 
+	if handler := s.embedder.hostRequest(req.Method); handler != nil { // rtsx: the host's own methods
+		return s.handleHostRequest(ctx, req, handler)
+	}
 	if handler := handlers()[req.Method]; handler != nil {
 		start := time.Now()
 		doAsyncWork, err := handler(s, ctx, req)
@@ -1671,6 +1677,9 @@ func (s *Server) handleInitialize(ctx context.Context, params *lsproto.Initializ
 		},
 	}
 
+	if s.embedder != nil { // rtsx
+		s.embedder.initializeResult(response)
+	}
 	return response, nil
 }
 
@@ -1754,7 +1763,9 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
 	}
 	s.session.InitializeWithUserConfig(userPreferences)
 
-	_, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
+	if s.embedder != nil { // rtsx: only where the client supports it, and without waiting
+		s.embedder.watchConfiguration(s)
+	} else if _, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
 		Registrations: []*lsproto.Registration{
 			{
 				Id: "typescript-config-watch-id",
@@ -1767,8 +1778,7 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
 				},
 			},
 		},
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("failed to register configuration change watcher: %w", err)
 	}
 
@@ -1848,6 +1858,11 @@ func (s *Server) handleSetLogVerbosity(_ context.Context, params *lsproto.SetLog
 
 func (s *Server) handleDocumentDiagnostic(ctx context.Context, languageService *ls.LanguageService, params *lsproto.DocumentDiagnosticParams) (lsproto.DocumentDiagnosticResponse, error) {
 	ctx = core.WithCheckerLifetime(ctx, core.CheckerLifetimeDiagnostics)
+	if provide := s.embedder.hostDiagnostics(); provide != nil { // rtsx: a content-mapped document's are the host's
+		if response, ok := languageService.ProvideHostDiagnostics(ctx, params.TextDocument.Uri, provide); ok {
+			return response, nil
+		}
+	}
 	if s.flakeLogging == lsproto.DiagnosticFlakeLogLevelOff {
 		return languageService.ProvideDiagnostics(ctx, params.TextDocument.Uri)
 	}
@@ -1913,6 +1928,9 @@ func (s *Server) handlePrepareRename(ctx context.Context, languageService *ls.La
 	if !info.CanRename {
 		return lsproto.PrepareRenameResponse{}, userFacingRequestFailedError(info.LocalizedErrorMessage)
 	}
+	if err := s.embedder.checkRename(ctx, languageService, params); err != nil { // rtsx: refused where the rename would be
+		return lsproto.PrepareRenameResponse{}, err
+	}
 	return lsproto.PrepareRenameResponse{
 		PrepareRenamePlaceholder: &lsproto.PrepareRenamePlaceholder{
 			Range:       info.TriggerSpan,
@@ -1955,6 +1973,9 @@ func (s *Server) handleRename(ctx context.Context, params *lsproto.RenameParams,
 		return s.handleWillRenameFilesWorker(ctx, renameFilesParams, req, true /*sendRenameFile*/)
 	}
 
+	if response, handled, err := s.embedder.rename(ctx, defaultLs, params, orchestrator); handled { // rtsx: written back by the host
+		return response, err
+	}
 	return defaultLs.ProvideRename(ctx, params, orchestrator)
 }
 
@@ -1991,7 +2012,7 @@ func (s *Server) handleWillRenameFilesWorker(ctx context.Context, params *lsprot
 
 	for _, languageService := range services {
 		for _, file := range params.Files {
-			changes := languageService.GetEditsForFileRename(ctx, file.OldUri, file.NewUri)
+			changes := languageService.GetEditsForFileRename(ctx, file.OldUri, file.NewUri, s.embedder.renameEdits(sendRenameFile)) // rtsx
 			for _, change := range changes {
 				if change.RenameFile != nil {
 					if !seenRenames[change.RenameFile.OldUri] {
@@ -2164,6 +2185,7 @@ func (s *Server) handleWorkspaceSymbol(ctx context.Context, params *lsproto.Work
 			snapshot.Converters(),
 			snapshot.UserPreferences(),
 			params.Query,
+			s.embedder.symbolFiles(), // rtsx
 		)
 	}
 	if params.TextDocument != nil && s.session.Config().WorkspaceSymbolsScope == lsutil.WorkspaceSymbolsScopeCurrentProject {

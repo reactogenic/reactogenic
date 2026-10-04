@@ -1,0 +1,25 @@
+import { Switch } from "@reactogenic/core";
+// A conditional's null branch keeps the previous value: with two null
+// branches the value is emitted twice. One copy answers the editor.
+const size = "lg";
+export const a = (
+  <Button>
+    <$Icon className="x" size title><$Sub title="t" /></$Icon>
+    {p ? (q ? <$Icon className="y" /> : null) : null}
+  </Button>
+);
+// Both branches assign: no previous value, nothing left unassigned.
+export const b = (
+  <Button>
+    {p ? <$Hint className="x" /> : <$Hint className="y" />}
+  </Button>
+);
+// The same from a Switch with a default.
+export const c = (
+  <Button>
+    <Switch on={kind}>
+      <$Case is="a"><$Hint className="x" /></$Case>
+      <$Case default><$Hint className="y" /></$Case>
+    </Switch>
+  </Button>
+);

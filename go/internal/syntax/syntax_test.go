@@ -233,3 +233,72 @@ func TestSlotArgErrors(t *testing.T) {
 		t.Error("want a syntax error in .tsx")
 	}
 }
+
+// The error of a half-typed arg — `&` without a name yet, `& name` — is on
+// the arg attribute, so whoever asks the tree what is broken finds it there
+// (ide.md, *Tolerance*).
+func TestSlotArgErrorFlag(t *testing.T) {
+	for _, text := range []string{
+		`const x = <span slot={$Icon} &></span>;`,
+		`const x = <span slot={$Icon} & size></span>;`,
+		`const x = <span slot={$Icon} &&></span>;`,
+		`const x = <Match& on={s}>x</Match>;`,
+	} {
+		file, attrs := attributes(t, text)
+		rtsx.Bind(file)
+		if len(file.Diagnostics()) == 0 {
+			t.Fatalf("want a parse error: %s", text)
+		}
+		flagged := false
+		for _, attr := range attrs {
+			if _, kind := SlotArg(attr); kind != NotArg {
+				flagged = rtsx.HasParseError(attr)
+			}
+		}
+		if !flagged {
+			t.Errorf("the arg attribute carries no parse-error flag: %s", text)
+		}
+	}
+	// A well-formed arg carries none.
+	file, attrs := attributes(t, `const x = <span slot={$Icon} &size></span>;`)
+	rtsx.Bind(file)
+	if rtsx.HasParseError(attrs[1]) {
+		t.Error("`&size` is flagged")
+	}
+}
+
+// BlankText is the scanner's rule on the text itself. After error recovery
+// the parser's flag is stale — here on the line breaks around the mismatched
+// `</$Icon>` — and a caller that trusted it would take formatting for content.
+func TestBlankText(t *testing.T) {
+	texts := func(text string) (blank, content, stale int) {
+		var visit func(n *rtsx.Node) bool
+		visit = func(n *rtsx.Node) bool {
+			if n.Kind == rtsx.KindJsxText {
+				switch {
+				case !BlankText(n):
+					content++
+				case !n.AsJsxText().ContainsOnlyTriviaWhiteSpaces:
+					blank, stale = blank+1, stale+1
+				default:
+					blank++
+				}
+			}
+			return n.ForEachChild(visit)
+		}
+		rtsx.ParseRTSX("/test.rtsx", text).AsNode().ForEachChild(visit)
+		return
+	}
+	// Valid: the line breaks are formatting; ` `, `x` and ` y ` are content.
+	if blank, content, stale := texts("const a = (\n  <A>\n    <b> {x}</b>x<i> y </i>\n  </A>\n);\n"); blank != 2 || content != 3 || stale != 0 {
+		t.Errorf("valid: %d blank, %d content, %d stale; want 2, 3, 0", blank, content, stale)
+	}
+	// Half-typed: every text but `x` is formatting, whatever the flag says.
+	blank, content, stale := texts("const a = (\n  <A>\n    <$B>\n      <$Icn>x</$Icon>\n    </$B>\n  </A>\n);\n")
+	if stale == 0 {
+		t.Fatal("no stale flag — the case tests nothing")
+	}
+	if blank != 4 || content != 1 {
+		t.Errorf("half-typed: %d blank, %d content; want 4, 1", blank, content)
+	}
+}

@@ -2625,6 +2625,15 @@ type ContentMapperSourceFileInfo struct {
 	DiagnosticDirectives    []MappedDiagnosticDirective
 	SupplementalSourceFiles []*SourceFile
 	CanonicalSourceFile     *SourceFile
+	Extra                   any // rtsx: what the mapper attached to its result
+}
+
+// ContentMapperExtra returns what the content mapper attached to this file's result.
+func (node *SourceFile) ContentMapperExtra() any {
+	if node.contentMapperInfo == nil {
+		return nil
+	}
+	return node.contentMapperInfo.Extra
 }
 
 // ContentMapperParseOptions returns the parse options used to acquire this file from the mapped parse cache.

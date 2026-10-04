@@ -20,6 +20,11 @@ jobs:
         run: go test -race github.com/reactogenic/reactogenic/go/... # tsgo parses files in parallel
       - name: gofmt
         run: test -z "$(gofmt -l go/cmd go/internal)"
+      - name: Every fork file is upstream's or in a patch
+        run: go/scripts/check-patches.sh
+      - name: Build without the workspace
+        run: GOWORK=off go build ./cmd/reactogenic # go/ is a module on its own (RGP1-003)
+        working-directory: go
 
   vendor:
     # The committed tsgo tree must equal upstream at UPSTREAM's commit + go/patches.
@@ -44,5 +49,31 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: grammar # the committed .rtsx grammar is what its generator writes (RGP1-109)
+        run: pnpm --filter rtsx generate:check
       - run: pnpm typecheck
       - run: pnpm test:js
+
+  vscode:
+    # The editor suite (RGP1-110): the extension and the binary of this commit
+    # in a real VS Code, isolated profile, five windows (packages/vscode/DEVELOPMENT.md).
+    # Not a required check of the `main` ruleset.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the binary
+        run: go build -o "$RUNNER_TEMP/reactogenic" ./cmd/reactogenic
+        working-directory: go
+      - name: Editor suite
+        run: xvfb-run -a pnpm --filter rtsx test:editor # VS Code needs a display
+        env:
+          REACTOGENIC_BINARY: ${{ runner.temp }}/reactogenic

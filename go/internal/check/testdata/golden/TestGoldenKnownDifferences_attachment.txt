@@ -1,0 +1,2 @@
+src/button.rtsx(3,34): error TS18048: '$Label' is possibly 'undefined'.
+src/button.rtsx(3,41): error TS2339: Property 'nope' does not exist on type '{ title?: string | undefined; children?: string | undefined; }'.

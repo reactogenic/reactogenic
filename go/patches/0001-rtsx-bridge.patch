@@ -1,9 +1,9 @@
 diff --git a/rtsx/rtsx.go b/rtsx/rtsx.go
 new file mode 100644
-index 0000000..511b91b
+index 0000000..15b30a6
 --- /dev/null
 +++ b/rtsx/rtsx.go
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,170 @@
 +// Package rtsx is Reactogenic's bridge into tsgo's internal packages.
 +//
 +// Go allows internal/ to be imported only from inside this module, so
@@ -77,16 +77,22 @@ index 0000000..511b91b
 +}
 +
 +// ParseRTSX parses text as an .rtsx file: TSX plus the attribute forms of
-+// go/patches/0002-rtsx-parser.patch. fileName must end in .rtsx; the parser
-+// enables the extensions by extension. An .rtsx file is always a module, as
++// go/patches/0002-rtsx-parser.patch. An .rtsx file is always a module, as
 +// under Vite, so its top-level declarations are module scope, not globals.
 +func ParseRTSX(fileName string, text string) *SourceFile {
 +	opts := ast.SourceFileParseOptions{
 +		FileName:                       fileName,
 +		Path:                           tspath.Path(fileName),
 +		ExternalModuleIndicatorOptions: ast.ExternalModuleIndicatorOptions{Force: true},
++		RTSX:                           true,
 +	}
 +	return parser.ParseSourceFile(opts, text, core.ScriptKindTSX)
++}
++
++// HasParseError reports whether n or a node under it was created by parser
++// recovery. The flag is set by Bind.
++func HasParseError(n *Node) bool {
++	return n.Flags&ast.NodeFlagsThisNodeOrAnySubNodesHasError != 0
 +}
 +
 +// TokenStart returns where n's first token starts, after leading trivia.

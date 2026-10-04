@@ -73,9 +73,11 @@ func (c *passContext) replace(el *rtsx.Node, origin emit.Span, expr []emit.Piece
 	return []emit.Edit{{Span: c.span(el), Pieces: inPosition(el, origin, expr)}}
 }
 
-// failed replaces an element that cannot be lowered with null; its errors
-// are already reported and stop the build.
+// failed replaces an element that cannot be lowered with null. Its errors
+// are already reported and stop the build — or, in the editor, were dropped
+// with a half-typed tag; either way its code is no longer in the output.
 func (c *passContext) failed(el *rtsx.Node, origin emit.Span) []emit.Edit {
+	c.leftOut(el)
 	return c.replace(el, origin, []emit.Piece{emit.Synth("null", origin)})
 }
 
@@ -98,14 +100,14 @@ func (c *passContext) flowAttributes(a attributes, allowed ...string) bool {
 		allow[name] = true
 	}
 	for _, attr := range a.order {
-		if !allow[rtsx.NodeText(attr.Name())] {
-			c.errorAt(attr, "flow-attribute", "`%s` is not an attribute of this element", rtsx.NodeText(attr.Name()))
+		if !allow[rtsx.NodeText(attr.Name())] && c.invalid(attr, "flow-attribute", "`%s` is not an attribute of this element", rtsx.NodeText(attr.Name())) {
 			ok = false
 		}
 	}
 	for _, attr := range a.other {
-		c.errorAt(attr, "flow-attribute", "Only the documented attributes are allowed here")
-		ok = false
+		if c.invalid(attr, "flow-attribute", "Only the documented attributes are allowed here") {
+			ok = false
+		}
 	}
 	return ok
 }

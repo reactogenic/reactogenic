@@ -1,0 +1,19 @@
+import type { Slot } from "@reactogenic/core";
+
+export type Size = "md" | "lg";
+
+export interface ButtonProps {
+  size: Size;
+  /** The label. */
+  $Label?: Slot<{ className?: string; children?: string }>;
+  $Icon?: Slot<{ className?: string }, { size: Size }>;
+}
+
+export function Button({ size, $Label, $Icon }: ButtonProps) {
+  return (
+    <button>
+      <span slot={$Icon} &size />
+      <b slot={$Label} className="label">Button</b>
+    </button>
+  );
+}

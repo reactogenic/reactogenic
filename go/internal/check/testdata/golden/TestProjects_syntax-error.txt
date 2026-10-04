@@ -1,0 +1,8 @@
+src/broken.rtsx(3,34): error TS17008: JSX element 'span' has no corresponding closing tag.
+src/main.tsx(2,14): error TS2322: Type 'number' is not assignable to type 'string'.
+src/main.tsx(4,14): error TS2322: Type 'string' is not assignable to type 'number'.
+src/unclosed.rtsx(3,6): error TS17008: JSX element 'section' has no corresponding closing tag.
+src/unclosed.rtsx(4,8): error TS17008: JSX element 'h1' has no corresponding closing tag.
+src/unclosed.rtsx(5,7): error TS17002: Expected corresponding JSX closing tag for 'h1'.
+src/unclosed.rtsx(7,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/unclosed.rtsx(8,1): error TS1005: '</' expected.

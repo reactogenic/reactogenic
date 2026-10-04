@@ -27,7 +27,7 @@ prototype to be rewritten later.
 | --- | --- |
 | Parser (RGP1-002) | Extending tsgo's own JSX parser becomes the natural option. Masking the reserved forms before parsing, or using Babel, would mean a second parser next to the one the checker uses. Still decided in RGP1-002 |
 | Type query (RGP1-051) | A call into tsgo's checker from Go: the props type of the tag, then `$X` in it, minus `undefined` / `null`, then array or tuple |
-| Program (RGP1-050) | tsgo's compiler host with an in-memory overlay: each `Foo.rtsx` is served as `Foo.tsx` |
+| Program (RGP1-050) | tsgo's compiler host with an in-memory overlay: each `Foo.rtsx` is served as `Foo.tsx` — superseded by *IDE support*, decision 2 |
 | `reactogenic check` (M6) | The Go binary itself, installed through an npm `bin` shim |
 | Vite plugin (M5) | The plugin runs in Node, so it drives a Go process (*Node ↔ Go* below) |
 | Semantics | The project is type-checked with TS7 semantics, including its `.ts` / `.tsx` files. Differences from the user's `tsc` 5.x are TS7's differences, not ours |
@@ -200,7 +200,7 @@ downloads that toolchain on demand (`GOTOOLCHAIN=auto`, the default).
 | `Slot<Children, Options>` helper | deferred | syntax.md, *Slots → Typing behaviour* |
 | Iterables in `Each` | rejected: arrays only, so `index` is always a `number` position | syntax.md, *Iteration* |
 | Scope for shorthand props | tsgo's binder, no resolver of our own; a same-named binding of the wrong type is an ordinary TS error | syntax.md, *Shorthand props*; RGP1-032 |
-| Package names | all scoped to the `@reactogenic` npm org: `core`, `vite`, `cli`, `cli-<os>-<arch>` | vite.md, *Runtime* |
+| Package names | all scoped to the `@reactogenic` npm org: `core`, `vite`, `cli`, `cli-<os>-<arch>`. One exception since RGP1-109: `packages/vscode` is `rtsx`, unscoped and private — `vsce` rejects scoped names, and it never goes to npm | vite.md, *Runtime*; ide.md, *VS Code extension* |
 
 ## RGP1-020 — No new node kinds, no new script kind
 
@@ -308,5 +308,174 @@ dropped: a segment is an ordinary module, made a segment by being mounted, so
 segment-import goes with it. The emitted import names the file found,
 extension included, so Vite and TS7 load the file the lookup chose rather than
 resolving by their own orders (TS: `.ts` before `.tsx`). `reactogenic check`
-resolves `./x.rtsx` through an `x.rtsx.tsx` alias of the virtual `x.tsx`, and
-drops TS5097 on segment imports.
+resolves `./x.rtsx` through an `x.rtsx.tsx` alias of the virtual `x.tsx`
+(superseded by *IDE support*, decision 2: `x.rtsx` is the module, resolved as
+written), and drops TS5097 on segment imports.
+
+## IDE support (RGP1-100)
+
+Researched 2026-10-03 against the vendored fork, `typescript@7.0.2`,
+`typescript@next` (7.1.0-dev.20261002.1) and VS Code 1.140; every claim below
+was run or read, then re-checked by a second pass.
+
+**Findings**
+
+| | |
+| --- | --- |
+| TS7 has *content mappers* (`internal/contentmapper`, `internal/spanmap`) | a file of an unsupported extension becomes virtual TS plus a span map; `tsc` and the language server serve it at original positions. Our fork has all of it and builds a working server as is |
+| …but only from 7.1 | 7.0.2 ignores `contentMappers` and rejects `--runExternalCode`; 7.1: beta 2026-10-06, stable planned 2026-11-24. VS Code 1.140 still runs TypeScript 6.0.3's `tsserver` by default |
+| mapped files are not found by extensionless imports | `./button` → TS2307; upstream closed it as intended (microsoft/TypeScript#64546) |
+| a mapper cannot touch TS's diagnostics | it runs before the checker: no slot-term rewrites, no `slot-conditional` |
+| client-contributed mappers reach inferred projects only | a tsconfig project needs its own `contentMappers` entry |
+| our `emit.Map` *is* a span map | copied → verbatim, synthesized-with-origin → atom; validated over the conformance corpus |
+| atoms must carry no features | an origin is often a whole tag: with features, hover and rename answer for unrelated generated code |
+| the transpiler returns nothing on a syntax error | the normal state while typing: no completion after `user.` |
+| rename through the map alone is wrong | `<Button size>` → `<Button dim>`; slot closing tags left behind |
+| `check` has a duplicate | an error inside a mounted segment prints twice, once under `intro.rtsx.tsx` |
+
+**Decisions**
+
+1. **Our own server on the fork** (`reactogenic lsp`), with the transform as
+   a built-in content mapper. Works on today's stable tools; keeps
+   extensionless imports (resolver patch); can rewrite diagnostics.
+2. **One program model.** `check` leaves the overlay for the same mapped
+   program — the editor and the CLI cannot disagree, and the duplicate goes.
+3. **One emission.** Names are copied so TS reaches them; no IDE-only output.
+4. **Tolerant in the editor, strict in builds.**
+5. **Rename is correct or refused**, for a rename started in an `.rtsx`
+   document.
+6. **Highlighting is a generated fork of the TSX grammar**, not injections.
+7. **The `.ts` side**: a TS server plugin for `tsserver` (TS ≤ 6), the stock
+   content mapper for TS 7.1+. Our server attaches to `.rtsx` only — taking
+   over `.ts` files would mean disabling VS Code's TypeScript per workspace
+   (Vue's abandoned "takeover mode"). A rename started in a `.ts` file that
+   reaches `.rtsx` is refused by the plugin: the fix-ups live in our server.
+8. **The stock content mapper is a by-product**, experimental until 7.1 is
+   stable; revisit making it the default path when 7.1 ships, upstream
+   resolves extensionless imports, and the client middleware
+   (`registerLspMiddleware`, merged 2026-10-02) is released.
+
+9. **Syntactic features come from the source tree** (folding, selection
+   ranges, closing tags): slot elements have no element in the virtual text.
+10. **Static capabilities only; attached to `.rtsx` only.** The fork
+    registers 26 capabilities dynamically per mapped extension; a client with
+    its own selector would answer everything twice.
+11. **The pin is frozen through M8.** TypeScript 7.1's beta is three days
+    after the research; re-vendoring mid-milestone, with a dozen patched
+    files, is the expensive case. RGP1-114 re-vendors.
+
+**Review (2026-10-03).** Five lenses over the first draft, each serious
+finding validated against the code: 42 findings, 5 blocking. What changed:
+the sibling re-transform had no seam (the cache key ignores siblings; a
+mapper has no file system) — now the directory listing is in the key and
+`segment-self` is a cross-file rule; rename fix-ups cannot work on the edit
+the fork returns (the two copies of a shorthand are one source range) — the
+server builds the edits from virtual positions; "closing tag copied" fails
+when the element is emitted self-closing — tags are paired on the source
+tree; the TS5097 drop must stay; the plan proved the built-in mapper in the
+server only after migrating `check` — a bare server now comes first.
+
+**Patched upstream files** (about 130 lines planned; 265 after the review of
+102–105; RGP1-107 adds 18 lines in three of them, the rest in new files;
+RGP1-108 adds 9 lines in `lsp/server.go` and none elsewhere — its hooks are
+new files; all in fast-moving packages):
+
+| File | Change |
+| --- | --- |
+| `module/resolver.go` | mapped extensions for extensionless imports |
+| `tsoptions/tsconfigparsing.go` | built-in mappers; user `.rtsx` entries dropped |
+| `project/project.go`, `session.go` | built-in mappers in inferred projects; a mapper host without `runExternalCode`; a diagnostics refresh when a mapped document is opened or closed with a text that is not the file's on disk (upstream refreshes on its edits and on watched files) |
+| `project/projectcollectionbuilder.go` | the default project of a mapped file is its lister: among a config and its references the search goes on past a project that holds the file through an import only, and takes the first such when none lists it — never a reason to search the configs above (upstream: the first that holds it) |
+| `project/mapped.go` (new) | the two rules above, as functions the patched lines call |
+| `project/compilerhost.go`, `contentmapper/host.go` | the file system to the transform; the directory listing in the cache key |
+| `contentmapper/transform.go`, `ast/ast.go` | `Extra` with the parsed file; module-ness |
+| `ast/parseoptions.go`, `parser/rtsx.go` | the rtsx grammar as a parse option |
+| `ls/host_diagnostics.go` (new) | the reporting hook: a mapped document's diagnostics from the host — asked for the program and the file, in place of `ls/diagnostics.go`'s path, which is not edited — and the LSP diagnostic made of each |
+| `ls/host_rename.go` (new) | a rename's occurrences in mapped files handed to the host before write-back — file, virtual range, whether it lies in one verbatim span, new text, gathered across projects — and the edits it returns, or its refusal; `prepareRename` asks the same. `ls/rename.go` is not edited: its checks and its text for each occurrence are called. What upstream renames in part is stopped here, for every file: a string and the body-valued prop of an element with a body are refused, a tag across component and intrinsic too, no file of the library is edited, an attribute nothing declares is not offered, and a binding pattern's quoted key is added to the occurrences |
+| `checker/rtsx.go` (new) | the name of the prop that an element's body is the value of |
+| `ls/syntactic.go` (new) | document symbols, folding, selection ranges, closing tags on a source file |
+| `ls/symbols.go` | workspace symbols collected from the embedder's files only, before the cut to 256; slot params are not document symbols |
+| `ls/file_rename.go` | which edits of a file rename are made, per import (`FileRenameEdits`); specifiers written for the files as they will be after the rename; a generated import left out |
+| `ls/autoimport/fix.go` | a generated import is no existing import: a name from its module gets a declaration of its own |
+| `ls/change/tracker.go` | an import inserted at the top of a text that is only comments: no index past its end (an upstream panic; in a mapped file, on every completion) |
+| `ls/inlay_hints.go` | each hint once; none on a generated call |
+| `ls/codeactions.go` | no organize-imports action without an edit in a mapped file |
+| `ls/definition.go` | a mapped module reached by a non-relative specifier: the file's start |
+| `modulespecifiers/specifiers.go` | extensionless specifiers for mapped files; the extension kept next to a built-in sibling, decided on the module's absolute path |
+| `spanmap/spanmap.go` | a position at the end of verbatim text maps back exactly; in generated text before the whole source, one that the mapper names (where a statement can go) is the source's start |
+| `lsp/server.go` | no dynamic registration, static capabilities, request hook, server info; the embedder's file predicate passed to workspace symbols and file rename; `textDocument/diagnostic` of a mapped document answered by the embedder's `Diagnostics`; the host's own methods dispatched first (`Embedder.Requests`); `rename` and `prepareRename` through the embedder's `Rename` |
+
+**Cost accepted:** the stripped binary grows about 45% with the language
+service linked in (19 → 28 MB, darwin-arm64); the patches above must be
+rebased when the pin moves.
+
+**`check` on the mapped program (RGP1-106).** What was open in decision 2,
+settled while moving `check`:
+
+| | |
+| --- | --- |
+| strict, by the transform | `check` registers the same mapper with the passes strict. A file with a syntax error is not lowered: it reports its syntax errors, and its source is its virtual text — stopped, so nothing TS says about it is shown — instead of an empty module (the overlay's, which gave every importer TS2306). **Rejected:** the tolerant transform in `check` — a build would print type errors of a half-parsed file |
+| rule 4 is the layer's, in both hosts | a file with code left out reports no TS diagnostic in `check` either: the editor and `check` must print the same lines, and those diagnostics are false in both |
+| TS's syntax errors of a mapped file stop nothing | `tsc` checks no types while any file has a syntax error. A syntax error in an `.rtsx` file never did that in `check` (the overlay served an empty file); it still does not, and one in a `.ts` / `.tsx` file still does |
+| referenced projects are checked first | a referenced project's sources are in the referencing program (there is no output to read instead), under the referencing project's options. Reporting them there would check a file twice, the second time with the wrong options: each project reports its own files — those its tsconfig lists, so the order of `references` decides nothing (a test project listed before the app it imports does not report the app's files). **Rejected:** the first project that *holds* a file — it may hold it through an import; `tsc -p`'s reading, where a referenced project is not checked at all — its `.rtsx` errors would pass `check` and fail `vite build` |
+| `include` keeps TS's meaning | a pattern that names extensions (`src/**/*.tsx`) lists the files of those extensions; `.rtsx` is listed by a directory, a `*`, or its own pattern. The overlay listed every `.rtsx` under a `.tsx` pattern, because each was served as a `.tsx` file. **Rejected:** a `.tsx` wildcard that also covers mapped extensions, in the fork's tsconfig matching — `check` and the server would then list files that stock TypeScript 7.1 with the same tsconfig does not |
+| a construct left as written stops the file | `arg-without-slot` and `params-on-html` leave their attribute in the emitted text, which is then not TSX. The transpiler marks the output and the layer treats the file as stopped (rule 4). **Rejected:** deciding it in the layer from TS's syntax errors of the virtual text — in the editor a half-typed file has those too, and keeps its type errors |
+| `ambiguous-module` is the transpiler's | the overlay's own copy said "and the `.rtsx` is not checked"; it is now — both files are modules |
+
+## RGP1-111 — The TS server plugin
+
+`tsserver` (TS ≤ 6) learns `.rtsx` through a plugin the extension ships
+(ide.md, *The `.ts` side*). Its host API is synchronous; the transform is a
+Go binary.
+
+1. **`spawnSync` of `serve`, one process per batch.** Measured on macOS
+   (M2 Pro, the 28.5 MB release build): 11 ms for one 8 KB file, 65 ms for
+   50, 200 ms for 200 — a process that does nothing takes 6. A project is
+   loaded in a handful of batches (an importer's `.rtsx` files, plus those
+   beside them); a save costs one. **Rejected** for now: a long-lived child
+   behind `Atomics.wait` — a worker, a shared buffer and a lifetime to
+   manage, for 6 ms. It stays the answer if Windows is slow (unmeasured).
+2. **`tsserver` keeps the source; the program gets the virtual text.** The
+   plugin replaces what the project hands the language service (snapshot,
+   version, script kind) and wraps the service's answers. `tsserver`'s own
+   record of the file stays the saved source: it watches it, and turns the
+   mapped offsets into lines with it. **Rejected:** Svelte's way — the
+   virtual text returned from `readFile`, so that every line map `tsserver`
+   keeps is of the wrong text and has to be patched after it. **Rejected:**
+   a cache keyed by mtime and size — it is `tsserver` that reads the file;
+   the text it holds is the key.
+3. **Each answer has one server — the one that can give it.** Workspace
+   symbols declared in `.rtsx` files are `reactogenic lsp`'s (RGP1-105)
+   while it has a project; the extension tells the plugin, which lists them
+   itself until then. **Rejected:** always leaving them out — the server
+   runs only once an `.rtsx` document was opened, and never in an untrusted
+   window: until then nobody listed them (seen in VS Code 1.140). File
+   rename: no edit in an `.rtsx` file is `tsserver`'s (it has the saved
+   text). **Rejected:** also leaving out its edits of imports of `.rtsx`
+   modules in `.ts` files, as "applied twice". Measured in VS Code: it asks
+   the language server before the move and `tsserver` after it; the
+   server's edit is in the file by then, `tsserver` finds nothing left to
+   update, and without the server its edit is the only one.
+4. **Rename, and every other edit, never goes into an `.rtsx` file.**
+   Through the map alone a rename is wrong (decision 5 of *IDE support*);
+   the fix-ups live in the server. Refused before `tsserver` collects the
+   locations, for every loaded project the rename leads into; what is seen
+   only then fails the request. **Rejected:** answering a project's
+   locations with none — `tsserver` merges the projects', and the rename
+   was applied to the others' files alone.
+5. **Configured by the client only.** The plugin is loaded in every TS
+   project, in restricted mode too, and before the extension is activated:
+   it finds its binary itself, and runs anything of the workspace — its CLI,
+   or a relative path of the setting or of `$REACTOGENIC_BINARY` — only
+   after the extension has said the workspace is trusted. A tsconfig
+   `plugins` entry of its name is ignored — it would let a repository choose
+   the binary.
+6. **What it costs a project without `.rtsx` is counted.** Loaded
+   everywhere, it looks up each failed import once more — once per folder
+   and name: TypeScript shares one resolution among the files of a folder
+   (for a package, among folders). Per importer, a clone before its install
+   loaded 2.6–5.4 times slower (3,000 files, 13 unresolved imports each:
+   906 → 3648 ms; now 892 → 922). It does nothing in VS Code's second
+   `tsserver` (`partialSemantic`), which exists to answer while the first
+   one is busy. A binary gets 5 s per batch, not 20, and one that used them
+   up is not asked again for a minute.

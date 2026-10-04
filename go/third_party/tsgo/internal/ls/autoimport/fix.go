@@ -861,6 +861,13 @@ func (v *View) getExistingImports() *collections.MultiMap[ModuleID, existingImpo
 				}
 			}
 		} else if node.Kind == ast.KindImportDeclaration || node.Kind == ast.KindImportEqualsDeclaration || node.Kind == ast.KindJSDocImportTag {
+			// rtsx: an import the content mapper generated is not in the original text: a name cannot be
+			// added to it, so it is no existing import — the name gets a declaration of its own.
+			if spans := v.importingFile.SpanMap(); spans != nil {
+				if _, fidelity := spans.VirtualToOriginalSpan(moduleSpecifier.Loc); !fidelity.IsExact() {
+					continue
+				}
+			}
 			if moduleSymbol := v.checker.GetSymbolAtLocation(moduleSpecifier); moduleSymbol != nil {
 				if moduleID, _, ok := tryGetModuleIDAndFileNameOfModuleSymbol(moduleSymbol); ok {
 					result.Add(moduleID, existingImport{node: node, moduleSpecifier: moduleSpecifier.Text(), index: i})

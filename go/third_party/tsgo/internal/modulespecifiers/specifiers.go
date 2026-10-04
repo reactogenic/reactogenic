@@ -506,6 +506,7 @@ func getLocalModuleSpecifier(
 	sourceDirectory := info.SourceDirectory
 
 	allowedEndings := preferences.getAllowedEndingsInPreferredOrder(importMode)
+	allowedEndings = contentMappedEndings(host, moduleFileName, allowedEndings) // rtsx
 	var relativePath string
 	if len(rootDirs) > 0 {
 		relativePath = tryGetModuleNameFromRootDirs(rootDirs, moduleFileName, sourceDirectory, allowedEndings, compilerOptions, host)
@@ -638,6 +639,21 @@ func getLocalModuleSpecifier(
 	return maybeNonRelative
 }
 
+// rtsx: next to a built-in sibling a content-mapped file keeps its extension — the sibling would win
+// the import — so the minimal ending is not allowed for it. Decided on the module's absolute name,
+// before the specifier (relative to the importer, to a root directory or to a `paths` base) is made.
+func contentMappedEndings(host ModuleSpecifierGenerationHost, moduleFileName string, allowedEndings []ModuleSpecifierEnding) []ModuleSpecifierEnding {
+	if host == nil {
+		return allowedEndings
+	}
+	for _, ext := range host.ContentMapperExtensions() {
+		if bare := strings.TrimSuffix(moduleFileName, ext); bare != moduleFileName && tryGetAnyFileFromPath(host, bare) {
+			return []ModuleSpecifierEnding{ModuleSpecifierEndingJsExtension}
+		}
+	}
+	return allowedEndings
+}
+
 func processEnding(
 	fileName string,
 	allowedEndings []ModuleSpecifierEnding,
@@ -650,6 +666,16 @@ func processEnding(
 
 	noExtension := tspath.RemoveFileExtension(fileName)
 	if fileName == noExtension {
+		// rtsx: an import finds a content-mapped file without its extension (the resolver, after every
+		// built-in extension), so the minimal ending drops it — unless a built-in sibling would win
+		// (getLocalModuleSpecifier: the minimal ending is then not allowed).
+		if host != nil && len(allowedEndings) > 0 && allowedEndings[0] == ModuleSpecifierEndingMinimal {
+			for _, ext := range host.ContentMapperExtensions() {
+				if bare := strings.TrimSuffix(fileName, ext); bare != fileName {
+					return bare
+				}
+			}
+		}
 		return fileName
 	}
 
@@ -763,6 +789,7 @@ func tryGetModuleNameAsNodeModule(
 	// Simplify the full file path to something that can be resolved by Node.
 	preferences := getModuleSpecifierPreferences(userPreferences, host, options, importingSourceFile, "")
 	allowedEndings := preferences.getAllowedEndingsInPreferredOrder(core.ResolutionModeNone)
+	allowedEndings = contentMappedEndings(host, pathObj.FileName, allowedEndings) // rtsx
 
 	caseSensitive := host.UseCaseSensitiveFileNames()
 	moduleSpecifier := pathObj.FileName

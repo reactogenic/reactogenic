@@ -1,0 +1,1664 @@
+diff --git a/internal/checker/rtsx.go b/internal/checker/rtsx.go
+new file mode 100644
+index 0000000..c5f9080
+--- /dev/null
++++ b/internal/checker/rtsx.go
+@@ -0,0 +1,13 @@
++// Reactogenic: what the host's rename asks of the checker. Not part of
++// upstream: added by go/patches/0006-rtsx-lsp.patch.
++
++package checker
++
++import "github.com/microsoft/TypeScript/tsc/internal/ast"
++
++// JsxChildrenPropertyName is the name of the prop that an element's body is
++// the value of, for the JSX namespace at location: `children`, unless
++// `JSX.ElementChildrenAttribute` names another; "" when a body is no prop.
++func (c *Checker) JsxChildrenPropertyName(location *ast.Node) string {
++	return c.getJsxElementChildrenPropertyName(c.getJsxNamespaceAt(location))
++}
+diff --git a/internal/ls/autoimport/fix.go b/internal/ls/autoimport/fix.go
+index 46423f3..a44903e 100644
+--- a/internal/ls/autoimport/fix.go
++++ b/internal/ls/autoimport/fix.go
+@@ -861,6 +861,13 @@ func (v *View) getExistingImports() *collections.MultiMap[ModuleID, existingImpo
+ 				}
+ 			}
+ 		} else if node.Kind == ast.KindImportDeclaration || node.Kind == ast.KindImportEqualsDeclaration || node.Kind == ast.KindJSDocImportTag {
++			// rtsx: an import the content mapper generated is not in the original text: a name cannot be
++			// added to it, so it is no existing import — the name gets a declaration of its own.
++			if spans := v.importingFile.SpanMap(); spans != nil {
++				if _, fidelity := spans.VirtualToOriginalSpan(moduleSpecifier.Loc); !fidelity.IsExact() {
++					continue
++				}
++			}
+ 			if moduleSymbol := v.checker.GetSymbolAtLocation(moduleSpecifier); moduleSymbol != nil {
+ 				if moduleID, _, ok := tryGetModuleIDAndFileNameOfModuleSymbol(moduleSymbol); ok {
+ 					result.Add(moduleID, existingImport{node: node, moduleSpecifier: moduleSpecifier.Text(), index: i})
+diff --git a/internal/ls/change/tracker.go b/internal/ls/change/tracker.go
+index 47543d2..f3c7a1f 100644
+--- a/internal/ls/change/tracker.go
++++ b/internal/ls/change/tracker.go
+@@ -565,7 +565,9 @@ func (t *Tracker) InsertAtTopOfFile(sourceFile *ast.SourceFile, insert []*ast.St
+ 	if originalPos != 0 {
+ 		options.Prefix = t.newLine
+ 	}
+-	if len(sourceFile.Text()) == 0 || !stringutil.IsLineBreak(rune(sourceFile.Text()[pos])) {
++	// rtsx: `pos` is the end of a text that is only comments (upstream indexes past it — and for a
++	// content-mapped file does so on every completion request, which computes these edits).
++	if pos >= len(sourceFile.Text()) || !stringutil.IsLineBreak(rune(sourceFile.Text()[pos])) {
+ 		options.Suffix = t.newLine
+ 	}
+ 	if blankLineBetween {
+diff --git a/internal/ls/codeactions.go b/internal/ls/codeactions.go
+index a95b8bb..84532fa 100644
+--- a/internal/ls/codeactions.go
++++ b/internal/ls/codeactions.go
+@@ -86,6 +86,9 @@ func (l *LanguageService) ProvideCodeActions(ctx context.Context, params *lsprot
+ 			matchingKinds := getOrganizeImportsActionsForKind(kind)
+ 			for _, matchingKind := range matchingKinds {
+ 				organizeAction := l.createOrganizeImportsAction(ctx, program, file, matchingKind)
++				if organizeAction == nil { // rtsx
++					continue
++				}
+ 				actions = append(actions, *organizeAction)
+ 			}
+ 
+@@ -354,6 +357,12 @@ func (l *LanguageService) createOrganizeImportsAction(
+ 		kind,
+ 	)
+ 	if len(changes) == 0 {
++		// rtsx: in a content-mapped file no edits means edits that could not be written back
++		// (OrganizeImports) — an import the mapper generated stands in the import block. An action
++		// that would silently do nothing is not offered.
++		if file.SpanMap() != nil {
++			return nil
++		}
+ 		return &lsproto.CommandOrCodeAction{
+ 			CodeAction: &lsproto.CodeAction{
+ 				Title: title,
+diff --git a/internal/ls/definition.go b/internal/ls/definition.go
+index c1d3d4b..1592eda 100644
+--- a/internal/ls/definition.go
++++ b/internal/ls/definition.go
+@@ -241,6 +241,21 @@ func (l *LanguageService) createDefinitionLocations(
+ 
+ 	for _, decl := range declarations {
+ 		file := ast.GetSourceFileOfNode(decl)
++		if decl.Kind == ast.KindSourceFile && file.SpanMap() != nil {
++			// rtsx: a module — reached by a specifier that is not relative (a `paths` alias, a
++			// package). A content-mapped file's whole text is no span that answers a feature: the
++			// module is the file, at its start, as for a relative specifier (above).
++			start := lsproto.Range{}
++			if locationRanges.AddIfAbsent(fileRange{file, core.NewTextRange(0, 0)}) {
++				locations = append(locations, &lsproto.LocationLink{
++					OriginSelectionRange: &originSelectionRange,
++					TargetUri:            lsconv.FileNameToDocumentURI(file.OriginalFileName()),
++					TargetRange:          start,
++					TargetSelectionRange: start,
++				})
++			}
++			continue
++		}
+ 		name := core.OrElse(ast.GetNameOfDeclaration(decl), decl)
+ 		var nameRange core.TextRange
+ 		if name.Kind == ast.KindEmptyStatement {
+diff --git a/internal/ls/file_rename.go b/internal/ls/file_rename.go
+index 1c43709..bd9fbdd 100644
+--- a/internal/ls/file_rename.go
++++ b/internal/ls/file_rename.go
+@@ -31,7 +31,17 @@ type movedFile struct {
+ 	newFileName string
+ }
+ 
+-func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lsproto.DocumentUri, newURI lsproto.DocumentUri) []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile {
++// FileRenameEdits decides which edits of a file rename are made (rtsx: lsp.Embedder — a server
++// that shares the project with another one makes only its own). importer is the file edited;
++// imported is what the rewritten path names: the module an import resolves to, the file a
++// reference or a tsconfig entry names, or "" when it is not known. nil keeps every edit.
++type FileRenameEdits func(importer, imported string) bool
++
++func (keep FileRenameEdits) wants(importer, imported string) bool {
++	return keep == nil || keep(importer, imported)
++}
++
++func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lsproto.DocumentUri, newURI lsproto.DocumentUri, keep FileRenameEdits) []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile {
+ 	program := l.GetProgram()
+ 	oldPath := oldURI.FileName()
+ 	newPath := newURI.FileName()
+@@ -39,8 +49,10 @@ func (l *LanguageService) GetEditsForFileRename(ctx context.Context, oldURI lspr
+ 	oldToNew := l.createPathUpdater(oldPath, newPath)
+ 
+ 	changeTracker := change.NewTracker(ctx, program.Options(), l.FormatOptions(), l.converters)
+-	l.updateTsconfigFiles(program, changeTracker, oldToNew, oldPath, newPath)
+-	l.updateImportsForFileRename(program, changeTracker, oldToNew)
++	if keep.wants("", oldPath) { // rtsx: a tsconfig is no one's file; its entry names the renamed path
++		l.updateTsconfigFiles(program, changeTracker, oldToNew, oldPath, newPath)
++	}
++	l.updateImportsForFileRename(renamedHost{program, oldToNew, l.createPathUpdater(newPath, oldPath)}, program, changeTracker, oldToNew, keep)
+ 
+ 	var documentChanges []lsproto.TextDocumentEditOrCreateFileOrRenameFileOrDeleteFile
+ 
+@@ -214,7 +226,7 @@ func (l *LanguageService) updateRelativePath(oldToNew pathUpdater, oldImportFrom
+ 	return relativeImportPathFromDirectory(tspath.GetDirectoryPath(newImportFromPath), newAbsolute, l.UseCaseSensitiveFileNames())
+ }
+ 
+-func (l *LanguageService) updateImportsForFileRename(program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater) {
++func (l *LanguageService) updateImportsForFileRename(renamed renamedHost, program *compiler.Program, changeTracker *change.Tracker, oldToNew pathUpdater, keep FileRenameEdits) {
+ 	allFiles := program.GetSourceFiles()
+ 	checker, done := program.GetTypeChecker(context.Background())
+ 	defer done()
+@@ -240,22 +252,58 @@ func (l *LanguageService) updateImportsForFileRename(program *compiler.Program,
+ 				continue
+ 			}
+ 			updated := l.updateRelativePath(oldToNew, oldFileName, newImportFromPath, ref.FileName)
+-			if updated != ref.FileName {
++			if updated != ref.FileName && keep.wants(oldFileName, tspath.ResolvePath(tspath.GetDirectoryPath(oldFileName), ref.FileName)) {
+ 				changeTracker.ReplaceTextRangeWithText(sourceFile, ref.TextRange, updated)
+ 			}
+ 		}
+ 
+ 		for _, importStringLiteral := range sourceFile.Imports() {
+-			updated := l.getUpdatedImportSpecifier(program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
+-			if updated != "" && updated != importStringLiteral.Text() {
++			// rtsx: an import the content mapper generated has no source text to rewrite. Left out, it
++			// does not keep the file's own imports from following the file when it moves.
++			if spans := sourceFile.SpanMap(); spans != nil {
++				if _, fidelity := spans.VirtualToOriginalSpan(importStringLiteral.Loc); !fidelity.IsExact() {
++					continue
++				}
++			}
++			updated := l.getUpdatedImportSpecifier(renamed, program, checker, sourceFile, importStringLiteral, oldToNew, movedFiles, newImportFromPath, fileMoved, moduleSpecifierPreferences)
++			if updated != "" && updated != importStringLiteral.Text() && keep.wants(oldFileName, resolvedImport(program, sourceFile, importStringLiteral)) {
+ 				changeTracker.ReplaceTextRangeWithText(sourceFile, createStringTextRange(sourceFile, importStringLiteral), updated)
+ 			}
+ 		}
+ 	}
+ }
+ 
++// rtsx: the host for the specifiers written for after the rename — its files are those that will
++// be there: a path renamed away is no file, a path renamed to is one. (The specifier of a
++// content-mapped module keeps its extension next to a built-in sibling. `util.ts` renamed to
++// `util.rtsx` is still on disk when the edits are asked for, and is not that sibling; `button.ts`
++// in a renamed folder is not yet where it will be, and is.)
++type renamedHost struct {
++	modulespecifiers.ModuleSpecifierGenerationHost
++	oldToNew, newToOld pathUpdater
++}
++
++func (h renamedHost) FileExists(path string) bool {
++	if _, renamed := h.oldToNew(path); renamed {
++		return false
++	}
++	if old, renamed := h.newToOld(path); renamed {
++		path = old
++	}
++	return h.ModuleSpecifierGenerationHost.FileExists(path)
++}
++
++// rtsx: the file an import resolves to, for FileRenameEdits; "" when it does not resolve.
++func resolvedImport(program *compiler.Program, sourceFile *ast.SourceFile, importLiteral *ast.StringLiteralLike) string {
++	if resolved := program.GetResolvedModuleFromModuleSpecifier(sourceFile, importLiteral); resolved != nil {
++		return resolved.ResolvedFileName
++	}
++	return ""
++}
++
+ // We assume the source file did not move to a different program.
+ func (l *LanguageService) getUpdatedImportSpecifier(
++	renamed renamedHost, // rtsx
+ 	program *compiler.Program,
+ 	checker *checker.Checker,
+ 	sourceFile *ast.SourceFile, // old importing source file
+@@ -292,7 +340,7 @@ func (l *LanguageService) getUpdatedImportSpecifier(
+ 
+ 	updated := modulespecifiers.UpdateModuleSpecifier(
+ 		program.Options(),
+-		program,
++		renamed, // rtsx
+ 		sourceFile,
+ 		newImportFromPath,
+ 		importLiteral.Text(),
+diff --git a/internal/ls/host_diagnostics.go b/internal/ls/host_diagnostics.go
+new file mode 100644
+index 0000000..d2c8013
+--- /dev/null
++++ b/internal/ls/host_diagnostics.go
+@@ -0,0 +1,150 @@
++// Reactogenic: the diagnostics of a content-mapped document, from the host
++// of the built-in mapper. Not part of upstream: added by
++// go/patches/0006-rtsx-lsp.patch.
++
++package ls
++
++import (
++	"context"
++	"unicode/utf8"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/compiler"
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++)
++
++// HostDiagnostic is one diagnostic of a content-mapped file as its host
++// reports it: in the text the author wrote, in the host's words.
++type HostDiagnostic struct {
++	// Pos and End are byte offsets in the file's original text.
++	Pos, End int
++	// Code and Source name a diagnostic that is the host's own, or one of
++	// the compiler's that the host reworded. With Code empty the diagnostic
++	// has the compiler's Number as its code and the source "ts", which the
++	// compiler's quick fixes match on: TS's own, or — without TS — that of
++	// a syntax error the host's parse of the original text found.
++	Code, Source string
++	Number       int32
++	// Severity is that of a diagnostic that is not made from one of the
++	// compiler's (TS nil).
++	Severity lsproto.DiagnosticSeverity
++	Message  string
++	Related  []HostRelatedInformation
++	// TS is the compiler's diagnostic this one was made from; nil for the
++	// host's own. Its severity (the user's reportStyleChecksAsWarnings
++	// included) and its tags — unnecessary, deprecated — are kept.
++	TS *ast.Diagnostic
++}
++
++// HostRelatedInformation is a related location: byte offsets in the
++// original text of FileName. With FileName empty it has no place of its
++// own, and is shown at its diagnostic's.
++type HostRelatedInformation struct {
++	FileName string
++	Pos, End int
++	Message  string
++}
++
++// HostDiagnostics returns every diagnostic of a content-mapped file of
++// program: the complete list, the compiler's included. It is given the
++// program rather than the compiler's diagnostics because it decides which
++// of them are asked for at all — never the syntactic ones of a virtual text.
++type HostDiagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []HostDiagnostic
++
++// ProvideHostDiagnostics answers textDocument/diagnostic for a content-mapped
++// document with the host's diagnostics, in place of ProvideDiagnostics: the
++// compiler's diagnostics reach the host still structured — before
++// toLSPDiagnostics would map them, and aggregate those in synthesized code
++// at the top of the file. ok is false for a document that is not content
++// mapped: ProvideDiagnostics answers for it.
++func (l *LanguageService) ProvideHostDiagnostics(ctx context.Context, uri lsproto.DocumentUri, provide HostDiagnostics) (response lsproto.DocumentDiagnosticResponse, ok bool) {
++	program, file := l.getProgramAndFile(uri)
++	if file.SpanMap() == nil {
++		return response, false
++	}
++	items := []*lsproto.Diagnostic{}
++	if !l.UserPreferences().EnableValidation.IsFalse() {
++		document := hostScript{fileName: file.OriginalFileName(), text: file.OriginalText()}
++		styleChecksAsWarnings := l.UserPreferences().ReportStyleChecksAsWarnings.IsTrue()
++		relatedInformation := lsproto.GetClientCapabilities(ctx).TextDocument.Diagnostic.RelatedInformation
++		for _, d := range provide(ctx, program, file) {
++			items = append(items, l.hostDiagnosticToLSP(ctx, program, document, d, styleChecksAsWarnings, relatedInformation))
++		}
++	}
++	return lsproto.RelatedFullDocumentDiagnosticReportOrUnchangedDocumentDiagnosticReport{
++		FullDocumentDiagnosticReport: &lsproto.RelatedFullDocumentDiagnosticReport{Items: items},
++	}, true
++}
++
++func (l *LanguageService) hostDiagnosticToLSP(ctx context.Context, program *compiler.Program, document hostScript, d HostDiagnostic, styleChecksAsWarnings, relatedInformation bool) *lsproto.Diagnostic {
++	result := &lsproto.Diagnostic{Severity: &d.Severity}
++	if d.TS != nil {
++		// The compiler's diagnostic, converted as upstream converts it — its
++		// number as the code, the source "ts", its severity and tags — and
++		// then placed and worded by the host.
++		result = lsconv.DiagnosticToLSPPull(ctx, l.converters, d.TS, styleChecksAsWarnings)
++		result.RelatedInformation = nil
++	}
++	if d.Code != "" {
++		result.Code = &lsproto.IntegerOrString{String: &d.Code}
++		result.Source = &d.Source
++	} else {
++		result.Code = &lsproto.IntegerOrString{Integer: &d.Number}
++		result.Source = new("ts")
++	}
++	result.Message = lsproto.StringOrMarkupContent{String: &d.Message}
++	result.Range = l.hostRange(document, d.Pos, d.End)
++	if relatedInformation && len(d.Related) > 0 {
++		related := make([]*lsproto.DiagnosticRelatedInformation, 0, len(d.Related))
++		for _, r := range d.Related {
++			location := lsproto.Location{Uri: lsconv.FileNameToDocumentURI(document.fileName), Range: result.Range}
++			if r.FileName != "" {
++				location = lsproto.Location{Uri: lsconv.FileNameToDocumentURI(r.FileName)}
++				if file := program.GetSourceFile(r.FileName); file != nil {
++					script := hostScript{fileName: file.OriginalFileName(), text: file.Text()}
++					if file.SpanMap() != nil {
++						script.text = file.OriginalText()
++					}
++					location.Range, _ = l.converters.ToLSPRange(script, core.NewTextRange(r.Pos, r.End))
++				}
++			}
++			related = append(related, &lsproto.DiagnosticRelatedInformation{Location: location, Message: r.Message})
++		}
++		result.RelatedInformation = &related
++	}
++	return result
++}
++
++// hostRange is the range of a span of the document's text. A span of no
++// length covers the character after it — also a line break — so that every
++// client has something to underline; at the end of the text it stays empty.
++func (l *LanguageService) hostRange(document hostScript, pos, end int) lsproto.Range {
++	pos = max(0, min(pos, len(document.text)))
++	end = max(pos, min(end, len(document.text)))
++	if end == pos && pos < len(document.text) {
++		_, size := utf8.DecodeRuneInString(document.text[pos:])
++		end = pos + size
++		if document.text[pos] == '\r' && end < len(document.text) && document.text[end] == '\n' {
++			end++
++		}
++	}
++	lspRange, _ := l.converters.ToLSPRange(document, core.NewTextRange(pos, end))
++	return lspRange
++}
++
++// hostScript is the text a host's positions are in — the original text of
++// a content-mapped file, or the text of any other file — as a Script: its
++// offsets convert to lines and characters without a span map.
++type hostScript struct {
++	fileName string
++	text     string
++}
++
++func (s hostScript) FileName() string         { return s.fileName }
++func (s hostScript) OriginalFileName() string { return s.fileName }
++func (s hostScript) Text() string             { return s.text }
++func (s hostScript) OriginalText() string     { return s.text }
++func (hostScript) SpanMap() *spanmap.SpanMap  { return nil }
+diff --git a/internal/ls/host_rename.go b/internal/ls/host_rename.go
+new file mode 100644
+index 0000000..c42fd60
+--- /dev/null
++++ b/internal/ls/host_rename.go
+@@ -0,0 +1,402 @@
++// Reactogenic: a rename whose occurrences in content-mapped files are written
++// back by the host of the built-in mapper. Not part of upstream: added by
++// go/patches/0006-rtsx-lsp.patch.
++
++package ls
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"iter"
++	"strings"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/checker"
++	"github.com/microsoft/TypeScript/tsc/internal/compiler"
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
++	"github.com/microsoft/TypeScript/tsc/internal/locale"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsutil"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/scanner"
++	"github.com/microsoft/TypeScript/tsc/internal/tspath"
++)
++
++// HostRenameOccurrence is one place a rename changes, as the language
++// service found it in the text it checks — before it is written back to the
++// text the author wrote.
++type HostRenameOccurrence struct {
++	// File holds the occurrence; Pos and End are offsets in its text, which
++	// for a content-mapped file is the virtual text.
++	File     *ast.SourceFile
++	Pos, End int
++	// Node is the name there, in File's tree; nil for an occurrence that is
++	// only a range.
++	Node *ast.Node
++	// OriginalPos and OriginalEnd are what Pos and End map to in the
++	// original text of a content-mapped file. Exact: the occurrence lies in
++	// one verbatim span, so it is that text — upstream writes such an
++	// occurrence back, and drops any other.
++	OriginalPos, OriginalEnd int
++	Exact                    bool
++	// NewText replaces the occurrence: the new name, or what the language
++	// service makes of it there (`size: dim` for a shorthand property).
++	NewText string
++
++	location lsproto.Location // of an occurrence in a file that is not content mapped
++	library  bool             // in a file of the default library
++}
++
++// HostRenameEdit is one edit of a rename, in the original text of a
++// content-mapped file.
++type HostRenameEdit struct {
++	FileName string
++	Pos, End int
++	NewText  string
++}
++
++// HostRenameRequest is a rename for the host to write back.
++type HostRenameRequest struct {
++	// Name is the name as it is, NewName what it becomes.
++	Name, NewName string
++	// Prepare: nothing is renamed. The question is whether a rename here
++	// would be refused; NewName is Name.
++	Prepare bool
++	// Occurrences are those in content-mapped files, each once.
++	Occurrences []HostRenameOccurrence
++	// Files are the content-mapped files of the program the rename started
++	// in: code the mapper left out of a virtual text has occurrences that
++	// nothing found.
++	Files []*ast.SourceFile
++}
++
++// HostRename writes a rename's occurrences in content-mapped files back:
++// the complete edits of those files, or an error — the rename is then
++// refused as a whole, with that message.
++type HostRename func(ctx context.Context, request HostRenameRequest) ([]HostRenameEdit, error)
++
++// hostRenameOccurrences is one project's answer.
++type hostRenameOccurrences struct {
++	renamed     bool // the symbol can be renamed
++	name        string
++	occurrences []HostRenameOccurrence
++	// notOffered: what is renamed is no name that anything declares — a
++	// rename of it would be of that one place.
++	notOffered bool
++	// refused: the occurrences are not all of them, or would not mean what
++	// they mean now. The rename is refused whatever the host makes of them.
++	refused error
++}
++
++// ProvideHostRename is ProvideRename with the occurrences in content-mapped
++// files written back by host: upstream maps each back by position and drops
++// those it cannot map, which renames a part. An occurrence in any other file
++// is written as upstream writes it. The occurrences are gathered across
++// projects first, so the host decides on all of them at once.
++func (l *LanguageService) ProvideHostRename(ctx context.Context, params *lsproto.RenameParams, orchestrator CrossProjectOrchestrator, host HostRename, prepare bool) (lsproto.WorkspaceEditOrNull, error) {
++	found, err := l.handleCrossProject(
++		ctx,
++		params,
++		orchestrator,
++		func(l *LanguageService, ctx context.Context, params *lsproto.RenameParams, data SymbolAndEntriesData, _ symbolEntryTransformOptions) (hostRenameOccurrences, error) {
++			return l.symbolAndEntriesToOccurrences(ctx, params, data, prepare), nil
++		},
++		func(results iter.Seq[hostRenameOccurrences]) hostRenameOccurrences {
++			var all hostRenameOccurrences
++			for result := range results {
++				all.renamed = all.renamed || result.renamed
++				if all.name == "" {
++					all.name = result.name
++				}
++				all.occurrences = append(all.occurrences, result.occurrences...)
++				all.notOffered = all.notOffered || result.notOffered
++				if all.refused == nil {
++					all.refused = result.refused
++				}
++			}
++			return all
++		},
++		true,  /*isRename*/
++		false, /*implementations*/
++		symbolEntryTransformOptions{},
++		nil, /*defaultProjectData*/
++	)
++	if err != nil || !found.renamed && !found.notOffered {
++		return lsproto.WorkspaceEditOrNull{}, err
++	}
++	if found.refused != nil {
++		return lsproto.WorkspaceEditOrNull{}, found.refused
++	}
++	if len(found.occurrences) == 0 || found.notOffered {
++		// The tag of an intrinsic element that an index signature declares:
++		// a symbol, and nothing to edit. A rename of nothing is not offered.
++		if prepare {
++			return lsproto.WorkspaceEditOrNull{}, errors.New(diagnostics.You_cannot_rename_this_element.Localize(locale.FromContext(ctx)))
++		}
++		return lsproto.WorkspaceEditOrNull{}, nil
++	}
++
++	request := HostRenameRequest{Name: found.name, NewName: params.NewName, Prepare: prepare}
++	if prepare {
++		request.NewName = found.name
++	}
++	type occurrenceKey struct {
++		fileName string
++		pos, end int
++		newText  string
++	}
++	seen := map[occurrenceKey]bool{}
++	files := map[string]*ast.SourceFile{}
++	var mappedEdits []mappedRenameEdit
++	for _, occurrence := range found.occurrences {
++		if occurrence.File.SpanMap() == nil {
++			// Upstream refuses a symbol declared in the library or in
++			// node_modules by its declarations. A string has none — it is
++			// found wherever a string of its type is written — and the prop
++			// of a generic component has passed that check instantiated: the
++			// library's file, or the declaration, is edited all the same.
++			if occurrence.library {
++				return lsproto.WorkspaceEditOrNull{}, errors.New(diagnostics.You_cannot_rename_elements_that_are_defined_in_the_standard_TypeScript_library.Localize(locale.FromContext(ctx)))
++			}
++			if isInsideNodeModules(occurrence.File.FileName()) {
++				return lsproto.WorkspaceEditOrNull{}, errors.New(diagnostics.You_cannot_rename_elements_that_are_defined_in_a_node_modules_folder.Localize(locale.FromContext(ctx)))
++			}
++			mappedEdits = append(mappedEdits, mappedRenameEdit{uri: occurrence.location.Uri, edit: &lsproto.TextEdit{Range: occurrence.location.Range, NewText: occurrence.NewText}})
++			continue
++		}
++		// A file of several projects is found once per project.
++		key := occurrenceKey{occurrence.File.OriginalFileName(), occurrence.Pos, occurrence.End, occurrence.NewText}
++		if !seen[key] {
++			seen[key] = true
++			files[key.fileName] = occurrence.File
++			request.Occurrences = append(request.Occurrences, occurrence)
++		}
++	}
++	for _, file := range l.GetProgram().SourceFiles() {
++		if file.SpanMap() != nil {
++			request.Files = append(request.Files, file)
++			if files[file.OriginalFileName()] == nil {
++				files[file.OriginalFileName()] = file
++			}
++		}
++	}
++	edits, err := host(ctx, request)
++	if err != nil {
++		return lsproto.WorkspaceEditOrNull{}, err
++	}
++	for _, edit := range edits {
++		file := files[edit.FileName]
++		if file == nil {
++			return lsproto.WorkspaceEditOrNull{}, errors.New("a rename edit in a file the rename does not reach: " + edit.FileName)
++		}
++		document := hostScript{fileName: file.OriginalFileName(), text: file.OriginalText()}
++		lspRange, _ := l.converters.ToLSPRange(document, core.NewTextRange(edit.Pos, edit.End))
++		mappedEdits = append(mappedEdits, mappedRenameEdit{uri: lsconv.FileNameToDocumentURI(document.fileName), edit: &lsproto.TextEdit{Range: lspRange, NewText: edit.NewText}})
++	}
++	changes, ok := deduplicateRenameEdits(mappedEdits)
++	if !ok {
++		return lsproto.WorkspaceEditOrNull{}, errors.New("the rename gives one place two different texts")
++	}
++	return lsproto.WorkspaceEditOrNull{WorkspaceEdit: &lsproto.WorkspaceEdit{Changes: &changes}}, nil
++}
++
++// symbolAndEntriesToOccurrences is symbolAndEntriesToRename up to the point
++// where that writes each occurrence back: the same checks, the same text
++// for each occurrence. And it is where a rename that the occurrences do not
++// make is stopped — what upstream renames in part, in a .tsx file as well:
++//
++//   - a string: found wherever a string of its type is written — another
++//     function's, the library's — and not always in the type that declares
++//     it. Refused;
++//   - a key written as a string in a binding pattern, `{ "sub-item": sub }`,
++//     is no reference to upstream's search: added here;
++//   - the prop that an element's body is the value of: the body has no name.
++//     Refused when an element of that prop's type has a body;
++//   - a tag that would change between a component's and an intrinsic
++//     element's (`Box` to `box`): it would no longer be a reference. Refused;
++//   - the name of an attribute that nothing declares (`data-tone`): renamed,
++//     it is another attribute. Not offered.
++func (l *LanguageService) symbolAndEntriesToOccurrences(ctx context.Context, params *lsproto.RenameParams, data SymbolAndEntriesData, prepare bool) hostRenameOccurrences {
++	if !nodeIsEligibleForRename(data.OriginalNode) {
++		return hostRenameOccurrences{}
++	}
++	program := l.GetProgram()
++	sourceFile := ast.GetSourceFileOfNode(data.OriginalNode)
++	newName := params.NewName
++	if prepare {
++		newName = data.OriginalNode.Text()
++	}
++	if info, ok := l.getRenameInfoForNode(ctx, newName, data.OriginalNode, sourceFile, program); !ok || !info.CanRename {
++		return hostRenameOccurrences{}
++	}
++	ch, done := program.GetTypeChecker(ctx)
++	defer done()
++	quotePreference := lsutil.GetQuotePreference(sourceFile, l.UserPreferences())
++	useAliasesForRename := l.UserPreferences().UseAliasesForRename.IsTrueOrUnknown()
++
++	name := data.OriginalNode.Text()
++	result := hostRenameOccurrences{renamed: true, name: name}
++	entries := core.FlatMap(data.SymbolsAndEntries, func(s *SymbolAndEntries) []*ReferenceEntry { return s.references })
++	entries = append(entries, quotedBindingKeys(program, ch, name, entries)...)
++	undeclared := len(entries) > 0
++	for _, entry := range entries {
++		if l.UserPreferences().AllowRenameOfImportPath != core.TSTrue && entry.node != nil && ast.IsStringLiteralLike(entry.node) && ast.TryGetImportFromModuleSpecifier(entry.node) != nil {
++			continue
++		}
++		l.resolveEntrySource(entry)
++		occurrence := HostRenameOccurrence{
++			File:    entry.sourceFile,
++			Pos:     entry.textRange.Pos(),
++			End:     entry.textRange.End(),
++			Node:    entry.node,
++			NewText: l.getTextForRename(data.OriginalNode, entry, newName, ch, quotePreference, useAliasesForRename),
++			library: program.IsSourceFileDefaultLibrary(entry.sourceFile.Path()) && tspath.IsDeclarationFileName(entry.sourceFile.FileName()),
++		}
++		undeclared = undeclared && entry.node != nil && ast.IsJsxAttribute(entry.node.Parent) && entry.node.Parent.Name() == entry.node && strings.Contains(entry.node.Text(), "-")
++		if spans := entry.sourceFile.SpanMap(); spans != nil {
++			original, fidelity := spans.VirtualToOriginalSpan(*entry.textRange)
++			occurrence.OriginalPos, occurrence.OriginalEnd, occurrence.Exact = original.Pos(), original.End(), fidelity.IsExact()
++		} else {
++			lspRange, ok := l.renameEditRange(entry)
++			if !ok {
++				continue // as upstream: behind a declaration map, with no place in its source
++			}
++			occurrence.location = lsproto.Location{Uri: l.getFileNameOfEntry(entry), Range: lspRange}
++		}
++		// A tag is a component or an intrinsic element by its first letter.
++		if node := entry.node; result.refused == nil && !prepare && node != nil && ast.IsIdentifier(node) && ast.IsJsxTagName(node) &&
++			scanner.IsIntrinsicJsxName(node.Text()) != scanner.IsIntrinsicJsxName(newName) {
++			what := "an intrinsic element: a tag that starts with a lower-case letter is one"
++			if scanner.IsIntrinsicJsxName(node.Text()) {
++				what = "a component: a tag that starts with a capital letter is one"
++			}
++			result.refused = hostRefusal(entry.sourceFile, entry.textRange.Pos(), "`<%s>` would become %s.", node.Text(), what)
++		}
++		result.occurrences = append(result.occurrences, occurrence)
++	}
++	switch {
++	case undeclared:
++		return hostRenameOccurrences{notOffered: true, name: name}
++	case core.Some(data.SymbolsAndEntries, func(s *SymbolAndEntries) bool {
++		return s.definition != nil && s.definition.Kind == definitionKindString
++	}):
++		result.refused = fmt.Errorf("Rename refused: \"%s\" is a string, not a name. TypeScript finds the strings of its type wherever they are written, and not always the type that declares them: the rename would be partial.", name)
++	case result.refused == nil:
++		result.refused = bodyIsRenamedProp(program, ch, name, data.OriginalNode, entries)
++	}
++	return result
++}
++
++// hostRefusal is a refusal that names a place: the position pos of file's
++// text — for a content-mapped file, where that is in what its author wrote.
++func hostRefusal(file *ast.SourceFile, pos int, format string, args ...any) error {
++	text := file.Text()
++	if spans := file.SpanMap(); spans != nil {
++		original, _ := spans.VirtualToOriginalSpan(core.NewTextRange(pos, pos))
++		text, pos = file.OriginalText(), original.Pos()
++	}
++	line, column := 1, 1
++	for i, r := range text {
++		if i >= pos {
++			break
++		}
++		if r == '\n' {
++			line, column = line+1, 1
++		} else {
++			column++
++		}
++	}
++	return fmt.Errorf("Rename refused at %s:%d:%d: %s", tspath.GetBaseFileName(file.OriginalFileName()), line, column, fmt.Sprintf(format, args...))
++}
++
++// renamedDeclarations are the declarations that the entries rename: those
++// whose name is an entry.
++func renamedDeclarations(entries []*ReferenceEntry) map[*ast.Node]bool {
++	declarations := map[*ast.Node]bool{}
++	for _, entry := range entries {
++		if node := entry.node; node != nil && node.Parent != nil && ast.IsDeclaration(node.Parent) && node.Parent.Name() == node {
++			declarations[node.Parent] = true
++		}
++	}
++	return declarations
++}
++
++// declares reports whether symbol is declared by one of declarations.
++func declares(symbol *ast.Symbol, declarations map[*ast.Node]bool) bool {
++	return symbol != nil && core.Some(symbol.Declarations, func(d *ast.Node) bool { return declarations[d] })
++}
++
++// quotedBindingKeys are the keys of binding patterns that name a renamed
++// property as a string — `{ "sub-item": sub }`, the only way to destructure
++// a property whose name is no identifier. Upstream's reference search takes
++// a string for a property's name where it declares or indexes one, and not
++// here: the rename would leave the pattern reading a property that is gone.
++func quotedBindingKeys(program *compiler.Program, ch *checker.Checker, name string, entries []*ReferenceEntry) []*ReferenceEntry {
++	declarations := renamedDeclarations(entries)
++	if len(declarations) == 0 {
++		return nil
++	}
++	found := map[*ast.Node]bool{}
++	for _, entry := range entries {
++		found[entry.node] = true
++	}
++	var keys []*ReferenceEntry
++	for _, file := range program.SourceFiles() {
++		// The name in quotes: few files have it, the library's seldom.
++		if text := file.Text(); !strings.Contains(text, `"`+name+`"`) && !strings.Contains(text, "'"+name+"'") && !strings.Contains(text, "`"+name+"`") {
++			continue
++		}
++		for _, node := range getPossibleSymbolReferenceNodes(file, name, nil /*container*/) {
++			if found[node] || !ast.IsStringLiteralLike(node) || node.Text() != name || !ast.IsBindingElement(node.Parent) || node.Parent.PropertyName() != node || !ast.IsObjectBindingPattern(node.Parent.Parent) {
++				continue
++			}
++			found[node] = true
++			if t := ch.GetTypeAtLocation(node.Parent.Parent); t != nil && declares(ch.GetPropertyOfType(t, name), declarations) {
++				keys = append(keys, newNodeEntry(node))
++			}
++		}
++	}
++	return keys
++}
++
++// bodyIsRenamedProp refuses the rename of the prop that an element's body
++// is the value of (`children`), when an element with a body has that prop:
++// the body is an occurrence with no name, and renamed without it the
++// element passes a prop that is gone.
++func bodyIsRenamedProp(program *compiler.Program, ch *checker.Checker, name string, location *ast.Node, entries []*ReferenceEntry) error {
++	if name == "" || ch.JsxChildrenPropertyName(location) != name {
++		return nil
++	}
++	declarations := renamedDeclarations(entries)
++	if len(declarations) == 0 {
++		return nil
++	}
++	var refused error
++	var visit func(node *ast.Node) bool
++	visit = func(node *ast.Node) bool {
++		if ast.IsJsxElement(node) && len(ast.GetSemanticJsxChildren(node.Children().Nodes)) > 0 {
++			opening := node.AsJsxElement().OpeningElement
++			if t := ch.GetContextualType(opening.Attributes(), checker.ContextFlagsNone); t != nil && declares(ch.GetPropertyOfType(t, name), declarations) {
++				tag := opening.TagName()
++				file := ast.GetSourceFileOfNode(node)
++				refused = hostRefusal(file, scanner.GetTokenPosOfNode(tag, file, false /*includeJsDoc*/), "`<%s>` has a body, which is its `%s`: a body has no name to rename. Write it as an attribute first.", scanner.GetTextOfNode(tag), name)
++				return true
++			}
++		}
++		return node.ForEachChild(visit)
++	}
++	for _, file := range program.SourceFiles() {
++		if !file.IsDeclarationFile && file.AsNode().ForEachChild(visit) {
++			break
++		}
++	}
++	return refused
++}
++
++// HostFile is the program and the file of a document; the file is nil when
++// the program does not hold it.
++func (l *LanguageService) HostFile(uri lsproto.DocumentUri) (*compiler.Program, *ast.SourceFile) {
++	return l.tryGetProgramAndFile(uri.FileName())
++}
+diff --git a/internal/ls/inlay_hints.go b/internal/ls/inlay_hints.go
+index 0864f8d..5697fb0 100644
+--- a/internal/ls/inlay_hints.go
++++ b/internal/ls/inlay_hints.go
+@@ -9,6 +9,7 @@ import (
+ 	"github.com/microsoft/TypeScript/tsc/internal/ast"
+ 	"github.com/microsoft/TypeScript/tsc/internal/astnav"
+ 	"github.com/microsoft/TypeScript/tsc/internal/checker"
++	"github.com/microsoft/TypeScript/tsc/internal/collections"
+ 	"github.com/microsoft/TypeScript/tsc/internal/core"
+ 	"github.com/microsoft/TypeScript/tsc/internal/debug"
+ 	"github.com/microsoft/TypeScript/tsc/internal/evaluator"
+@@ -53,9 +54,44 @@ func (l *LanguageService) ProvideInlayHint(
+ 		inlayHintState.visit(projection.AsNode())
+ 		result = append(result, inlayHintState.result...)
+ 	}
++	result = uniqueInlayHints(result) // rtsx
+ 	return lsproto.InlayHintsOrNull{InlayHints: &result}, nil
+ }
+ 
++// rtsx: a node that holds generated code is visited once per run of copied text the requested range
++// maps to, and gives its hints each time: each hint once. (Upstream answers a range with every hint
++// of a node that intersects it.)
++func uniqueInlayHints(hints []*lsproto.InlayHint) []*lsproto.InlayHint {
++	type key struct {
++		position lsproto.Position
++		label    string
++	}
++	var seen collections.Set[key]
++	return slices.DeleteFunc(hints, func(hint *lsproto.InlayHint) bool {
++		var label strings.Builder
++		if hint.Label.String != nil {
++			label.WriteString(*hint.Label.String)
++		} else if hint.Label.InlayHintLabelParts != nil {
++			for _, part := range *hint.Label.InlayHintLabelParts {
++				label.WriteString(part.Value)
++			}
++		}
++		return !seen.AddIfAbsent(key{hint.Position, label.String()})
++	})
++}
++
++// rtsx: a call the content mapper generated — its callee is not source text — has no argument to
++// name, though an argument may be copied from the source (the `$X` of `slot={$X}`).
++func isGeneratedCall(file *ast.SourceFile, expr *ast.CallOrNewExpression) bool {
++	spans := file.SpanMap()
++	if spans == nil {
++		return false
++	}
++	callee := expr.Expression()
++	_, fidelity := spans.VirtualToOriginalSpan(core.NewTextRange(callee.End()-1, callee.End()))
++	return !fidelity.IsExact()
++}
++
+ type inlayHintState struct {
+ 	ctx             context.Context
+ 	span            core.TextRange
+@@ -148,7 +184,7 @@ func (s *inlayHintState) visitFunctionDeclarationLikeForReturnType(decl *ast.Fun
+ 
+ func (s *inlayHintState) visitCallOrNewExpression(expr *ast.CallOrNewExpression) {
+ 	args := expr.Arguments()
+-	if len(args) == 0 {
++	if len(args) == 0 || isGeneratedCall(s.file, expr) { // rtsx
+ 		return
+ 	}
+ 
+diff --git a/internal/ls/symbols.go b/internal/ls/symbols.go
+index fd26181..cebcb44 100644
+--- a/internal/ls/symbols.go
++++ b/internal/ls/symbols.go
+@@ -193,6 +193,12 @@ func (l *LanguageService) getDocumentSymbolsForChildren(ctx context.Context, nod
+ 			}
+ 		case ast.KindSpreadAssignment:
+ 			addSymbolForNode(node, node.Expression(), nil /*children*/)
++		case ast.KindJsxSpreadAttribute:
++			// rtsx: slot params `{ size }` (a source tree only: ls/syntactic.go) are parameters — not
++			// listed, as a function's are not.
++			if !ast.IsObjectBindingPattern(node.Expression()) {
++				node.ForEachChild(visit)
++			}
+ 		case ast.KindMethodSignature, ast.KindPropertySignature, ast.KindCallSignature, ast.KindConstructSignature, ast.KindIndexSignature,
+ 			ast.KindEnumMember, ast.KindShorthandPropertyAssignment, ast.KindTypeAliasDeclaration, ast.KindImportEqualsDeclaration, ast.KindExportSpecifier:
+ 			addSymbolForNode(node, nil /*name*/, nil /*children*/)
+@@ -549,6 +555,7 @@ func ProvideWorkspaceSymbols(
+ 	converters *lsconv.Converters,
+ 	preferences lsutil.UserPreferences,
+ 	query string,
++	include func(*ast.SourceFile) bool, // rtsx: the files to collect from (lsp.Embedder); nil: all
+ ) (lsproto.WorkspaceSymbolResponse, error) {
+ 	excludeLibrarySymbols := preferences.ExcludeLibrarySymbolsInNavTo.IsTrue()
+ 	// Obtain set of non-declaration source files from all active programs.
+@@ -556,7 +563,7 @@ func ProvideWorkspaceSymbols(
+ 	for _, program := range programs {
+ 		for _, sourceFile := range program.SourceFiles() {
+ 			if (program.HasTSFile() || !sourceFile.IsDeclarationFile) &&
+-				!shouldExcludeFile(sourceFile, program, excludeLibrarySymbols) {
++				!shouldExcludeFile(sourceFile, program, excludeLibrarySymbols) && (include == nil || include(sourceFile)) {
+ 				sourceFiles[sourceFile.Path()] = sourceFile
+ 			}
+ 		}
+diff --git a/internal/ls/syntactic.go b/internal/ls/syntactic.go
+new file mode 100644
+index 0000000..252bfb9
+--- /dev/null
++++ b/internal/ls/syntactic.go
+@@ -0,0 +1,123 @@
++// Reactogenic: syntactic features on a source file that is in no program —
++// the .rtsx source tree. Not part of upstream: added by
++// go/patches/0006-rtsx-lsp.patch.
++
++package ls
++
++import (
++	"context"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/astnav"
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/scanner"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++)
++
++// Syntactic answers the features that need only a tree. A content-mapped
++// file's virtual text cannot answer them for constructs that are lowered
++// away (a slot element has no element there); its source tree can.
++type Syntactic struct {
++	l    *LanguageService
++	file *ast.SourceFile
++}
++
++// NewSyntactic serves file, with positions in encoding.
++func NewSyntactic(file *ast.SourceFile, encoding lsproto.PositionEncodingKind) *Syntactic {
++	lineMap := lsconv.ComputeLSPLineStarts(file.Text())
++	converters := lsconv.NewConverters(encoding, func(string) *lsconv.LSPLineMap { return lineMap })
++	return &Syntactic{l: &LanguageService{converters: converters}, file: file}
++}
++
++// FoldingRanges are TypeScript's folding ranges of the file.
++func (s *Syntactic) FoldingRanges(ctx context.Context, lineFoldingOnly bool) []*lsproto.FoldingRange {
++	ranges := s.l.addNodeOutliningSpans(ctx, s.file)
++	ranges = append(ranges, s.l.addRegionOutliningSpans(ctx, s.file)...)
++	if lineFoldingOnly {
++		ranges = s.l.adjustFoldingEnd(ranges, s.file)
++	}
++	return ranges
++}
++
++// SelectionRanges are TypeScript's smart selection ranges at positions.
++func (s *Syntactic) SelectionRanges(positions []lsproto.Position) []*lsproto.SelectionRange {
++	results := make([]*lsproto.SelectionRange, 0, len(positions))
++	for _, position := range positions {
++		if r := getSmartSelectionRange(s.l, s.file, s.offset(position)); r != nil {
++			results = append(results, r)
++		}
++	}
++	return results
++}
++
++// DocumentSymbols are TypeScript's document symbols of the file, as a tree.
++// On the source tree a declaration's range is its own, whatever constructs it
++// holds, and there is no generated declaration (the keys of the objects a
++// mapper builds) to list.
++func (s *Syntactic) DocumentSymbols(ctx context.Context) []*lsproto.DocumentSymbol {
++	symbols := s.l.getDocumentSymbolsForChildren(ctx, s.file.AsNode(), s.file)
++	if symbols == nil {
++		symbols = []*lsproto.DocumentSymbol{}
++	}
++	return symbols
++}
++
++// SymbolInformations are DocumentSymbols for a client that takes no tree.
++func (s *Syntactic) SymbolInformations(ctx context.Context, uri lsproto.DocumentUri) []lsproto.SymbolInformation {
++	infos := flattenDocumentSymbols(s.DocumentSymbols(ctx), uri)
++	if infos == nil {
++		infos = []lsproto.SymbolInformation{}
++	}
++	return infos
++}
++
++// ClosingTag is the closing tag to insert after a `>` just typed at
++// position: `</name>` for an opening tag that has none, as TypeScript
++// decides it (ProvideOnAutoInsert).
++func (s *Syntactic) ClosingTag(position lsproto.Position) string {
++	token := astnav.FindPrecedingToken(s.file, s.offset(position))
++	if token == nil {
++		return ""
++	}
++	var element *ast.Node
++	if token.Kind == ast.KindGreaterThanToken && ast.IsJsxOpeningElement(token.Parent) {
++		element = token.Parent.Parent
++	} else if ast.IsJsxText(token) && ast.IsJsxElement(token.Parent) {
++		element = token.Parent
++	}
++	if element != nil && isUnclosedTag(element.AsJsxElement()) {
++		return "</" + ast.EntityNameToString(element.AsJsxElement().OpeningElement.TagName(), scanner.GetTextOfNode) + ">"
++	}
++	var fragment *ast.Node
++	if token.Kind == ast.KindGreaterThanToken && ast.IsJsxOpeningFragment(token.Parent) {
++		fragment = token.Parent.Parent
++	} else if ast.IsJsxText(token) && ast.IsJsxFragment(token.Parent) {
++		fragment = token.Parent
++	}
++	if fragment != nil && isUnclosedFragment(fragment.AsJsxFragment()) {
++		return "</>"
++	}
++	return ""
++}
++
++func (s *Syntactic) offset(position lsproto.Position) int {
++	positions := s.l.converters.FromLSPPosition(s.file, position, spanmap.FeatureAll)
++	if len(positions) == 0 {
++		return 0
++	}
++	return int(positions[0].Position)
++}
++
++// File is the tree the features are answered from.
++func (s *Syntactic) File() *ast.SourceFile { return s.file }
++
++// Offset is the byte offset of position in the text.
++func (s *Syntactic) Offset(position lsproto.Position) int { return s.offset(position) }
++
++// Range is the span pos..end of the text as an LSP range.
++func (s *Syntactic) Range(pos, end int) lsproto.Range {
++	lspRange, _ := s.l.converters.ToLSPRange(s.file, core.NewTextRange(pos, end))
++	return lspRange
++}
+diff --git a/internal/lsp/embedder.go b/internal/lsp/embedder.go
+new file mode 100644
+index 0000000..8842f1a
+--- /dev/null
++++ b/internal/lsp/embedder.go
+@@ -0,0 +1,201 @@
++// Reactogenic: hooks for a host that embeds this server with a built-in
++// content mapper. Not part of upstream: added by go/patches/0006-rtsx-lsp.patch.
++
++package lsp
++
++import (
++	"context"
++	"fmt"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/compiler"
++	"github.com/microsoft/TypeScript/tsc/internal/json"
++	"github.com/microsoft/TypeScript/tsc/internal/ls"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++)
++
++// Embedder customizes the server for its host. With one set, no feature is
++// registered dynamically: nothing for content-mapped extensions (a client
++// that attaches by language would otherwise answer every request twice).
++// Only watching is — files, and the configuration — and only with a client
++// that declared support for it. The server offers no formatting.
++type Embedder struct {
++	// Name and Version replace the server info.
++	Name, Version string
++	// Capabilities may edit the static capabilities before they are sent.
++	Capabilities func(*lsproto.ServerCapabilities)
++	// Owns reports whether a file is the host's: a content-mapped one. The
++	// client attaches this server to those documents only, and another
++	// server — which does not know them — to the rest of the project. With
++	// Owns set, the workspace-wide answers are narrowed to what no other
++	// server gives:
++	//   - workspace symbols: those declared in the host's files, chosen
++	//     before the best matches are cut to 256;
++	//   - file rename: the edits in the host's files, and the edits of
++	//     imports that resolve to the host's files — decided per import, so
++	//     a request that renames several files, or a folder, is answered
++	//     right for each.
++	Owns func(fileName string) bool
++	// Diagnostics returns the diagnostics of a content-mapped document: all
++	// of them, the compiler's too, which the host takes from the program
++	// while they are structured — to drop, place and reword them — and
++	// returns in its own words (ls.ProvideHostDiagnostics). Without it such
++	// a document gets the compiler's diagnostics, mapped back by position.
++	Diagnostics ls.HostDiagnostics
++	// Rename writes a rename's occurrences in content-mapped files back
++	// (ls.ProvideHostRename): the complete edits of those files, or an error
++	// that refuses the whole rename — which prepareRename then refuses too.
++	// Without it such an occurrence is mapped back by position, or dropped.
++	Rename ls.HostRename
++	// Requests are the host's own methods, by name. One that names a method
++	// of the server replaces it.
++	Requests map[string]HostRequest
++}
++
++// HostRequest answers one of the host's own methods for the document that
++// the params name (`textDocument.uri`): it is given the program that
++// document is in and its file there — nil when the program does not hold
++// it — and the params as JSON. Its result is the answer; its error refuses
++// the request, with that message.
++type HostRequest func(ctx context.Context, program *compiler.Program, file *ast.SourceFile, params []byte) (any, error)
++
++// hostRequest is the host's handler of a method; nil when it has none.
++func (e *Embedder) hostRequest(method lsproto.Method) HostRequest {
++	if e == nil {
++		return nil
++	}
++	return e.Requests[string(method)]
++}
++
++// handleHostRequest answers one of the host's own methods, as the handlers
++// of a document's language service do: the service is taken now, the answer
++// is computed when its turn comes.
++func (s *Server) handleHostRequest(ctx context.Context, req *lsproto.RequestMessage, handler HostRequest) (func() error, error) {
++	if s.session == nil {
++		return nil, lsproto.ErrorCodeServerNotInitialized
++	}
++	raw, _ := req.Params.(json.Value)
++	var params struct {
++		TextDocument lsproto.TextDocumentIdentifier `json:"textDocument"`
++	}
++	if err := json.Unmarshal(raw, &params); err != nil || params.TextDocument.Uri == "" {
++		return nil, fmt.Errorf("%w: %s takes a textDocument", lsproto.ErrorCodeInvalidParams, req.Method)
++	}
++	languageService, err := s.session.GetLanguageService(ctx, params.TextDocument.Uri)
++	if err != nil {
++		return nil, err
++	}
++	return func() error {
++		defer s.recover(req)
++		program, file := languageService.HostFile(params.TextDocument.Uri)
++		result, err := handler(ctx, program, file, raw)
++		if err != nil {
++			return refused(ctx, err)
++		}
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
++		if req.ID == nil {
++			return nil
++		}
++		return s.sendResult(req.ID, result)
++	}, nil
++}
++
++// rename answers textDocument/rename through the host; handled is false
++// without one.
++func (e *Embedder) rename(ctx context.Context, languageService *ls.LanguageService, params *lsproto.RenameParams, orchestrator ls.CrossProjectOrchestrator) (response lsproto.RenameResponse, handled bool, err error) {
++	if e == nil || e.Rename == nil {
++		return response, false, nil
++	}
++	response, err = languageService.ProvideHostRename(ctx, params, orchestrator, e.Rename, false /*prepare*/)
++	return response, true, refused(ctx, err)
++}
++
++// checkRename refuses textDocument/prepareRename where the host would
++// refuse the rename whatever the new name — an occurrence it cannot write
++// back. It is asked of the document's own project.
++func (e *Embedder) checkRename(ctx context.Context, languageService *ls.LanguageService, params *lsproto.PrepareRenameParams) error {
++	if e == nil || e.Rename == nil {
++		return nil
++	}
++	_, err := languageService.ProvideHostRename(ctx, &lsproto.RenameParams{TextDocument: params.TextDocument, Position: params.Position}, nil, e.Rename, true /*prepare*/)
++	return refused(ctx, err)
++}
++
++// refused is the host's refusal as the error a client shows to its user.
++func refused(ctx context.Context, err error) error {
++	if err == nil || ctx.Err() != nil {
++		return err
++	}
++	return userFacingRequestFailedError(err.Error())
++}
++
++// hostDiagnostics is Diagnostics; nil without an embedder.
++func (e *Embedder) hostDiagnostics() ls.HostDiagnostics {
++	if e == nil {
++		return nil
++	}
++	return e.Diagnostics
++}
++
++// symbolFiles is the files workspace symbols are collected from; nil: all.
++func (e *Embedder) symbolFiles() func(*ast.SourceFile) bool {
++	if e == nil || e.Owns == nil {
++		return nil
++	}
++	return func(file *ast.SourceFile) bool { return e.Owns(file.OriginalFileName()) }
++}
++
++// renameEdits is the edits of a file rename to keep (ls.FileRenameEdits);
++// nil: all. Everything is kept when the rename is this server's own answer
++// to textDocument/rename on a module specifier (complete), for a client
++// without willRenameFiles: no other server is asked then.
++func (e *Embedder) renameEdits(complete bool) ls.FileRenameEdits {
++	if e == nil || e.Owns == nil || complete {
++		return nil
++	}
++	return func(importer, imported string) bool { return e.Owns(importer) || e.Owns(imported) }
++}
++
++func (e *Embedder) initializeResult(result *lsproto.InitializeResult) {
++	if e.Name != "" {
++		version := e.Version
++		result.ServerInfo = &lsproto.ServerInfo{Name: e.Name, Version: &version}
++	}
++	c := result.Capabilities
++	c.DocumentFormattingProvider = nil
++	c.DocumentRangeFormattingProvider = nil
++	c.DocumentOnTypeFormattingProvider = nil
++	if e.Capabilities != nil {
++		e.Capabilities(c)
++	}
++}
++
++// watchConfiguration registers for configuration changes, as upstream does
++// in handleInitialized, with two differences: only with a client that
++// declared workspace.didChangeConfiguration.dynamicRegistration (upstream
++// asks every client), and without waiting for the answer — a client that
++// never answers would otherwise get no reply to any request.
++func (e *Embedder) watchConfiguration(s *Server) {
++	if !s.clientCapabilities.Workspace.DidChangeConfiguration.DynamicRegistration {
++		return
++	}
++	err := s.sendClientRequestFireAndForget(lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
++		Registrations: []*lsproto.Registration{
++			{
++				Id: "typescript-config-watch-id",
++				RegisterOptions: &lsproto.RegisterOptions{
++					WorkspaceDidChangeConfiguration: &lsproto.DidChangeConfigurationRegistrationOptions{
++						Section: &lsproto.StringOrStrings{
++							Strings: &[]string{"js/ts", "typescript", "javascript", "editor"},
++						},
++					},
++				},
++			},
++		},
++	})
++	if err != nil {
++		s.logger.Errorf("failed to register configuration change watcher: %v", err)
++	}
++}
+diff --git a/internal/lsp/server.go b/internal/lsp/server.go
+index 1d32d1e..51d6c63 100644
+--- a/internal/lsp/server.go
++++ b/internal/lsp/server.go
+@@ -55,6 +55,7 @@ type ServerOptions struct {
+ 	Spawn              func(command []string, dir string, stderr io.Writer) (io.ReadWriteCloser, error)
+ 	ProgressDelay      time.Duration // delay before showing progress UI; 0 means no delay
+ 	SetParentProcessID func(parentPID int)
++	Embedder           *Embedder // rtsx: see embedder.go
+ }
+ 
+ func NewServer(opts *ServerOptions) *Server {
+@@ -80,6 +81,7 @@ func NewServer(opts *ServerOptions) *Server {
+ 		startWatchdog:         opts.SetParentProcessID,
+ 		initComplete:          make(chan struct{}),
+ 		progressDelay:         opts.ProgressDelay,
++		embedder:              opts.Embedder,
+ 	}
+ 	s.logger = newLogger(s)
+ 
+@@ -189,6 +191,7 @@ type Server struct {
+ 	fs                 vfs.FS
+ 	defaultLibraryPath string
+ 	typingsLocation    string
++	embedder           *Embedder // rtsx
+ 
+ 	initializeParams      *lsproto.InitializeParams
+ 	initializationOptions *lsproto.InitializationOptions
+@@ -420,7 +423,7 @@ func (s *Server) supportsContentMapperRegistration(id string) bool {
+ // open/change/close notifications to the server and requests diagnostics for them. It is called with the
+ // full desired set each time it changes; an empty slice removes any prior registration.
+ func (s *Server) RegisterContentMapperExtensions(ctx context.Context, extensions []string) error {
+-	if !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration {
++	if s.embedder != nil || !s.clientCapabilities.TextDocument.Synchronization.DynamicRegistration { // rtsx: static capabilities only
+ 		return nil
+ 	}
+ 
+@@ -1144,6 +1147,9 @@ func (s *Server) send(msg *lsproto.Message) error {
+ func (s *Server) handleRequestOrNotification(ctx context.Context, req *lsproto.RequestMessage) (func() error, error) {
+ 	ctx = lsproto.WithClientCapabilities(ctx, &s.clientCapabilities)
+ 
++	if handler := s.embedder.hostRequest(req.Method); handler != nil { // rtsx: the host's own methods
++		return s.handleHostRequest(ctx, req, handler)
++	}
+ 	if handler := handlers()[req.Method]; handler != nil {
+ 		start := time.Now()
+ 		doAsyncWork, err := handler(s, ctx, req)
+@@ -1671,6 +1677,9 @@ func (s *Server) handleInitialize(ctx context.Context, params *lsproto.Initializ
+ 		},
+ 	}
+ 
++	if s.embedder != nil { // rtsx
++		s.embedder.initializeResult(response)
++	}
+ 	return response, nil
+ }
+ 
+@@ -1754,7 +1763,9 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
+ 	}
+ 	s.session.InitializeWithUserConfig(userPreferences)
+ 
+-	_, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
++	if s.embedder != nil { // rtsx: only where the client supports it, and without waiting
++		s.embedder.watchConfiguration(s)
++	} else if _, err = s.sendClientRequest(ctx, lsproto.ClientRegisterCapabilityInfo, &lsproto.RegistrationParams{
+ 		Registrations: []*lsproto.Registration{
+ 			{
+ 				Id: "typescript-config-watch-id",
+@@ -1767,8 +1778,7 @@ func (s *Server) handleInitialized(ctx context.Context, params *lsproto.Initiali
+ 				},
+ 			},
+ 		},
+-	})
+-	if err != nil {
++	}); err != nil {
+ 		return fmt.Errorf("failed to register configuration change watcher: %w", err)
+ 	}
+ 
+@@ -1848,6 +1858,11 @@ func (s *Server) handleSetLogVerbosity(_ context.Context, params *lsproto.SetLog
+ 
+ func (s *Server) handleDocumentDiagnostic(ctx context.Context, languageService *ls.LanguageService, params *lsproto.DocumentDiagnosticParams) (lsproto.DocumentDiagnosticResponse, error) {
+ 	ctx = core.WithCheckerLifetime(ctx, core.CheckerLifetimeDiagnostics)
++	if provide := s.embedder.hostDiagnostics(); provide != nil { // rtsx: a content-mapped document's are the host's
++		if response, ok := languageService.ProvideHostDiagnostics(ctx, params.TextDocument.Uri, provide); ok {
++			return response, nil
++		}
++	}
+ 	if s.flakeLogging == lsproto.DiagnosticFlakeLogLevelOff {
+ 		return languageService.ProvideDiagnostics(ctx, params.TextDocument.Uri)
+ 	}
+@@ -1913,6 +1928,9 @@ func (s *Server) handlePrepareRename(ctx context.Context, languageService *ls.La
+ 	if !info.CanRename {
+ 		return lsproto.PrepareRenameResponse{}, userFacingRequestFailedError(info.LocalizedErrorMessage)
+ 	}
++	if err := s.embedder.checkRename(ctx, languageService, params); err != nil { // rtsx: refused where the rename would be
++		return lsproto.PrepareRenameResponse{}, err
++	}
+ 	return lsproto.PrepareRenameResponse{
+ 		PrepareRenamePlaceholder: &lsproto.PrepareRenamePlaceholder{
+ 			Range:       info.TriggerSpan,
+@@ -1955,6 +1973,9 @@ func (s *Server) handleRename(ctx context.Context, params *lsproto.RenameParams,
+ 		return s.handleWillRenameFilesWorker(ctx, renameFilesParams, req, true /*sendRenameFile*/)
+ 	}
+ 
++	if response, handled, err := s.embedder.rename(ctx, defaultLs, params, orchestrator); handled { // rtsx: written back by the host
++		return response, err
++	}
+ 	return defaultLs.ProvideRename(ctx, params, orchestrator)
+ }
+ 
+@@ -1991,7 +2012,7 @@ func (s *Server) handleWillRenameFilesWorker(ctx context.Context, params *lsprot
+ 
+ 	for _, languageService := range services {
+ 		for _, file := range params.Files {
+-			changes := languageService.GetEditsForFileRename(ctx, file.OldUri, file.NewUri)
++			changes := languageService.GetEditsForFileRename(ctx, file.OldUri, file.NewUri, s.embedder.renameEdits(sendRenameFile)) // rtsx
+ 			for _, change := range changes {
+ 				if change.RenameFile != nil {
+ 					if !seenRenames[change.RenameFile.OldUri] {
+@@ -2164,6 +2185,7 @@ func (s *Server) handleWorkspaceSymbol(ctx context.Context, params *lsproto.Work
+ 			snapshot.Converters(),
+ 			snapshot.UserPreferences(),
+ 			params.Query,
++			s.embedder.symbolFiles(), // rtsx
+ 		)
+ 	}
+ 	if params.TextDocument != nil && s.session.Config().WorkspaceSymbolsScope == lsutil.WorkspaceSymbolsScopeCurrentProject {
+diff --git a/rtsx/server/server.go b/rtsx/server/server.go
+new file mode 100644
+index 0000000..04305de
+--- /dev/null
++++ b/rtsx/server/server.go
+@@ -0,0 +1,162 @@
++// Package server runs the language server with whatever content mapper is
++// registered (rtsx.RegisterMapper) built in (specs/phase01/ide.md,
++// *reactogenic lsp*). It is its own package so that only a binary that
++// serves LSP links the language service.
++package server
++
++import (
++	"context"
++	"errors"
++	"io"
++	"strings"
++	"time"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/bundled"
++	"github.com/microsoft/TypeScript/tsc/internal/compiler"
++	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
++	"github.com/microsoft/TypeScript/tsc/internal/ls"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/tspath"
++	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
++)
++
++// Options configure a run of the server.
++type Options struct {
++	In  io.Reader // LSP messages, framed
++	Out io.Writer
++	Err io.Writer // log output
++	Cwd string
++	// Name and Version are reported as the server info.
++	Name, Version string
++	// SetParentProcessID, when set, is called with the processId of the
++	// client's initialize: the process whose end ends the server (upstream's
++	// watchdog hook; the watching itself is the host's).
++	SetParentProcessID func(pid int)
++	// Diagnostics returns every diagnostic of a mapped file of program, as
++	// its author reads them (specs/phase01/ide.md, *Diagnostics*): the
++	// answer to textDocument/diagnostic for that document. It is asked for
++	// the program and the file, so the compiler's diagnostics are still
++	// structured where it takes them. nil: the compiler's, mapped back by
++	// position.
++	Diagnostics func(ctx context.Context, program *compiler.Program, file *ast.SourceFile) []Diagnostic
++	// Rename writes a rename's occurrences in mapped files back (ide.md,
++	// *Rename*): it is given each occurrence as the language service found
++	// it in the virtual text — before anything is mapped back — and returns
++	// the complete edits of the mapped files, or the error that refuses the
++	// whole rename. nil: each occurrence mapped back by position, or
++	// dropped.
++	Rename func(ctx context.Context, request RenameRequest) ([]RenameEdit, error)
++	// Requests are the host's own methods, by name (`reactogenic/…`): each
++	// is given the program and the file of the document its params name, and
++	// the params as JSON.
++	Requests map[string]func(ctx context.Context, program *compiler.Program, file *ast.SourceFile, params []byte) (any, error)
++}
++
++type (
++	// RenameRequest is a rename to write back: its occurrences in mapped
++	// files, and the mapped files of the program it started in.
++	RenameRequest = ls.HostRenameRequest
++	// RenameOccurrence is one occurrence, in a virtual text.
++	RenameOccurrence = ls.HostRenameOccurrence
++	// RenameEdit is one edit of a mapped file's source.
++	RenameEdit = ls.HostRenameEdit
++)
++
++// FileNames are the names of the files in directory dir as program's file
++// system has them — the server's, unsaved buffers included.
++func FileNames(program *compiler.Program, dir string) []string {
++	return program.Host().FS().GetAccessibleEntries(dir).Files
++}
++
++type (
++	// Diagnostic is one diagnostic of a mapped document: byte offsets in
++	// its source, a name as its code — or, with TS set and no Code, the
++	// compiler's number and the source "ts", which its quick fixes match
++	// on. The server makes the LSP diagnostic: the range (one character
++	// for a span of no length), the tags and severity of TS, the related
++	// locations.
++	Diagnostic = ls.HostDiagnostic
++	// RelatedInformation is a related location of a Diagnostic.
++	RelatedInformation = ls.HostRelatedInformation
++)
++
++// The severities of a Diagnostic that is not one of the compiler's.
++const (
++	SeverityError       = lsproto.DiagnosticSeverityError
++	SeverityWarning     = lsproto.DiagnosticSeverityWarning
++	SeverityInformation = lsproto.DiagnosticSeverityInformation
++	SeverityHint        = lsproto.DiagnosticSeverityHint
++)
++
++// Run serves LSP until the client exits, In ends or ctx is done. Nothing
++// external runs: no content mapper process, no automatic type acquisition.
++func Run(ctx context.Context, o Options) error {
++	embedder := &lsp.Embedder{Name: o.Name, Version: o.Version, Capabilities: capabilities, Owns: owns, Diagnostics: o.Diagnostics, Rename: o.Rename}
++	if len(o.Requests) > 0 {
++		embedder.Requests = make(map[string]lsp.HostRequest, len(o.Requests))
++		for method, handler := range o.Requests {
++			embedder.Requests[method] = handler
++		}
++	}
++	s := lsp.NewServer(&lsp.ServerOptions{
++		In:                 lsp.ToReader(o.In),
++		Out:                lsp.ToWriter(o.Out),
++		Err:                o.Err,
++		Cwd:                o.Cwd,
++		FS:                 bundled.WrapFS(osvfs.FS()),
++		DefaultLibraryPath: bundled.LibPath(),
++		TypingsLocation:    "", // no automatic type acquisition
++		NpmInstall: func(string, []string) ([]byte, error) {
++			return nil, errors.New("this server does not install packages")
++		},
++		ProgressDelay:      250 * time.Millisecond,
++		SetParentProcessID: o.SetParentProcessID,
++		Embedder:           embedder,
++	})
++	err := s.Run(ctx)
++	if errors.Is(err, context.Canceled) && ctx.Err() == nil {
++		// The client's exit: the server's loops stop each other through a
++		// context of their own, and one of them reports that.
++		return nil
++	}
++	return err
++}
++
++// capabilities takes out what upstream advertises and this server does not
++// offer (specs/phase01/ide.md, the table of *reactogenic lsp*, lists what
++// stays):
++//   - code lens: its ranges are wrong on a declaration that holds mapped
++//     constructs, and the lens's command is filled in by upstream's own VS
++//     Code extension;
++//   - `_vs_references`: Visual Studio's variant of references;
++//   - `experimental`: the custom requests of upstream's VS Code extension
++//     (source definition, multi-document highlights).
++//
++// And it adds to the files whose rename the client asks about: the mapped
++// ones, which no other server knows, and folders, which hold them
++// (upstream asks about neither).
++func capabilities(c *lsproto.ServerCapabilities) {
++	c.CodeLensProvider = nil
++	c.VSReferencesProvider = nil
++	c.Experimental = nil
++
++	_, extensions := contentmapper.BuiltInMappers()
++	glob := "**/*.{ts,tsx,js,jsx,cts,cjs,mts,mjs,json" // upstream's fileRenameFilters
++	for _, extension := range extensions {
++		glob += "," + strings.TrimPrefix(extension, ".")
++	}
++	c.Workspace = &lsproto.WorkspaceOptions{FileOperations: &lsproto.FileOperationOptions{WillRename: &lsproto.FileOperationRegistrationOptions{
++		Filters: []*lsproto.FileOperationFilter{
++			{Scheme: new("file"), Pattern: &lsproto.FileOperationPattern{Glob: glob + "}"}},
++			{Scheme: new("file"), Pattern: &lsproto.FileOperationPattern{Glob: "**", Matches: new(lsproto.FileOperationPatternKindFolder)}},
++		},
++	}}}
++}
++
++// owns: the files of the built-in mapper are this server's (lsp.Embedder).
++func owns(fileName string) bool {
++	_, extensions := contentmapper.BuiltInMappers()
++	return tspath.FileExtensionIsOneOf(fileName, extensions)
++}
+diff --git a/rtsx/server/syntactic.go b/rtsx/server/syntactic.go
+new file mode 100644
+index 0000000..053b430
+--- /dev/null
++++ b/rtsx/server/syntactic.go
+@@ -0,0 +1,142 @@
++package server
++
++import (
++	"context"
++	"fmt"
++	"math"
++
++	"github.com/microsoft/TypeScript/tsc/internal/ast"
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/json"
++	"github.com/microsoft/TypeScript/tsc/internal/ls"
++	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++	"github.com/microsoft/TypeScript/tsc/rtsx"
++)
++
++// Syntactic answers, for the text of an .rtsx file, the LSP features that
++// need only its tree (specs/phase01/ide.md, *Span map*: syntactic features
++// run on the source tree). Results are LSP JSON, positions in encoding
++// ("utf-16" or "utf-8").
++type Syntactic struct{ s *ls.Syntactic }
++
++// documentName is the file name of every syntactic parse. Nothing reads it,
++// and the parser wants a normalized absolute path — which a document's URI
++// (`untitled:new.rtsx`, `file:/single/slash.rtsx`) is not.
++const documentName = "/document.rtsx"
++
++// NewSyntactic parses text as .rtsx.
++func NewSyntactic(text, encoding string) *Syntactic {
++	return &Syntactic{s: ls.NewSyntactic(rtsx.ParseRTSX(documentName, text), lsproto.PositionEncodingKind(encoding))}
++}
++
++// FoldingRanges is the result of textDocument/foldingRange.
++func (s *Syntactic) FoldingRanges(lineFoldingOnly bool) ([]byte, error) {
++	ranges := s.s.FoldingRanges(context.Background(), lineFoldingOnly)
++	if ranges == nil {
++		ranges = []*lsproto.FoldingRange{}
++	}
++	return json.Marshal(ranges)
++}
++
++// SelectionRanges is the result of textDocument/selectionRange for the
++// request's `positions` (JSON).
++func (s *Syntactic) SelectionRanges(positions []byte) ([]byte, error) {
++	var at []lsproto.Position
++	if err := json.Unmarshal(positions, &at); err != nil {
++		return nil, err
++	}
++	if err := inRange(at...); err != nil {
++		return nil, err
++	}
++	return json.Marshal(s.s.SelectionRanges(at))
++}
++
++// DocumentSymbols is the result of textDocument/documentSymbol: a tree for a
++// client that supports one (hierarchical), else flat, located in uri.
++func (s *Syntactic) DocumentSymbols(uri string, hierarchical bool) ([]byte, error) {
++	if hierarchical {
++		return json.Marshal(s.s.DocumentSymbols(context.Background()))
++	}
++	return json.Marshal(s.s.SymbolInformations(context.Background(), lsproto.DocumentUri(uri)))
++}
++
++// ClosingTag is the closing tag to insert after a `>` just typed at the
++// request's `position` (JSON), or "".
++func (s *Syntactic) ClosingTag(position []byte) (string, error) {
++	var at lsproto.Position
++	if err := json.Unmarshal(position, &at); err != nil {
++		return "", err
++	}
++	if err := inRange(at); err != nil {
++		return "", err
++	}
++	return s.s.ClosingTag(at), nil
++}
++
++// File is the parsed text: the .rtsx source tree.
++func (s *Syntactic) File() *ast.SourceFile { return s.s.File() }
++
++// Offset is the byte offset in the text of an LSP `position` (JSON).
++func (s *Syntactic) Offset(position []byte) (int, error) {
++	var at lsproto.Position
++	if err := json.Unmarshal(position, &at); err != nil {
++		return 0, err
++	}
++	if err := inRange(at); err != nil {
++		return 0, err
++	}
++	return s.s.Offset(at), nil
++}
++
++// Range is the LSP range of the span pos..end of the text.
++func (s *Syntactic) Range(pos, end int) Range { return s.s.Range(pos, end) }
++
++// Range is an LSP range; it marshals as one.
++type Range = lsproto.Range
++
++// inRange refuses a position the server's converters cannot take: they hold
++// lines and characters as int32, and one beyond that would index the line
++// map with a negative number. (A negative one is refused before: it does
++// not decode.)
++func inRange(positions ...lsproto.Position) error {
++	for _, p := range positions {
++		if p.Line > math.MaxInt32 || p.Character > math.MaxInt32 {
++			return fmt.Errorf("position %d:%d is out of range", p.Line, p.Character)
++		}
++	}
++	return nil
++}
++
++// document is a text that is in no program, for the server's converters.
++type document string
++
++func (d document) FileName() string         { return documentName }
++func (d document) OriginalFileName() string { return documentName }
++func (d document) Text() string             { return string(d) }
++func (d document) OriginalText() string     { return string(d) }
++func (document) SpanMap() *spanmap.SpanMap  { return nil }
++
++// ApplyChange applies one ranged content change of textDocument/didChange —
++// `range` as JSON, and the new text — exactly as the server applies it to
++// its own copy of the document: the same line map (a lone `\r` breaks a
++// line), the same clamping of a position past the end of its line. A host
++// that keeps the text of a document stays equal to the server this way. A
++// range the server would reject (a negative position) is an error.
++func ApplyChange(text, encoding string, changeRange []byte, newText string) (string, error) {
++	var r lsproto.Range
++	if err := json.Unmarshal(changeRange, &r); err != nil {
++		return text, err
++	}
++	if err := inRange(r.Start, r.End); err != nil {
++		return text, err
++	}
++	lineMap := lsconv.ComputeLSPLineStarts(text)
++	converters := lsconv.NewConverters(lsproto.PositionEncodingKind(encoding), func(string) *lsconv.LSPLineMap { return lineMap })
++	spans := converters.FromLSPRange(document(text), r, spanmap.FeatureAll)
++	if len(spans) != 1 {
++		return text, fmt.Errorf("a range with %d spans", len(spans))
++	}
++	return core.TextChange{TextRange: spans[0].Span, NewText: newText}.ApplyTo(text), nil
++}

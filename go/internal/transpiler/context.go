@@ -13,13 +13,22 @@ import (
 )
 
 type passContext struct {
-	file   *rtsx.SourceFile
-	text   string
-	report func(s emit.Span, severity Severity, code, message string)
+	file *rtsx.SourceFile
+	text string
+	// report records a diagnostic; false: dropped, as part of a half-typed
+	// construct (tolerant mode).
+	report func(s emit.Span, severity Severity, code, message string) bool
 	// note and generated record Output.Notes and Output.Generated.
-	note      func(s emit.Span, kind, name, detail string)
-	noteTag   func(s, tag emit.Span, kind, name string)
-	generated func(local, written string)
+	note    func(s emit.Span, kind, name, detail string)
+	noteTag func(s, tag emit.Span, kind, name string)
+	// shorthandSite and slotGroup record Output.Shorthands and SlotGroups.
+	shorthandSite func(name emit.Span, kind string)
+	slotGroup     func(name string, owner emit.Span, tags []emit.Span)
+	generated     func(local, written string)
+	// dropped records Output.Dropped: code of the author's is left out.
+	dropped func()
+	// unlowered records Output.Unlowered: a construct stays as written.
+	unlowered func()
 	// names holds every identifier of the original source, so generated
 	// names can never capture or shadow the author's.
 	names map[string]bool
@@ -43,6 +52,51 @@ func (c *passContext) copy(n *rtsx.Node) emit.Piece {
 	return emit.Copy(c.text, c.span(n))
 }
 
+// copyValue copies an expression. A string in JSX attribute position
+// (`title="…"`) is not a JS string: a backslash is a backslash, it may span
+// lines, and character references are decoded. Where the value moves to a JS
+// position — an object property, a test, an argument — a string that holds
+// one of those is rewritten as the JS literal of its value (an atom on the
+// string). Any other string means the same in both grammars and is copied as
+// written, so hover and completion keep working inside it (`is="loading"`).
+func (c *passContext) copyValue(n *rtsx.Node) emit.Piece {
+	if n.Kind == rtsx.KindStringLiteral && n.Parent != nil && n.Parent.Kind == rtsx.KindJsxAttribute {
+		if raw := rtsx.NodeText(n); strings.ContainsAny(raw, "\\&\r\n") {
+			return emit.Synth(jsxStringLiteral(raw), c.span(n))
+		}
+	}
+	return c.copy(n)
+}
+
+// The two copies of a shorthand (`value` → `value={value}`) are different
+// symbols — the prop and the binding — and answer different features, as TS
+// does on `{ value }` (ide.md, *Span map*). The masks are what each lacks.
+const (
+	nameCopyHas  = emit.FeatureHover | emit.FeatureCompletion | emit.FeatureDefinition | emit.FeatureTypeDefinition | emit.FeatureReferences | emit.FeatureDocumentHighlights
+	valueCopyHas = emit.FeatureHover | emit.FeatureDefinition | emit.FeatureReferences | emit.FeatureDocumentHighlights | emit.FeatureRename | emit.FeatureSemanticTokens | emit.FeatureInlayHints
+	nameCopy     = emit.AllFeatures &^ nameCopyHas
+	valueCopy    = emit.AllFeatures &^ valueCopyHas
+)
+
+// copyName copies a name the author wrote — a slot tag, a slot attribute,
+// an arg — to where it is a prop name or an object key, so TS's features
+// reach it. It keeps the grammar's colour: no semantic tokens.
+func (c *passContext) copyName(s emit.Span) emit.Piece {
+	return emit.Copy(c.text, s).Lacking(emit.FeatureSemanticTokens)
+}
+
+// closingName is the name for a rebuilt closing tag: the closing tag the
+// author wrote, or — the element was self-closing — one more copy of the
+// opening name.
+func (c *passContext) closingName(el, opening *rtsx.Node) emit.Piece {
+	if el.Kind == rtsx.KindJsxElement {
+		if closing := el.AsJsxElement().ClosingElement; closing != nil && closing.TagName().End() > closing.TagName().Pos() {
+			return c.copy(closing.TagName())
+		}
+	}
+	return c.copy(opening.TagName()).Lacking(emit.AllFeatures)
+}
+
 // copyChild copies a JSX child. JSX text starts at its first byte: its
 // leading whitespace is content, not trivia.
 func (c *passContext) copyChild(n *rtsx.Node) emit.Piece {
@@ -52,8 +106,60 @@ func (c *passContext) copyChild(n *rtsx.Node) emit.Piece {
 	return c.copy(n)
 }
 
-func (c *passContext) errorAt(n *rtsx.Node, code, format string, args ...any) {
-	c.report(c.span(n), Error, code, fmt.Sprintf(format, args...))
+// errorAt reports an error on n; false: it was dropped, n being part of a
+// half-typed construct (ide.md, *Tolerance*).
+func (c *passContext) errorAt(n *rtsx.Node, code, format string, args ...any) bool {
+	s := c.span(n)
+	if n.Kind == rtsx.KindJsxText && s.Len() <= 0 {
+		// Whitespace text has no token: the error is on the text itself, not
+		// an empty span at whatever follows it.
+		s = emit.Span{Pos: n.Pos(), End: n.End()}
+	}
+	return c.report(s, Error, code, fmt.Sprintf(format, args...))
+}
+
+// invalid reports an error on n — an attribute or a child that its construct
+// does not take — and says whether the construct fails with it. When the
+// error is dropped, n being half-typed, the construct is lowered without n
+// instead (ide.md, *Tolerance*): one `$Case` being typed does not take the
+// `Switch` out of the virtual text.
+func (c *passContext) invalid(n *rtsx.Node, code, format string, args ...any) bool {
+	if c.errorAt(n, code, format, args...) {
+		return true
+	}
+	c.leftOut(n)
+	return false
+}
+
+// leftOut: n is not in the output. If it holds code — an expression, a
+// component — TS no longer sees what the author wrote (Output.Dropped).
+func (c *passContext) leftOut(n *rtsx.Node) {
+	if holdsCode(n) {
+		c.dropped()
+	}
+}
+
+// holdsCode: n uses a name — in a `{…}` expression, a spread or params, or
+// as a component tag. Text, intrinsic elements, slot tags and string
+// attributes use none.
+func holdsCode(n *rtsx.Node) bool {
+	found := false
+	var visit func(n *rtsx.Node) bool
+	visit = func(n *rtsx.Node) bool {
+		switch n.Kind {
+		case rtsx.KindJsxExpression:
+			found = n.Expression() != nil
+		case rtsx.KindJsxSpreadAttribute:
+			found = true
+		case rtsx.KindJsxOpeningElement, rtsx.KindJsxSelfClosingElement:
+			tag := n.TagName()
+			name := rtsx.NodeText(tag)
+			found = !rtsx.IsIntrinsicTag(tag) && !(tag.Kind == rtsx.KindIdentifier && (name == "" || strings.HasPrefix(name, "$")))
+		}
+		return found || n.ForEachChild(visit)
+	}
+	visit(n)
+	return found
 }
 
 // fresh returns base, or base1, base2, … — the first not used in the source.
@@ -267,7 +373,7 @@ func jsxChildren(el *rtsx.Node) []*rtsx.Node {
 	var out []*rtsx.Node
 	for _, ch := range el.Children().Nodes {
 		switch {
-		case ch.Kind == rtsx.KindJsxText && ch.AsJsxText().ContainsOnlyTriviaWhiteSpaces:
+		case syntax.BlankText(ch):
 		case ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil:
 		default:
 			out = append(out, ch)
@@ -321,7 +427,7 @@ func isJSXElement(n *rtsx.Node) bool {
 // operand copies expr, in parentheses when its precedence is not above min.
 func (c *passContext) operand(expr *rtsx.Node, min int) []emit.Piece {
 	if rtsx.Precedence(expr) > min {
-		return []emit.Piece{c.copy(expr)}
+		return []emit.Piece{c.copyValue(expr)}
 	}
 	s := c.span(expr)
 	return []emit.Piece{emit.Synth("(", s), c.copy(expr), emit.Synth(")", s)}

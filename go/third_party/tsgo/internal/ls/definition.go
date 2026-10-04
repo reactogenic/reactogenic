@@ -241,6 +241,21 @@ func (l *LanguageService) createDefinitionLocations(
 
 	for _, decl := range declarations {
 		file := ast.GetSourceFileOfNode(decl)
+		if decl.Kind == ast.KindSourceFile && file.SpanMap() != nil {
+			// rtsx: a module — reached by a specifier that is not relative (a `paths` alias, a
+			// package). A content-mapped file's whole text is no span that answers a feature: the
+			// module is the file, at its start, as for a relative specifier (above).
+			start := lsproto.Range{}
+			if locationRanges.AddIfAbsent(fileRange{file, core.NewTextRange(0, 0)}) {
+				locations = append(locations, &lsproto.LocationLink{
+					OriginSelectionRange: &originSelectionRange,
+					TargetUri:            lsconv.FileNameToDocumentURI(file.OriginalFileName()),
+					TargetRange:          start,
+					TargetSelectionRange: start,
+				})
+			}
+			continue
+		}
 		name := core.OrElse(ast.GetNameOfDeclaration(decl), decl)
 		var nameRange core.TextRange
 		if name.Kind == ast.KindEmptyStatement {

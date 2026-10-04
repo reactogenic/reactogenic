@@ -1,0 +1,6 @@
+# "src/**/*.ts", "src/**/*.tsx", "src/**/*.rtsx"
+src/page.rtsx(1,14): error TS2322: Type 'string' is not assignable to type 'number'.
+src/unreached.rtsx(1,14): error TS2322: Type 'string' is not assignable to type 'number'.
+src/unreached.rtsx(2,24): error orphan-slot: Slot must be immediate child of the component
+# "src/**/*.ts", "src/**/*.tsx"
+src/page.rtsx(1,14): error TS2322: Type 'string' is not assignable to type 'number'.

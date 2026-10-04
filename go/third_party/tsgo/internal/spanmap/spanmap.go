@@ -129,6 +129,9 @@ type MappedSpan struct {
 type SpanMap struct {
 	segments []Segment
 
+	// rtsx: SetLeadingStatementStarts. Sorted.
+	leadingStatementStarts []core.TextPos
+
 	// origOnce guards lazy construction of the interval index used for original-to-virtual lookups.
 	origOnce      sync.Once
 	originalIndex *originalIndex
@@ -314,7 +317,7 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
 	if m == nil {
 		return pos, FidelityExact
 	}
-	idx, in := m.segmentIndexAt(pos)
+	idx, in := m.positionSegmentAt(pos)
 	if !in {
 		return m.insertionPoint(idx), FidelityNone
 	}
@@ -322,7 +325,46 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
 	if seg.Kind == KindVerbatim {
 		return clamp(seg.OriginalStart+(pos-seg.VirtualStart), seg.OriginalStart, seg.OriginalEnd), FidelityExact
 	}
+	if _, starts := slices.BinarySearch(m.leadingStatementStarts, pos); starts && m.beforeOriginalText(idx) {
+		return 0, FidelityExact
+	}
 	return seg.OriginalStart, FidelityAtom
+}
+
+// SetLeadingStatementStarts names the virtual offsets, in generated text that precedes the whole
+// original text, where a statement starts or the text after the last one begins. (rtsx: an import
+// the mapper generates in a file that has none. A position at one of these — where an edit inserts
+// the file's first import of its own, before or after the generated one — is the start of the
+// original text, exactly. Any other position in that text is the generated statement's own — an
+// edit there, a name added to the generated import, has nowhere to go — and a range, a
+// diagnostic's, maps to the segment's origin as ever.)
+func (m *SpanMap) SetLeadingStatementStarts(starts []core.TextPos) {
+	m.leadingStatementStarts = slices.Sorted(slices.Values(starts))
+}
+
+// beforeOriginalText reports whether segment idx is generated text that precedes the whole original
+// text: no verbatim segment before it, and the first one starts at original offset 0.
+func (m *SpanMap) beforeOriginalText(idx int) bool {
+	for i, s := range m.segments {
+		if s.Kind == KindVerbatim {
+			return idx < i && s.OriginalStart == 0
+		}
+	}
+	return false
+}
+
+// positionSegmentAt is segmentIndexAt for a position, as opposed to a range boundary: a position at
+// the end of verbatim text belongs to that text when what follows is not verbatim. (rtsx: a cursor
+// after an identifier being typed — `{getSta|}` — is the identifier's end, though generated text
+// starts there; without this, completion there has no exact position to write back to.)
+func (m *SpanMap) positionSegmentAt(pos core.TextPos) (int, bool) {
+	idx, in := m.segmentIndexAt(pos)
+	if in && idx > 0 && m.segments[idx].Kind != KindVerbatim && m.segments[idx].VirtualStart == pos {
+		if previous := m.segments[idx-1]; previous.Kind == KindVerbatim && previous.VirtualEnd == pos {
+			return idx - 1, true
+		}
+	}
+	return idx, in
 }
 
 // VirtualToOriginalPositionExact maps a position only when it is unambiguously in verbatim content.
@@ -352,7 +394,7 @@ func (m *SpanMap) VirtualToOriginalPositionForFeature(pos core.TextPos, feature 
 	if m == nil {
 		return mapped, fidelity
 	}
-	index, inside := m.segmentIndexAt(pos)
+	index, inside := m.positionSegmentAt(pos) // rtsx
 	if !inside || !supportsFeature(m.segments[index], feature) {
 		return mapped, FidelityNone
 	}

@@ -23,6 +23,12 @@
       "default": "./binary.js"
     }
   },
+  "typescript": {
+    "contentMapper": {
+      "exec": ["node", "./bin/reactogenic.js", "content-mapper"],
+      "compilerOptions": ["paths"]
+    }
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

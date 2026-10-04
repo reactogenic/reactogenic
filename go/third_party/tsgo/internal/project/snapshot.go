@@ -502,6 +502,9 @@ func (s *Snapshot) Clone(
 		inferredContentMappers = change.contentMapperContributions.Mappers
 		inferredContentMapperExtensions = change.contentMapperContributions.Extensions
 	}
+	if builtIn, builtInExtensions := contentmapper.BuiltInMappers(); builtIn != nil { // rtsx
+		inferredContentMappers, inferredContentMapperExtensions = builtIn, builtInExtensions
+	}
 	baseFS := store.fs
 	if change.fs != nil {
 		baseFS = change.fs

@@ -178,9 +178,8 @@ None. Every bare attribute desugars to A or B.
   attribute changes that attribute's meaning with no error when the types
   happen to agree (`const disabled = false; … <Button disabled />`).
 
-> ROADMAP: a warning in the `.tsx` → `.rtsx` migration path on bare
-> attributes that resolve as case A (the silent flip). Belongs with editor
-> tooling ([../later/tooling.md](../later/tooling.md)).
+> ROADMAP: an inlay hint on bare attributes that resolve as case A (the
+> silent flip) — [ide.md](ide.md), *Not in the first release*.
 
 ### Prior art
 
@@ -850,7 +849,8 @@ JsxAttribute ::= … | ("&" | "&&") JsxAttributeName [ "=" JsxAttributeValue ]
 
 `&` and `&&` cannot start an attribute in today's TSX (TypeScript, esbuild
 and Babel all reject them), so the forms are free to reserve. No whitespace
-after `&` / `&&`. Only on an attachment (`slot={$X}`); anywhere else is
+after `&` / `&&`, and the name is an identifier: `&#seg` is a syntax error
+(TS1003). Only on an attachment (`slot={$X}`); anywhere else is
 arg-without-slot.
 
 ### Typing behaviour
@@ -1276,7 +1276,9 @@ JsxSegmentRoot  ::= '#' JsxIdentifier          // JsxIdentifier allows hyphens: 
 ```
 
 No whitespace between `#` and the name (tsgo's scanner already rejects a
-lone `#`). At most one per element (segment-id), and no value or namespace:
+lone `#`), and none is needed before `#`, as before any JSX attribute:
+`<section#intro />` and `<section hidden#intro />` are roots, and the `id`
+they become is set apart (`<section hidden id="intro">`). At most one per element (segment-id), and no value or namespace:
 `#about-us="x"` and `#about:us` are segment-syntax. Unrelated to
 class private names (`#x`), which never occur in attribute position.
 
@@ -1378,19 +1380,19 @@ order: TS tries `.ts` before `.tsx`, Vite has its own `resolve.extensions`.
 With the extension, the file the lookup chose is the file Vite runs and TS7
 checks.
 
-- `reactogenic check` resolves `./about-us.rtsx` to the transpiled
-  `about-us.rtsx` (TS finds it as `about-us.rtsx.tsx`, whose real path is the
-  virtual `about-us.tsx`), and accepts the `.tsx` / `.ts` extension of a
-  segment import without `allowImportingTsExtensions` — the import is the
-  transpiler's, not the author's.
+- `reactogenic check` and the editor resolve `./about-us.rtsx` as written:
+  the `.rtsx` file is a module of the program under its own name
+  ([ide.md](ide.md), *The engine*), under every `moduleResolution` —
+  `node16` and `nodenext` included. They accept the `.tsx` / `.ts` extension
+  of a segment import without `allowImportingTsExtensions` (TS5097 is
+  dropped) — the import is the transpiler's, not the author's.
 - A segment file may also be imported by hand, and may export other things:
   it is a module like any other. What makes it a segment is being mounted.
 
-> OPEN: two known gaps of `reactogenic check` (Vite is right in both). (1)
-> Under `moduleResolution: node16` / `nodenext`, TS does not look for
-> `about-us.rtsx.tsx`, so an `.rtsx` segment is not found. (2) TS maps
+> OPEN: one known gap of `reactogenic check` (Vite is right). TS maps
 > `./about-us.jsx` to `about-us.ts` when both exist, so it checks the `.ts`
-> instead of the mounted `.jsx`.
+> instead of the mounted `.jsx`. (A `.jsx` / `.js` segment is otherwise TS's
+> usual JavaScript import: `allowJs`, or TS7016 under `noImplicitAny`.)
 
 ### Typing behaviour
 

@@ -1,0 +1,2 @@
+src/main.tsx(1,26): error TS17008: JSX element 'span' has no corresponding closing tag.
+src/page.rtsx(2,26): error orphan-slot: Slot must be immediate child of the component

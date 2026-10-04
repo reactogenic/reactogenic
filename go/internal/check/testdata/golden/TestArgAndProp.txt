@@ -1,0 +1,4 @@
+src/rows.rtsx(4,43): error TS2339: Property 'nope' does not exist on type '{ id: string; }'.
+src/rows.rtsx(7,28): error TS2304: Cannot find name 'className'.
+src/rows.rtsx(10,43): error TS2339: Property 'nope' does not exist on type '{ id: string; }'.
+src/rows.rtsx(13,28): error TS2304: Cannot find name 'className'.

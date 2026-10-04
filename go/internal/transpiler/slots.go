@@ -175,6 +175,7 @@ func (c *passContext) removeOrphans() []emit.Edit {
 	visit = func(n *rtsx.Node) bool {
 		if isSlotElement(n) && !claimed(n) {
 			c.errorAt(n, "orphan-slot", "Slot must be immediate child of the component")
+			c.leftOut(n)
 			edits = append(edits, emit.Edit{Span: c.span(n), Pieces: inPosition(n, c.openingSpan(n), []emit.Piece{emit.Synth("null", c.openingSpan(n))})})
 			return false
 		}
@@ -193,7 +194,7 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 		opening = p.AsJsxElement().OpeningElement
 	}
 	a := readAttributes(p)
-	names, values, replaced, remaining, first := c.assignSlots(p, a)
+	names, values, replaced, remaining, first, firstTag := c.assignSlots(p, a)
 	tagText := c.tagText(p)
 
 	// The new element: written attributes (minus params and replaced `$X=`),
@@ -209,7 +210,7 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 	}
 	for _, name := range names {
 		c.note(first[name], "slot-prop", name, tagText)
-		out = append(out, emit.Synth(" ", origin), emit.Synth(name+"={", first[name]))
+		out = append(out, emit.Synth(" ", origin), c.slotName(name, firstTag[name], first[name]), emit.Synth("={", first[name]))
 		out = append(append(out, values[name]...), emit.Synth("}", first[name]))
 	}
 
@@ -234,7 +235,7 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 	} else {
 		out = append(out, emit.Synth(">", origin))
 		out = append(out, children...)
-		out = append(out, emit.Synth("</", origin), c.copy(opening.TagName()), emit.Synth(">", origin))
+		out = append(out, emit.Synth("</", origin), c.closingName(p, opening), emit.Synth(">", origin))
 	}
 	return []emit.Edit{{Span: c.span(p), Pieces: out}}
 }
@@ -242,7 +243,7 @@ func (c *passContext) hoist(p *rtsx.Node) []emit.Edit {
 func meaningfulChildren(children []*rtsx.Node) []*rtsx.Node {
 	var out []*rtsx.Node
 	for _, ch := range children {
-		if !(ch.Kind == rtsx.KindJsxText && ch.AsJsxText().ContainsOnlyTriviaWhiteSpaces) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
+		if !syntax.BlankText(ch) && !(ch.Kind == rtsx.KindJsxExpression && ch.Expression() == nil) {
 			out = append(out, ch)
 		}
 	}
@@ -257,11 +258,22 @@ func meaningfulChildren(children []*rtsx.Node) []*rtsx.Node {
 // assignment; when a slot element follows, the attribute is replaced.
 //
 // It returns the slots in order of first appearance, their values, the
-// replaced attributes, and the children that are not slots.
-func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map[string][]emit.Piece, map[*rtsx.Node]bool, []*rtsx.Node, map[string]emit.Span) {
+// replaced attributes, the children that are not slots, where each slot is
+// first filled, and the tag name of its first element.
+func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map[string][]emit.Piece, map[*rtsx.Node]bool, []*rtsx.Node, map[string]emit.Span, map[string]emit.Span) {
 	var names []string
 	values := map[string][]emit.Piece{}
 	first := map[string]emit.Span{} // where each slot is first filled
+	firstTag := map[string]emit.Span{}
+	tags := map[string][]emit.Span{} // every tag name of a slot's elements: its group
+	group := func(name string, el *rtsx.Node) {
+		tags[name] = append(tags[name], c.span(tagOf(el)))
+		if el.Kind == rtsx.KindJsxElement {
+			if closing := el.AsJsxElement().ClosingElement; closing != nil && closing.TagName().End() > closing.TagName().Pos() {
+				tags[name] = append(tags[name], c.span(closing.TagName()))
+			}
+		}
+	}
 	replaced := map[*rtsx.Node]bool{}
 	var rest []*rtsx.Node
 	previous := func(name string) []emit.Piece {
@@ -276,7 +288,7 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 		return nil
 	}
 	if owner.Kind != rtsx.KindJsxElement {
-		return nil, values, replaced, nil, first
+		return nil, values, replaced, nil, first, firstTag
 	}
 	// A slot whose elements carry `key` is keyed (syntax.md, *Keyed slots*):
 	// its value collects the entries instead of keeping the last one.
@@ -306,6 +318,7 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 			if _, ok := first[name]; !ok {
 				first[name] = c.openingSpan(ch)
 			}
+			group(name, ch)
 			if isKeyed(name, ch) {
 				if _, started := keyed[name]; !started && prev != nil {
 					keyed[name] = append(keyed[name], append([]emit.Piece{emit.Synth("...", first[name])}, prev...))
@@ -317,10 +330,17 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 			values[name] = c.slotObject(ch)
 		case slotConditional(ch) != nil:
 			cond := slotConditional(ch)
-			if name, ok := c.conditionalSlotName(cond); ok {
+			if name, ok := c.conditionalSlotName(cond); !ok {
+				// Neither a slot's value nor a child: the conditional — its
+				// test, its branches — is not in the output.
+				c.leftOut(ch)
+			} else {
 				prev := previous(name)
 				if _, ok := first[name]; !ok {
 					first[name] = c.span(ch)
+				}
+				for _, leaf := range slotLeaves(cond) {
+					group(name, leaf)
 				}
 				if el := firstSlotLeaf(cond); el != nil && isKeyed(name, el) {
 					if _, started := keyed[name]; !started && prev != nil {
@@ -357,7 +377,36 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 		props := append([][]emit.Piece{{emit.Synth("["+marker+"]: true", first[name])}}, entries...)
 		values[name] = objectLiteral(props, first[name])
 	}
-	return names, values, replaced, rest, first
+	for _, name := range names {
+		if len(tags[name]) > 0 {
+			firstTag[name] = tags[name][0]
+			c.slotGroup(name, c.openingSpan(owner), tags[name])
+		}
+	}
+	return names, values, replaced, rest, first, firstTag
+}
+
+// slotName is the emitted name of a slot prop: the tag name of its first
+// element, copied, so hover, definition and references on `<$Icon` reach the
+// prop (ide.md, *Span map*).
+func (c *passContext) slotName(name string, tag, origin emit.Span) emit.Piece {
+	if tag.Len() == len(name) && c.text[tag.Pos:tag.End] == name {
+		return c.copyName(tag)
+	}
+	return emit.Synth(name, origin)
+}
+
+// slotLeaves are the slot elements among a conditional's branches.
+func slotLeaves(expr *rtsx.Node) []*rtsx.Node {
+	expr = unwrapParens(expr)
+	switch {
+	case expr.Kind == rtsx.KindConditionalExpression:
+		ce := expr.AsConditionalExpression()
+		return append(slotLeaves(ce.WhenTrue), slotLeaves(ce.WhenFalse)...)
+	case isSlotElement(expr):
+		return []*rtsx.Node{expr}
+	}
+	return nil
 }
 
 // keyAttribute is a slot element's entry key — its `key` attribute, unless
@@ -425,7 +474,7 @@ func (c *passContext) keyedEntry(el *rtsx.Node) []emit.Piece {
 	case v == nil:
 		key = []emit.Piece{emit.Synth("[undefined]", c.span(attr))} // a bare `key`: TS reports it
 	case v.Kind == rtsx.KindStringLiteral:
-		key = []emit.Piece{c.copy(v)}
+		key = []emit.Piece{c.copyValue(v)}
 	default:
 		key = append(append([]emit.Piece{emit.Synth("[", c.span(attr))}, c.operand(v, rtsx.PrecedenceComma)...), emit.Synth("]", c.span(attr)))
 	}
@@ -537,6 +586,9 @@ func (c *passContext) attributeProps(attrs []*rtsx.Node) [][]emit.Piece {
 			key = `"` + name + `"`
 		}
 		prop := []emit.Piece{emit.Synth(key+": ", c.span(attr))}
+		if key == name && name != "" {
+			prop = []emit.Piece{c.copyName(c.span(attr.Name())), emit.Synth(": ", c.span(attr))}
+		}
 		switch v := attr.Initializer(); {
 		case v == nil:
 			prop = append(prop, emit.Synth("true", c.span(attr)))
@@ -545,7 +597,7 @@ func (c *passContext) attributeProps(attrs []*rtsx.Node) [][]emit.Piece {
 		case v.Kind == rtsx.KindJsxExpression:
 			prop = append(prop, c.operand(v.Expression(), rtsx.PrecedenceComma)...)
 		default:
-			prop = append(prop, c.copy(v))
+			prop = append(prop, c.copyValue(v))
 		}
 		props = append(props, prop)
 	}
@@ -577,7 +629,7 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 		opening = el.AsJsxElement().OpeningElement
 	}
 	a := readAttributes(el)
-	names, values, replaced, rest, first := c.assignSlots(el, a)
+	names, values, replaced, rest, first, firstTag := c.assignSlots(el, a)
 	body := meaningfulChildren(rest)
 	slotName := c.tagText(el)
 	var attrs []*rtsx.Node
@@ -596,6 +648,7 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 				continue
 			case name == "children" && len(body) > 0:
 				c.errorAt(attr, "slot-children-conflict", "`children` is given twice: as an attribute and as the body")
+				c.leftOut(attr) // the body wins
 				continue
 			}
 		}
@@ -607,7 +660,11 @@ func (c *passContext) slotObject(el *rtsx.Node) []emit.Piece {
 	}
 	for _, name := range names {
 		c.note(first[name], "slot-prop", name, slotName)
-		props = append(props, append([]emit.Piece{emit.Synth(name+": ", first[name])}, values[name]...))
+		key := []emit.Piece{c.slotName(name, firstTag[name], first[name])}
+		if !identifierName.MatchString(name) { // `<$sub-item>`: a quoted key, the name still copied
+			key = []emit.Piece{emit.Synth(`"`, first[name]), key[0], emit.Synth(`"`, first[name])}
+		}
+		props = append(props, append(append(key, emit.Synth(": ", first[name])), values[name]...))
 	}
 	if a.params != nil {
 		c.note(c.span(a.params), "slot-params", slotName, "")

@@ -1,0 +1,680 @@
+diff --git a/internal/ast/ast.go b/internal/ast/ast.go
+index 30172cf..92cb6b6 100644
+--- a/internal/ast/ast.go
++++ b/internal/ast/ast.go
+@@ -2625,6 +2625,15 @@ type ContentMapperSourceFileInfo struct {
+ 	DiagnosticDirectives    []MappedDiagnosticDirective
+ 	SupplementalSourceFiles []*SourceFile
+ 	CanonicalSourceFile     *SourceFile
++	Extra                   any // rtsx: what the mapper attached to its result
++}
++
++// ContentMapperExtra returns what the content mapper attached to this file's result.
++func (node *SourceFile) ContentMapperExtra() any {
++	if node.contentMapperInfo == nil {
++		return nil
++	}
++	return node.contentMapperInfo.Extra
+ }
+ 
+ // ContentMapperParseOptions returns the parse options used to acquire this file from the mapped parse cache.
+diff --git a/internal/contentmapper/builtin.go b/internal/contentmapper/builtin.go
+new file mode 100644
+index 0000000..fbe1160
+--- /dev/null
++++ b/internal/contentmapper/builtin.go
+@@ -0,0 +1,119 @@
++// Reactogenic: a content mapper that runs in this process.
++// Not part of upstream: added by go/patches/0004-rtsx-mapper.patch.
++
++package contentmapper
++
++import (
++	"sync/atomic"
++
++	"github.com/microsoft/TypeScript/tsc/internal/locale"
++	"github.com/microsoft/TypeScript/tsc/internal/vfs"
++)
++
++// BuiltIn is a content mapper compiled into the binary. Once registered it
++// serves its extensions in every project — configured, referenced and
++// inferred — without a tsconfig entry and without runExternalCode: nothing
++// external runs. Configured mappers are ignored while one is registered.
++type BuiltIn struct {
++	Name, Version string
++	Extensions    []string
++	// Transform never fails: user errors yield a usable result.
++	Transform func(BuiltInRequest) Result
++	// FileIdentity is what a file's transform depends on besides its own
++	// text (the names of its siblings); it becomes part of the cache key.
++	FileIdentity func(BuiltInRequest) string
++
++	// mappers is the registration as config-level mappers: made once, since
++	// a project compares its mappers with a snapshot's by identity — a new
++	// one for every snapshot would rebuild the inferred project each time.
++	mappers []*Mapper
++}
++
++// BuiltInRequest is a file to transform and the file system to read its
++// surroundings from: in the language server, the snapshot's, with open
++// buffers.
++type BuiltInRequest struct {
++	FileName string
++	Content  string
++	FS       vfs.FS
++}
++
++var builtIn atomic.Pointer[BuiltIn]
++
++// RegisterBuiltIn installs b for the process; call it before any program is
++// built. nil removes it.
++func RegisterBuiltIn(b *BuiltIn) {
++	if b != nil {
++		b.mappers = []*Mapper{{
++			Definition: Definition{Package: b.Name, Extensions: b.Extensions},
++			Manifest:   Manifest{Name: b.Name, Version: b.Version},
++		}}
++	}
++	builtIn.Store(b)
++}
++
++// BuiltInMappers returns the registered mapper as config-level mappers, with
++// its extensions; nil when none is registered. The same slice every time: it
++// is not to be changed.
++func BuiltInMappers() ([]*Mapper, []string) {
++	b := builtIn.Load()
++	if b == nil {
++		return nil, nil
++	}
++	return b.mappers, b.Extensions
++}
++
++// FileIdentifier is implemented by a Project whose transforms depend on
++// more than the file's text.
++type FileIdentifier interface {
++	FileIdentity(fileName, content string) string
++}
++
++type builtInProject struct{ fs vfs.FS }
++
++// NewBuiltInProject is the Project of the registered built-in mapper,
++// reading through fs.
++func NewBuiltInProject(fs vfs.FS) Project { return &builtInProject{fs: fs} }
++
++func (p *builtInProject) identity() string {
++	if b := builtIn.Load(); b != nil {
++		return b.Name + "@" + b.Version
++	}
++	return ""
++}
++
++func (p *builtInProject) Refresh() error                   { return nil }
++func (p *builtInProject) Identities() ([]string, error)    { return []string{p.identity()}, nil }
++func (p *builtInProject) Identity(*Mapper) (string, error) { return p.identity(), nil }
++func (p *builtInProject) WatchedFiles() ([]string, error)  { return nil, nil }
++func (p *builtInProject) Diagnostics() []OptionDiagnostic  { return nil }
++func (p *builtInProject) Close() error                     { return nil }
++func (p *builtInProject) Transform(_ *Mapper, request Request) (Result, error) {
++	b := builtIn.Load()
++	if b == nil {
++		return Result{}, ErrProjectUnavailable
++	}
++	return b.Transform(BuiltInRequest{FileName: request.FileName, Content: request.Content, FS: p.fs}), nil
++}
++
++func (p *builtInProject) FileIdentity(fileName, content string) string {
++	if b := builtIn.Load(); b != nil && b.FileIdentity != nil {
++		return b.FileIdentity(BuiltInRequest{FileName: fileName, Content: content, FS: p.fs})
++	}
++	return ""
++}
++
++type builtInHost struct{}
++
++// NewBuiltInHost is the Host of the registered built-in mapper: it spawns
++// nothing.
++func NewBuiltInHost() Host { return builtInHost{} }
++
++func (builtInHost) Timings() Timings                   { return Timings{} }
++func (builtInHost) Project(spec ProjectSpec) Project   { return NewBuiltInProject(spec.FS) }
++func (builtInHost) Acquire([]*Mapper) (release func()) { return func() {} }
++func (builtInHost) SetLocale(locale.Locale)            {}
++func (builtInHost) Close() error                       { return nil }
++func (builtInHost) Transform(_ *Mapper, request Request) (Result, error) {
++	return NewBuiltInProject(nil).Transform(nil, request)
++}
+diff --git a/internal/contentmapper/host.go b/internal/contentmapper/host.go
+index 538e9ca..3e8766b 100644
+--- a/internal/contentmapper/host.go
++++ b/internal/contentmapper/host.go
+@@ -8,6 +8,7 @@ import (
+ 	"github.com/microsoft/TypeScript/tsc/internal/core"
+ 	"github.com/microsoft/TypeScript/tsc/internal/locale"
+ 	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++	"github.com/microsoft/TypeScript/tsc/internal/vfs"
+ )
+ 
+ // TransformErrorKind identifies the stage at which a content mapper transform failed.
+@@ -178,6 +179,11 @@ type Result struct {
+ 	DiagnosticDirectives []ast.MappedDiagnosticDirective
+ 	// Supplemental contains additional unnamed outputs associated with the canonical result.
+ 	Supplemental []MappedResult
++	// Extra travels with the parsed file (rtsx: the transpiler's notes), read through
++	// ast.SourceFile.ContentMapperExtra.
++	Extra any
++	// Module forces the virtual text to be parsed as a module (rtsx).
++	Module bool
+ }
+ 
+ // MappedResult is one virtual source file and its mapping to the original input.
+@@ -204,6 +210,8 @@ type ProjectSpec struct {
+ 	Mappers []*Mapper
+ 	// CompilerOptions are the project's effective compiler options.
+ 	CompilerOptions *core.CompilerOptions
++	// FS is the file system the project reads through (rtsx: for built-in mappers).
++	FS vfs.FS
+ }
+ 
+ type OptionPathSegment struct {
+diff --git a/internal/contentmapper/transform.go b/internal/contentmapper/transform.go
+index 6954139..5c95d5e 100644
+--- a/internal/contentmapper/transform.go
++++ b/internal/contentmapper/transform.go
+@@ -58,7 +58,7 @@ func ParseResult(parseOptions ast.SourceFileParseOptions, content string, mapper
+ 	baseParseOptions := parseOptions
+ 	virtualFileName := baseParseOptions.FileName + virtualExtension
+ 	parseOptions = baseParseOptions
+-	if isModuleVirtualExtension(virtualExtension) {
++	if isModuleVirtualExtension(virtualExtension) || result.Module {
+ 		parseOptions.ExternalModuleIndicatorOptions.Force = true
+ 	}
+ 	sourceFile := parser.ParseSourceFile(parseOptions, result.Text, core.GetScriptKindFromFileName(virtualFileName))
+@@ -103,6 +103,7 @@ func ParseResult(parseOptions ast.SourceFileParseOptions, content string, mapper
+ 		SpanMap:                 result.Mappings,
+ 		DiagnosticDirectives:    result.DiagnosticDirectives,
+ 		SupplementalSourceFiles: files.Supplemental,
++		Extra:                   result.Extra,
+ 	})
+ 	for i, file := range files.Supplemental {
+ 		supplemental := result.Supplemental[i]
+diff --git a/internal/project/compilerhost.go b/internal/project/compilerhost.go
+index 59c0d99..f2a46d8 100644
+--- a/internal/project/compilerhost.go
++++ b/internal/project/compilerhost.go
+@@ -125,6 +125,9 @@ func (c *compilerHost) GetContentMappedSourceFiles(parseOptions ast.SourceFilePa
+ 	if err != nil {
+ 		return contentmapper.SourceFiles{}, contentmapper.NewTransformError(contentmapper.TransformErrorKindProject, err)
+ 	}
++	if perFile, ok := project.(contentmapper.FileIdentifier); ok { // rtsx: sibling names
++		identity += perFile.FileIdentity(parseOptions.FileName, fh.Content())
++	}
+ 	transformIdentity := xxh3.Hash128([]byte(identity))
+ 	key := contentMappedParseCacheKey(parseOptions, fh.Hash(), transformIdentity, diagnosticLocale)
+ 	files, err := c.builder.contentMappedParseCache.AcquireOrError(key, func() (contentmapper.SourceFiles, error) {
+@@ -163,6 +166,7 @@ func (c *compilerHost) ContentMapperProject() contentmapper.Project {
+ 			ConfigFileName:  commandLine.ConfigName(),
+ 			Mappers:         commandLine.ContentMappers(),
+ 			CompilerOptions: commandLine.CompilerOptions(),
++			FS:              c.FS(), // rtsx
+ 		})
+ 	})
+ 	return c.contentMapperProject
+diff --git a/internal/project/mapped.go b/internal/project/mapped.go
+new file mode 100644
+index 0000000..517be3a
+--- /dev/null
++++ b/internal/project/mapped.go
+@@ -0,0 +1,72 @@
++// Reactogenic: what the session does for the documents of the built-in
++// content mapper. Not part of upstream: added by
++// go/patches/0004-rtsx-mapper.patch.
++
++package project
++
++import (
++	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
++	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
++	"github.com/microsoft/TypeScript/tsc/internal/tsoptions"
++	"github.com/microsoft/TypeScript/tsc/internal/tspath"
++)
++
++// mappedBufferDiffers reports whether uri is a content-mapped document whose
++// buffer is not the file on disk: a new file not saved yet, a buffer with
++// edits. Opening or closing such a document changes the program — a module
++// appears or goes, or reads differently — and with it the diagnostics of
++// other open documents, which no client pulls again by itself: it pulls the
++// document it opened. DidOpenFile and DidCloseFile then ask for a refresh.
++// (Upstream refreshes on a change to such a document, and on a watched
++// file.)
++//
++// DidOpenFile asks with the snapshot updated; DidCloseFile, before it queues
++// the close.
++func (s *Session) mappedBufferDiffers(uri lsproto.DocumentUri) bool {
++	if !s.isContentMapperFile(uri) {
++		return false
++	}
++	overlay := s.fs.Overlays()[s.toPath(uri.FileName())]
++	if overlay == nil {
++		return true
++	}
++	// A change that is not in the overlay yet.
++	s.pendingFileChangesMu.Lock()
++	for _, change := range s.pendingFileChanges {
++		if change.URI == uri {
++			s.pendingFileChangesMu.Unlock()
++			return true
++		}
++	}
++	s.pendingFileChangesMu.Unlock()
++	matches, _ := overlay.computeMatchesDiskText(s.fs.host)
++	return !matches
++}
++
++// listsMappedFile reports whether a project that contains a file ends the
++// search for its default project: always, but for a file of the built-in
++// mapper, which is its lister's — the project whose config names it, in
++// `files` or through `include` — before one that reaches it through an
++// import only.
++//
++// The preference holds inside one search: a config and the projects it
++// references. There the search goes on past an importer, and takes the
++// first of them when none of these projects lists the file
++// (findOrCreateDefaultConfiguredProjectWorker's `importers`). It is no
++// reason to go on to the configs above: an importer is found where upstream
++// finds it, and a config higher up — a base config that packages extend
++// lists every file under it by default — does not take the file from the
++// package that imports it.
++//
++// Upstream takes the first project that contains the file, so with
++// `references` to a test project and then to the app it tests, a file of the
++// app is checked under the tests' options. The host's command-line check
++// reports each file by its lister (specs/phase01/diagnostics.md,
++// *References*), and the editor shows what that prints.
++func listsMappedFile(config *tsoptions.ParsedCommandLine, fileName string, path tspath.Path) bool {
++	if _, extensions := contentmapper.BuiltInMappers(); !tspath.FileExtensionIsOneOf(fileName, extensions) {
++		return true
++	}
++	_, listed := config.FileNamesByPath()[path]
++	return listed
++}
+diff --git a/internal/project/projectcollectionbuilder.go b/internal/project/projectcollectionbuilder.go
+index eb37526..4f2dee7 100644
+--- a/internal/project/projectcollectionbuilder.go
++++ b/internal/project/projectcollectionbuilder.go
+@@ -1065,6 +1065,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
+ 	logger *logging.LogTree,
+ ) searchResult {
+ 	var configs collections.SyncMap[tspath.Path, *tsoptions.ParsedCommandLine]
++	var importers collections.SyncSet[tspath.Path] // rtsx: see listsMappedFile
+ 	if visited == nil {
+ 		visited = &collections.SyncSet[searchNodeKey]{}
+ 	}
+@@ -1126,6 +1127,10 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
+ 
+ 			if project.Value().containsFile(path) {
+ 				isDirectInclusion := !project.Value().IsSourceFromProjectReference(path)
++				if isDirectInclusion && !listsMappedFile(config, fileName, path) { // rtsx
++					importers.Add(configFilePath)
++					isDirectInclusion = false
++				}
+ 				if node.logger != nil {
+ 					node.logger.Logf("Project contains file %s", core.IfElse(isDirectInclusion, "directly", "as a source of a referenced project"))
+ 				}
+@@ -1164,7 +1169,7 @@ func (b *ProjectCollectionBuilder) findOrCreateDefaultConfiguredProjectWorker(
+ 		}
+ 	}
+ 
+-	if search.Stopped {
++	if search.Stopped || project != nil && importers.Has(b.toPath(search.Path[0].configFileName)) { // rtsx
+ 		// Found a project that directly contains the file.
+ 		return searchResult{
+ 			project: project,
+diff --git a/internal/project/session.go b/internal/project/session.go
+index 08585aa..6d2c9d7 100644
+--- a/internal/project/session.go
++++ b/internal/project/session.go
+@@ -197,6 +197,9 @@ type Session struct {
+ // a spawner is available; otherwise it returns nil, and configured content mappers are rejected by the
+ // config-file gate.
+ func newContentMapperHost(init *SessionInit) contentmapper.Host {
++	if builtIn, _ := contentmapper.BuiltInMappers(); builtIn != nil { // rtsx
++		return contentmapper.NewBuiltInHost()
++	}
+ 	if !init.Options.RunExternalCode || init.Spawner == nil {
+ 		return nil
+ 	}
+@@ -337,6 +340,9 @@ func (s *Session) DidOpenFile(ctx context.Context, uri lsproto.DocumentUri, vers
+ 		fileChanges: changes,
+ 		Documents:   []lsproto.DocumentUri{uri},
+ 	})
++	if s.mappedBufferDiffers(uri) { // rtsx
++		s.scheduleDiagnosticsRefresh(0)
++	}
+ }
+ 
+ // SetContentMapperContributions atomically replaces extension-provided inferred-project mappers and
+@@ -363,6 +369,7 @@ func (s *Session) SetContentMapperContributions(ctx context.Context, contributio
+ func (s *Session) DidCloseFile(ctx context.Context, uri lsproto.DocumentUri) {
+ 	s.cancelWarmAutoImportCache()
+ 	s.scheduleIdleCacheClean()
++	differs := s.mappedBufferDiffers(uri) // rtsx
+ 	s.pendingFileChangesMu.Lock()
+ 	s.pendingFileChanges = append(s.pendingFileChanges, FileChange{
+ 		Kind: FileChangeKindClose,
+@@ -370,6 +377,9 @@ func (s *Session) DidCloseFile(ctx context.Context, uri lsproto.DocumentUri) {
+ 	})
+ 	s.pendingFileChangesMu.Unlock()
+ 	s.ScheduleSnapshotUpdate(UpdateReasonDidCloseFile)
++	if differs { // rtsx
++		s.scheduleDiagnosticsRefresh(0)
++	}
+ }
+ 
+ func (s *Session) DidChangeFile(ctx context.Context, uri lsproto.DocumentUri, version int32, changes []lsproto.TextDocumentContentChangePartialOrWholeDocument) {
+diff --git a/internal/project/snapshot.go b/internal/project/snapshot.go
+index 6040a63..8719176 100644
+--- a/internal/project/snapshot.go
++++ b/internal/project/snapshot.go
+@@ -502,6 +502,9 @@ func (s *Snapshot) Clone(
+ 		inferredContentMappers = change.contentMapperContributions.Mappers
+ 		inferredContentMapperExtensions = change.contentMapperContributions.Extensions
+ 	}
++	if builtIn, builtInExtensions := contentmapper.BuiltInMappers(); builtIn != nil { // rtsx
++		inferredContentMappers, inferredContentMapperExtensions = builtIn, builtInExtensions
++	}
+ 	baseFS := store.fs
+ 	if change.fs != nil {
+ 		baseFS = change.fs
+diff --git a/internal/spanmap/spanmap.go b/internal/spanmap/spanmap.go
+index 465fa24..b9932ad 100644
+--- a/internal/spanmap/spanmap.go
++++ b/internal/spanmap/spanmap.go
+@@ -129,6 +129,9 @@ type MappedSpan struct {
+ type SpanMap struct {
+ 	segments []Segment
+ 
++	// rtsx: SetLeadingStatementStarts. Sorted.
++	leadingStatementStarts []core.TextPos
++
+ 	// origOnce guards lazy construction of the interval index used for original-to-virtual lookups.
+ 	origOnce      sync.Once
+ 	originalIndex *originalIndex
+@@ -314,7 +317,7 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
+ 	if m == nil {
+ 		return pos, FidelityExact
+ 	}
+-	idx, in := m.segmentIndexAt(pos)
++	idx, in := m.positionSegmentAt(pos)
+ 	if !in {
+ 		return m.insertionPoint(idx), FidelityNone
+ 	}
+@@ -322,9 +325,48 @@ func (m *SpanMap) VirtualToOriginalPosition(pos core.TextPos) (core.TextPos, Fid
+ 	if seg.Kind == KindVerbatim {
+ 		return clamp(seg.OriginalStart+(pos-seg.VirtualStart), seg.OriginalStart, seg.OriginalEnd), FidelityExact
+ 	}
++	if _, starts := slices.BinarySearch(m.leadingStatementStarts, pos); starts && m.beforeOriginalText(idx) {
++		return 0, FidelityExact
++	}
+ 	return seg.OriginalStart, FidelityAtom
+ }
+ 
++// SetLeadingStatementStarts names the virtual offsets, in generated text that precedes the whole
++// original text, where a statement starts or the text after the last one begins. (rtsx: an import
++// the mapper generates in a file that has none. A position at one of these — where an edit inserts
++// the file's first import of its own, before or after the generated one — is the start of the
++// original text, exactly. Any other position in that text is the generated statement's own — an
++// edit there, a name added to the generated import, has nowhere to go — and a range, a
++// diagnostic's, maps to the segment's origin as ever.)
++func (m *SpanMap) SetLeadingStatementStarts(starts []core.TextPos) {
++	m.leadingStatementStarts = slices.Sorted(slices.Values(starts))
++}
++
++// beforeOriginalText reports whether segment idx is generated text that precedes the whole original
++// text: no verbatim segment before it, and the first one starts at original offset 0.
++func (m *SpanMap) beforeOriginalText(idx int) bool {
++	for i, s := range m.segments {
++		if s.Kind == KindVerbatim {
++			return idx < i && s.OriginalStart == 0
++		}
++	}
++	return false
++}
++
++// positionSegmentAt is segmentIndexAt for a position, as opposed to a range boundary: a position at
++// the end of verbatim text belongs to that text when what follows is not verbatim. (rtsx: a cursor
++// after an identifier being typed — `{getSta|}` — is the identifier's end, though generated text
++// starts there; without this, completion there has no exact position to write back to.)
++func (m *SpanMap) positionSegmentAt(pos core.TextPos) (int, bool) {
++	idx, in := m.segmentIndexAt(pos)
++	if in && idx > 0 && m.segments[idx].Kind != KindVerbatim && m.segments[idx].VirtualStart == pos {
++		if previous := m.segments[idx-1]; previous.Kind == KindVerbatim && previous.VirtualEnd == pos {
++			return idx - 1, true
++		}
++	}
++	return idx, in
++}
++
+ // VirtualToOriginalPositionExact maps a position only when it is unambiguously in verbatim content.
+ // A boundary touching an atom is rejected because the same virtual position can describe either side.
+ func (m *SpanMap) VirtualToOriginalPositionExact(pos core.TextPos) (core.TextPos, bool) {
+@@ -352,7 +394,7 @@ func (m *SpanMap) VirtualToOriginalPositionForFeature(pos core.TextPos, feature
+ 	if m == nil {
+ 		return mapped, fidelity
+ 	}
+-	index, inside := m.segmentIndexAt(pos)
++	index, inside := m.positionSegmentAt(pos) // rtsx
+ 	if !inside || !supportsFeature(m.segments[index], feature) {
+ 		return mapped, FidelityNone
+ 	}
+diff --git a/internal/tsoptions/tsconfigparsing.go b/internal/tsoptions/tsconfigparsing.go
+index 8f50493..c999a99 100644
+--- a/internal/tsoptions/tsconfigparsing.go
++++ b/internal/tsoptions/tsconfigparsing.go
+@@ -1427,7 +1427,10 @@ func parseJsonConfigFileContentWorker(
+ 		}
+ 		mapper.Definition.Extensions = validExtensions
+ 	}
+-	if len(contentMappers) > 0 && !(parsedConfig.options != nil && parsedConfig.options.RunExternalCode.IsTrue()) {
++	if builtIn, builtInExtensions := contentmapper.BuiltInMappers(); builtIn != nil {
++		// rtsx: the built-in mapper serves every project; configured mappers are ignored.
++		contentMappers, contentMapperExtensions = builtIn, builtInExtensions
++	} else if len(contentMappers) > 0 && !(parsedConfig.options != nil && parsedConfig.options.RunExternalCode.IsTrue()) {
+ 		errors = append(errors, setContentMapperDiagnosticLocation(ast.NewCompilerDiagnostic(diagnostics.Content_mappers_require_the_runExternalCode_command_line_flag_to_be_enabled), contentMapperSourceFile, getContentMappersKeySyntax(contentMapperSourceFile)))
+ 		// Without the flag the mappers are not trusted to run, so drop them entirely: their extensions are
+ 		// not registered and their files are not intercepted (they are treated as unknown foreign files).
+diff --git a/rtsx/mapper.go b/rtsx/mapper.go
+new file mode 100644
+index 0000000..c72d431
+--- /dev/null
++++ b/rtsx/mapper.go
+@@ -0,0 +1,122 @@
++package rtsx
++
++import (
++	"strings"
++
++	"github.com/microsoft/TypeScript/tsc/internal/contentmapper"
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/vfs"
++	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
++)
++
++// Mapper is a content mapper that runs in this process (specs/phase01/ide.md,
++// *The engine*): once registered, files with Extension are modules of every
++// program — the CLI's and the language server's, with or without a tsconfig —
++// under their own names, checked through their virtual text.
++type Mapper struct {
++	Name, Version string
++	Extension     string
++	// Transform turns a file into virtual TSX and its span map. It must not
++	// fail on user errors.
++	Transform func(MapperRequest) MapperResult
++	// Depends lists the paths whose existence the transform of a file
++	// depends on; the answer is part of the file's cache key, and the probes
++	// are what rebuild a program when one of them is created or deleted.
++	Depends func(MapperRequest) []string
++}
++
++// MapperRequest is a file to transform, and the file system around it: the
++// server's, with unsaved buffers.
++type MapperRequest struct {
++	FileName   string
++	Content    string
++	FileExists func(path string) bool
++	ReadFile   func(path string) (string, bool)
++}
++
++// MapperResult is the virtual TSX of a file, its span-map tuples
++// ([virtualStart, virtualLength, originalStart, originalLength, kind,
++// features], byte offsets, covering Text), and anything that should travel
++// with the parsed file (MappedFile).
++type MapperResult struct {
++	Text  string
++	Spans [][6]int32
++	// StatementStarts are the offsets in Text, within generated text that
++	// precedes the whole source, where a statement starts or the text after
++	// the last one begins. An edit that inserts a statement at one of them
++	// (the file's first import of its own, next to a generated one) is
++	// written at the start of the source; any other edit in generated text
++	// is dropped.
++	StatementStarts []int32
++	Extra           any
++}
++
++// RegisterMapper installs m for the process; call it before any program is
++// built. nil removes it.
++func RegisterMapper(m *Mapper) {
++	if m == nil {
++		contentmapper.RegisterBuiltIn(nil)
++		return
++	}
++	request := func(r contentmapper.BuiltInRequest) MapperRequest {
++		fs := r.FS
++		if fs == nil {
++			fs = osvfs.FS()
++		}
++		return MapperRequest{FileName: r.FileName, Content: r.Content, FileExists: fs.FileExists, ReadFile: fs.ReadFile}
++	}
++	contentmapper.RegisterBuiltIn(&contentmapper.BuiltIn{
++		Name:       m.Name,
++		Version:    m.Version,
++		Extensions: []string{m.Extension},
++		Transform: func(r contentmapper.BuiltInRequest) contentmapper.Result {
++			result := m.Transform(request(r))
++			mappings := NewSpanMap(result.Spans)
++			starts := make([]core.TextPos, len(result.StatementStarts))
++			for i, start := range result.StatementStarts {
++				starts[i] = core.TextPos(start)
++			}
++			mappings.SetLeadingStatementStarts(starts)
++			return contentmapper.Result{
++				Text:             result.Text,
++				VirtualExtension: ".tsx",
++				Mappings:         mappings,
++				Extra:            result.Extra,
++				Module:           true,
++			}
++		},
++		FileIdentity: func(r contentmapper.BuiltInRequest) string {
++			if m.Depends == nil {
++				return ""
++			}
++			req := request(r)
++			var bits strings.Builder
++			for _, path := range m.Depends(req) {
++				if req.FileExists(path) {
++					bits.WriteByte('1')
++				} else {
++					bits.WriteByte('0')
++				}
++			}
++			return bits.String()
++		},
++	})
++}
++
++// builtInProject is the mapper project a CLI compiler host needs, or nil
++// when no mapper is registered.
++func builtInProject(fs vfs.FS) contentmapper.Project {
++	if mappers, _ := contentmapper.BuiltInMappers(); mappers == nil {
++		return nil
++	}
++	return contentmapper.NewBuiltInProject(fs)
++}
++
++// MappedFile returns, for a content-mapped source file, its source text, its
++// span map and what its transform attached; ok is false for any other file.
++func MappedFile(file *SourceFile) (source string, spans *SpanMap, extra any, ok bool) {
++	if file == nil || file.SpanMap() == nil {
++		return "", nil, nil, false
++	}
++	return file.OriginalText(), file.SpanMap(), file.ContentMapperExtra(), true
++}
+diff --git a/rtsx/spanmap.go b/rtsx/spanmap.go
+new file mode 100644
+index 0000000..029d7b2
+--- /dev/null
++++ b/rtsx/spanmap.go
+@@ -0,0 +1,62 @@
++package rtsx
++
++import (
++	"github.com/microsoft/TypeScript/tsc/internal/core"
++	"github.com/microsoft/TypeScript/tsc/internal/spanmap"
++)
++
++// SpanMap maps a mapped file's virtual text back to its source: the content
++// mapper's position model (specs/phase01/ide.md, *Span map*).
++type SpanMap = spanmap.SpanMap
++
++// Feature bits and segment kinds of the span map; our emit package mirrors
++// them as plain integers.
++const (
++	SpanFeatureHover      = int32(spanmap.FeatureHover)
++	SpanFeatureCompletion = int32(spanmap.FeatureCompletion)
++	SpanFeatureRename     = int32(spanmap.FeatureRename)
++	SpanFeatureFormatting = int32(spanmap.FeatureFormatting)
++	SpanFeatureCodeLens   = int32(spanmap.FeatureCodeLens)
++	SpanFeatureAll        = int32(spanmap.FeatureAll)
++	SpanKindVerbatim      = int32(spanmap.KindVerbatim)
++	SpanKindAtom          = int32(spanmap.KindAtom)
++)
++
++// NewSpanMap builds a span map from tuples [virtualStart, virtualLength,
++// originalStart, originalLength, kind, features], in byte offsets.
++func NewSpanMap(tuples [][6]int32) *SpanMap {
++	segments := make([]spanmap.Segment, len(tuples))
++	for i, t := range tuples {
++		segments[i] = spanmap.Segment{
++			VirtualStart:  core.TextPos(t[0]),
++			VirtualEnd:    core.TextPos(t[0] + t[1]),
++			OriginalStart: core.TextPos(t[2]),
++			OriginalEnd:   core.TextPos(t[2] + t[3]),
++			Kind:          spanmap.Kind(t[4]),
++			Features:      spanmap.Feature(t[5]),
++		}
++	}
++	return spanmap.New(segments)
++}
++
++// ValidateSpanMap checks m against the virtual and the original text as the
++// compiler does before it accepts a mapper's result.
++func ValidateSpanMap(m *SpanMap, virtual, original string) error {
++	if problem := m.Validate(virtual, original); problem != nil {
++		return problem
++	}
++	return nil
++}
++
++// SpanSource maps a virtual range to the original; exact reports whether it
++// lies in one verbatim segment.
++func SpanSource(m *SpanMap, pos, end int) (srcPos, srcEnd int, exact bool) {
++	r, fidelity := m.VirtualToOriginalSpan(core.NewTextRange(pos, end))
++	return r.Pos(), r.End(), fidelity.IsExact()
++}
++
++// SpanProjections counts the virtual positions that answer feature for an
++// original position.
++func SpanProjections(m *SpanMap, pos int, feature int32) int {
++	return len(m.OriginalToVirtualPositions(core.TextPos(pos), spanmap.Feature(feature)))
++}

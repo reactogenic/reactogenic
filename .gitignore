@@ -8,3 +8,6 @@ coverage/
 
 # copied from the root by scripts/release.sh
 packages/*/LICENSE
+
+# VS Code downloaded by the editor suite (packages/vscode, pnpm test:editor)
+.vscode-test/

@@ -89,7 +89,8 @@ emit type-directed; they are gone.)
 
 ## Runtime
 
-All packages are scoped to the `@reactogenic` npm org. Phase 1 ships:
+All npm packages are scoped to the `@reactogenic` npm org (the VS Code
+extension, `packages/vscode`, is not one: ide.md). Phase 1 ships:
 
 | Package | Contents |
 | --- | --- |
@@ -114,6 +115,4 @@ All packages are scoped to the `@reactogenic` npm org. Phase 1 ships:
 
 - Type-checking inside the dev server. Vite does not type-check `.tsx`
   either; `reactogenic check` does.
-- Editor support (completion, hover, errors as you type) — see
-  [../later/tooling.md](../later/tooling.md). Until then, `.rtsx` errors come
-  from Vite and from `reactogenic check`.
+- (Editor support is specified in [ide.md](ide.md).)

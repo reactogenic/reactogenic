@@ -1,0 +1,7 @@
+src/main.tsx(2,14): error TS2322: Type 'Element' is not assignable to type 'string'.
+src/page.rtsx(4,35): error TS2322: Type 'string' is not assignable to type 'number'.
+  src/button.rtsx:1:36 - The expected type comes from property 'size' which is declared here on type '{ size: number; }'
+src/page.rtsx(4,53): error TS2322: Type 'string' is not assignable to type 'number'.
+  src/button.rtsx:1:36 - The expected type comes from property 'size' which is declared here on type '{ size: number; }'
+src/page.rtsx(4,74): error TS2322: Type 'string' is not assignable to type 'number'.
+  src/button.rtsx:1:36 - The expected type comes from property 'size' which is declared here on type '{ size: number; }'

@@ -1,9 +1,9 @@
 diff --git a/rtsx/program.go b/rtsx/program.go
 new file mode 100644
-index 0000000..342b134
+index 0000000..e2ba83d
 --- /dev/null
 +++ b/rtsx/program.go
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,221 @@
 +// Reactogenic's bridge to tsgo's program, file system and checker.
 +// Not part of upstream: added by go/patches/0003-rtsx-program.patch.
 +// Keep it thin — aliases and short wrappers only.
@@ -12,6 +12,7 @@ index 0000000..342b134
 +
 +import (
 +	"context"
++	"slices"
 +
 +	"github.com/microsoft/TypeScript/tsc/internal/ast"
 +	"github.com/microsoft/TypeScript/tsc/internal/astnav"
@@ -22,16 +23,13 @@ index 0000000..342b134
 +	"github.com/microsoft/TypeScript/tsc/internal/tsoptions"
 +	"github.com/microsoft/TypeScript/tsc/internal/vfs"
 +	"github.com/microsoft/TypeScript/tsc/internal/vfs/osvfs"
-+	"github.com/microsoft/TypeScript/tsc/internal/vfs/wrapvfs"
 +)
 +
 +type (
-+	FS             = vfs.FS
-+	FSEntries      = vfs.Entries
-+	FSReplacements = wrapvfs.Replacements
-+	Program        = compiler.Program
-+	Checker        = checker.Checker
-+	Type           = checker.Type
++	FS      = vfs.FS
++	Program = compiler.Program
++	Checker = checker.Checker
++	Type    = checker.Type
 +)
 +
 +// OSFS is the real file system.
@@ -39,35 +37,109 @@ index 0000000..342b134
 +	return osvfs.FS()
 +}
 +
-+// WrapFS overrides some methods of fs; nil replacements fall through.
-+func WrapFS(fs FS, r FSReplacements) FS {
-+	return wrapvfs.Wrap(fs, r)
++// Project is a tsconfig that has been read, before its program is built.
++type Project struct {
++	host   compiler.CompilerHost
++	config *tsoptions.ParsedCommandLine
 +}
 +
-+// NewProgram reads the tsconfig at configPath through fs and builds its
-+// program, with TypeScript's lib files bundled. It also returns the config's
-+// parsing diagnostics; the program is nil when the config cannot be read.
-+func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
-+	host := compiler.NewCompilerHost(cwd, bundled.WrapFS(fs), bundled.LibPath(), nil, nil, nil)
++// LoadProject reads the tsconfig at configPath through fs, with TypeScript's
++// lib files bundled. It also returns the config's parsing diagnostics; the
++// project is nil when the config cannot be read.
++func LoadProject(configPath, cwd string, fs FS) (*Project, []*Diagnostic) {
++	wrapped := bundled.WrapFS(fs)
++	host := compiler.NewCompilerHost(cwd, wrapped, bundled.LibPath(), nil, nil, builtInProject(wrapped))
 +	config, diags := tsoptions.GetParsedCommandLineOfConfigFile(configPath, nil, nil, host, nil)
 +	if config == nil {
 +		return nil, diags
 +	}
-+	program := compiler.NewProgram(compiler.ProgramOptions{Host: host, Config: config})
-+	return program, diags
++	return &Project{host: host, config: config}, diags
 +}
 +
-+// AllDiagnostics returns what `tsc --noEmit` reports for p, sorted:
-+// config, syntactic, program, bind, global and semantic diagnostics.
++// Files are the files the tsconfig lists — its `files`, and what its
++// `include` matches: the project's own, as against those its program only
++// reaches through an import.
++func (c *Project) Files() []string {
++	return c.config.FileNames()
++}
++
++// References are the tsconfig paths of the projects the tsconfig references.
++func (c *Project) References() []string {
++	return c.config.ResolvedProjectReferencePaths()
++}
++
++// Program builds the project's program.
++//
++// A module of a referenced project is read from its source, as the language
++// server reads it, not from the output a build would have left: a
++// content-mapped file has no output to leave, and the two would disagree.
++func (c *Project) Program() *Program {
++	return compiler.NewProgram(compiler.ProgramOptions{Host: c.host, Config: c.config, UseSourceOfProjectReference: true})
++}
++
++// NewProgram is LoadProject and Program: the program of the tsconfig at
++// configPath, nil when the config cannot be read.
++func NewProgram(configPath, cwd string, fs FS) (*Program, []*Diagnostic) {
++	project, diags := LoadProject(configPath, cwd, fs)
++	if project == nil {
++		return nil, diags
++	}
++	return project.Program(), diags
++}
++
++// AllDiagnostics returns what `tsc --noEmit` reports for p, sorted: config,
++// syntactic, program, global, semantic and — of a project that emits
++// declarations — declaration diagnostics, the later ones only while the
++// earlier are none — the steps of compiler.GetDiagnosticsOfAnyProgram.
++//
++// But for one: the syntactic diagnostics of a content-mapped file are left
++// out, and stop nothing. They are about its virtual text; the syntax errors
++// of the source are its mapper's to report (specs/phase01/ide.md,
++// *Tolerance*).
 +func AllDiagnostics(p *Program) []*Diagnostic {
 +	ctx := context.Background()
-+	return compiler.SortAndDeduplicateDiagnostics(
-+		compiler.GetDiagnosticsOfAnyProgram(ctx, p, nil, false, p.GetBindDiagnostics, p.GetSemanticDiagnostics))
++	all := slices.Clip(p.GetConfigFileParsingDiagnostics())
++	config := len(all)
++	for _, d := range p.GetSyntacticDiagnostics(ctx, nil) {
++		if d.File() == nil || d.File().SpanMap() == nil {
++			all = append(all, d)
++		}
++	}
++	if len(all) == config {
++		all = append(all, p.GetProgramDiagnostics()...)
++		p.GetBindDiagnostics(ctx, nil)
++		all = append(all, p.GetGlobalDiagnostics(ctx)...)
++		if len(all) == config {
++			all = append(all, p.GetSemanticDiagnostics(ctx, nil)...)
++			// The globals found while checking.
++			all = append(all, p.GetGlobalDiagnostics(ctx)...)
++		}
++		// Nothing is emitted here, whatever `noEmit` says: the errors an emit
++		// would report are reported now (GetDiagnosticsOfAnyProgram's
++		// skipNoEmitCheckForDtsDiagnostics), as FileDiagnostics reports them.
++		if p.Options().GetEmitDeclarations() && len(all) == config {
++			all = append(all, p.GetDeclarationDiagnostics(ctx, nil)...)
++		}
++	}
++	return compiler.SortAndDeduplicateDiagnostics(all)
 +}
 +
-+// GetChecker returns p's checker and the func that releases it.
-+func GetChecker(p *Program) (*Checker, func()) {
-+	return p.GetTypeChecker(context.Background())
++// FileDiagnostics returns what the language server reports for one file of
++// p: its syntactic, semantic (declaration diagnostics included, when
++// declarations are emitted) and suggestion diagnostics.
++func FileDiagnostics(ctx context.Context, p *Program, file *SourceFile) (syntactic, semantic, suggestion []*Diagnostic) {
++	syntactic = p.GetSyntacticDiagnostics(ctx, file)
++	semantic = p.GetSemanticDiagnostics(ctx, file)
++	if p.Options().GetEmitDeclarations() {
++		semantic = append(slices.Clip(semantic), p.GetDeclarationDiagnostics(ctx, file)...)
++	}
++	return syntactic, semantic, p.GetSuggestionDiagnostics(ctx, file)
++}
++
++// GetChecker returns the checker p checks file with, and the func that
++// releases it.
++func GetChecker(ctx context.Context, p *Program, file *SourceFile) (*Checker, func()) {
++	return p.GetTypeCheckerForFile(ctx, file)
 +}
 +
 +// TokenAt is the token at pos in file.
@@ -100,6 +172,52 @@ index 0000000..342b134
 +		}
 +	}
 +	return decl, false, false
++}
++
++// Prop is a prop that a JSX element, or the value of a slot, takes.
++type Prop struct {
++	Name     string
++	Optional bool
++	Type     string // as the checker prints it
++}
++
++// PropsAt are the props of what the name at pos of file names: the tag of a
++// JSX element — the props of its component — or the name of a JSX attribute
++// or of an object's property — the properties of the value expected there
++// (of every member of a union: a slot is its value or NOT_ASSIGNED). nil for
++// any other name, and for one whose type is unknown.
++func PropsAt(c *Checker, file *SourceFile, pos int) []Prop {
++	node := astnav.GetTouchingPropertyName(file, pos)
++	if node == nil || node.Parent == nil {
++		return nil
++	}
++	var expected *checker.Type
++	tag := node
++	for ast.IsPropertyAccessExpression(tag.Parent) { // the `Kit` of `<Kit.Panel>`
++		tag = tag.Parent
++	}
++	switch parent := node.Parent; {
++	case ast.IsJsxOpeningLikeElement(tag.Parent) && tag.Parent.TagName() == tag:
++		expected = c.GetContextualType(tag.Parent.Attributes(), checker.ContextFlagsNone)
++	case ast.IsJsxAttribute(parent) && parent.Name() == node:
++		if init := parent.Initializer(); init != nil && ast.IsJsxExpression(init) && init.Expression() != nil {
++			expected = c.GetContextualType(init.Expression(), checker.ContextFlagsNone)
++		}
++	case ast.IsPropertyAssignment(parent) && parent.Name() == node:
++		expected = c.GetContextualType(parent.Initializer(), checker.ContextFlagsNone)
++	}
++	if expected == nil {
++		return nil
++	}
++	types := []*checker.Type{expected}
++	if expected.IsUnion() {
++		types = expected.Types()
++	}
++	var props []Prop
++	for _, symbol := range c.GetAllPossiblePropertiesOfTypes(types) {
++		props = append(props, Prop{Name: symbol.Name, Optional: symbol.Flags&ast.SymbolFlagsOptional != 0, Type: c.TypeToString(c.GetTypeOfSymbol(symbol))})
++	}
++	return props
 +}
 +
 +// IsError reports whether a diagnostic is an error, not a warning or a

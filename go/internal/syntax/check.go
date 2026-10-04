@@ -61,7 +61,8 @@ func checkElement(file *rtsx.SourceFile, element *rtsx.Node) []Error {
 		if _, ok := SlotParams(attr); ok {
 			params++
 			switch {
-			case rtsx.IsIntrinsicTag(tag):
+			// A `$` tag is a slot whatever follows the `$`: `<$sub-item { size }>`.
+			case rtsx.IsIntrinsicTag(tag) && !(tag.Kind == rtsx.KindIdentifier && strings.HasPrefix(rtsx.NodeText(tag), "$")):
 				report(attr, "params-on-html", "Params are only allowed on components and slot elements")
 			case params > 1:
 				report(attr, "duplicate-params", "An element takes one params pattern")

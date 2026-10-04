@@ -1,0 +1,2 @@
+src/a.rtsx(1,24): error orphan-slot: Slot must be immediate child of the component
+tsconfig.json(1,215): error TS6053: File '<root>/gone' not found.
