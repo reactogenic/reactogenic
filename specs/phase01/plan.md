@@ -1619,9 +1619,12 @@ binaries, darwin-arm64's started; the editor suite against that `.vsix`
 *Left*: the npm version is still 0.1.0-alpha.0 — the bump needs the
 platform packages on the registry before the lockfile can name them, so it
 is the first step of the release (`release.sh`, the order in its header).
-The `package` workflow has not run (nothing is pushed): the five other
-binaries were never started. The last two lines of *Done when* need the
-published alpha. (The icon, `packages/vscode/icon.png`, 256×256, is the
+The last two lines of *Done when* need the published alpha.
+*In CI* (PR #2): the `package` workflow built the seven and each of the six
+binaries answered `initialize` on a runner of its platform — Windows x64 and
+arm64 included, their first start anywhere; the editor suite passed on Linux
+under `xvfb`. (First run: the two Windows jobs failed in the check itself —
+Git Bash's `tar` is GNU tar; it now calls Windows' own by its path.) (The icon, `packages/vscode/icon.png`, 256×256, is the
 owner's.)
 - getting-started (*Editor*), README, a changelog line for the `check`
   changes (moved columns, merged duplicates, project references).
