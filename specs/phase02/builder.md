@@ -52,6 +52,21 @@ program's (`file.Text()` — the emitted TSX for an `.rtsx` module): what is
 built is what was checked. esbuild resolves only what the program does not
 hold (assets, behaviour modules).
 
+| An import made by a program file | Resolved by |
+| --- | --- |
+| the program resolved it to a module with code (`./layout` → `layout.rtsx`, a `paths` alias, a workspace package's `.ts`) | the program |
+| the program resolved it to declarations (`react` → `@types/react/index.d.ts`) | esbuild: the package's JavaScript, from the importing file |
+| `*.css` | nobody, in the render bundle: an empty module (*CSS*) |
+| anything else (`./logo.svg`) | esbuild; no loader is render-bundle (below) |
+
+esbuild reads no `tsconfig.json`: the JSX settings are the builder's, and a
+program file is compiled with esbuild's defaults for the rest
+(*Not in phase 2*).
+
+| Code | Condition |
+| --- | --- |
+| render-bundle | the render bundle cannot be made: an import that esbuild cannot resolve or load, at the import in the `.rtsx`; no `react-dom` in the project. No page is rendered |
+
 **No `text/template`, `html/template` or reflection-heavy package in the
 binary**: one `template.Execute` costs 18.6 MB (research.md). HTML is written
 as strings.
@@ -75,11 +90,11 @@ pages/reference/cli/index.rtsx   /reference/cli/
 - No route table file in phase 2: the table is derived, and still gives the
   check (*Checks*: link-not-found).
 
-| Code | Condition |
-| --- | --- |
-| page-no-default | `index.rtsx` has no default export that is a component |
-| page-not-document | the page's root element is not `<html>` |
-| pages-not-found | `--pages` is not a directory, or holds no page |
+| Code | Condition | Reported at |
+| --- | --- | --- |
+| page-no-default | `index.rtsx` has no default export that is a component: the module's `default` is not a function | the file |
+| page-not-document | the page's root element is not `<html>`: what it rendered does not start with `<html` | the page's `export default` |
+| pages-not-found | `--pages` is not a directory, or holds no page | |
 
 ## Shell code in phase 2
 
@@ -104,14 +119,32 @@ forbidding it is a fake constraint.
 | Code | Message | How it is found |
 | --- | --- | --- |
 | shell-handler | The shell cannot handle events: `onClick` on `<button>` | a function-valued prop on a host element, when the element is created |
-| shell-react | The shell cannot use React state or effects: `useState` | an import of `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useInsertionEffect`, `useRef`, `useImperativeHandle`, `useSyncExternalStore`, `useTransition`, `useDeferredValue`, `useOptimistic`, `useActionState` from `react` in a module a page reaches; reported at the import |
-| shell-nondeterministic | `Date.now()` makes the shell irreproducible | `Date.now`, `new Date()` without arguments, `Math.random`, `crypto.getRandomValues`, `performance.now` throw in the engine |
-| shell-error | the message of the exception | anything else thrown while a page renders |
+| shell-react | The shell cannot use React state or effects: `useState` | an import of `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useInsertionEffect`, `useRef`, `useImperativeHandle`, `useSyncExternalStore`, `useTransition`, `useDeferredValue`, `useOptimistic`, `useActionState` from `react` in a module a page reaches; reported at the import — the name in `import { useState }`, or in `React.useState` when `react` is imported whole. Found in the text: nothing runs for it, and the page still renders |
+| shell-nondeterministic | `Date.now()` makes the shell irreproducible | `Date.now`, `new Date()` without arguments, `Date()`, `Math.random`, `crypto.getRandomValues`, `crypto.randomUUID`, `performance.now` throw in the engine. `new Date(2026, 9, 4)` is a compile-time value |
+| shell-error | the message of the exception, after its name when it is not a plain `Error`: `TypeError: cannot read property 'map' of undefined` | anything else thrown while a page renders. Among it, what the engine itself ends: `InternalError: stack overflow` (a call depth of 10 000), and a page that does not finish in 30 s — *Rendering did not end in 30s: a loop without an end?* |
+| shell-console (warning) | `console.log: ` and what was printed | `console` is collected: nobody reads the console of a build. At the call |
 
-Every one is reported at the `.rtsx` (or `.tsx`) position, through the render
-bundle's source map and the file's span map, with the component stack as
-related lines. `build` reports them; `check` and the editor do not yet
+Every one is reported at the `.rtsx` (or `.tsx`, `.ts`) position, through the
+render bundle's source map and the file's span map, with the component stack
+as related lines. `build` reports them; `check` and the editor do not yet
 (*Not in phase 2*).
+
+```
+pages/pricing/index.rtsx(8,15): error shell-error: no price for enterprise
+  pages/pricing/index.rtsx:17:24 - in Price
+  pages/pricing/index.rtsx:16:7 - in Each
+  pages/pricing/index.rtsx:26:7 - in Plans
+  pages/pricing/index.rtsx:23:1 - in PricingPage
+```
+
+| | Where |
+| --- | --- |
+| the position | the innermost frame of the exception's stack that is in the project's code — not React's, not a package's: the helper that read the clock, not the component that called it. Columns count characters, as in `check` |
+| shell-handler | narrowed to the attribute: `onClick` of `<button onClick={…}>`. A function that arrives through a spread (`<input {...props} />`): the element |
+| the component stack | the **owners**, as React's own stacks have them: each component at the place its element was written, the page last, at its `export default` |
+| an exception of React's own (an object as a child) | no frame is the project's: the element of the component called last, its line reading `after Coordinates`. React's production build words it as an error number and a link |
+| a module's top level | what a module throws or prints while it loads is no page's: reported once, and no page is rendered |
+| an error that several pages share (a layout's) | reported once |
 
 ### What shell code can ask the builder
 
@@ -149,6 +182,16 @@ bundle only): it wraps `react/jsx-runtime`, counts function components by
 name, and raises shell-handler. Type checking is untouched — it still sees
 React's JSX types.
 
+- A component is counted when React **calls** it: an element that is made
+  and never rendered (an unused fallback, a slot nobody attaches) is not in
+  the record.
+- By name: `function Page` of two modules is one entry. Classes, `memo` and
+  `forwardRef` components, and elements made by `React.createElement` by
+  hand are rendered and not counted.
+- What React adds is the page's too — the HTML is React's, to the byte: an
+  empty `<head>` when the page has none, `<link rel="preload" as="image">`
+  for an `<img srcSet>`, a `<meta>` written in the body moved into the head.
+
 ## Checks on the page
 
 On the parsed HTML of each page. Things only something that sees the whole
@@ -168,8 +211,9 @@ provenance the renderer does not carry (*Not in phase 2*).
 ## CSS
 
 **Authoring.** Plain `.css`, imported by the module that needs it
-(`import "./dialog.css"`). esbuild bundles a page's CSS in import order,
-lowers nesting and minifies. The design system's convention
+(`import "./dialog.css"`). TypeScript 7 checks side-effect imports: a project
+declares the module once (`declare module "*.css";`), or `check` says TS2882.
+esbuild bundles a page's CSS in import order, lowers nesting and minifies. The design system's convention
 ([components.md](components.md), *CSS convention*) is what makes pruning
 exact rather than heuristic.
 
@@ -306,4 +350,6 @@ The difference between the two builds is what component awareness is worth
 | `.rtsx` positions for the page checks | needs attribute provenance through the renderer |
 | Markdown, highlighted code samples | a second front end; samples are plain `<pre>` |
 | source maps for the emitted JS | |
+| the tsconfig's emit options in the render bundle | esbuild compiles a program file with its own defaults for `useDefineForClassFields`, `experimentalDecorators` and the like: shell code is function components |
+| `async` components, `use()`, Suspense | the renderer is synchronous; the engine has no timers |
 | asset pipeline (images, fonts), `public/` | a `public` directory next to `pages` is copied as is; nothing is processed |

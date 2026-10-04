@@ -50,7 +50,14 @@ type Page struct {
 	Mounts     []Mount        // in render order, duplicates kept
 	Components map[string]int // function components rendered, by name
 }
+type Options struct {
+	Dir     string        // the project's directory: react and react-dom are resolved from it; "": the program's
+	Timeout time.Duration // of one page; 0: 30 s
+}
 func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []report.Report)
+// Pages: those that rendered, in the order of routes. Reports: errors (the caller
+// stops on one) and warnings (shell-console). Mount.Flags holds what the use site
+// passed, `false` included; nil when it passed none.
 
 // cssprune — RGP2-020
 func Prune(css string, doc *html.Node) (out string, stats Stats, err error)
@@ -78,7 +85,15 @@ and `pathname()`, `useShellId()`, `mount()` of `@reactogenic/core` use it when
 it is there (builder.md, *What shell code can ask the builder*). Its absence
 means React: `location.pathname`, `React.useId()`, nothing.
 
-### RGP2-010 — The render bundle · M
+- `id(prefix)` is the prefix and a counter per prefix, per page, from 1:
+  `d1`, `d2`, `m1`. No prefix (`""`, `undefined`): `r`.
+- It is there only while a page renders: not while a module loads.
+- The render bundle's own globals: `__reactogenic_render(pathname)` returns
+  `{ html, mounts, components }` or throws; `__reactogenic_render_json` is
+  the same as JSON, for the engine; `__reactogenic_console()` hands over what
+  `console` collected.
+
+### RGP2-010 — The render bundle · M · done
 One esbuild build, in memory: a generated entry that imports every page and
 React's static renderer and exposes `render(pathname)`.
 - The plugin: `OnResolve` answers from the program for every import a program
@@ -96,8 +111,17 @@ React's static renderer and exposes `render(pathname)`.
   closure, before anything is executed.
 - **Done when:** the bundle of a three-page fixture loads in Node and renders
   the same HTML as `react-dom/server` there.
+- **Done:** `go/internal/build/render/bundle.go`. The renderer is the legacy
+  static build, reached by path in the project's react-dom
+  (`cjs/react-dom-server-legacy.browser.production.js`: not in its `exports`
+  — a React that moves it is a render-bundle error, not a wrong page). The
+  JSX is compiled with `jsxDev`: esbuild hands each element's position to the
+  runtime, which is how a component stack has positions; React's production
+  `jsx` does the work. The entry and the builder's two modules are virtual
+  (`reactogenic:entry`, `:sandbox`, `:jsx`). The pages' module closure is the
+  program files esbuild loaded.
 
-### RGP2-011 — Execution · L
+### RGP2-011 — Execution · L · done
 `modernc.org/quickjs`, one runtime per build: the sandbox prelude, the
 bundle, then `render(pathname)` per route.
 - The prelude makes `Date.now`, argument-less `new Date()`, `Math.random`,
@@ -117,6 +141,24 @@ bundle, then `render(pathname)` per route.
   three intrinsics render; each shell-* error is reported at its `.rtsx`
   line and column; the differential test passes.
 - Depends on: 010.
+- **Done:** `engine.go`, `position.go`, `js/`. Measured, darwin-arm64: the
+  four-page fixture is checked, bundled and rendered in ≈ 0.1 s.
+  - The differential test compares three renderings of every fixture page:
+    the engine; the same bundle in Node; and an oracle in Node — the same
+    pages with the public `react-dom/server` and React's own JSX runtime.
+    Equal to the byte, on Node 22 and 25. It needs `node` and the root's
+    `node_modules`: CI's `go` job installs them.
+  - **The engine's call depth has to be bounded by us** (10 000): with the
+    engine's default a function that recurses without end overflows the Go
+    stack, which is fatal to the process — no `recover`. Bounded, it is
+    shell-error at the call.
+  - The six targets, `CGO_ENABLED=0`, stripped, with the package linked
+    (`scripts/build-binaries.sh`): darwin-arm64 27.3 → 34.5 MB, darwin-x64
+    28.6 → 36.5, linux-arm64 26.4 → 33.7, linux-x64 27.9 → 35.9, win32-arm64
+    26.5 → 33.7, win32-x64 28.2 → 36.3 (+26–29%).
+  - Not verified: Windows paths (the six targets build; the tests ran on
+    macOS); React other than 19.3 — its static renderer reads no clock, so
+    the sandbox has no exemption for React's own code.
 
 ### RGP2-012 — `@reactogenic/core`: `pathname`, `useShellId`, `mount` · S
 In `packages/core`, with the protocol above and the React fallbacks; unit
