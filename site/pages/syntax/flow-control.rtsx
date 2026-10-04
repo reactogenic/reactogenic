@@ -1,0 +1,157 @@
+// The segment `#flow-control` of "/syntax/" (specs/phase01/syntax.md, *Flow
+// control: Switch and Match*).
+import { Each } from "@reactogenic/core";
+import { Code } from "../../code.rtsx";
+
+const IMPORT = `import { Match, Switch } from "@reactogenic/core";`;
+
+const MATCH_SOURCE = `<Match on={user}>
+  <Avatar src={user.avatarUrl} />   // user: User, not User | null
+</Match>`;
+
+const MATCH_EMITTED = `{user ? <Avatar src={user.avatarUrl} /> : null}`;
+
+const MATCH_PARAMS_SOURCE = `<Match on={getUser()} { value: user }>
+  <Avatar src={user.avatarUrl} />
+</Match>`;
+
+const MATCH_PARAMS_EMITTED = `{(({ value: user }) => user ? <Avatar src={user.avatarUrl} /> : null)({ value: getUser() })}`;
+
+const SWITCH_SOURCE = `// state: { status: "loading" } | { status: "error"; error: Error } | …
+<Switch on={state.status}>
+  <$Case is="loading"><Spinner /></$Case>
+  <$Case is="error"><ErrorText error={state.error} /></$Case>
+</Switch>`;
+
+const SWITCH_EMITTED = `{state.status === "loading" ? <Spinner />
+  : state.status === "error" ? <ErrorText error={state.error} />
+  : null}`;
+
+const EXHAUSTIVE_SOURCE = `// getStatus(): "loading" | "error" | "success"
+<Switch on={getStatus()} exhaustive>
+  <$Case is="loading">…</$Case>
+  <$Case is="error">…</$Case>
+</Switch>                          // Error: Missing "success"`;
+
+const EXHAUSTIVE_EMITTED = `import { noMatch as _noMatch } from "@reactogenic/core";
+
+{((_on) =>
+  _on === "loading" ? "…"
+  : _on === "error" ? "…"
+  : _noMatch(_on)                  // noMatch(value: never): never — throws
+)(getStatus())}`;
+
+const DYNAMIC_SOURCE = `<Switch on={getNumber()} { value: n }>
+  <$Case is={n % 15 === 0}>FizzBuzz</$Case>
+  <$Case is={n % 5 === 0}>Buzz</$Case>
+  <$Case is={n % 3 === 0}>Fizz</$Case>
+  <$Case default>{n}</$Case>
+</Switch>`;
+
+const DYNAMIC_EMITTED = `{(({ value: n }) =>
+  n % 15 === 0 ? "FizzBuzz"
+  : n % 5 === 0 ? "Buzz"
+  : n % 3 === 0 ? "Fizz"
+  : n
+)({ value: getNumber() })}`;
+
+const ATTRIBUTES = [
+  { attribute: "on={expr}", on: "Match, Switch", meaning: "the subject; evaluated once" },
+  { attribute: "{ value }", on: "Match", meaning: "hands the subject out" },
+  { attribute: "{ value }", on: "Switch", meaning: "hands the subject out, and makes every is a condition" },
+  { attribute: "exhaustive", on: "Switch", meaning: "the cases must cover the subject's type" },
+  { attribute: "is={expr}", on: "$Case", meaning: "a value compared with the subject by ===; with params on the Switch, a condition" },
+  { attribute: "default", on: "$Case", meaning: "the fallback; bare, and last" },
+  { attribute: "key", on: "$Case", meaning: "remounts on switching: the body is wrapped in a keyed fragment" },
+];
+
+export default function FlowControl() {
+  return (
+    <>
+      <h2>Flow control</h2>
+      <p>
+        JSX conditionals are expressions in braces: <code>{"&&"}</code> leaks <code>0</code> and <code>""</code>{" "}
+        into the output, nested ternaries are hard to read, and a choice between several has no markup form.{" "}
+        <code>Match</code> is an <code>if</code>; <code>Switch</code> with <code>$Case</code> is a{" "}
+        <code>switch</code>.
+      </p>
+      <Code>{IMPORT}</Code>
+      <p>
+        Neither exists at run time. The transpiler replaces them with conditional expressions, so a body that is
+        not chosen is never evaluated, and the emitted code drops their import. They are recognised by where they
+        are imported from, not by name.
+      </p>
+
+      <h3 id="match">Match</h3>
+      <Code label=".rtsx">{MATCH_SOURCE}</Code>
+      <Code label=".tsx">{MATCH_EMITTED}</Code>
+      <p>
+        A ternary, not <code>{"&&"}</code>: <code>{"<Match on={items.length}>"}</code> renders nothing for{" "}
+        <code>0</code>. The body is inline, so TypeScript narrows a reference used as the subject. A computed
+        subject has no reference to narrow; params hand its value out:
+      </p>
+      <Code label=".rtsx">{MATCH_PARAMS_SOURCE}</Code>
+      <Code label=".tsx">{MATCH_PARAMS_EMITTED}</Code>
+
+      <h3 id="switch">Switch</h3>
+      <p>
+        At most one <code>$Case</code> renders: the first that matches. No match and no <code>default</code>{" "}
+        renders nothing, like a JavaScript <code>switch</code>.
+      </p>
+      <Code label=".rtsx">{SWITCH_SOURCE}</Code>
+      <Code label=".tsx">{SWITCH_EMITTED}</Code>
+      <p>
+        When <code>on</code> is a reference — an identifier or a property access — it is repeated in each test, so
+        that it is narrowed inside each body: <code>state.error</code> above. Any other subject is evaluated once,
+        in an immediately-invoked arrow.
+      </p>
+      <p>
+        <code>exhaustive</code> makes a missing case a type error. The proof is TypeScript's own: after every
+        comparison the subject must have narrowed to <code>never</code>, and what is left over is the list of
+        missing cases. The throw stays in the output even when the proof succeeds — data can lie.
+      </p>
+      <Code label=".rtsx">{EXHAUSTIVE_SOURCE}</Code>
+      <Code label=".tsx">{EXHAUSTIVE_EMITTED}</Code>
+      <p>
+        With params, <code>is</code> is a condition over the value handed out. Such a <code>Switch</code> cannot be{" "}
+        <code>exhaustive</code>: arbitrary conditions cannot be proven.
+      </p>
+      <Code label=".rtsx">{DYNAMIC_SOURCE}</Code>
+      <Code label=".tsx">{DYNAMIC_EMITTED}</Code>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Attribute</th>
+            <th>On</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={ATTRIBUTES} { item: row, index }>
+            <tr key={index}>
+              <td><code>{row.attribute}</code></td>
+              <td><code>{row.on}</code></td>
+              <td>{row.meaning}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          Any other attribute on <code>Match</code>, <code>Switch</code> or <code>$Case</code> is{" "}
+          <code>flow-attribute</code>; any child of a <code>Switch</code> that is not a <code>$Case</code> is{" "}
+          <code>switch-children</code>.
+        </li>
+        <li>
+          <code>Match</code> and <code>Switch</code> exist only as elements: <code>const S = Switch</code> is{" "}
+          <code>flow-as-value</code>.
+        </li>
+        <li>
+          All branches of a <code>Switch</code> share one child position and get no keys, as a hand-written ternary
+          would: two cases that render the same component keep its state. Set <code>key</code> to remount.
+        </li>
+      </ul>
+    </>
+  );
+}

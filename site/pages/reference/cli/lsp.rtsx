@@ -1,0 +1,91 @@
+// The segment `#lsp` of "/reference/cli/" (specs/phase01/ide.md,
+// *reactogenic lsp*).
+import { Each } from "@reactogenic/core";
+import { Code } from "../../../code.rtsx";
+
+const USAGE = `reactogenic lsp --stdio [--clientProcessId pid]`;
+
+const FEATURES = [
+  { feature: "diagnostics", support: "the same as reactogenic check: same codes, same messages, same positions" },
+  { feature: "hover, signature help, completion, auto-import", support: "yes; slot names are completed too" },
+  { feature: "go to definition, type definition, implementation, references, highlights", support: "yes; on <$Icon> the slot's declaration, on #name the segment's file" },
+  { feature: "rename", support: "correct or refused: the server says why and changes nothing" },
+  { feature: "semantic tokens, inlay hints, call hierarchy", support: "yes" },
+  { feature: "document symbols, folding, selection ranges", support: "yes" },
+  { feature: "closing-tag insertion", support: "yes, $ tags included" },
+  { feature: "code actions", support: "quick fixes, when every edit maps back exactly" },
+  { feature: "organize imports", support: "only in a file where every import is the author's" },
+  { feature: "workspace symbols", support: "the symbols declared in .rtsx files" },
+  { feature: "file rename", support: "updates the imports of and in .rtsx modules" },
+  { feature: "formatting", support: "no: not advertised" },
+];
+
+const STATUS = [
+  { when: "exit after shutdown", status: "0" },
+  { when: "the input ends", status: "0" },
+  { when: "exit without shutdown", status: "1" },
+  { when: "input that is not LSP", status: "1, with the reason on stderr" },
+  { when: "the client's process is gone", status: "1" },
+  { when: "anything but --stdio", status: "2" },
+];
+
+export default function Lsp() {
+  return (
+    <>
+      <h2>lsp</h2>
+      <p>
+        A standard language server over stdin and stdout: TypeScript 7's own, with the <code>.rtsx</code> transform
+        built in. The VS Code extension starts it for you; any other client attaches it to <code>*.rtsx</code>{" "}
+        files.
+      </p>
+      <Code>{USAGE}</Code>
+      <ul>
+        <li>
+          Its capabilities are static — nothing is registered dynamically — so a client that declares no capability
+          at all is served.
+        </li>
+        <li>
+          <code>.ts</code> and <code>.tsx</code> files of the project are in its program, for types across the
+          boundary, but it is attached to <code>.rtsx</code> documents only. It reads them from disk: an unsaved{" "}
+          <code>.ts</code> edit reaches <code>.rtsx</code> files on save.
+        </li>
+        <li>
+          <code>--clientProcessId</code> names the editor's process where <code>initialize</code> does not: the
+          server ends when that process is gone.
+        </li>
+      </ul>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>In .rtsx</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={FEATURES} { item: row }>
+            <tr key={row.feature}>
+              <td>{row.feature}</td>
+              <td>{row.support}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th>The process ends on</th>
+            <th>Exit status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={STATUS} { item: row }>
+            <tr key={row.when}>
+              <td>{row.when}</td>
+              <td>{row.status}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+    </>
+  );
+}

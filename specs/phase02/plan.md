@@ -455,6 +455,36 @@ ship: `/guide/` and `/reference/cli/` need `overlays` alone, `/` adds
   would also turn its CSS pruning off (builder.md, *CSS*).
 - CI builds it (`reactogenic build`) and fails on any diagnostic.
 - Depends on: 025, 030.
+- **State:** the site is written, before `reactogenic build` exists on its
+  branch: `site/` — `layout.rtsx`, `code.rtsx` (a sample: plain
+  `<pre><code>`), `site.css`, `public/favicon.svg`, and the four pages, whose
+  long bodies are segments (`pages/syntax/slots.rtsx` mounted by
+  `<section #slots />`, ten in all).
+  - `reactogenic check -p site/tsconfig.json`: exit 0, nothing printed.
+  - Rendered by `render.Render` (the program as `check` builds it) and
+    checked by `pagecheck.Check`, with `public/` as the output's files: no
+    report on any page. The mounts are the table's: `/guide/` and
+    `/reference/cli/` `overlays`; `/` adds `invokers`; `/syntax/` adds
+    `menu-keys` with `RG_MENU_TYPEAHEAD`.
+  - Looked at in Chromium 153 (light and dark) and WebKit 26.6 (light), by
+    Playwright, at 1200, 800, 640, 400 and 320 px, through the stand-in build of
+    `packages/ui/test/browser` pointed at `site/`: no page scrolls sideways;
+    both dialogs stay inside the viewport and their bodies scroll; the
+    drawer opens and closes on its scrim; arrow keys and typeahead move
+    through the action menu, and closing the cheat sheet returns focus to
+    its trigger; a fragment lands below the sticky header.
+  - The side menu's groups each start with the page's own link: a link to a
+    section (`/guide/#install`) is never the current page (components.md,
+    *SideMenu*). The page check does not look at the fragment of a link to
+    another page: that `/syntax/#slots` names an element of `/syntax/` was
+    checked by hand, once.
+  - **Not done:** built by `reactogenic build` itself; CI. Not verified:
+    the pruned CSS (the stand-in ships the unpruned bundle), `--base`,
+    `public/` through the builder.
+  - Playwright's headless shell paints the page beside the open drawer
+    wrongly (scrolled, without the backdrop); the full Chromium
+    (`channel: "chromium"`, as `test/browser/run.mjs` launches it) and
+    WebKit paint it right. Screenshots of RGP2-050 need the full browser.
 
 ## M4 — The bet
 

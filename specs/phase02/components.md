@@ -382,6 +382,7 @@ interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "p
 | --- | --- |
 | **the current page is the builder's, not the author's** | the item whose `href` is `pathname()` gets `aria-current="page"`, and every disclosure around it `open`. CSS styles `[aria-current]`. There is no `current` prop to get wrong; two pages' menus differ in exactly those attributes |
 | which `href` is the page | every form the builder's link check takes for the route (builder.md, *Checks on the page*): `/guide/`, `/guide`, `/guide/index.html`, percent-encoded or not (`/%C3%BCber/` is `pages/über/`; `%2F` is no separator). **Not** an `href` with a `?query` or a `#fragment` — `/guide/#keyed`, `#keyed`: that is a state or a place of a page, not the page |
+| a link into a page | `href="/guide/#install"` is not the page `/guide/`: with a fragment or a query an item is never current, and opens no group — which section is shown is run-time state, and six items of one page cannot all be the current one. So a group of a page's sections starts with the page itself (the example below; the OPEN note after it) |
 | drawer on small screens | **the same `<nav>` is a popover.** Above the breakpoint CSS shows it as a sticky column and hides the toggle and the close button; below it, the toggle opens it in the top layer: backdrop, Esc, focus return (to a toggle that had focus: *Known limits*) — native. One copy of the menu in the HTML |
 | `$Toggle` | `label` names the fallback, the icon: `aria-label="Documentation"`. A toggle with content of the author's is named by that content — `<$Toggle>Menu</$Toggle>` → `<button type="button" class="rg-sidemenu-toggle" popovertarget="s1">Menu</button>`, no `aria-label`: a button that shows "Menu" and is named "Documentation" answers to neither word by voice (WCAG 2.5.3, Label in Name). The `<nav>` keeps `label` |
 | the close button | always emitted, first in the `<nav>`: on iOS 17–18.2 a popover does not close on an outside tap. Its name: the OPEN note of *Dialog* |
@@ -394,12 +395,33 @@ interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "p
 | JS | `overlays` only |
 | not in phase 2 | icons and badges, an icon-only rail, groups that remember being closed across pages (storage, so JS) |
 
+```tsx
+// layout.rtsx — a page and its sections
+<$Item key="guide">
+  Getting started
+  <$Item key="page" href="/guide/">Overview</$Item>
+  <$Item key="install" href="/guide/#install">Install</$Item>
+</$Item>
+```
+
+```html
+<!-- emitted for the page /guide/: the group is open because of its first item -->
+<details open>
+  <summary>Getting started</summary>
+  <ul>
+    <li><a href="/guide/" aria-current="page">Overview</a></li>
+    <li><a href="/guide/#install">Install</a></li>
+  </ul>
+</details>
+```
+
 > OPEN: links *into* the current page — a page's headings as nested items:
 > `/guide/slots/#keyed`, `#keyed`, `?tab=api`. Today such an item is not
-> marked and does not open the disclosures around it. Recommended: it opens
-> its disclosures (the group is about this page) and stays unmarked —
-> `aria-current="page"` on five items names none, and which place of the page
-> is current is in-page state: a script's, later.
+> marked and does not open the disclosures around it (so the docs site's
+> groups start with an "Overview" link to the page, as above). Recommended:
+> it opens its disclosures (the group is about this page) and stays unmarked
+> — `aria-current="page"` on five items names none, and which place of the
+> page is current is in-page state: a script's, later.
 
 ## Behaviours
 
@@ -489,6 +511,16 @@ which covers a site's own `.css` imports too.
 - Rule 7 is about selectors, not inheritance: a component written in a slot
   inherits what CSS inherits there — in `SideMenu`'s `$Footer`, its smaller
   font size.
+- Unlayered author CSS wins over **every** rule of a component, so a bare
+  element selector in it restyles the components' own elements: `h2 { … }`
+  reaches the dialog's title and the side menu's section titles, `a { … }`
+  every button that is a link, `ul { … }` the menus. Text styles are scoped
+  to the page's content, as `site/site.css` does:
+
+  ```css
+  h2 { margin-top: 2.5rem }                             /* also the dialog's title */
+  :is(main, main > section) > h2 { margin-top: 2.5rem } /* the page's headings     */
+  ```
 - Measured in Chromium 143 / 153, Chrome 154 and Playwright's WebKit 26.0 /
   26.6 (`pnpm --filter @reactogenic/ui test:browser`). Not in Firefox
   (`ENGINES=firefox` is there; Playwright's Firefox 155 did not start in the

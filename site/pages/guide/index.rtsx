@@ -1,0 +1,174 @@
+// "/guide/": getting started — docs/getting-started.md as a page. Nothing
+// here opens anything, so the page ships what the layout mounts and no more.
+// The editor section is long enough to live in its own file: a segment.
+import { Code } from "../../code.rtsx";
+import { Layout } from "../../layout.rtsx";
+
+const INSTALL = `pnpm add @reactogenic/core@alpha
+pnpm add -D @reactogenic/vite@alpha @reactogenic/cli@alpha`;
+
+const VITE_CONFIG = `import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import reactogenic from "@reactogenic/vite";
+
+export default defineConfig({
+  plugins: [reactogenic(), react()],
+});`;
+
+const SCRIPTS = `{
+  "scripts": {
+    "check": "reactogenic check",
+    "build": "reactogenic check && vite build"
+  }
+}`;
+
+// Copied from a run of `reactogenic check`, not written by hand.
+const ERRORS = `src/page.rtsx:6:26 - error slot-type: \`$Field\` does not match its declaration in \`Card\`: Type 'number' is not assignable to type 'boolean | undefined'.
+
+6     <$Field name="email" required={1} />
+                           ^
+
+src/page.rtsx:10:23 - error missing-slot: \`Card\` requires \`$Title\`
+
+10 export const empty = <Card>Nothing yet</Card>;
+                         ^
+
+  src/card.rtsx:5:3 - '$Title' is declared here.
+
+Found 2 error(s).`;
+
+const SILENT_FLIP = `const disabled = false;
+<Button disabled />    // TSX: disabled={true}. .rtsx: disabled={disabled}`;
+
+export default function Page() {
+  return (
+    <Layout title="Getting started" description="Install Reactogenic's .rtsx in a Vite + React app, type-check it with reactogenic check, and set up the editor.">
+      <h1>Getting started</h1>
+      <p className="lead">
+        <code>.rtsx</code> is TSX with a few additions for components that have slots, flow control and page
+        segments. It runs in an ordinary Vite + React app and is type-checked by TypeScript 7, with every error
+        reported on the <code>.rtsx</code> line you wrote.
+      </p>
+
+      <section id="install">
+        <h2>Install</h2>
+        <Code>{INSTALL}</Code>
+        <p>
+          Reactogenic is in alpha: the packages are published under the <code>alpha</code> tag.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Package</th>
+              <th>What it is</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>@reactogenic/core</code></td>
+              <td>the runtime: the slot types, <code>Each</code>, <code>Switch</code> and <code>Match</code></td>
+            </tr>
+            <tr>
+              <td><code>@reactogenic/vite</code></td>
+              <td>the Vite plugin</td>
+            </tr>
+            <tr>
+              <td><code>@reactogenic/cli</code></td>
+              <td>
+                the <code>reactogenic</code> command, with the binary for your platform: macOS, Linux and Windows,
+                arm64 and x64
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="vite">
+        <h2>Configure Vite</h2>
+        <Code label="vite.config.ts">{VITE_CONFIG}</Code>
+        <ul>
+          <li>
+            <code>reactogenic()</code> goes first: it compiles <code>.rtsx</code> itself. <code>.tsx</code> files go
+            through Vite and plugin-react as before.
+          </li>
+          <li>
+            <code>.tsx</code> and <code>.rtsx</code> live side by side and import each other without extensions:{" "}
+            <code>{'import { Page } from "./page"'}</code> finds <code>page.rtsx</code>.
+          </li>
+          <li>
+            Do not keep a <code>page.tsx</code> and a <code>page.rtsx</code> next to each other: the import would be
+            ambiguous.
+          </li>
+          <li>
+            Editing an <code>.rtsx</code> file reloads the page. There is no Fast Refresh for <code>.rtsx</code>{" "}
+            yet.
+          </li>
+          <li>
+            The plugin reports the transpiler's own errors — a slot element in the wrong place, a segment without a
+            file — in Vite's overlay and in a failed <code>vite build</code>. Type errors are{" "}
+            <code>reactogenic check</code>'s.
+          </li>
+        </ul>
+      </section>
+
+      <section id="check">
+        <h2>Type-check</h2>
+        <p>
+          Vite does not type-check. <code>reactogenic check</code> does, for <code>.ts</code>, <code>.tsx</code> and{" "}
+          <code>.rtsx</code>:
+        </p>
+        <Code label="package.json">{SCRIPTS}</Code>
+        <Code>{ERRORS}</Code>
+        <p>
+          Errors about slots and segments are reported in their terms, with the name of the rule as the code:{" "}
+          <code>missing-slot</code> above, <code>undeclared-slot</code>, <code>slot-args-missing</code>. Everything
+          else is TypeScript's own error, with its <code>TS</code> number.
+        </p>
+        <p>
+          Use <code>reactogenic check --watch</code> while you work, and <code>--pretty=false</code> for{" "}
+          <code>file(line,col)</code> output in CI. The rest is in the <a href="/reference/cli/#check">CLI reference</a>.
+        </p>
+      </section>
+
+      <section #editor />
+
+      <section id="syntax">
+        <h2>The syntax</h2>
+        <p>Five additions to TSX, each with its own section in the tour:</p>
+        <ul>
+          <li>
+            <a href="/syntax/#shorthand-props">Shorthand props</a> — <code>{"<Input value />"}</code> passes the
+            variable <code>value</code> when there is one in scope.
+          </li>
+          <li>
+            <a href="/syntax/#slots">Slots</a> — <code>{"<$Icon>"}</code> fills a named place of a component;{" "}
+            <code>{"slot={$Icon}"}</code> says where it renders.
+          </li>
+          <li>
+            <a href="/syntax/#flow-control">Flow control</a> — <code>Match</code> and <code>Switch</code> instead of{" "}
+            <code>{"&&"}</code> and nested ternaries.
+          </li>
+          <li>
+            <a href="/syntax/#segment-roots">Segment roots</a> — <code>{"<section #pricing />"}</code> mounts{" "}
+            <code>pricing.rtsx</code>, the file next to the page.
+          </li>
+          <li>
+            <a href="/syntax/#each">Each</a> — a loop as markup.
+          </li>
+        </ul>
+      </section>
+
+      <section id="migrating">
+        <h2>From .tsx to .rtsx</h2>
+        <p>
+          Renaming the file is the whole migration, with one thing to look for: a bare boolean attribute that has a
+          variable of the same name in scope changes meaning.
+        </p>
+        <Code>{SILENT_FLIP}</Code>
+        <p>
+          To keep <code>true</code>, write <code>{"disabled={true}"}</code>: an explicit value is never rewritten.
+        </p>
+      </section>
+    </Layout>
+  );
+}

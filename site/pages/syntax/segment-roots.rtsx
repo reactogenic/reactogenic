@@ -1,0 +1,98 @@
+// The segment `#segment-roots` of "/syntax/" (specs/phase01/syntax.md,
+// *Segment roots*) — itself mounted by a segment root.
+import { Each } from "@reactogenic/core";
+import { Code } from "../../code.rtsx";
+
+const SOURCE = `<section #about-us className="band" />`;
+
+const EMITTED = `import _Section_aboutUs from "./about-us.rtsx";
+
+<section id="about-us" className="band">
+  <_Section_aboutUs />
+</section>`;
+
+const THIS_PAGE = `<section #shorthand-props />
+<section #slots />
+<section #flow-control />
+<section #segment-roots />
+<section #each />`;
+
+const FILES = ["about-us.rtsx", "about-us.tsx", "about-us.jsx", "about-us.ts", "about-us.js"];
+
+const ERRORS = [
+  { code: "segment-not-found", when: "no file of that name next to the file that mounts it" },
+  { code: "segment-not-component", when: "the file has no default export that is a component" },
+  { code: "segment-props", when: "the default export has required props" },
+  { code: "segment-id", when: "an explicit id, a spread or a second #name on the same element" },
+  { code: "segment-syntax", when: 'a value or a namespace: #about-us="x", #about:us' },
+  { code: "segment-duplicate", when: "the same name mounted twice in one file" },
+  { code: "segment-root-props", when: "a component root that does not accept id and children" },
+  { code: "segment-self", when: "a segment that mounts itself, directly or through other segments" },
+  { code: "segment-in-loop", when: "a root inside .map() or the body of an Each" },
+  { code: "segment-children (warning)", when: "the root has children: the segment overwrites them" },
+];
+
+export default function SegmentRoots() {
+  return (
+    <>
+      <h2>Segment roots</h2>
+      <p>
+        A <strong>segment</strong> is a part of one page, split into its own file so that the page does not pile
+        up. It is mounted by name into a <strong>segment root</strong>. One token names the DOM id, the file and
+        the URL fragment — <code>#</code> already means "id" in CSS and in URLs.
+      </p>
+      <Code label="page.rtsx">{SOURCE}</Code>
+      <Code label="page.tsx">{EMITTED}</Code>
+      <p>That is its whole meaning: an import and a nested element.</p>
+      <ul>
+        <li>
+          The root may be any element, HTML or component. A component root must accept <code>id</code> and{" "}
+          <code>children</code>; other attributes on the root stay on the root.
+        </li>
+        <li>
+          The segment is the <strong>default export</strong> of the file of that name in the same directory, and is
+          rendered with <strong>no props</strong>: a segment owns its data.
+        </li>
+        <li>
+          The import is static, and names the file found, extension included — so the file the lookup chose is the
+          file Vite runs and TypeScript checks.
+        </li>
+        <li>
+          A plain <code>id="about-us"</code> keeps its React meaning and mounts nothing.
+        </li>
+        <li>
+          A segment is mounted once per page. Anything used twice is a component, and is imported.
+        </li>
+      </ul>
+      <p>
+        <code>#about-us</code> mounts the first of these next to the file that mentions it:
+      </p>
+      <ol>
+        <Each items={FILES} { item: file }>
+          <li key={file}><code>{file}</code></li>
+        </Each>
+      </ol>
+      <p>
+        A segment file is an ordinary module: it may contain segment roots of its own, export other things, and be
+        imported by hand. The body of this page is five of them:
+      </p>
+      <Code label="pages/syntax/index.rtsx">{THIS_PAGE}</Code>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={ERRORS} { item: error }>
+            <tr key={error.code}>
+              <td><code>{error.code}</code></td>
+              <td>{error.when}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+    </>
+  );
+}
