@@ -86,3 +86,19 @@ func TestSuspends(t *testing.T) {
 		t.Errorf("pages: %+v", pages)
 	}
 }
+
+// A page that allocates without end is ended as one that loops without end
+// is (builder.md, *Shell code in phase 2*, shell-error): at 300 MB a second,
+// the thirty seconds of the timeout are the machine's memory. The page after
+// it renders: its runtime is its own.
+func TestMemory(t *testing.T) {
+	f := load(t, "memory")
+	pages, reports := Render(f.program, f.routes, Options{Memory: 64 << 20})
+	if len(reports) != 1 || reports[0].Code != "shell-error" || reports[0].File != f.dir+"/pages/index.tsx" ||
+		reports[0].Message != "Rendering took more than 64 MiB of memory: a loop that keeps what it makes?" {
+		t.Errorf("reports: %+v", reports)
+	}
+	if len(pages) != 1 || pages[0].Pathname != "/fine/" || pages[0].HTML != `<html lang="en"><head></head><body>fine</body></html>` {
+		t.Errorf("pages: %+v", pages)
+	}
+}

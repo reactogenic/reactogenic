@@ -34,9 +34,12 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 	if dir == "" {
 		dir = program.GetCurrentDirectory()
 	}
-	timeout := opts.Timeout
-	if timeout == 0 {
-		timeout = 30 * time.Second
+	within := limits{opts.Timeout, opts.Memory}
+	if within.timeout == 0 {
+		within.timeout = 30 * time.Second
+	}
+	if within.memory == 0 {
+		within.memory = maxMemory
 	}
 	// What is built is what was checked: a page outside the program would
 	// be read from the disk, by esbuild, unchecked.
@@ -61,7 +64,7 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 	}
 	// What the bundle does as it loads is no page's: the first runtime says
 	// it, once.
-	first, thrown, err := startCompiled(bytecode, timeout)
+	first, thrown, err := startCompiled(bytecode, within)
 	if err != nil {
 		return nil, sorted(append(reports, report.Report{Code: "internal", Message: "render: " + err.Error()}))
 	}
@@ -82,7 +85,7 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 		// not from what the pages before it left of them.
 		engine := first
 		if i > 0 {
-			if engine, thrown, err = startCompiled(bytecode, timeout); err != nil {
+			if engine, thrown, err = startCompiled(bytecode, within); err != nil {
 				reports = append(reports, report.Report{File: route.File, Line: 1, Col: 1, Code: "internal", Message: "render: " + err.Error()})
 				continue
 			}

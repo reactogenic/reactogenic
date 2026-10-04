@@ -42,4 +42,8 @@ type Options struct {
 	// end — and, the same, the bundle that does not finish loading. 0: thirty
 	// seconds.
 	Timeout time.Duration
+	// Memory ends a page that takes more than that many bytes — a loop that
+	// keeps what it makes fills the machine's memory long before the
+	// timeout. 0: one gibibyte.
+	Memory uintptr
 }

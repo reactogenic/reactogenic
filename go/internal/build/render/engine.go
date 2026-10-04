@@ -16,9 +16,20 @@ import (
 // code in phase 2*). Nothing of the host is in it — no file system, no
 // network, no clock: the bundle's sandbox module sees to the clock.
 type engine struct {
-	vm      *quickjs.VM
-	timeout time.Duration
+	vm *quickjs.VM
+	limits
 }
+
+// limits are what ends a page that does not end by itself (Options).
+type limits struct {
+	timeout time.Duration
+	memory  uintptr
+}
+
+// maxMemory is the memory of one page's runtime when Options sets none. A
+// loop that keeps what it makes took 512 MiB in 1.7 s (darwin-arm64): the
+// thirty seconds of the timeout would be some 9 GiB.
+const maxMemory = 1 << 30
 
 // maxDepth bounds the engine's call depth: about one unit per JavaScript
 // frame, two for a call through a built-in. The engine's own default is, in
@@ -75,7 +86,7 @@ type rendered struct {
 // start loads the bundle from its text. What a module throws while it loads
 // — at its top level — is the *thrown returned: no page can render then.
 func start(code string, timeout time.Duration) (*engine, *thrown, error) {
-	return boot(timeout, func(vm *quickjs.VM) error {
+	return boot(limits{timeout, maxMemory}, func(vm *quickjs.VM) error {
 		_, err := vm.Eval(code, quickjs.EvalGlobal)
 		return err
 	})
@@ -95,25 +106,26 @@ func compile(code string) ([]byte, error) {
 }
 
 // startCompiled is start, from the bundle's bytecode.
-func startCompiled(bytecode []byte, timeout time.Duration) (*engine, *thrown, error) {
-	return boot(timeout, func(vm *quickjs.VM) error {
+func startCompiled(bytecode []byte, within limits) (*engine, *thrown, error) {
+	return boot(within, func(vm *quickjs.VM) error {
 		_, err := vm.EvalBytecode(bytecode)
 		return err
 	})
 }
 
 // boot makes a runtime and loads the bundle into it.
-func boot(timeout time.Duration, bundle func(*quickjs.VM) error) (*engine, *thrown, error) {
+func boot(within limits, bundle func(*quickjs.VM) error) (*engine, *thrown, error) {
 	vm, err := quickjs.NewVM()
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := vm.SetEvalTimeout(timeout); err != nil {
+	if err := vm.SetEvalTimeout(within.timeout); err != nil {
 		vm.Close()
 		return nil, nil, err
 	}
 	vm.SetMaxStackSize(maxDepth)
-	e := &engine{vm, timeout}
+	vm.SetMemoryLimit(within.memory)
+	e := &engine{vm, within}
 	if err := bundle(vm); err != nil {
 		return e, e.exception(err), nil
 	}
@@ -140,6 +152,9 @@ func (e *engine) render(pathname string) (*rendered, error) {
 	if err := json.Unmarshal([]byte(text), &r); err != nil {
 		return nil, fmt.Errorf("render: %w", err)
 	}
+	if r.Error != nil {
+		e.ended(r.Error)
+	}
 	return &r, nil
 }
 
@@ -161,9 +176,18 @@ func (e *engine) exception(err error) *thrown {
 	if !errors.As(err, &js) {
 		return &thrown{Message: strings.TrimSpace(err.Error())}
 	}
-	t := &thrown{Name: js.Name, Message: js.Message, Stack: js.Stack}
-	if t.Name == "InternalError" && t.Message == "interrupted" { // the timeout's; the stack is where it struck
+	return e.ended(&thrown{Name: js.Name, Message: js.Message, Stack: js.Stack})
+}
+
+// ended words what the engine itself ended, by its limits; the stack is
+// where the limit struck. Running out of memory is an exception that shell
+// code may catch — so it also arrives as a page's own (render).
+func (e *engine) ended(t *thrown) *thrown {
+	switch {
+	case t.Name == "InternalError" && t.Message == "interrupted":
 		t.Name, t.Message = "", fmt.Sprintf("Rendering did not end in %v: a loop without an end?", e.timeout)
+	case t.Name == "InternalError" && t.Message == "out of memory":
+		t.Name, t.Message = "", fmt.Sprintf("Rendering took more than %d MiB of memory: a loop that keeps what it makes?", e.memory>>20)
 	}
 	return t
 }
