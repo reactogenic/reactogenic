@@ -42,3 +42,18 @@ func TestKind(t *testing.T) {
 		}
 	}
 }
+
+// What a <noscript> holds is text to the browser that runs the page's
+// script: `document.getElementById` finds nothing in it, and a mount on an
+// id that is only there would throw.
+func TestNoscriptIDs(t *testing.T) {
+	got := elementIDs(`<html><body><noscript id="ns"><p id="n"></p><noscript><i id="m"></i></noscript></noscript><p id="a"></p></body></html>`)
+	if want := []string{"a", "ns"}; !slices.Equal(sortedKeys(got), want) {
+		t.Errorf("%v, want %v", sortedKeys(got), want)
+	}
+	opts := project(t)
+	p := page("/n/", `<noscript><div id="m1"></div></noscript>`, mount("menu-keys", "m1"))
+	if js, _, got := codes(t, opts, p); !slices.Equal(got, []string{"mount-no-element"}) || js != "" {
+		t.Errorf("reports: %v, script %q", got, js)
+	}
+}
