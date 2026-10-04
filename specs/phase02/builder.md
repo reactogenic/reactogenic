@@ -65,7 +65,7 @@ program file is compiled with esbuild's defaults for the rest
 
 | Code | Condition |
 | --- | --- |
-| render-bundle | the render bundle cannot be made: an import that esbuild cannot resolve or load, at the import in the `.rtsx`; no `react-dom` in the project. No page is rendered |
+| render-bundle | the render bundle cannot be made: an import that esbuild cannot resolve or load, at the import in the `.rtsx`; a page that is not a module of the program (the tsconfig does not include it: it was not checked); no `react-dom` in the project. No page is rendered |
 
 **No `text/template`, `html/template` or reflection-heavy package in the
 binary**: one `template.Execute` costs 18.6 MB (research.md). HTML is written

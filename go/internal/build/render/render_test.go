@@ -372,6 +372,17 @@ func TestSandbox(t *testing.T) {
 	}
 }
 
+// A page that the tsconfig leaves out was not checked: it is not built.
+func TestPageOutsideProgram(t *testing.T) {
+	f := load(t, "runaway")
+	outside := f.dir + "/elsewhere/index.tsx"
+	pages, reports := Render(f.program, append(f.routes, Route{Pathname: "/elsewhere/", File: outside}), Options{})
+	if len(pages) != 0 || len(reports) != 1 || reports[0].Code != "render-bundle" || reports[0].File != outside ||
+		reports[0].Message != "The page is not a module of the project: the tsconfig does not include it" {
+		t.Errorf("pages %q, reports: %+v", pathnames(pages), reports)
+	}
+}
+
 // Without react-dom there is no renderer: one report, no page.
 func TestNoReact(t *testing.T) {
 	f := load(t, "runaway")

@@ -40,6 +40,17 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
+	// What is built is what was checked: a page outside the program would
+	// be read from the disk, by esbuild, unchecked.
+	var reports []report.Report
+	for _, route := range routes {
+		if file := program.GetSourceFile(route.File); file == nil || file.IsDeclarationFile {
+			reports = append(reports, report.Report{File: route.File, Line: 1, Col: 1, Code: "render-bundle", Message: "The page is not a module of the project: the tsconfig does not include it"})
+		}
+	}
+	if len(reports) > 0 {
+		return nil, sorted(reports)
+	}
 	b, reports := build(program, routes, filepath.FromSlash(dir), variant{platform: api.PlatformBrowser})
 	if b == nil {
 		return nil, sorted(reports)
