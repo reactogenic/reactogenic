@@ -29,11 +29,16 @@ func FuzzPrune(f *testing.F) {
 		`a;b{c:d}`, `@media x{a;b{c:d}}`, `@media x{;}`, `@media x{a{b:c}`, `a{b:c}@media x{d{e:f}}g{h:i}`, `[a="]"]{b:c}`, `[a=b i],[a=b s],[a|=b]{c:d}`,
 		"a\n{\nb\n:\nc\n}\n", "\xef\xbb\xbfa{b:c}", "a{b:c}\x00", `a{b:(c;d);e:[f;g];h:{i;j}}`, `((((((((`, `a{b:c !important;d:e!important}`,
 		`@container style(--a: b){c{d:e}}:root{--a: b;--f: g}`, `&{a:b}&&{c:d}a&{e:f}`, `a>b+c~d e{f:g}`, `:root:not(html),html:not(:root){a:b}`,
+		`@layer a,b{x{y:z}}@layer b{x{y:z}}@layer a,1;@layer a{x{y:z}}@layer initial{x{y:z}}`, `x{y:z}@import "i";@layer l{x{y:z}}a{b:c}`,
+		`@layer l{x{y:z}}@namespace url(n);a{b:c}@layer l{x{y:z}}`, `@charset "u";@layer l;@import "i";@namespace n url(n);x{y:z}@layer l{x{y:z}}`,
+		`a::before:hover,x{y:z}`, `x::before>b,a{b:c}`, `x::before::marker,a:after:focus{b:c}`, `x~b~c~d,a:has(~b~c~x),a:has(b c x),x b c d{e:f}`,
 	} {
 		f.Add(css, `<html class="a"><body><a b="c"><b></b><c></c><d></d><e></e></a><x style="y: var(--x)"></x></body></html>`)
 	}
 	f.Add(`a{b:c}`, `<template><a></a></template>`)
 	f.Add(`a{b:c}`, `<noscript><a></a></noscript>`)
+	f.Add(`a{b:c}`, `<select><button><selectedcontent></selectedcontent></button><option><a></a></option></select>`)
+	f.Add(`.a{b:c}#B{d:e}`, `<!doctype html><a class="A" id="b"></a>`)
 	f.Add(`a{b:c}`, ``)
 	f.Fuzz(func(t *testing.T, css, page string) {
 		doc, err := html.Parse(strings.NewReader(page))

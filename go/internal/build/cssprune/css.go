@@ -43,6 +43,7 @@ type rule struct {
 	// everywhere but inside @scope; such a rule is kept whole, because `&`
 	// takes its specificity from the whole selector list.
 	opaque bool
+	block  bool // it has a block: `@layer a{}`, not `@layer a;`
 
 	sels []string // kStyle: the selectors kept, as written
 	dead bool     // kStyle: no selector may match; kKeyframes: no animation names it
@@ -364,10 +365,14 @@ func parseRules(s string, inBlock bool, depth int) ([]*rule, error) {
 		if err != nil {
 			return nil, err
 		}
-		r.raw, r.body = s[start:end], s[j+1:end-1]
+		r.raw, r.body, r.block = s[start:end], s[j+1:end-1], true
 		i = end
 		out = append(out, r)
 		switch {
+		case r.name == "layer" && r.prelude != "" && !layerName(r.prelude):
+			// `@layer a, b{…}`, `@layer 1{…}`: a browser ignores it, block
+			// and all. It stays an at-rule kept as it is: as a statement it
+			// would order what the block never did.
 		case !at:
 			r.kind = kStyle
 			if r.decls, r.opaque, err = parseDecls(r.body, depth); err != nil {
@@ -385,6 +390,28 @@ func parseRules(s string, inBlock bool, depth int) ([]*rule, error) {
 			r.kind = kKeyframes
 		}
 	}
+}
+
+// layerName reports whether s names a layer as every browser reads it:
+// identifiers joined by dots — nothing between them — and none a CSS-wide
+// keyword. It errs on the side of "no": then a block is kept as it is and a
+// statement orders nothing, which at worst leaves one statement too many.
+func layerName(s string) bool {
+	for i := 0; identStart(s, i); {
+		name, j := readName(s, i)
+		switch strings.ToLower(name) {
+		case "initial", "inherit", "unset", "revert", "revert-layer", "default":
+			return false
+		}
+		if j == len(s) {
+			return true
+		}
+		if s[j] != '.' {
+			return false
+		}
+		i = j + 1
+	}
+	return false
 }
 
 // parseDecls splits a style rule's block into declarations. opaque: the block

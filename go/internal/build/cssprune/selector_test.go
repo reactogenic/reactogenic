@@ -105,7 +105,17 @@ func TestParseSelector(t *testing.T) {
 		{in: `.a::before`, want: `.a`},
 		{in: `.a:after`, want: `.a`},
 		{in: `::selection`, want: ``},
-		{in: `.a::backdrop:hover`, want: `.a?hover`},
+		// Nothing follows a pseudo-element in every browser of the floor.
+		{in: `.a::backdrop:hover`, want: `.a?hover`, unknown: true},
+		{in: `.a:before:first-child`, want: `.a?first-child`, unknown: true},
+		{in: `.a::before::marker`, want: `.a`, unknown: true},
+		{in: `.a::before:after`, want: `.a`, unknown: true},
+		{in: `.a::file-selector-button:is(:hover)`, want: `.a?is`, unknown: true},
+		{in: `.a::before > .b`, bad: true},
+		{in: `.a::before .b`, bad: true},
+		{in: `.a:after + .b`, bad: true},
+		{in: `.a::before ~ .b`, bad: true},
+		{in: `.l:has(> .a::before)`, bad: true},
 		{in: `.a::-webkit-scrollbar-thumb`, want: `.a`, unknown: true},
 		{in: `.a::part(x)`, want: `.a`, unknown: true},
 		{in: `details::details-content`, want: `details`},
@@ -174,13 +184,64 @@ func TestValidNth(t *testing.T) {
 	}
 }
 
+// parsePage parses a page as the builder writes it: with the doctype
+// (builder.md, Routes). TestPruneQuirks has the pages without one.
 func parsePage(t testing.TB, src string) *html.Node {
 	t.Helper()
+	if len(src) < 9 || !strings.EqualFold(src[:9], "<!doctype") {
+		src = "<!doctype html>" + src
+	}
 	doc, err := html.Parse(strings.NewReader(src))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return doc
+}
+
+// TestMatchLinear: a selector costs a number of steps proportional to the
+// page. A row of siblings is not walked again from each of them (`~`), nor a
+// subtree from each of its ancestors (`:has()`), nor the ancestors from each
+// descendant: on a list of 20 000 items `.gone~li~li` took 6.5 s that way.
+func TestMatchLinear(t *testing.T) {
+	const wide, deep = 4000, 400
+	pages := map[string]*html.Node{
+		"wide": parsePage(t, `<ul>`+strings.Repeat(`<li class="r"></li>`, wide)+`</ul>`),
+		"deep": parsePage(t, strings.Repeat(`<div class="r">`, deep)),
+	}
+	for _, tt := range []struct {
+		page, sel string
+		want      bool
+	}{
+		{"wide", `.gone~li~li`, false},
+		{"wide", `li~li~li~.gone`, false},
+		{"wide", `li~li~li~li`, true},
+		{"wide", `li:hover~li:hover~.gone`, false},
+		{"wide", `ul:has(li~li~.gone)`, false},
+		{"wide", `li:has(~.gone)`, false},
+		{"wide", `li:has(~li~li~.gone)`, false},
+		{"wide", `li:not(:has(~li:hover~.gone))`, true},
+		{"wide", `:is(.gone~li,li~.gone)~li`, false},
+		{"deep", `.gone div div`, false},
+		{"deep", `.gone .r .r .r`, false},
+		{"deep", `div:hover div:hover .gone`, false},
+		{"deep", `div:has(.gone)`, false},
+		{"deep", `div:has(div div .gone)`, false},
+		{"deep", `div:not(:has(div:hover .gone)) div`, true},
+		{"deep", `:is(.gone div,div .gone) div`, false},
+	} {
+		var p pruner
+		p.page(pages[tt.page])
+		sel, err := parseSelector(tt.sel, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := p.m.may(sel); got != tt.want {
+			t.Errorf("%s: may(%q) = %v", tt.page, tt.sel, got)
+		}
+		if n := len(p.m.els); p.m.work > 12*n {
+			t.Errorf("%s: %q tried %d compounds on %d elements", tt.page, tt.sel, p.m.work, n)
+		}
+	}
 }
 
 // TestMatch: the three values, on the element with id="t".

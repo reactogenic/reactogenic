@@ -65,6 +65,25 @@ func TestPrune(t *testing.T) {
 			want: `.a,.gone::-webkit-scrollbar{x:y}.a,.gone:open{x:y}.a,.gone:nth-child(2 of .x){x:y}.a,[data-v=x s]{x:y}`,
 		},
 		{
+			// Chromium and WebKit reject almost everything that follows a
+			// pseudo-element — a pseudo-class, a second pseudo-element, a
+			// combinator — and esbuild prints it without a warning.
+			name: "a list is kept whole when a selector to drop goes on after a pseudo-element",
+			css: `.a,.gone::before:hover{x:y}.a,.gone:after:focus{x:y}.a,.gone::before::marker{x:y}.a,.gone::backdrop:first-child{x:y}` +
+				`.a,.gone::selection:root{x:y}.a,.gone::before > .b{x:y}.a,.gone::before .b{x:y}.gone::before > .b{x:y}` +
+				`.gone::before:hover,.gone2{x:y}.a::before:hover,.gone{x:y}`,
+			page: `<p class="a"></p>`,
+			want: `.a,.gone::before:hover{x:y}.a,.gone:after:focus{x:y}.a,.gone::before::marker{x:y}.a,.gone::backdrop:first-child{x:y}` +
+				`.a,.gone::selection:root{x:y}.a,.gone::before > .b{x:y}.a,.gone::before .b{x:y}.gone::before > .b{x:y}` +
+				`.a::before:hover{x:y}`,
+		},
+		{
+			name:   "…as esbuild prints it",
+			nested: `.Other::after:hover, .Btn { color: red } .Btn { .Other::before:hover, & { color: blue } }`,
+			page:   `<button class="Btn"></button>`,
+			want:   `.Other:after:hover,.Btn{color:red}.Btn .Other:before:hover,.Btn{color:#00f}`,
+		},
+		{
 			// What does not parse as a selector may not be one. Trimming
 			// `.gone` off the last rule would make a real @font-face of what
 			// a browser reads as one rule with a bad selector.
@@ -226,6 +245,46 @@ func TestPrune(t *testing.T) {
 			css:  `@layer t{:root{--unused: 1}}@layer u{.A{x:y}}@layer t{.A{y:z}}`,
 			page: `<div class="A"></div>`,
 			want: `@layer t;@layer u{.A{x:y}}@layer t{.A{y:z}}`,
+		},
+		{
+			// A browser ignores a @layer rule whose prelude it cannot read: it
+			// orders nothing, and a statement in its place would.
+			name: "a @layer block that names no single layer is kept as it is",
+			css:  `@layer a, b{.gone{x:y}}@layer c{.A{color:red}}@layer b{.A{color:#00f}}@layer 1{.gone{x:y}}@layer a . b{.gone{x:y}}@layer initial{.gone{x:y}}`,
+			page: `<div class="A"></div>`,
+			want: `@layer a, b{.gone{x:y}}@layer c{.A{color:red}}@layer b{.A{color:#00f}}@layer 1{.gone{x:y}}@layer a . b{.gone{x:y}}@layer initial{.gone{x:y}}`,
+		},
+		{
+			name: "…and a statement with a name that is not one orders nothing",
+			css:  `@layer a,1;@layer a{.gone{x:y}}@layer c{.A{x:y}}@layer a{.A{y:z}}@layer d,e;@layer d{.gone{x:y}}`,
+			page: `<div class="A"></div>`,
+			want: `@layer a,1;@layer a;@layer c{.A{x:y}}@layer a{.A{y:z}}@layer d,e;`,
+		},
+
+		// ---- @import and @namespace out of place ----
+		{
+			// A browser ignores an @import or a @namespace that follows a rule,
+			// but not one that follows `@layer a;`: the statement would make
+			// the default namespace SVG's, and `p` match nothing.
+			name: "an emptied @layer block before a @namespace is not made a statement",
+			css:  `@layer a{.gone{x:y}}@namespace url(http://www.w3.org/2000/svg);p{color:red}.gone{x:y}@layer a{.gone{x:y}}`,
+			page: `<p class="A"></p>`,
+			want: `@layer a{.gone{x:y}}@namespace url(http://www.w3.org/2000/svg);p{color:red}`,
+		},
+		{
+			name: "nothing is dropped before an @import that is out of place",
+			css: `:root{--unused: 1}.gone{x:y}@media print{.gone{x:y}}@keyframes k{to{x:y}}@layer l{.gone{x:y}}` +
+				`@import url(x.css);.gone{x:y}@layer l{.gone{x:y}}@layer m{.gone{x:y}}.A{x:y}`,
+			page: `<p class="A"></p>`,
+			want: `:root{--unused: 1}.gone{x:y}@media print{.gone{x:y}}@keyframes k{to{x:y}}@layer l{.gone{x:y}}` +
+				`@import url(x.css);@layer m;.A{x:y}`,
+		},
+		{
+			name: "…and a sheet that starts as it should is pruned as any other",
+			css: `@charset "UTF-8";/*! legal */@layer a,b;@import url(x.css);@layer c;@namespace svg url(http://www.w3.org/2000/svg);` +
+				`.gone{x:y}@layer a{.gone{x:y}}@layer d{.gone{x:y}}.A{x:y}`,
+			page: `<p class="A"></p>`,
+			want: `@charset "UTF-8";/*! legal */@layer a,b;@import url(x.css);@layer c;@namespace svg url(http://www.w3.org/2000/svg);@layer d;.A{x:y}`,
 		},
 
 		// ---- @keyframes ----
@@ -431,11 +490,58 @@ func TestPruneTemplate(t *testing.T) {
 		"shadow root":         parsePage(t, `<p class="a"></p><div><template shadowrootmode="open"><slot></slot></template></div>`),
 		"noscript, as text":   parsePage(t, `<head><noscript><link rel="stylesheet" href="x.css"></noscript></head><p class="a"></p>`),
 		"noscript, as markup": noscript,
+		// The browser clones the selected option's content into it at load:
+		// `selectedcontent .desc` and `button .desc` match there, and nothing
+		// in the page as it was written says so.
+		"selectedcontent": parsePage(t, `<p class="a"></p><select><button><selectedcontent></selectedcontent></button><option><span class="gone">x</span>A</option></select>`),
+		// A parser from before the customizable select drops what a <select>
+		// holds besides its options, and their end tags: there the option
+		// is a child of the select, and the next <p> is not in a <div>.
+		"select, markup around the options": parsePage(t, `<p class="a"></p><select><div><option>A</option></div></select>`),
+		"select, markup in an option":       parsePage(t, `<p class="a"></p><select><optgroup label="g"><option><b>A</b></option></optgroup></select>`),
+		"selectedcontent, on its own":       parsePage(t, `<p class="a"></p><selectedcontent></selectedcontent>`),
 	} {
 		out, stats := mustPrune(t, css, doc)
 		if out != css || !stats.Unpruned || stats.BytesOut != len(css) || stats.Rules != 3 || stats.Selectors != 3 || stats.RulesDropped != 0 {
 			t.Errorf("%s: pruned: %q %+v", name, out, stats)
 		}
+	}
+}
+
+// TestPruneQuirks: without `<!doctype html>` a browser may be in quirks mode,
+// where classes and ids match whatever their case. The builder writes the
+// doctype; a page given without one is pruned for either mode.
+func TestPruneQuirks(t *testing.T) {
+	const css = `.foo{x:y}#bar{x:y}p.FOO#BAR{x:y}.gone{x:y}#gone{x:y}[class=foo]{x:y}[id=bar]{x:y}`
+	const body = `<p class="Foo" id="Bar">t</p>`
+	const folded = `.foo{x:y}#bar{x:y}p.FOO#BAR{x:y}`
+	for _, tt := range []struct{ name, page, want string }{
+		{"no doctype", body, folded},
+		{"no doctype, a document", `<html><head><title>t</title></head><body>` + body, folded},
+		{"a quirks doctype", `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">` + body, folded},
+		{"a doctype that is not html", `<!doctype svg>` + body, folded},
+		{"standards", `<!doctype html>` + body, ``},
+		{"standards, as written by hand", "<!-- c -->\n<!DOCTYPE HTML>\n" + body, ``},
+	} {
+		doc, err := html.Parse(strings.NewReader(tt.page))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out, _ := mustPrune(t, css, doc); out != tt.want {
+			t.Errorf("%s:\n got: %s\nwant: %s", tt.name, out, tt.want)
+		}
+	}
+}
+
+// TestPruneSelect: a <select> as it has always been written is pruned like
+// anything else; so is an <option> that is not in one.
+func TestPruneSelect(t *testing.T) {
+	const css = `select>option{x:y}select>optgroup>option{x:y}select>hr{x:y}select>.gone{x:y}option:checked{x:y}datalist b{x:y}.gone{x:y}`
+	doc := parsePage(t, `<select><option>A</option><optgroup label="g"><option>B</option></optgroup><hr><option>C</option><script></script></select>`+
+		`<datalist><option><b>D</b></option></datalist>`)
+	out, stats := mustPrune(t, css, doc)
+	if want := `select>option{x:y}select>optgroup>option{x:y}select>hr{x:y}option:checked{x:y}datalist b{x:y}`; out != want || stats.Unpruned {
+		t.Errorf("\n got: %s\nwant: %s\n%+v", out, want, stats)
 	}
 }
 

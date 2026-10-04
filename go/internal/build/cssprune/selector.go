@@ -33,6 +33,7 @@ type simple struct {
 type compound struct {
 	tag     string // lower-cased; "" and "*" are any element
 	simples []simple
+	pseudo  bool // it ends in a pseudo-element: the selector's last compound
 }
 
 // selector is a complex selector: compounds joined by combinators.
@@ -148,6 +149,10 @@ func (p *selParser) complex(relative bool) (*selector, error) {
 		switch c := p.peek(); {
 		case p.i >= len(p.s):
 			return sel, nil
+		case cp.pseudo:
+			// `.a::before > .b`: no browser reads it, and the rule dies with
+			// it. Not a selector to reason about — kept, with its list.
+			return nil, fmt.Errorf("a pseudo-element is not last, at %d", p.i)
 		case c == '>' || c == '+' || c == '~':
 			comb = c
 			p.i++
@@ -173,10 +178,9 @@ func (p *selParser) compound() (compound, error) {
 	if p.peek() == '|' {
 		return cp, fmt.Errorf("namespaces are not supported")
 	}
-	pseudoElement := false
 	for {
 		c := p.peek()
-		if pseudoElement && c != ':' {
+		if cp.pseudo && c != ':' {
 			break // only pseudo-classes may follow a pseudo-element
 		}
 		switch c {
@@ -201,12 +205,12 @@ func (p *selParser) compound() (compound, error) {
 			p.i++
 			cp.simples = append(cp.simples, simple{kind: sMaybe, name: "&"})
 		case ':':
-			s, pe, err := p.pseudo(pseudoElement)
+			s, pe, err := p.pseudo(cp.pseudo)
 			if err != nil {
 				return cp, err
 			}
 			if pe {
-				pseudoElement = true
+				cp.pseudo = true
 			} else {
 				cp.simples = append(cp.simples, s)
 			}
@@ -276,7 +280,14 @@ func (p *selParser) attribute() (simple, error) {
 
 // pseudo parses :name, ::name and their functional forms. element: it is a
 // pseudo-element, which matching ignores. after: a pseudo-element came before.
+//
+// What follows a pseudo-element is never known: the grammar allows a
+// pseudo-class there, but which pairs a browser accepts is its own business —
+// Chromium and WebKit reject `::before:hover`, `::backdrop:first-child`,
+// `::before::marker` and most other pairs of the tables above, and esbuild
+// prints them all (builder.md, CSS, *Lists*).
 func (p *selParser) pseudo(after bool) (s simple, element bool, err error) {
+	p.known = p.known && !after
 	p.i++
 	if p.peek() == ':' {
 		element = true
@@ -308,7 +319,6 @@ func (p *selParser) pseudo(after bool) (s simple, element bool, err error) {
 	s = simple{kind: sMaybe, name: name}
 	switch {
 	case after: // `::backdrop:hover`: state of something that is not an element
-		p.known = p.known && !functional && knownPseudoClass[name]
 	case !functional:
 		if name == "root" {
 			s.kind = sRoot

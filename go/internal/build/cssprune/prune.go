@@ -17,12 +17,27 @@
 //
 // # What it assumes
 //
-//   - The page is served as it was parsed, in standards mode: the builder
-//     writes the doctype, so classes and ids are case-sensitive. Parse the
-//     page with its doctype.
+//   - The page is served as it was parsed. Parse it with its doctype: the
+//     builder writes `<!doctype html>`, which makes classes and ids
+//     case-sensitive. Without exactly that doctype the page may be in quirks
+//     mode, and they are matched whatever their case.
 //   - No script adds a class, a data-* attribute or an element
 //     (components.md, *CSS convention*): state is written only where it is
-//     "maybe".
+//     "maybe". Where the browser's tree is not the one written — <template>,
+//     <noscript>, <selectedcontent>, markup inside a <select> — the page is
+//     not pruned.
+//   - The sheet is valid where validity is positional: an @import or a
+//     @namespace that follows a rule is dead, and stays dead — everything
+//     before it is kept as it is.
+//
+// # What was checked in browsers
+//
+// The tables of selector.go (what every browser of the floor parses, so that
+// a list may be trimmed around it) and the cases of the tests were run in
+// Chromium 153 and WebKit 26.6: 3 377 selectors, none of those called known
+// rejected; 465 pairs of page and sheet, computed styles equal before and
+// after pruning but for the custom properties dropped. Not in Firefox, and
+// not at the floor's own versions: plan.md, RGP2-050 has both.
 //
 // # What it saves
 //
@@ -53,7 +68,9 @@
 // that each use all of them) keeps 98–100%: there is nothing to prune.
 //
 // One page costs about 1 ms (BenchmarkPrune: reading the 29 KB bundle and
-// pruning it for the heaviest page).
+// pruning it for the heaviest page), and a selector a number of steps
+// proportional to the page (TestMatchLinear): `.a~li~li` on a list of 20 000
+// items takes 12 ms.
 package cssprune
 
 import (
@@ -74,8 +91,9 @@ type Stats struct {
 	SelectorsDropped  int
 	Properties        int // custom property declarations dropped
 	Keyframes         int // @keyframes dropped
-	// Unpruned: the page holds a <template> or a <noscript>, and the sheet
-	// came back as it was.
+	// Unpruned: the page holds a <template>, a <noscript>, a
+	// <selectedcontent> or a <select> with more than options in it, and the
+	// sheet came back as it was.
 	Unpruned bool
 	// Sources is the same per source file, when the sheet names them:
 	// esbuild writes `/* path/to/file.css */` before each file of a bundle
@@ -126,6 +144,7 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 		p.stats.Rules, p.stats.Selectors = count(rules)
 		return css, p.stats, nil
 	}
+	freeze(rules)
 	p.selectors(rules, false)
 	// Custom properties and @keyframes, to a fixed point: dropping one may
 	// empty a rule, which may empty an at-rule, whose prelude was the last
@@ -146,29 +165,48 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 }
 
 // page indexes the document. It reports false if the page cannot be pruned
-// (builder.md, CSS): the content of a <template> is cloned somewhere at run
-// time, so what it matches — and what matches because of it,
-// `.list:has(.row)` — is not known; the content of a <noscript> is elements
-// or text depending on the browser.
+// (builder.md, CSS), because the tree a browser matches against is not the
+// one written: the content of a <template> is cloned somewhere at run time,
+// so what it matches — and what matches because of it, `.list:has(.row)` —
+// is not known; the content of a <noscript> is elements or text depending on
+// the browser; a <selectedcontent> is filled at load with a copy of the
+// selected option's content, which `selectedcontent .x`, `button .x` and
+// `.x:not(option .x)` then match; and what a <select> holds besides its
+// options is kept by a parser that knows the customizable select (this one,
+// Chrome 135, WebKit 26.6) and dropped, with its end tags, by one that does
+// not — where `<select><div><option>` makes `select > option` match. Whether
+// the floor's Firefox and Safari are of the second kind was not checked.
 func (p *pruner) page(doc *html.Node) bool {
 	p.named = refs{dashed: map[string]bool{}, words: map[string]bool{}}
+	p.m.quirks = !standards(doc)
 	ok := true
-	var walk func(n *html.Node)
-	walk = func(n *html.Node) {
+	// in: 1 inside a <select>, 2 inside one of its options, where the older
+	// parser keeps text only.
+	var walk func(n *html.Node, in int)
+	walk = func(n *html.Node, in int) {
 		if n.Type == html.ElementNode {
 			if p.m.root == nil {
 				p.m.root = n
 			}
 			p.m.els = append(p.m.els, n)
-			switch strings.ToLower(n.Data) {
-			case "template", "noscript":
+			switch tag := strings.ToLower(n.Data); tag {
+			case "template", "noscript", "selectedcontent":
 				ok = false
+			case "option", "optgroup", "hr", "script":
+				if ok = ok && in < 2; in == 1 && tag == "option" {
+					in = 2
+				}
+			case "select":
+				ok, in = ok && in == 0, 1
 			case "style":
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					if c.Type == html.TextNode {
 						p.named.all(c.Data)
 					}
 				}
+				fallthrough
+			default:
+				ok = ok && in == 0
 			}
 			for _, a := range n.Attr {
 				if a.Key == "style" || strings.Contains(a.Val, "--") {
@@ -177,12 +215,28 @@ func (p *pruner) page(doc *html.Node) bool {
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
+			walk(c, in)
 		}
 	}
-	walk(doc)
+	walk(doc, 0)
 	p.m.memo = map[memoKey]tri{}
 	return ok
+}
+
+// standards reports whether the page is surely not in quirks mode: it starts
+// with `<!doctype html>` and nothing more, as the builder writes it. Any
+// other doctype may be one of those that mean quirks, and none does: classes
+// and ids then match whatever their case (builder.md, CSS, *case*).
+func standards(doc *html.Node) bool {
+	for c := doc.FirstChild; c != nil; c = c.NextSibling {
+		switch c.Type {
+		case html.DoctypeNode:
+			return strings.EqualFold(c.Data, "html") && len(c.Attr) == 0
+		case html.ElementNode:
+			return false
+		}
+	}
+	return false
 }
 
 func count(rules []*rule) (n, sels int) {
@@ -199,6 +253,33 @@ func count(rules []*rule) (n, sels int) {
 		}
 	}
 	return n, sels
+}
+
+// freeze keeps the head of a sheet as it is when an @import or a @namespace
+// stands out of place in it (builder.md, CSS, *Out of place*). A browser
+// ignores one that follows a rule, so dropping that rule would bring it to
+// life; and it does not ignore one that follows `@layer a;`, so the statement
+// an emptied block leaves would too. Everything before the last such rule
+// becomes an at-rule the pruner does not know.
+func freeze(rules []*rule) {
+	last, misplaced := -1, false
+	for i, r := range rules {
+		switch {
+		case r.kind == kComment:
+		case r.kind == kAt && (r.name == "import" || r.name == "namespace"):
+			if misplaced {
+				last = i
+			}
+		case r.kind == kAt && !r.block && (r.name == "charset" || r.name == "layer"):
+		default:
+			misplaced = true // whatever follows is
+		}
+	}
+	for _, r := range rules[:max(last, 0)] {
+		if r.kind != kComment {
+			r.kind = kAt
+		}
+	}
 }
 
 // selectors decides every style rule: which selectors of its list stay.
@@ -320,13 +401,22 @@ func (p *pruner) resolve(rules []*rule, path string, declared *layers) (output, 
 			}
 		default: // kAt, kRaw
 			o, s = true, true
-			if r.kind == kAt && r.name == "layer" { // @layer a, b;
-				if names, err := splitList(r.prelude); err == nil {
-					for _, name := range names {
+			if r.kind == kAt && r.name == "layer" {
+				// `@layer a, b;` orders its layers — if a browser reads it:
+				// one name that is not a layer's makes it ignore the whole
+				// statement. A block here is one kept as it is: frozen, or
+				// with a prelude that is no name, which orders nothing.
+				names, err := splitList(r.prelude)
+				read := err == nil && (!r.block || len(names) == 1)
+				for _, name := range names {
+					read = read && layerName(name)
+				}
+				for _, name := range names {
+					if read {
 						declared.add(path + name)
 					}
 				}
-				s = false
+				s = r.block
 			}
 		}
 		r.live = o

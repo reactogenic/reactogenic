@@ -38,18 +38,34 @@ var caseInsensitiveValue = set(
 	"type", "valign", "valuetype", "vlink",
 )
 
+// What the memo holds for an element and a position in a selector.
+type memoKind uint8
+
+const (
+	mUp     memoKind = iota // upTo
+	mDown                   // down
+	mAbove                  // the best upTo of its ancestors
+	mBefore                 // … of the siblings before it
+	mAfter                  // the best down of the siblings after it
+	mBelow                  // … of its descendants
+)
+
 type memoKey struct {
-	s   *selector
-	i   int
-	el  *html.Node
-	fwd bool
+	s    *selector
+	i    int
+	el   *html.Node
+	kind memoKind
 }
 
 // matcher matches selectors against one page.
 type matcher struct {
 	root *html.Node   // the document element: what :root is
 	els  []*html.Node // every element, in document order
-	memo map[memoKey]tri
+	// quirks: the page may be in quirks mode, where classes and ids match
+	// whatever their case.
+	quirks bool
+	memo   map[memoKey]tri
+	work   int // compounds tried, for the tests: matching must stay linear in the page
 }
 
 // may reports whether some element of the page may match s.
@@ -107,9 +123,7 @@ func (m *matcher) upTo(el *html.Node, s *selector, i int) tri {
 	rel := no
 	switch s.comb[i] {
 	case ' ':
-		for a := parent(el); a != nil && rel != yes; a = parent(a) {
-			rel = max(rel, m.upTo(a, s, i-1))
-		}
+		rel = m.chain(el, s, i-1, mAbove)
 	case '>':
 		if a := parent(el); a != nil {
 			rel = m.upTo(a, s, i-1)
@@ -119,18 +133,50 @@ func (m *matcher) upTo(el *html.Node, s *selector, i int) tri {
 			rel = m.upTo(a, s, i-1)
 		}
 	case '~':
-		for a := prev(el); a != nil && rel != yes; a = prev(a) {
-			rel = max(rel, m.upTo(a, s, i-1))
-		}
+		rel = m.chain(el, s, i-1, mBefore)
 	}
 	r = min(r, rel)
 	m.memo[k] = r
 	return r
 }
 
+// chain is the best answer over the elements one step leads to from el, again
+// and again: its ancestors (mAbove), the siblings before it (mBefore) or after
+// it (mAfter). The answer is kept per element, so a row of n siblings costs n
+// and not n²: `.a ~ li ~ li` on a list of 20 000 took seconds without it.
+func (m *matcher) chain(el *html.Node, s *selector, i int, kind memoKind) tri {
+	step, f := parent, m.upTo
+	switch kind {
+	case mBefore:
+		step = prev
+	case mAfter:
+		step, f = next, m.down
+	}
+	// Out to the first element whose answer is known, or to the end …
+	var todo []*html.Node
+	r := no
+	for a := el; a != nil; a = step(a) {
+		if v, ok := m.memo[memoKey{s, i, a, kind}]; ok {
+			r = v
+			break
+		}
+		todo = append(todo, a)
+	}
+	// … and back: the answer of a is that of step(a), and step(a) itself.
+	for n := len(todo) - 1; n >= 0; n-- {
+		if b := step(todo[n]); b == nil {
+			r = no
+		} else if r != yes {
+			r = max(r, f(b, s, i))
+		}
+		m.memo[memoKey{s, i, todo[n], kind}] = r
+	}
+	return r
+}
+
 // has: s, relative to el, matches something — `:has(> .a .b)`.
 func (m *matcher) has(el *html.Node, s *selector) tri {
-	return m.related(el, s.comb[0], func(x *html.Node) tri { return m.down(x, s, 0) })
+	return m.related(el, s, 0)
 }
 
 // down: x matches parts[i], and parts[i+1:] match what stands after it.
@@ -139,51 +185,61 @@ func (m *matcher) down(x *html.Node, s *selector, i int) tri {
 	if r == no || i == len(s.parts)-1 {
 		return r
 	}
-	k := memoKey{s: s, i: i, el: x, fwd: true}
+	k := memoKey{s: s, i: i, el: x, kind: mDown}
 	if v, ok := m.memo[k]; ok {
 		return v
 	}
-	r = min(r, m.related(x, s.comb[i+1], func(y *html.Node) tri { return m.down(y, s, i+1) }))
+	r = min(r, m.related(x, s, i+1))
 	m.memo[k] = r
 	return r
 }
 
-// related is the best answer of f over the elements a combinator leads to
-// from el: its descendants, children, next sibling, following siblings.
-func (m *matcher) related(el *html.Node, comb byte, f func(*html.Node) tri) tri {
+// related is the best answer of down(·, s, i) over the elements the
+// combinator before parts[i] leads to from el: its descendants, children,
+// next sibling, following siblings.
+func (m *matcher) related(el *html.Node, s *selector, i int) tri {
 	r := no
-	switch comb {
+	switch s.comb[i] {
 	case '>':
 		for c := el.FirstChild; c != nil && r != yes; c = c.NextSibling {
 			if c.Type == html.ElementNode {
-				r = max(r, f(c))
+				r = max(r, m.down(c, s, i))
 			}
 		}
 	case '+':
 		if n := next(el); n != nil {
-			r = f(n)
+			r = m.down(n, s, i)
 		}
 	case '~':
-		for n := next(el); n != nil && r != yes; n = next(n) {
-			r = max(r, f(n))
-		}
+		r = m.chain(el, s, i, mAfter)
 	default: // a descendant
-		var walk func(n *html.Node)
-		walk = func(n *html.Node) {
-			for c := n.FirstChild; c != nil && r != yes; c = c.NextSibling {
-				if c.Type == html.ElementNode {
-					if r = max(r, f(c)); r != yes {
-						walk(c)
-					}
-				}
-			}
-		}
-		walk(el)
+		r = m.below(el, s, i)
 	}
 	return r
 }
 
+// below is the best answer of down(·, s, i) over the descendants of el, kept
+// per element as chain keeps its answers: `div:has(.x)` asks it of every div,
+// and each subtree is walked once.
+func (m *matcher) below(el *html.Node, s *selector, i int) tri {
+	k := memoKey{s, i, el, mBelow}
+	if v, ok := m.memo[k]; ok {
+		return v
+	}
+	r := no
+	for c := el.FirstChild; c != nil && r != yes; c = c.NextSibling {
+		if c.Type == html.ElementNode {
+			if r = max(r, m.down(c, s, i)); r != yes {
+				r = max(r, m.below(c, s, i))
+			}
+		}
+	}
+	m.memo[k] = r
+	return r
+}
+
 func (m *matcher) compound(el *html.Node, c *compound) tri {
+	m.work++
 	// Tag names compare case-insensitively: exact for HTML elements, and a
 	// superset of what matches for SVG's camel-cased ones.
 	if c.tag != "" && c.tag != "*" && !strings.EqualFold(c.tag, el.Data) {
@@ -201,10 +257,10 @@ func (m *matcher) compound(el *html.Node, c *compound) tri {
 func (m *matcher) simple(el *html.Node, s *simple) tri {
 	switch s.kind {
 	case sClass:
-		return is(hasClass(el, s.name))
+		return is(hasClass(el, s.name, m.quirks))
 	case sID:
 		v, ok := attribute(el, "id")
-		return is(ok && v == s.name)
+		return is(ok && (v == s.name || m.quirks && strings.EqualFold(v, s.name)))
 	case sAttr:
 		if dynamic(s.name) {
 			return maybe
@@ -263,15 +319,17 @@ func attribute(el *html.Node, name string) (string, bool) {
 	return "", false
 }
 
-// hasClass: classes are separated by HTML's whitespace, not Unicode's.
-func hasClass(el *html.Node, class string) bool {
+// hasClass: classes are separated by HTML's whitespace, not Unicode's. fold:
+// whatever their case, as in quirks mode — which folds ASCII only; folding
+// more matches more, and that is the safe side.
+func hasClass(el *html.Node, class string, fold bool) bool {
 	v, _ := attribute(el, "class")
 	for v != "" {
 		i := 0
 		for i < len(v) && !isSpace(v[i]) {
 			i++
 		}
-		if v[:i] == class && i > 0 {
+		if i > 0 && (v[:i] == class || fold && strings.EqualFold(v[:i], class)) {
 			return true
 		}
 		for i < len(v) && isSpace(v[i]) {
