@@ -9,7 +9,8 @@
 #   pnpm install                           the lockfile: cli's platform packages exist only now. Wait for
 #                                          `npm view` to show all six: one that lags is left out silently
 #   scripts/release.sh vsix                the seven .vsix in dist/vsix/, from pack's binaries
-#   scripts/release.sh publish-vsix        dist/vsix/*.vsix to the Marketplace ($VSCE_PAT) and Open VSX ($OVSX_PAT)
+#   scripts/release.sh publish-vsix        dist/vsix/*.vsix to the Marketplace ($VSCE_PAT) and Open VSX ($OVSX_PAT);
+#                                          the tokens may be in .env.release, which git ignores
 #
 # pack checks that every package.json carries <version>; publish uploads the
 # tarballs pack made, so what was tested is what is published. The dist-tag
@@ -95,6 +96,8 @@ vsix)
   (cd "$root/packages/vscode" && node scripts/package.mjs --pre-release && node scripts/smoke-vsix.mjs "$root"/dist/vsix/*.vsix)
   ;;
 publish-vsix)
+  # The tokens: from the environment, else from .env.release (gitignored).
+  if [[ -f "$root/.env.release" ]]; then set -a; . "$root/.env.release"; set +a; fi
   : "${VSCE_PAT:?the Marketplace token of the publisher reactogenic}" "${OVSX_PAT:?the Open VSX token of the namespace reactogenic}"
   version="$(node -p "require('$root/packages/vscode/package.json').version")"
   files=()
@@ -110,7 +113,7 @@ publish-vsix)
   done
   ;;
 *)
-  sed -n '2,15p' "$0" >&2
+  sed -n '2,16p' "$0" >&2
   exit 2
   ;;
 esac
