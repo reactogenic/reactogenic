@@ -268,3 +268,34 @@ func TestPrint(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
 	}
 }
+
+// RootRelative is the links Check reads, and so the ones packaging gives the
+// base (builder.md, *Packaging*): its path, as a URL parser reads the href.
+func TestRootRelative(t *testing.T) {
+	for href, want := range map[string]string{
+		"/":                 "/",
+		"/guide/":           "/guide/",
+		"/guide/?tab=2#x":   "/guide/",
+		"/guide#x":          "/guide",
+		" /guide/ ":         "/guide/",
+		"\n/gui\tde/":       "/guide/",
+		`\guide\slot`:       "/guide/slot",
+		"/a?b=//c":          "/a",
+		"/100%":             "/100%",
+		"/favicon.svg":      "/favicon.svg",
+		"/se%C3%B1or/":      "/se%C3%B1or/",
+		"/a//b":             "/a//b",
+		"/#top":             "/",
+		"/?q":               "/",
+		"/guide/index.html": "/guide/index.html",
+	} {
+		if got, ok := RootRelative(href); !ok || got != want {
+			t.Errorf("%q: %q, %v; want %q", href, got, ok, want)
+		}
+	}
+	for _, href := range []string{"", "#x", "?q", "guide/", "./guide/", "../", "//host/x", `/\host`, `\\host`, "/\t/host", "https://example.com/", "mailto:a@b", "javascript:void(0)", "data:,x"} {
+		if got, ok := RootRelative(href); ok {
+			t.Errorf("%q is taken for a root-relative link: %q", href, got)
+		}
+	}
+}
