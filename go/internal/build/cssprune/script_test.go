@@ -1,7 +1,12 @@
 package cssprune
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"testing"
+
+	"github.com/evanw/esbuild/pkg/api"
 )
 
 // TestPruneOwnScript: a page that carries a script of its own — one the
@@ -102,6 +107,49 @@ func TestPruneWithScript(t *testing.T) {
 		out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
 		if err != nil || out != css || !stats.Unpruned || stats.Why != "the page's script changes the tree" {
 			t.Errorf("%s: %v: pruned: %q %+v", name, err, out, stats)
+		}
+	}
+}
+
+// The behaviours of @reactogenic/ui, built as a page's script is — bundled,
+// minified, every flag on: none names an API that changes the tree, so a
+// page that mounts them is pruned (builder.md, CSS, *The page's script*).
+// One that starts to is not a mistake; its pages lose their pruning, and
+// this test says which.
+func TestDesignSystemScripts(t *testing.T) {
+	files, err := filepath.Glob("../../../../packages/ui/src/behaviors/*.ts")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no behaviours of @reactogenic/ui: %v", err)
+	}
+	flag := regexp.MustCompile(`\bRG_[A-Z0-9_]+\b`)
+	for _, file := range files {
+		source, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		define := map[string]string{}
+		for _, name := range flag.FindAllString(string(source), -1) {
+			define[name] = "true"
+		}
+		r := api.Build(api.BuildOptions{
+			EntryPoints: []string{file}, Bundle: true, Write: false, Format: api.FormatESModule, Define: define,
+			MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true, LogLevel: api.LogLevelSilent,
+		})
+		if len(r.Errors) > 0 || len(r.OutputFiles) != 1 {
+			t.Fatalf("%s: %v", file, r.Errors)
+		}
+		names := scriptNames(string(r.OutputFiles[0].Contents))
+		for _, writer := range treeWriters {
+			if names.words[writer] {
+				t.Errorf("%s names `%s`: a page that mounts it is not pruned", filepath.Base(file), writer)
+			}
+		}
+		// What it names is state a selector may be about: none of it a
+		// class the CSS convention forbids a script to toggle.
+		for _, name := range []string{"classList", "className", "dataset", "setAttribute", "toggleAttribute"} {
+			if names.words[name] {
+				t.Errorf("%s names `%s`: it writes what the HTML does not show", filepath.Base(file), name)
+			}
 		}
 	}
 }
