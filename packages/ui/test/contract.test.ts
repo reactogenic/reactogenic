@@ -6,7 +6,8 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ComponentType } from "react";
+import { createElement, type ComponentType } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, test } from "vitest";
 import { distinct, normalise, Page, type Mount } from "./stand-in.ts";
 
@@ -79,6 +80,33 @@ test("the spec has the examples this suite knows", () => {
 describe("emitted HTML equals the spec's", () => {
   test.each(cases)("$name", ({ name, html }) => {
     expect(normalise(rendered.get(name)!.html)).toBe(normalise(html));
+  });
+});
+
+// components.md, *Types*: the spec prints HTML as a parser reads it. As a
+// string, React's output is spelled otherwise — and nothing rewrites it
+// (builder.md: the HTML is React's, to the byte).
+describe("React's spellings", () => {
+  test("camelCase names and empty values, as written by the components", () => {
+    const menu = rendered.get("DropdownMenu/2")!.html;
+    expect(menu).toContain('popoverTarget="m2"');
+    expect(menu).toContain('popover=""');
+    expect(menu).toContain('autofocus=""');
+    const side = rendered.get("SideMenu/1")!.html;
+    expect(side).toContain('popoverTargetAction="hide"');
+    expect(side).toContain('tabindex="-1"');
+    expect(side).toContain('<details open="">');
+  });
+
+  test("a bare `popover` or a lower-case `autofocus` is dropped: a component writes `popover=\"\"` and `autoFocus`", () => {
+    const error = console.error;
+    console.error = () => {}; // React says so, in development
+    try {
+      expect(renderToStaticMarkup(createElement("ul", { popover: true as unknown as "" }))).toBe("<ul></ul>");
+      expect(renderToStaticMarkup(createElement("button", { autofocus: true } as object))).toBe("<button></button>");
+    } finally {
+      console.error = error;
+    }
   });
 });
 

@@ -8,6 +8,11 @@
   .rg-sidemenu {
     box-sizing: border-box;
     padding: 1rem;
+    /* Its edge towards the page, as a column and as a drawer. In forced
+       colours that line is all that tells the drawer from the page under it:
+       a background is the canvas there, and a backdrop is no darker. */
+    border: 0;
+    border-inline-end: 1px solid var(--rg-line);
     background: var(--rg-bg);
     color: var(--rg-fg);
     overflow: auto;
@@ -83,8 +88,6 @@
       width: auto;
       height: 100dvh;
       margin: 0;
-      border: 0;
-      border-inline-end: 1px solid var(--rg-line);
 
       > :is([data-part="close"], [data-part="scrim"]) {
         display: none;
@@ -101,11 +104,14 @@
       height: 100dvh;
       max-height: none;
       margin: 0;
-      border: 0;
-      transition:
-        left 0.2s,
-        overlay 0.2s allow-discrete,
-        display 0.2s allow-discrete;
+
+      /* It slides in only for a reader who has not asked for less motion. */
+      @media (prefers-reduced-motion: no-preference) {
+        transition:
+          left 0.2s,
+          overlay 0.2s allow-discrete,
+          display 0.2s allow-discrete;
+      }
 
       &:popover-open {
         left: 0;
@@ -117,6 +123,15 @@
       &::backdrop {
         background: var(--rg-scrim);
       }
+      /* A dialog written in the drawer (`$Header`, `$Footer`) and opened by a
+         button outside it. A closed popover is `display: none` by the user
+         agent's rule, and nothing in a box that is not there is rendered —
+         the top layer included: the dialog would be modal, and unseen. So
+         the closed drawer has its box while a dialog in it is modal. That
+         box is where a closed drawer is: beside the viewport. */
+      &:not(:popover-open):has(dialog:modal) {
+        display: block;
+      }
       /* Everything beside the drawer. A tap on it is a tap inside the
          popover: nothing closes until its click, and nothing behind it is
          reached. */
@@ -127,6 +142,11 @@
         border: 0;
         background: none;
         cursor: default;
+      }
+      /* Only while the drawer is open: not over the page while it slides
+         out, nor while it has a box for a dialog's sake. */
+      &:not(:popover-open) > [data-part="scrim"] {
+        display: none;
       }
     }
   }

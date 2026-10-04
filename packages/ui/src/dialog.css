@@ -23,11 +23,15 @@
     overflow: hidden;
     place-items: center;
     opacity: 0;
-    /* Leaving the top layer is animated in Chromium only: an enhancement. */
-    transition:
-      opacity 0.15s,
-      overlay 0.15s allow-discrete,
-      display 0.15s allow-discrete;
+
+    /* It fades in only for a reader who has not asked for less motion.
+       Leaving the top layer is animated in Chromium only: an enhancement. */
+    @media (prefers-reduced-motion: no-preference) {
+      transition:
+        opacity 0.15s,
+        overlay 0.15s allow-discrete,
+        display 0.15s allow-discrete;
+    }
 
     /* `display` only when open: a closed dialog stays `display: none`. One
        cell of a definite size — the viewport less the padding: an `auto`

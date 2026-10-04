@@ -1,0 +1,16 @@
+// Not a page: a side menu of one link, for the table of site.test.ts — which
+// `href` is the page being rendered.
+import { SideMenu } from "@reactogenic/ui";
+
+export function Probe({ href }: { href: string }) {
+  return (
+    <SideMenu id="probe" label="Probe">
+      <$Section key="only">
+        <$Item key="group">
+          Group
+          <$Item key="link" href>Link</$Item>
+        </$Item>
+      </$Section>
+    </SideMenu>
+  );
+}

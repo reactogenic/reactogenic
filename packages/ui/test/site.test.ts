@@ -1,7 +1,7 @@
 // The example site (test/site), page by page, through the stand-in builder:
 // what the spec says beyond its examples — the current page and the open
 // disclosures per pathname, ids, options, and which behaviours a page mounts.
-import type { ComponentType } from "react";
+import { createElement, type ComponentType } from "react";
 import { describe, expect, test } from "vitest";
 import Actions from "./site/pages/actions/index.rtsx";
 import Fit from "./site/pages/fit/index.rtsx";
@@ -11,6 +11,7 @@ import Index from "./site/pages/index.rtsx";
 import Menus from "./site/pages/menus/index.rtsx";
 import Nested from "./site/pages/nested/index.rtsx";
 import Plain from "./site/pages/plain/index.rtsx";
+import { Probe } from "./site/probe.rtsx";
 import { distinct, normalise, Page } from "./stand-in.ts";
 
 const OVERLAYS = "@reactogenic/ui/behaviors/overlays";
@@ -55,6 +56,41 @@ describe("SideMenu", () => {
 
   test("the trailing slash is normalised", () => {
     expect(sideMenu(build("/guide/slots", Slots).html)).toBe(menu("/guide/slots/", " open", ""));
+  });
+
+  // The forms a link to a page takes are the builder's (builder.md, *Checks
+  // on the page*, a root-relative link). A link with a query or a fragment
+  // names a state or a place of a page — not the page.
+  test.each([
+    ["/guide/", "/guide/", true],
+    ["/guide/", "/guide", true],
+    ["/guide", "/guide/", true],
+    ["/guide/", "/guide/index.html", true],
+    ["/", "/index.html", true],
+    ["/über/", "/%C3%BCber/", true], // the builder names a page by its directory
+    ["/%C3%BCber/", "/über/", true], // … and `location.pathname`, in React, is encoded
+    ["/guide/", "/guide/slots/", false],
+    ["/guide/", "/", false],
+    ["/guide/", "/guide/#keyed", false],
+    ["/guide/", "/guide/?tab=2", false],
+    ["/guide/", "#keyed", false],
+    ["/guide/", "https://example.com/guide/", false],
+    ["/a/b/", "/a%2Fb/", false], // an encoded slash is no separator
+    ["/100%/", "/100%/", true], // a `%` that encodes nothing stands for itself
+    ["/guide/", "/100%/", false],
+  ])("on %s, href=%s is the current page: %s", (pathname, href, current) => {
+    const { html } = build(pathname, () => createElement(Probe, { href }));
+    const link = `<a href="${href}"${current ? ' aria-current="page"' : ""}>Link</a>`;
+    // Every disclosure around the current page is open.
+    expect(html).toContain(`<details${current ? " open" : ""}><summary>Group</summary><ul><li>${link}</li></ul></details>`);
+  });
+
+  // WCAG 2.5.3, Label in Name: a button that shows "Menu" is not named "Docs".
+  test("the label names the toggle's fallback, the icon — not the author's own content", () => {
+    expect(build("/", Index).html).toContain('<button type="button" class="rg-sidemenu-toggle" popovertarget="nav" aria-label="Documentation">☰</button>');
+    expect(build("/nested/", Nested).html).toContain('<button type="button" class="rg-sidemenu-toggle" popovertarget="nav">Menu</button>');
+    // The landmark keeps its name.
+    expect(build("/nested/", Nested).html).toContain('<nav id="nav" class="rg-sidemenu" popover aria-label="Docs">');
   });
 });
 
@@ -138,6 +174,15 @@ describe("DropdownMenu", () => {
     // A menu of links stays one: `href` decides, not `disabled`.
     expect(html).toContain('<ul id="links" class="rg-menu" popover><li><a aria-disabled="true">Not yet</a></li><li><a href="/">Home</a></li></ul>');
     expect(html).toContain('<a class="rg-button" id="off" aria-disabled="true">A disabled link button</a>');
+  });
+
+  // Known limit (components.md): JavaScript enumerates integer-like keys
+  // first, ascending. When the KEYED marker carries the written order, this
+  // test and the limit go.
+  test("known limit: integer-like keys are rendered first, not in the order written", () => {
+    const { html } = build("/menus/", Menus);
+    const order = html.slice(html.indexOf('<ul id="order"'), html.indexOf("</ul>", html.indexOf('<ul id="order"')));
+    expect([...order.matchAll(/<a href="\/">(\w+)<\/a>/g)].map((match) => match[1])).toEqual(["9", "10", "b", "a"]); // written: b, 10, 9, a
   });
 
   test("generated ids count per page, whatever ids the author gave", () => {

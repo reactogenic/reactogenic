@@ -2,15 +2,16 @@
 // trigger. Links or actions decide its semantics and its JS, at compile time.
 import type { ReactNode } from "react";
 import { Each, isAssigned, mount, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
-import { Button, type ButtonProps, type Command } from "./button.rtsx";
+import { Button, type Command, type TriggerProps } from "./button.rtsx";
 import "./tokens.css";
 import "./dropdown-menu.css";
 
-/** A link (`href`), or a declarative action on another element (`command` + `commandfor`). With `href` it is a link, whatever else it has. */
-export interface MenuItemProps {
-  href?: string;
-  command?: Command;
-  commandfor?: string;
+// An item is a link, or a declarative action on another element: one or the
+// other. Named member by member, so that a type error says which case the
+// author wrote.
+
+/** What both kinds of item have. */
+interface MenuItemCommonProps {
   /** The item that stands for what is shown now (the current version). */
   current?: boolean;
   /** Neither focus nor the arrow keys stop at it; a link is emitted without its `href`. */
@@ -18,21 +19,37 @@ export interface MenuItemProps {
   children?: ReactNode;
 }
 
+/** An item that is a link. A link commands nothing. */
+export interface MenuLinkProps extends MenuItemCommonProps {
+  href: string;
+  command?: undefined;
+  commandfor?: undefined;
+}
+
+/** An item that is an action: a command on the dialog `commandfor` names. */
+export interface MenuActionProps extends MenuItemCommonProps {
+  href?: undefined;
+  command?: Command;
+  commandfor?: string;
+}
+
+export type MenuItemProps = MenuLinkProps | MenuActionProps;
+
 export interface DropdownMenuProps {
   id?: string;
   /** Option: the edge of the trigger the menu lines up with. Default "start". */
   align?: "start" | "end";
   /** Option, action menus only: a printable key moves to the next item that starts with it. */
   typeahead?: boolean;
-  $Trigger: Slot<ButtonProps>;
+  $Trigger: Slot<TriggerProps>;
   /** In order. */
   $Item: KeyedSlot<MenuItemProps>;
 }
 
-interface ItemProps extends MenuItemProps {
+type ItemProps = MenuItemProps & {
   role?: "menuitem";
   autoFocus?: boolean;
-}
+};
 
 function MenuItem({ href, current, children, ...rest }: ItemProps) {
   const ariaCurrent = current ? "true" : undefined;

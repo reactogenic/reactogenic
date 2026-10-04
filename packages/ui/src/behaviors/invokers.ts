@@ -4,8 +4,10 @@
 // `command` / `commandfor` where the browser has none (before Chrome 135,
 // Firefox 144, Safari 26.2 — about 15% of usage): without it every dialog
 // button is dead. Feature-detected: at the floor it adds no listener.
-// Covers what the components emit — a dialog's `show-modal`, `close`,
-// `request-close`; popovers use `popovertarget`, which is older.
+// Covers the commands of the floor, which is all `Command` has — a dialog's
+// `show-modal` and `close`; popovers use `popovertarget`, which is older.
+// Not `request-close`: it is Chrome 139, so in Chrome 135–138 — which have
+// `command`, and get no fallback — a button with it is dead.
 
 export default function mountInvokers(): void {
   if (!("command" in HTMLButtonElement.prototype)) {
@@ -25,7 +27,7 @@ function invoke(event: MouseEvent): void {
     if (!dialog.open) {
       dialog.showModal();
     }
-  } else if (command === "close" || command === "request-close") {
+  } else if (command === "close") {
     dialog.close();
   }
 }

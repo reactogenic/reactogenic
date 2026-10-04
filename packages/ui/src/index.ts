@@ -4,10 +4,10 @@
 /// <reference path="./css.d.ts" />
 /// <reference path="./html.d.ts" />
 export { Button } from "./button.rtsx";
-export type { ButtonProps, Command } from "./button.rtsx";
+export type { ButtonActionProps, ButtonLinkProps, ButtonProps, Command, TriggerProps } from "./button.rtsx";
 export { Dialog } from "./dialog.rtsx";
-export type { DialogProps } from "./dialog.rtsx";
+export type { DialogActionProps, DialogProps } from "./dialog.rtsx";
 export { DropdownMenu } from "./dropdown-menu.rtsx";
-export type { DropdownMenuProps, MenuItemProps } from "./dropdown-menu.rtsx";
+export type { DropdownMenuProps, MenuActionProps, MenuItemProps, MenuLinkProps } from "./dropdown-menu.rtsx";
 export { SideMenu } from "./side-menu.rtsx";
-export type { SideMenuItemProps, SideMenuProps, SideMenuSectionProps } from "./side-menu.rtsx";
+export type { SideMenuItemProps, SideMenuProps, SideMenuSectionProps, SideMenuToggleProps } from "./side-menu.rtsx";

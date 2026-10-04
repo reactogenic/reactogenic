@@ -53,9 +53,11 @@ export function distinct(mounts: Mount[]): Mount[] {
 }
 
 /**
- * HTML in the form the spec prints it: attribute names in lower case (React
- * prints `popoverTarget`; the builder lower-cases), an empty value as a bare
- * attribute (`popover=""`), no comments, no whitespace between tags.
+ * HTML in the form the spec prints it — as a parser reads React's output
+ * (components.md, *Types*): attribute names in lower case (React prints
+ * `popoverTarget`, and HTML's names are case-insensitive), an empty value as
+ * a bare attribute (`popover=""`), no comments, no whitespace between tags.
+ * Only the comparison is normalised: nothing rewrites the page's markup.
  */
 export function normalise(html: string): string {
   return html
