@@ -9,7 +9,8 @@
 #   pnpm install                           the lockfile: cli's platform packages exist only now. Wait for
 #                                          `npm view` to show all six: one that lags is left out silently
 #   scripts/release.sh vsix                the seven .vsix in dist/vsix/, from pack's binaries
-#   scripts/release.sh publish-vsix        dist/vsix/*.vsix to the Marketplace ($VSCE_PAT) and Open VSX ($OVSX_PAT);
+#   scripts/release.sh publish-vsix [marketplace|openvsx]
+#                                          dist/vsix/*.vsix to the Marketplace ($VSCE_PAT) and Open VSX ($OVSX_PAT);
 #                                          the tokens may be in .env.release, which git ignores
 #
 # pack checks that every package.json carries <version>; publish uploads the
@@ -98,7 +99,8 @@ vsix)
 publish-vsix)
   # The tokens: from the environment, else from .env.release (gitignored).
   if [[ -f "$root/.env.release" ]]; then set -a; . "$root/.env.release"; set +a; fi
-  : "${VSCE_PAT:?the Marketplace token of the publisher reactogenic}" "${OVSX_PAT:?the Open VSX token of the namespace reactogenic}"
+  where="${2:-both}"
+  [[ "$where" == both || "$where" == marketplace || "$where" == openvsx ]] || { echo "publish-vsix [marketplace|openvsx]" >&2; exit 2; }
   version="$(node -p "require('$root/packages/vscode/package.json').version")"
   files=()
   for target in "${platforms[@]}" universal; do
@@ -106,14 +108,24 @@ publish-vsix)
     files+=("$root/dist/vsix/rtsx-$target-$version.vsix")
   done
   # 0.1.x is a pre-release line: the Marketplace has no pre-release tags, a
-  # .vsix is one or is not (package.mjs --pre-release).
-  (cd "$root/packages/vscode" && pnpm exec vsce publish --pre-release --packagePath "${files[@]}")
-  for file in "${files[@]}"; do
-    pnpm dlx ovsx publish "$file" --pre-release
-  done
+  # .vsix is one or is not (package.mjs --pre-release) — both stores read it
+  # from the file.
+  if [[ "$where" != openvsx ]]; then
+    # Without a token (it needs an Azure subscription): upload the seven at
+    # marketplace.visualstudio.com/manage — the universal one first.
+    : "${VSCE_PAT:?the Marketplace token of the publisher reactogenic}"
+    (cd "$root/packages/vscode" && pnpm exec vsce publish --pre-release --packagePath "${files[@]}")
+  fi
+  if [[ "$where" != marketplace ]]; then
+    : "${OVSX_PAT:?the Open VSX token of the namespace reactogenic}"
+    export OVSX_PAT
+    for file in "${files[@]}"; do
+      pnpm dlx ovsx publish "$file"
+    done
+  fi
   ;;
 *)
-  sed -n '2,16p' "$0" >&2
+  sed -n '2,17p' "$0" >&2
   exit 2
   ;;
 esac
