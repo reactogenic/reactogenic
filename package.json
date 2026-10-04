@@ -11,5 +11,14 @@
     "test:js": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "vendor:check": "go/scripts/sync-tsgo.sh && test -z \"$(git status --porcelain -- go/third_party/tsgo)\""
-  }
+  },
+  "devDependencies": {
+    "@reactogenic/core": "workspace:*",
+    "@reactogenic/ui": "workspace:*",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "//": "The devDependencies are for Go test fixtures under go/: they resolve react, react-dom and the workspace packages from this node_modules (specs/phase02/plan.md)."
 }
