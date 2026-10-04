@@ -10,7 +10,6 @@ package pagecheck
 import (
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -19,27 +18,19 @@ import (
 	"github.com/reactogenic/reactogenic/go/internal/report"
 )
 
-// Options is what the checks need of the build beside the page.
-type Options struct {
-	// Base is `--base`, the path the site is served under: "/docs/". A link
-	// under it is the site's and is matched without it; "" is "/".
-	Base string
-}
-
-// Check is Options{}.Check: the checks of a site served from "/".
-func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report {
-	return Options{}.Check(page, doc, routes, files)
-}
-
 // Check returns the id-duplicate, idref-not-found, command-target and
 // link-not-found reports of page, in document order. doc is the page's HTML,
 // parsed; routes are the site's pages; files are the other files of the
 // output, by their path from its root ("/favicon.svg").
 //
+// The page is checked as it is rendered, before it is packaged: its links
+// name the site from its root, whatever `--base` the build then prefixes
+// them with (builder.md, *Packaging*).
+//
 // The same mistake is reported once per page however often it is rendered: a
 // link of the layout is on every item of a list.
-func (o Options) Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report {
-	c := &checker{page: page, base: base(o.Base), routes: map[string]bool{}, files: files, ids: map[string][]*html.Node{}, names: map[string]bool{}, seen: map[string]bool{}}
+func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report {
+	c := &checker{page: page, routes: map[string]bool{}, files: files, ids: map[string][]*html.Node{}, names: map[string]bool{}, seen: map[string]bool{}}
 	for _, r := range routes {
 		c.routes[r.Pathname] = true
 	}
@@ -74,7 +65,6 @@ func (o Options) Check(page render.Page, doc *html.Node, routes []render.Route, 
 
 type checker struct {
 	page    render.Page
-	base    string // "/", "/docs/"
 	routes  map[string]bool
 	files   map[string]bool
 	ids     map[string][]*html.Node
@@ -152,7 +142,8 @@ func (c *checker) element(n *html.Node) {
 				c.list(written, a.Val)
 			}
 		case "href":
-			switch value := strings.Trim(a.Val, asciiSpace); {
+			// What a URL parser strips around a URL: spaces and controls.
+			switch value := strings.TrimFunc(a.Val, func(r rune) bool { return r <= ' ' }); {
 			case n.Data == "base" && n.Namespace == "":
 			case strings.HasPrefix(value, "#"):
 				if !c.fragment(value[1:]) {
@@ -214,28 +205,26 @@ func (c *checker) fragment(fragment string) bool {
 // with a scheme or a host, a relative path, a query alone — is not checked;
 // a root-relative one has to be a page of the site or a file of the output,
 // its query and fragment aside.
+//
+// The href is read as a browser's URL parser reads it, not as Go's: that one
+// refuses what a browser requests (`/100%`) and decodes what a browser
+// leaves alone (`%2F`).
 func (c *checker) link(href string) bool {
-	// `//host` and, as browsers read it, `/\host` are another origin.
-	if !strings.HasPrefix(href, "/") || strings.HasPrefix(href, "//") || strings.HasPrefix(href, `/\`) {
+	// A tab or a line break is not of the URL, wherever it is.
+	href = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return -1
+		}
+		return r
+	}, href)
+	href, _, _ = strings.Cut(href, "#")
+	href, _, _ = strings.Cut(href, "?")
+	href = strings.ReplaceAll(href, `\`, "/") // in a path, a backslash is a slash
+	// `//host` — and so `/\host` — is another origin.
+	if !strings.HasPrefix(href, "/") || strings.HasPrefix(href, "//") {
 		return true
 	}
-	u, err := url.Parse(href)
-	if err != nil {
-		return true // not a URL we can read: the browser's to resolve
-	}
-	p := path.Clean(u.Path)
-	if strings.HasSuffix(u.Path, "/") && p != "/" {
-		p += "/"
-	}
-	// What is not under the base is another site of the same origin.
-	switch {
-	case p+"/" == c.base:
-		p = "/"
-	case strings.HasPrefix(p, c.base):
-		p = "/" + p[len(c.base):]
-	default:
-		return true
-	}
+	p := pathOf(href)
 	file := func(p string) bool { return c.files[p] || c.files[strings.TrimPrefix(p, "/")] }
 	if c.routes[p] || file(p) {
 		return true
@@ -249,13 +238,68 @@ func (c *checker) link(href string) bool {
 	return c.routes[p+"/"] || file(p+"/index.html") || index && c.routes[dir+"/"]
 }
 
-// base normalises `--base`: "", "docs", "/docs" and "/docs/" → "/", "/docs/".
-func base(b string) string {
-	return strings.TrimSuffix("/"+strings.Trim(b, "/"), "/") + "/"
+// pathOf is the path a root-relative href requests, in the names of the
+// site's directories: dot segments resolved (`.`, `..`, also written `%2e`),
+// then each segment percent-decoded. An empty segment is a segment — `/a//b`
+// is not `/a/b` — and an encoded slash is no separator: `%2F` is decoded to
+// a NUL, which is in no name. A `%` that encodes nothing stands for itself.
+func pathOf(href string) string {
+	var segments []string
+	all := strings.Split(href[1:], "/")
+	for i, segment := range all {
+		last := i == len(all)-1
+		switch strings.ReplaceAll(strings.ToLower(segment), "%2e", ".") {
+		case "..":
+			if len(segments) > 0 {
+				segments = segments[:len(segments)-1]
+			}
+			if last {
+				segments = append(segments, "")
+			}
+		case ".":
+			if last {
+				segments = append(segments, "")
+			}
+		default:
+			segments = append(segments, decoded(segment))
+		}
+	}
+	return "/" + strings.Join(segments, "/")
 }
 
-// HTML's ASCII whitespace: what separates the ids of a list and what is
-// stripped around a URL.
+func decoded(segment string) string {
+	if !strings.Contains(segment, "%") {
+		return segment
+	}
+	var b strings.Builder
+	for i := 0; i < len(segment); i++ {
+		c := segment[i]
+		if c == '%' && i+2 < len(segment) && isHex(segment[i+1]) && isHex(segment[i+2]) {
+			if c = unhex(segment[i+1])<<4 | unhex(segment[i+2]); c == '/' {
+				c = 0
+			}
+			i += 2
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+func isHex(c byte) bool {
+	return '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F'
+}
+
+func unhex(c byte) byte {
+	switch {
+	case c <= '9':
+		return c - '0'
+	case c >= 'a':
+		return c - 'a' + 10
+	}
+	return c - 'A' + 10
+}
+
+// HTML's ASCII whitespace: what separates the ids of a list.
 const asciiSpace = " \t\n\f\r"
 
 func attr(n *html.Node, key string) (string, bool) {
