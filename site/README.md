@@ -11,6 +11,7 @@ here — what a page ships is what its components asked the builder for
 pnpm install                      # at the repository root
 pnpm --filter @reactogenic/site check   # type-check: reactogenic check
 pnpm --filter @reactogenic/site build   # reactogenic build → site/dist
+pnpm --filter @reactogenic/site test:browser   # the built site in Chromium and WebKit (test/browser.mjs)
 ```
 
 In this repository the `reactogenic` command is the binary that
@@ -29,6 +30,8 @@ REACTOGENIC_BINARY=/tmp/reactogenic pnpm --filter @reactogenic/site build
 | `code.rtsx` | `Code`: a sample as plain `<pre><code>`; the text is a template-literal constant of the module that shows it |
 | `site.css` | page grid, text, code, tables. Unlayered, so it wins over the design system's layers |
 | `public/` | copied to the output as it is |
+| `test/browser.mjs` | builds the site as it ships and with `--no-specialize`, and checks both in a browser: the components work, and pruning changes no computed style |
+| `dist/` | the output; not in the repository |
 
 | Page | Beyond the layout | Ships |
 | --- | --- | --- |

@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "reactogenic build",
-    "check": "reactogenic check"
+    "check": "reactogenic check",
+    "test:browser": "node test/browser.mjs"
   },
   "dependencies": {
     "@reactogenic/core": "workspace:*",
