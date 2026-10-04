@@ -1,0 +1,1 @@
+function e(){addEventListener("pagehide",l)}function l(){for(let o of document.querySelectorAll(":popover-open"))o.hidePopover();for(let o of document.querySelectorAll("dialog[open]"))o.close()}e();

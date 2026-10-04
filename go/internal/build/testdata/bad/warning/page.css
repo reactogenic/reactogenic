@@ -1,0 +1,6 @@
+.lead {
+  widht: 2px;
+  font-weight: 600;
+  /* Not resolved, not checked: a `url()` stays as it is written. */
+  background: url(/not/there.png);
+}

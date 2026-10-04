@@ -1,7 +1,7 @@
-// Command reactogenic is the phase 1 CLI: `reactogenic check` (RGP1-070),
-// the language server (RGP1-103), the stdio server driven by the Vite
-// plugin (RGP1-053) and by the TS server plugin (RGP1-111), and the content
-// mapper for stock TypeScript 7.1 (RGP1-112).
+// Command reactogenic is the CLI: `reactogenic check` (RGP1-070), the
+// builder (RGP2-030), the language server (RGP1-103), the stdio server
+// driven by the Vite plugin (RGP1-053) and by the TS server plugin
+// (RGP1-111), and the content mapper for stock TypeScript 7.1 (RGP1-112).
 package main
 
 import (
@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/reactogenic/reactogenic/go/internal/build"
 	"github.com/reactogenic/reactogenic/go/internal/check"
 	"github.com/reactogenic/reactogenic/go/internal/lsp"
 	"github.com/reactogenic/reactogenic/go/internal/mapper"
@@ -23,6 +24,7 @@ import (
 var version = "0.0.0-dev"
 
 const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]
+       ` + build.Usage + `
        reactogenic lsp --stdio [--clientProcessId pid]
        reactogenic serve
        reactogenic content-mapper
@@ -30,6 +32,15 @@ const usage = `usage: reactogenic check [-p tsconfig.json|dir] [--pretty=false] 
 
   check   type-check the project, with .rtsx transpiled; errors are reported
           on the .rtsx files (exit status 1 when there are errors)
+  build   build the pages under --pages (pages/**/index.rtsx) into --out
+          (dist): per page plain HTML, the CSS it can use and the JS of the
+          behaviours it mounted, no React; any error of check stops it
+          (exit status 1). --out is emptied when the build writes. --base
+          /docs/ for a site served under a path; --inline: a page's CSS and
+          JS in the page (always), as files under _rg/ (never), or by what
+          is cheaper (auto); --report prints the bytes of every page, also
+          written to _rg/report.json; --no-specialize builds the control:
+          one CSS bundle and one script for the whole site
   lsp     the language server for editors (LSP over stdio); it ends with the
           client's process: --clientProcessId, else the one named in initialize
           (exit status 0 after shutdown and exit, 1 otherwise)
@@ -49,6 +60,16 @@ func main() {
 	switch os.Args[1] {
 	case "check":
 		os.Exit(runCheck(os.Args[2:]))
+	case "build":
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		// As `check`: every .rtsx file is a module of the program, and a
+		// build fails on a syntax error (specs/phase02/builder.md).
+		mapper.RegisterStrict(version)
+		os.Exit(build.Main(os.Args[2:], cwd, os.Stdout, os.Stderr))
 	case "serve":
 		if err := server.Serve(os.Stdin, os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "reactogenic serve:", err)

@@ -1,0 +1,18 @@
+// "/guide/": text, and a segment root — `intro.rtsx` beside it is a module of
+// this page, not a page.
+import { Layout } from "../../layout.rtsx";
+
+export default function GuidePage() {
+  return (
+    <Layout title="Guide">
+      <article className="prose">
+        <h1>Guide</h1>
+        <section #intro />
+        <h2>Slots</h2>
+        <p>A slot is data plus an optional render function: <code>{"<$Title>"}</code>.</p>
+        <pre>{"<Dialog>\n  <$Title>Install</$Title>\n</Dialog>"}</pre>
+        <p><a href="/guide/more/">More</a></p>
+      </article>
+    </Layout>
+  );
+}

@@ -1,0 +1,22 @@
+// "/": a SideMenu — a drawer, so `overlays` and nothing else.
+import { SideMenu } from "@reactogenic/ui";
+import { Layout } from "../layout.rtsx";
+
+export default function HomePage() {
+  return (
+    <Layout title="Home">
+      <SideMenu id="nav" label="Fixture">
+        <$Header>Fixture</$Header>
+        <$Section key="pages">
+          <$Item key="home" href="/">Home</$Item>
+          <$Item key="guide">
+            Guide
+            <$Item key="guide" href="/guide/">The guide</$Item>
+            <$Item key="more" href="/guide/more/">More</$Item>
+          </$Item>
+        </$Section>
+      </SideMenu>
+      <h1>Home</h1>
+    </Layout>
+  );
+}

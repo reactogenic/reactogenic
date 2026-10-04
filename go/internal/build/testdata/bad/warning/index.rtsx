@@ -1,0 +1,12 @@
+// css-warning: what esbuild says of a stylesheet is passed on, and the page
+// is built.
+import { Page } from "../page.tsx";
+import "./page.css";
+
+export default function WarningPage() {
+  return (
+    <Page title="Warning">
+      <p className="lead">Built all the same.</p>
+    </Page>
+  );
+}

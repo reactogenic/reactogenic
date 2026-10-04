@@ -1,0 +1,17 @@
+// "/guide/more/": the same kinds of elements as "/guide/", so the same CSS —
+// one blob for two pages.
+import { Layout } from "../../../layout.rtsx";
+
+export default function MorePage() {
+  return (
+    <Layout title="More">
+      <article className="prose">
+        <h1>More</h1>
+        <h2 id="flow">Flow control</h2>
+        <p><code>Match</code> is an if; <code>Switch</code> has cases.</p>
+        <pre>{"<Match on={user}>…</Match>"}</pre>
+        <p><a href="/guide">Back to the guide</a></p>
+      </article>
+    </Layout>
+  );
+}

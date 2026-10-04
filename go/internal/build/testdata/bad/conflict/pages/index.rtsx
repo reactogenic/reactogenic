@@ -1,0 +1,7 @@
+// public-conflict: `public/index.html` is where this page is written, and
+// `public/_rg/` is the builder's.
+import { Page } from "../../page.tsx";
+
+export default function ConflictPage() {
+  return <Page title="Conflict" />;
+}

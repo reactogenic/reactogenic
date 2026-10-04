@@ -1,0 +1,35 @@
+// The fixture site's layout: a header of plain links — nothing in it opens,
+// so what a page ships beyond its HTML is what the page itself uses.
+import type { ReactNode } from "react";
+import "./site.css";
+
+const NAV = [
+  { href: "/", label: "Home" },
+  { href: "/guide/", label: "Guide" },
+  { href: "/plain/", label: "Plain" },
+  { href: "/links/", label: "Links" },
+  { href: "/dialog/", label: "Dialog" },
+  { href: "/actions/", label: "Actions" },
+];
+
+export function Layout({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{`${title} · Fixture`}</title>
+        <link rel="icon" href="/favicon.svg" />
+      </head>
+      <body>
+        <header className="site-header">
+          {NAV.map((item) => (
+            <a key={item.href} href={item.href}>{item.label}</a>
+          ))}
+          <a href="https://example.com/">Elsewhere</a>
+        </header>
+        <main>{children}</main>
+      </body>
+    </html>
+  );
+}

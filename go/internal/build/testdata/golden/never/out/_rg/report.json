@@ -1,0 +1,846 @@
+{
+  "base": "/",
+  "inline": "never",
+  "specialize": true,
+  "pages": [
+    {
+      "pathname": "/",
+      "file": "pages/index.rtsx",
+      "output": "index.html",
+      "document": {
+        "raw": 1280,
+        "gzip": 597
+      },
+      "html": {
+        "raw": 1168,
+        "gzip": 535
+      },
+      "css": {
+        "raw": 2894,
+        "gzip": 1026,
+        "delivery": "file",
+        "url": "/_rg/page-ea7b9393.css",
+        "pages": 1,
+        "blob": "ea7b9393"
+      },
+      "js": {
+        "raw": 198,
+        "gzip": 153,
+        "delivery": "file",
+        "url": "/_rg/page-df8e53f4.js",
+        "pages": 2,
+        "blob": "df8e53f4"
+      },
+      "components": [
+        {
+          "name": "Each",
+          "count": 3
+        },
+        {
+          "name": "HomePage",
+          "count": 1
+        },
+        {
+          "name": "Item",
+          "count": 4
+        },
+        {
+          "name": "Items",
+          "count": 2
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "Section",
+          "count": 1
+        },
+        {
+          "name": "SideMenu",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "../../../../../packages/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "path": "<entry>",
+          "bytes": 4
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 36,
+        "selectors": 63,
+        "selectorsDropped": 37,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "../../../../../packages/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 451,
+            "bytesOut": 396
+          },
+          {
+            "file": "../../../../../packages/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 4,
+            "bytesIn": 656,
+            "bytesOut": 47
+          },
+          {
+            "file": "../../../../../packages/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 13,
+            "bytesIn": 2353,
+            "bytesOut": 47
+          },
+          {
+            "file": "../../../../../packages/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 7,
+            "bytesIn": 1625,
+            "bytesOut": 145
+          },
+          {
+            "file": "../../../../../packages/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 2,
+            "bytesIn": 3329,
+            "bytesOut": 2331
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1396,
+            "bytesOut": 380
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/actions/",
+      "file": "pages/actions/index.rtsx",
+      "output": "actions/index.html",
+      "document": {
+        "raw": 1523,
+        "gzip": 694
+      },
+      "html": {
+        "raw": 1411,
+        "gzip": 634
+      },
+      "css": {
+        "raw": 3668,
+        "gzip": 1237,
+        "delivery": "file",
+        "url": "/_rg/page-3ed21ca5.css",
+        "pages": 1,
+        "blob": "3ed21ca5"
+      },
+      "js": {
+        "raw": 1420,
+        "gzip": 695,
+        "delivery": "file",
+        "url": "/_rg/page-9cd9b99a.js",
+        "pages": 1,
+        "blob": "9cd9b99a"
+      },
+      "components": [
+        {
+          "name": "ActionsPage",
+          "count": 1
+        },
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 3
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/menu-keys",
+          "id": "actions",
+          "flags": {
+            "RG_MENU_TYPEAHEAD": true
+          }
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "../../../../../packages/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/menu-keys",
+          "path": "../../../../../packages/ui/src/behaviors/menu-keys.ts",
+          "bytes": 850
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers",
+          "path": "../../../../../packages/ui/src/behaviors/invokers.ts",
+          "bytes": 330
+        },
+        {
+          "path": "<entry>",
+          "bytes": 46
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 35,
+        "selectors": 63,
+        "selectorsDropped": 36,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "../../../../../packages/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 451,
+            "bytesOut": 354
+          },
+          {
+            "file": "../../../../../packages/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 1,
+            "bytesIn": 656,
+            "bytesOut": 463
+          },
+          {
+            "file": "../../../../../packages/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 1,
+            "bytesIn": 2353,
+            "bytesOut": 1698
+          },
+          {
+            "file": "../../../../../packages/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 1,
+            "bytesIn": 1625,
+            "bytesOut": 1273
+          },
+          {
+            "file": "../../../../../packages/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3329,
+            "bytesOut": 50
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1396,
+            "bytesOut": 380
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/dialog/",
+      "file": "pages/dialog/index.rtsx",
+      "output": "dialog/index.html",
+      "document": {
+        "raw": 1281,
+        "gzip": 594
+      },
+      "html": {
+        "raw": 1169,
+        "gzip": 534
+      },
+      "css": {
+        "raw": 2819,
+        "gzip": 1048,
+        "delivery": "file",
+        "url": "/_rg/page-0ac89da4.css",
+        "pages": 1,
+        "blob": "0ac89da4"
+      },
+      "js": {
+        "raw": 532,
+        "gzip": 317,
+        "delivery": "file",
+        "url": "/_rg/page-5baafe54.js",
+        "pages": 1,
+        "blob": "5baafe54"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 2
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "DialogPage",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "../../../../../packages/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers",
+          "path": "../../../../../packages/ui/src/behaviors/invokers.ts",
+          "bytes": 330
+        },
+        {
+          "path": "<entry>",
+          "bytes": 8
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 40,
+        "selectors": 63,
+        "selectorsDropped": 41,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "../../../../../packages/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 451,
+            "bytesOut": 354
+          },
+          {
+            "file": "../../../../../packages/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 1,
+            "bytesIn": 656,
+            "bytesOut": 463
+          },
+          {
+            "file": "../../../../../packages/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 0,
+            "bytesIn": 2353,
+            "bytesOut": 1879
+          },
+          {
+            "file": "../../../../../packages/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 7,
+            "bytesIn": 1625,
+            "bytesOut": 145
+          },
+          {
+            "file": "../../../../../packages/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3329,
+            "bytesOut": 50
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1396,
+            "bytesOut": 380
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/guide/",
+      "file": "pages/guide/index.rtsx",
+      "output": "guide/index.html",
+      "document": {
+        "raw": 954,
+        "gzip": 528
+      },
+      "html": {
+        "raw": 901,
+        "gzip": 498
+      },
+      "css": {
+        "raw": 1074,
+        "gzip": 502,
+        "delivery": "file",
+        "url": "/_rg/page-e28e8351.css",
+        "pages": 2,
+        "blob": "e28e8351"
+      },
+      "components": [
+        {
+          "name": "GuidePage",
+          "count": 1
+        },
+        {
+          "name": "Intro",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 15,
+        "rulesDropped": 1,
+        "selectors": 15,
+        "selectorsDropped": 1,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 1,
+            "bytesIn": 1396,
+            "bytesOut": 1160
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/guide/more/",
+      "file": "pages/guide/more/index.rtsx",
+      "output": "guide/more/index.html",
+      "document": {
+        "raw": 771,
+        "gzip": 461
+      },
+      "html": {
+        "raw": 718,
+        "gzip": 433
+      },
+      "css": {
+        "raw": 1074,
+        "gzip": 502,
+        "delivery": "file",
+        "url": "/_rg/page-e28e8351.css",
+        "pages": 2,
+        "blob": "e28e8351"
+      },
+      "components": [
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MorePage",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 15,
+        "rulesDropped": 1,
+        "selectors": 15,
+        "selectorsDropped": 1,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 1,
+            "bytesIn": 1396,
+            "bytesOut": 1160
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/links/",
+      "file": "pages/links/index.rtsx",
+      "output": "links/index.html",
+      "document": {
+        "raw": 931,
+        "gzip": 507
+      },
+      "html": {
+        "raw": 819,
+        "gzip": 447
+      },
+      "css": {
+        "raw": 2186,
+        "gzip": 861,
+        "delivery": "file",
+        "url": "/_rg/page-e3ae4903.css",
+        "pages": 1,
+        "blob": "e3ae4903"
+      },
+      "js": {
+        "raw": 198,
+        "gzip": 153,
+        "delivery": "file",
+        "url": "/_rg/page-df8e53f4.js",
+        "pages": 2,
+        "blob": "df8e53f4"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "LinksPage",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 3
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "../../../../../packages/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "path": "<entry>",
+          "bytes": 4
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 46,
+        "selectors": 63,
+        "selectorsDropped": 47,
+        "customPropertiesDropped": 2,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "../../../../../packages/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 451,
+            "bytesOut": 336
+          },
+          {
+            "file": "../../../../../packages/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 0,
+            "bytesIn": 656,
+            "bytesOut": 537
+          },
+          {
+            "file": "../../../../../packages/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 13,
+            "bytesIn": 2353,
+            "bytesOut": 47
+          },
+          {
+            "file": "../../../../../packages/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 1,
+            "bytesIn": 1625,
+            "bytesOut": 1265
+          },
+          {
+            "file": "../../../../../packages/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3329,
+            "bytesOut": 50
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1396,
+            "bytesOut": 380
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/plain/",
+      "file": "pages/plain/index.rtsx",
+      "output": "plain/index.html",
+      "document": {
+        "raw": 611,
+        "gzip": 361
+      },
+      "html": {
+        "raw": 558,
+        "gzip": 332
+      },
+      "css": {
+        "raw": 1106,
+        "gzip": 553,
+        "delivery": "file",
+        "url": "/_rg/page-c3ea256e.css",
+        "pages": 1,
+        "blob": "c3ea256e"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "PlainPage",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 53,
+        "selectors": 63,
+        "selectorsDropped": 54,
+        "customPropertiesDropped": 2,
+        "keyframesDropped": 1,
+        "sources": [
+          {
+            "file": "../../../../../packages/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 451,
+            "bytesOut": 336
+          },
+          {
+            "file": "../../../../../packages/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 1,
+            "bytesIn": 656,
+            "bytesOut": 463
+          },
+          {
+            "file": "../../../../../packages/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 13,
+            "bytesIn": 2353,
+            "bytesOut": 47
+          },
+          {
+            "file": "../../../../../packages/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 7,
+            "bytesIn": 1625,
+            "bytesOut": 145
+          },
+          {
+            "file": "../../../../../packages/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3329,
+            "bytesOut": 50
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1396,
+            "bytesOut": 380
+          }
+        ]
+      }
+    }
+  ],
+  "blobs": [
+    {
+      "kind": "css",
+      "hash": "ea7b9393",
+      "size": {
+        "raw": 2894,
+        "gzip": 1026
+      },
+      "delivery": "file",
+      "file": "_rg/page-ea7b9393.css",
+      "pages": [
+        "/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "df8e53f4",
+      "size": {
+        "raw": 198,
+        "gzip": 153
+      },
+      "delivery": "file",
+      "file": "_rg/page-df8e53f4.js",
+      "pages": [
+        "/",
+        "/links/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "3ed21ca5",
+      "size": {
+        "raw": 3668,
+        "gzip": 1237
+      },
+      "delivery": "file",
+      "file": "_rg/page-3ed21ca5.css",
+      "pages": [
+        "/actions/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "9cd9b99a",
+      "size": {
+        "raw": 1420,
+        "gzip": 695
+      },
+      "delivery": "file",
+      "file": "_rg/page-9cd9b99a.js",
+      "pages": [
+        "/actions/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "0ac89da4",
+      "size": {
+        "raw": 2819,
+        "gzip": 1048
+      },
+      "delivery": "file",
+      "file": "_rg/page-0ac89da4.css",
+      "pages": [
+        "/dialog/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "5baafe54",
+      "size": {
+        "raw": 532,
+        "gzip": 317
+      },
+      "delivery": "file",
+      "file": "_rg/page-5baafe54.js",
+      "pages": [
+        "/dialog/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "e28e8351",
+      "size": {
+        "raw": 1074,
+        "gzip": 502
+      },
+      "delivery": "file",
+      "file": "_rg/page-e28e8351.css",
+      "pages": [
+        "/guide/",
+        "/guide/more/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "e3ae4903",
+      "size": {
+        "raw": 2186,
+        "gzip": 861
+      },
+      "delivery": "file",
+      "file": "_rg/page-e3ae4903.css",
+      "pages": [
+        "/links/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "c3ea256e",
+      "size": {
+        "raw": 1106,
+        "gzip": 553
+      },
+      "delivery": "file",
+      "file": "_rg/page-c3ea256e.css",
+      "pages": [
+        "/plain/"
+      ]
+    }
+  ],
+  "public": [
+    "favicon.svg",
+    "robots.txt"
+  ]
+}

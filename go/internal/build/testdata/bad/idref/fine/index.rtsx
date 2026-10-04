@@ -1,0 +1,11 @@
+// A page with nothing wrong, beside one that has: the build stops all the
+// same, and names the page that is.
+import { Page } from "../../page.tsx";
+
+export default function FinePage() {
+  return (
+    <Page title="Fine">
+      <a href="/">Up</a>
+    </Page>
+  );
+}
