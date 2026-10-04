@@ -1,0 +1,10 @@
+/* @reactogenic/ui's CSS — the files themselves, not a copy — in the order a
+   page that uses every component imports them, then the CSS of the builder's
+   fixture site (internal/build/testdata/site): the sheet its pages are
+   pruned from. */
+@import "../../../../../../packages/ui/src/tokens.css";
+@import "../../../../../../packages/ui/src/button.css";
+@import "../../../../../../packages/ui/src/dialog.css";
+@import "../../../../../../packages/ui/src/dropdown-menu.css";
+@import "../../../../../../packages/ui/src/side-menu.css";
+@import "../../../testdata/site/site.css";

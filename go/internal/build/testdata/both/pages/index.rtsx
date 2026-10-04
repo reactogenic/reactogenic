@@ -1,0 +1,9 @@
+// `index.rtsx` and `index.tsx` side by side: `check` says ambiguous-module,
+// and so the build stops (builder.md, *Routes*).
+export default function Page() {
+  return (
+    <html>
+      <body>rtsx</body>
+    </html>
+  );
+}

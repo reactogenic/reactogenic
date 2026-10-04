@@ -23,7 +23,7 @@ func Watch(configPath string, interval time.Duration, stop <-chan struct{}, repo
 	check := func(before map[string]string) {
 		watched := configs
 		var reports []Report
-		reports, configs = run(configPath)
+		reports, configs, _ = run(configPath, nil)
 		last = before
 		for file, stamp := range snapshot(configs) {
 			if !slices.ContainsFunc(watched, func(config string) bool {

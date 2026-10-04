@@ -171,14 +171,6 @@ func build(program *rtsx.Program, routes []Route, dir string, v variant) (*bundl
 		reacts   []string            // the directories of the project's react and react-dom
 		once     sync.Once
 	)
-	// source is the program's module at an esbuild path: a file whose text
-	// is code. A declaration file stands for code that only esbuild can find.
-	source := func(path string) *rtsx.SourceFile {
-		if file := program.GetSourceFile(filepath.ToSlash(path)); file != nil && !file.IsDeclarationFile {
-			return file
-		}
-		return nil
-	}
 	plugin := api.Plugin{Name: namespace, Setup: func(b api.PluginBuild) {
 		// project resolves one of React's packages as the project does.
 		project := func(specifier string) api.ResolveResult {
@@ -246,34 +238,12 @@ func build(program *rtsx.Program, routes []Route, dir string, v variant) (*bundl
 			// built is what was checked. What the program holds no code for (a
 			// package's JavaScript, behind its declarations) is esbuild's.
 			if args.Namespace == namespace {
-				if source(args.Path) != nil { // the entry's import of a page
+				if Source(program, args.Path) != nil { // the entry's import of a page
 					return api.OnResolveResult{Path: filepath.FromSlash(args.Path)}, nil
 				}
 				return api.OnResolveResult{}, nil
 			}
-			importer := source(args.Importer)
-			if importer == nil {
-				return api.OnResolveResult{}, nil
-			}
-			for _, specifier := range importer.Imports() {
-				if specifier.Text() != args.Path {
-					continue
-				}
-				resolved := program.GetResolvedModuleFromModuleSpecifier(importer, specifier)
-				if resolved == nil || resolved.ResolvedFileName == "" {
-					continue
-				}
-				if source(resolved.ResolvedFileName) != nil {
-					return api.OnResolveResult{Path: filepath.FromSlash(resolved.ResolvedFileName)}, nil
-				}
-				// Declarations of the project's own — not a package's, which
-				// esbuild finds as Node does: the JavaScript is beside them,
-				// wherever the specifier (a `paths` alias) pointed.
-				if code := declared(resolved.ResolvedFileName); code != "" && !resolved.IsExternalLibraryImport {
-					return api.OnResolveResult{Path: filepath.FromSlash(code)}, nil
-				}
-			}
-			return api.OnResolveResult{}, nil
+			return api.OnResolveResult{Path: Resolve(program, args.Importer, args.Path)}, nil
 		})
 		b.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: namespace}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 			var text string
@@ -300,23 +270,13 @@ func build(program *rtsx.Program, routes []Route, dir string, v variant) (*bundl
 				text, err := hooked(args.Path)
 				return api.OnLoadResult{Contents: &text, Loader: api.LoaderJS, ResolveDir: filepath.Dir(args.Path)}, err
 			}
-			// A program file's text is the program's: for an .rtsx module,
-			// its emitted TSX.
-			file := source(args.Path)
-			loader, known := loaders[strings.ToLower(filepath.Ext(args.Path))]
-			if file == nil || !known {
-				return api.OnLoadResult{}, nil
+			file, result, err := Load(program, args.Path)
+			if file != nil && err == nil {
+				mu.Lock()
+				loaded = append(loaded, file)
+				mu.Unlock()
 			}
-			if f, mapped := mapper.Of(file); mapped && f.Stopped {
-				// Its text is its source, not TSX: `build` stops on the
-				// file's diagnostics before it gets here.
-				return api.OnLoadResult{}, fmt.Errorf("%s was not compiled: it has errors", args.Path)
-			}
-			mu.Lock()
-			loaded = append(loaded, file)
-			mu.Unlock()
-			text := file.Text()
-			return api.OnLoadResult{Contents: &text, Loader: loader, ResolveDir: filepath.Dir(args.Path)}, nil
+			return result, err
 		})
 	}}
 
@@ -382,6 +342,69 @@ func build(program *rtsx.Program, routes []Route, dir string, v variant) (*bundl
 		}
 	}
 	return out, nil
+}
+
+// Source is the program's module at an esbuild path: a file whose text is
+// code. nil for a file the program does not hold, and for a declaration
+// file, which stands for code that only esbuild can find.
+//
+// Source, Resolve and Load are the one resolver of builder.md (*The
+// pipeline*) for an esbuild plugin: the render bundle's, and the CSS
+// build's, which reads the same modules for the stylesheets they import.
+func Source(program *rtsx.Program, path string) *rtsx.SourceFile {
+	if file := program.GetSourceFile(filepath.ToSlash(path)); file != nil && !file.IsDeclarationFile {
+		return file
+	}
+	return nil
+}
+
+// Resolve is where an import goes that a program file makes: where the
+// program resolved it — what is built is what was checked. "": the importer
+// is no program file, or the program holds no code for the import (a
+// package's JavaScript, behind its declarations; a stylesheet; an asset) —
+// it is esbuild's to resolve.
+func Resolve(program *rtsx.Program, importer, specifier string) string {
+	file := Source(program, importer)
+	if file == nil {
+		return ""
+	}
+	for _, written := range file.Imports() {
+		if written.Text() != specifier {
+			continue
+		}
+		resolved := program.GetResolvedModuleFromModuleSpecifier(file, written)
+		if resolved == nil || resolved.ResolvedFileName == "" {
+			continue
+		}
+		if Source(program, resolved.ResolvedFileName) != nil {
+			return filepath.FromSlash(resolved.ResolvedFileName)
+		}
+		// Declarations of the project's own — not a package's, which
+		// esbuild finds as Node does: the JavaScript is beside them,
+		// wherever the specifier (a `paths` alias) pointed.
+		if code := declared(resolved.ResolvedFileName); code != "" && !resolved.IsExternalLibraryImport {
+			return filepath.FromSlash(code)
+		}
+	}
+	return ""
+}
+
+// Load is a program file as esbuild loads it: its text is the program's —
+// for an .rtsx module, its emitted TSX. A nil file and an empty result: the
+// path is not the program's, or has no loader, and esbuild reads it.
+func Load(program *rtsx.Program, path string) (*rtsx.SourceFile, api.OnLoadResult, error) {
+	file := Source(program, path)
+	loader, known := loaders[strings.ToLower(filepath.Ext(path))]
+	if file == nil || !known {
+		return nil, api.OnLoadResult{}, nil
+	}
+	if f, mapped := mapper.Of(file); mapped && f.Stopped {
+		// Its text is its source, not TSX: `build` stops on the file's
+		// diagnostics before it gets here.
+		return file, api.OnLoadResult{}, fmt.Errorf("%s was not compiled: it has errors", path)
+	}
+	text := file.Text()
+	return file, api.OnLoadResult{Contents: &text, Loader: loader, ResolveDir: filepath.Dir(path)}, nil
 }
 
 // loaders are esbuild's loaders for the program's files, by extension.
@@ -502,7 +525,17 @@ func importers(metafile, dir string) map[string][]edge {
 // wrote what it is about. An error in a module of the builder's own has no
 // file.
 func bundleError(program *rtsx.Program, dir string, message api.Message) report.Report {
-	r := report.Report{Code: "render-bundle", Message: message.Text}
+	return Message(program, dir, "render-bundle", message)
+}
+
+// Message is a message of an esbuild build that reads the program's files
+// (Load), as a report where the author wrote what it is about: in a program
+// file esbuild's position is one of the program's text — for an .rtsx
+// module, of its emitted TSX — and the report's is the source's. dir is the
+// build's working directory, which esbuild names files from. A message about
+// a module of the builder's own has no file.
+func Message(program *rtsx.Program, dir, code string, message api.Message) report.Report {
+	r := report.Report{Code: code, Message: message.Text}
 	location := message.Location
 	if location == nil || strings.HasPrefix(location.File, namespace+":") || location.Namespace != "" && location.Namespace != "file" {
 		return r

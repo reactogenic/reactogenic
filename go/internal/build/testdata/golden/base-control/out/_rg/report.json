@@ -1,0 +1,436 @@
+{
+  "base": "/docs/",
+  "inline": "auto",
+  "specialize": false,
+  "pages": [
+    {
+      "pathname": "/",
+      "file": "pages/index.rtsx",
+      "output": "index.html",
+      "document": {
+        "raw": 1340,
+        "gzip": 602
+      },
+      "html": {
+        "raw": 1218,
+        "gzip": 542
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "Each",
+          "count": 3
+        },
+        {
+          "name": "HomePage",
+          "count": 1
+        },
+        {
+          "name": "Item",
+          "count": 4
+        },
+        {
+          "name": "Items",
+          "count": 2
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "Section",
+          "count": 1
+        },
+        {
+          "name": "SideMenu",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        }
+      ]
+    },
+    {
+      "pathname": "/actions/",
+      "file": "pages/actions/index.rtsx",
+      "output": "actions/index.html",
+      "document": {
+        "raw": 1568,
+        "gzip": 702
+      },
+      "html": {
+        "raw": 1446,
+        "gzip": 640
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "ActionsPage",
+          "count": 1
+        },
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 3
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/menu-keys",
+          "id": "actions",
+          "flags": {
+            "RG_MENU_TYPEAHEAD": true
+          }
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ]
+    },
+    {
+      "pathname": "/dialog/",
+      "file": "pages/dialog/index.rtsx",
+      "output": "dialog/index.html",
+      "document": {
+        "raw": 1326,
+        "gzip": 603
+      },
+      "html": {
+        "raw": 1204,
+        "gzip": 538
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 2
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "DialogPage",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ]
+    },
+    {
+      "pathname": "/guide/",
+      "file": "pages/guide/index.rtsx",
+      "output": "guide/index.html",
+      "document": {
+        "raw": 1063,
+        "gzip": 567
+      },
+      "html": {
+        "raw": 941,
+        "gzip": 505
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "GuidePage",
+          "count": 1
+        },
+        {
+          "name": "Intro",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": []
+    },
+    {
+      "pathname": "/guide/more/",
+      "file": "pages/guide/more/index.rtsx",
+      "output": "guide/more/index.html",
+      "document": {
+        "raw": 880,
+        "gzip": 501
+      },
+      "html": {
+        "raw": 758,
+        "gzip": 438
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MorePage",
+          "count": 1
+        }
+      ],
+      "mounts": []
+    },
+    {
+      "pathname": "/links/",
+      "file": "pages/links/index.rtsx",
+      "output": "links/index.html",
+      "document": {
+        "raw": 986,
+        "gzip": 512
+      },
+      "html": {
+        "raw": 864,
+        "gzip": 453
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "LinksPage",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 3
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        }
+      ]
+    },
+    {
+      "pathname": "/plain/",
+      "file": "pages/plain/index.rtsx",
+      "output": "plain/index.html",
+      "document": {
+        "raw": 720,
+        "gzip": 398
+      },
+      "html": {
+        "raw": 598,
+        "gzip": 337
+      },
+      "css": {
+        "raw": 7177,
+        "gzip": 2010,
+        "delivery": "file",
+        "url": "/docs/_rg/site-96dce8a3.css",
+        "pages": 7,
+        "blob": "96dce8a3"
+      },
+      "js": {
+        "raw": 1633,
+        "gzip": 813,
+        "delivery": "file",
+        "url": "/docs/_rg/site-071d3561.js",
+        "pages": 7,
+        "blob": "071d3561"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "PlainPage",
+          "count": 1
+        }
+      ],
+      "mounts": []
+    }
+  ],
+  "blobs": [
+    {
+      "kind": "css",
+      "hash": "96dce8a3",
+      "size": {
+        "raw": 7177,
+        "gzip": 2010
+      },
+      "delivery": "file",
+      "file": "_rg/site-96dce8a3.css",
+      "pages": [
+        "/",
+        "/actions/",
+        "/dialog/",
+        "/guide/",
+        "/guide/more/",
+        "/links/",
+        "/plain/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "071d3561",
+      "size": {
+        "raw": 1633,
+        "gzip": 813
+      },
+      "delivery": "file",
+      "file": "_rg/site-071d3561.js",
+      "pages": [
+        "/",
+        "/actions/",
+        "/dialog/",
+        "/guide/",
+        "/guide/more/",
+        "/links/",
+        "/plain/"
+      ]
+    }
+  ],
+  "public": [
+    "favicon.svg",
+    "robots.txt"
+  ]
+}

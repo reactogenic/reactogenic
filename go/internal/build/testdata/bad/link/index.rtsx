@@ -1,0 +1,11 @@
+// link-not-found: `/guide/` is no page of this site.
+import { Page } from "../page.tsx";
+
+export default function LinkPage() {
+  return (
+    <Page title="Link">
+      <a href="/guide/">The guide</a>
+      <a href="/">Here</a>
+    </Page>
+  );
+}

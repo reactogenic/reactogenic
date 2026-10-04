@@ -1,0 +1,8 @@
+// css-bundle: the stylesheet is not there. TypeScript does not say so — the
+// module is declared (`*.css`) — and the render bundle reads no CSS.
+import { Page } from "../page.tsx";
+import "./missing.css";
+
+export default function CssPage() {
+  return <Page title="CSS" />;
+}

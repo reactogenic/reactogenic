@@ -1,0 +1,22 @@
+// "/actions/": an action menu with typeahead that opens a dialog — the
+// heaviest page: `overlays`, `menu-keys` with its flag on, `invokers`.
+import { Dialog, DropdownMenu } from "@reactogenic/ui";
+import { Layout } from "../../layout.rtsx";
+
+export default function ActionsPage() {
+  return (
+    <Layout title="Actions">
+      <h1>Actions</h1>
+      <DropdownMenu id="actions" typeahead>
+        <$Trigger>Actions</$Trigger>
+        <$Item key="about" command="show-modal" commandfor="about">About…</$Item>
+        <$Item key="print">Print</$Item>
+        <$Item key="source" href="https://github.com/reactogenic/reactogenic">Source</$Item>
+      </DropdownMenu>
+      <Dialog id="about">
+        <$Title>About</$Title>
+        A fixture of the builder's tests.
+      </Dialog>
+    </Layout>
+  );
+}

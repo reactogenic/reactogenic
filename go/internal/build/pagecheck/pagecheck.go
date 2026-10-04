@@ -210,18 +210,8 @@ func (c *checker) fragment(fragment string) bool {
 // refuses what a browser requests (`/100%`) and decodes what a browser
 // leaves alone (`%2F`).
 func (c *checker) link(href string) bool {
-	// A tab or a line break is not of the URL, wherever it is.
-	href = strings.Map(func(r rune) rune {
-		if r == '\t' || r == '\n' || r == '\r' {
-			return -1
-		}
-		return r
-	}, href)
-	href, _, _ = strings.Cut(href, "#")
-	href, _, _ = strings.Cut(href, "?")
-	href = strings.ReplaceAll(href, `\`, "/") // in a path, a backslash is a slash
-	// `//host` — and so `/\host` — is another origin.
-	if !strings.HasPrefix(href, "/") || strings.HasPrefix(href, "//") {
+	href, ok := RootRelative(href)
+	if !ok {
 		return true
 	}
 	p := pathOf(href)
@@ -236,6 +226,32 @@ func (c *checker) link(href string) bool {
 	// the file the page is written to.
 	dir, index := strings.CutSuffix(p, "/index.html")
 	return c.routes[p+"/"] || file(p+"/index.html") || index && c.routes[dir+"/"]
+}
+
+// RootRelative says whether href — the value of an `href`, as written — is a
+// link to the site from its root, and returns its path, query and fragment
+// aside, a backslash a slash. These are the links Check reads, and so the
+// ones packaging prefixes with `--base` (builder.md, *Packaging*): one rule
+// for both. A URL with a scheme or a host (`//host`, and so `/\host`), a
+// relative one and a fragment alone are not.
+func RootRelative(href string) (path string, ok bool) {
+	// What a URL parser strips around a URL: spaces and controls. A tab or a
+	// line break is not of the URL, wherever it is.
+	href = strings.TrimFunc(href, func(r rune) bool { return r <= ' ' })
+	href = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return -1
+		}
+		return r
+	}, href)
+	href, _, _ = strings.Cut(href, "#")
+	href, _, _ = strings.Cut(href, "?")
+	href = strings.ReplaceAll(href, `\`, "/") // in a path, a backslash is a slash
+	// `//host` — and so `/\host` — is another origin.
+	if !strings.HasPrefix(href, "/") || strings.HasPrefix(href, "//") {
+		return "", false
+	}
+	return href, true
 }
 
 // pathOf is the path a root-relative href requests, in the names of the

@@ -1,0 +1,226 @@
+{
+  "base": "/docs/",
+  "inline": "always",
+  "specialize": true,
+  "pages": [
+    {
+      "pathname": "/",
+      "file": "pages/index.rtsx",
+      "output": "index.html",
+      "document": {
+        "raw": 459,
+        "gzip": 298
+      },
+      "html": {
+        "raw": 164,
+        "gzip": 143
+      },
+      "css": {
+        "raw": 162,
+        "gzip": 107,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "f8cd5b8a"
+      },
+      "js": {
+        "raw": 87,
+        "gzip": 105,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "f561d7b7"
+      },
+      "components": [
+        {
+          "name": "HomePage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "Marked",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "./behaviors/mark",
+          "id": "marked"
+        }
+      ],
+      "modules": [
+        {
+          "module": "./behaviors/mark",
+          "path": "behaviors/mark.ts",
+          "bytes": 50
+        },
+        {
+          "path": "<entry>",
+          "bytes": 37
+        }
+      ],
+      "styles": {
+        "rules": 15,
+        "rulesDropped": 7,
+        "selectors": 17,
+        "selectorsDropped": 9,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 7,
+            "bytesIn": 466,
+            "bytesOut": 174
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/edit/",
+      "file": "pages/edit/index.rtsx",
+      "output": "edit/index.html",
+      "document": {
+        "raw": 536,
+        "gzip": 295
+      },
+      "html": {
+        "raw": 172,
+        "gzip": 146
+      },
+      "css": {
+        "raw": 349,
+        "gzip": 184,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "03fa1053"
+      },
+      "components": [
+        {
+          "name": "EditPage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "unpruned": true,
+        "because": "the page has an element the user edits (`contenteditable`)",
+        "rules": 15,
+        "rulesDropped": 0,
+        "selectors": 17,
+        "selectorsDropped": 0,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": []
+      }
+    },
+    {
+      "pathname": "/guide/",
+      "file": "pages/guide/index.rtsx",
+      "output": "guide/index.html",
+      "document": {
+        "raw": 217,
+        "gzip": 171
+      },
+      "html": {
+        "raw": 132,
+        "gzip": 126
+      },
+      "css": {
+        "raw": 70,
+        "gzip": 71,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "2ec5d016"
+      },
+      "components": [
+        {
+          "name": "GuidePage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 15,
+        "rulesDropped": 11,
+        "selectors": 17,
+        "selectorsDropped": 13,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 11,
+            "bytesIn": 466,
+            "bytesOut": 76
+          }
+        ]
+      }
+    }
+  ],
+  "blobs": [
+    {
+      "kind": "css",
+      "hash": "f8cd5b8a",
+      "size": {
+        "raw": 162,
+        "gzip": 107
+      },
+      "delivery": "inline",
+      "pages": [
+        "/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "f561d7b7",
+      "size": {
+        "raw": 87,
+        "gzip": 105
+      },
+      "delivery": "inline",
+      "pages": [
+        "/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "03fa1053",
+      "size": {
+        "raw": 349,
+        "gzip": 184
+      },
+      "delivery": "inline",
+      "pages": [
+        "/edit/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "2ec5d016",
+      "size": {
+        "raw": 70,
+        "gzip": 71
+      },
+      "delivery": "inline",
+      "pages": [
+        "/guide/"
+      ]
+    }
+  ],
+  "public": []
+}

@@ -1,0 +1,17 @@
+// "/links/": a menu of links — a disclosure: `overlays`, no keys.
+import { DropdownMenu } from "@reactogenic/ui";
+import { Layout } from "../../layout.rtsx";
+
+export default function LinksPage() {
+  return (
+    <Layout title="Links">
+      <h1>Links</h1>
+      <DropdownMenu id="versions">
+        <$Trigger variant="ghost">Versions</$Trigger>
+        <$Item key="now" href="/" current>0.1 alpha</$Item>
+        <$Item key="robots" href="/robots.txt">robots.txt</$Item>
+        <$Item key="npm" href="https://www.npmjs.com/package/@reactogenic/cli">npm</$Item>
+      </DropdownMenu>
+    </Layout>
+  );
+}

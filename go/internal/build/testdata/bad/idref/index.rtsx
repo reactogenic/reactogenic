@@ -1,0 +1,11 @@
+// idref-not-found: the label names an input that is not on the page.
+import { Page } from "../page.tsx";
+
+export default function IdrefPage() {
+  return (
+    <Page title="Idref">
+      <label htmlFor="email">Email</label>
+      <input id="mail" type="email" />
+    </Page>
+  );
+}

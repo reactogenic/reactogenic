@@ -1,0 +1,57 @@
+/* A page's CSS is pruned against the page as it is served (builder.md,
+   *CSS*): with the base in its links, and with the elements packaging puts
+   in it. Every rule has an `order` of its own, which the test looks for. */
+a {
+  order: 1;
+}
+
+/* The links: `/guide/` in the source, `/docs/guide/` under `--base /docs/`. */
+a[href="/guide/"] {
+  order: 2; /* without a base */
+}
+a[href="/docs/guide/"] {
+  order: 3; /* under /docs/ */
+}
+a[href^="/docs/"] {
+  order: 4; /* under /docs/ */
+}
+a[href$="/guide/"] {
+  order: 5; /* under any base */
+}
+
+/* What packaging adds: the sheet's own element, and the script's. */
+style {
+  order: 6; /* a sheet that is inlined */
+}
+link[rel="stylesheet"] {
+  order: 7; /* a sheet that is a file */
+}
+link[href^="/docs/_rg/"] {
+  order: 8; /* …under /docs/ */
+}
+title + style,
+title + link {
+  order: 9; /* either, after the page's last element of the head */
+}
+script {
+  order: 10; /* a page that mounts something */
+}
+script[src] {
+  order: 11; /* …whose script is a file */
+}
+p + script {
+  order: 12; /* …at the end of the body */
+}
+body > style,
+head > script {
+  order: 13; /* nowhere: not where packaging writes them */
+}
+
+/* The elements the user's editing makes are of no page as written: a page
+   with a `contenteditable` keeps its whole sheet. */
+.editor b {
+  order: 14;
+}
+.never {
+  order: 15;
+}

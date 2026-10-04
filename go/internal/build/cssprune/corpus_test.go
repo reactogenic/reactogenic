@@ -23,6 +23,8 @@ import (
 //	docs         the modelled design system of research/css.md: 12 files, 4 pages
 //	components   the three components of research/components.md, 4 pages
 //	adversarial  sheets written to break the pruner, each with its page
+//	ui           packages/ui's CSS and the fixture site's, 6 pages the builder built
+//	served       a sheet that selects on what packaging writes, 3 built pages
 type sheet struct {
 	name  string
 	entry string
@@ -46,6 +48,16 @@ func corpus(t testing.TB) []sheet {
 		name := strings.TrimSuffix(filepath.Base(css), ".css")
 		out = append(out, sheet{"adversarial/" + name, css, []string{strings.TrimSuffix(css, ".css") + ".html"}})
 	}
+	// The design system itself, and pages the builder built with it: the
+	// fixture site of internal/build, as its golden output has it — a page
+	// of each kind (a drawer, nothing that opens, a menu of links, a dialog,
+	// an action menu with a dialog, text). Last, so that the sheets above
+	// keep their places.
+	out = append(out, sheet{"ui", "testdata/ui/all.css", append(glob("../testdata/golden/never/out/index.html"), glob("../testdata/golden/never/out/*/index.html")...)})
+	// Pages as they are served — under a base, with the <link> and the
+	// <script> packaging put in them, which the sheet selects on — and one
+	// the user edits (`contenteditable`), which is not pruned.
+	out = append(out, sheet{"served", "../testdata/served/site.css", append(glob("../testdata/golden/served-files/out/index.html"), glob("../testdata/golden/served-files/out/*/index.html")...)})
 	return out
 }
 
@@ -82,6 +94,9 @@ func loadPages(t testing.TB, s sheet) []page {
 			t.Fatal(err)
 		}
 		name := strings.TrimSuffix(filepath.Base(file), ".html")
+		if name == "index" { // a built page: named by its directory, `out` for "/"
+			name = filepath.Base(filepath.Dir(file))
+		}
 		out = append(out, page{name, string(src), parsePage(t, string(src))})
 		if strings.Contains(string(src), "<template") {
 			doc := parsePage(t, string(src))
@@ -189,20 +204,31 @@ func TestCorpusSound(t *testing.T) {
 				var props, frames []string
 				p.onProperty = func(name string) { props = append(props, name) }
 				p.onKeyframes = func(name string) { frames = append(frames, name) }
+				var tries []string
+				p.onTry = func(name string) { tries = append(tries, name) }
 				out, stats, err := p.prune(css, pg.doc)
 				if err != nil {
 					t.Fatalf("%s: %v", name, err)
 				}
-				if strings.Contains(pg.src, "<template") != stats.Unpruned {
+				// React writes the attribute as `contentEditable="true"`.
+				if (strings.Contains(pg.src, "<template") || strings.Contains(strings.ToLower(pg.src), "contenteditable")) != stats.Unpruned {
 					t.Errorf("%s: Unpruned = %v", name, stats.Unpruned)
 				}
 				if stats.Unpruned {
 					if out != css {
-						t.Errorf("%s: a page with a <template> was pruned", name)
+						t.Errorf("%s: a page with a <template>, or one the user edits, was pruned", name)
 					}
 					continue
 				}
 				checkPruned(t, css, out, pg.doc)
+
+				// A @position-try dropped is named nowhere in what is left,
+				// nor in the page.
+				for _, try := range tries {
+					if word(out, try) || word(pg.src, try) {
+						t.Errorf("%s: dropped @position-try %s, which is still named", name, try)
+					}
+				}
 
 				for _, prop := range props {
 					if word(out, prop) || word(pg.src, prop) {
@@ -304,11 +330,11 @@ func TestCorpusBytes(t *testing.T) {
 			}
 			note := ""
 			if stats.Unpruned {
-				note = "  unpruned: <template>"
+				note = "  unpruned: " + stats.Because
 			}
-			t.Logf("%-12s %-22s %7d %6d %5d%%%s  (rules %d-%d, selectors %d-%d, custom properties -%d, @keyframes -%d)",
+			t.Logf("%-12s %-22s %7d %6d %5d%%%s  (rules %d-%d, selectors %d-%d, custom properties -%d, @keyframes -%d, @position-try -%d)",
 				"", pg.name, len(out), gz(out), 100*gz(out)/gz(css), note,
-				stats.Rules, stats.RulesDropped, stats.Selectors, stats.SelectorsDropped, stats.Properties, stats.Keyframes)
+				stats.Rules, stats.RulesDropped, stats.Selectors, stats.SelectorsDropped, stats.Properties, stats.Keyframes, stats.PositionTries)
 			if len(out) > len(css) {
 				t.Errorf("%s/%s: pruning grew the sheet: %d > %d", s.name, pg.name, len(out), len(css))
 			}
@@ -361,7 +387,8 @@ func TestCorpusSources(t *testing.T) {
 	if len(stats.Sources) != 13 || rules != stats.Rules || dropped != stats.RulesDropped {
 		t.Errorf("%d sources, %d rules (%d), %d dropped (%d)", len(stats.Sources), rules, stats.Rules, dropped, stats.RulesDropped)
 	}
-	if d := byName["Dialog.css"]; d.Rules == 0 || d.Rules != d.RulesDropped || d.BytesOut != len("/* testdata/docs/ds/Dialog.css */") {
+	// Nothing of it is left: the comment that names the file is not the file's.
+	if d := byName["Dialog.css"]; d.Rules == 0 || d.Rules != d.RulesDropped || d.BytesIn == 0 || d.BytesOut != 0 {
 		t.Errorf("Dialog.css on a page without a dialog: %+v", d)
 	}
 	if b := byName["Button.css"]; b.RulesDropped == 0 || b.RulesDropped == b.Rules {

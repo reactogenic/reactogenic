@@ -1,0 +1,17 @@
+// mount-not-found, mount-no-element: a component mounts a behaviour that is
+// not there, on an element that is not on the page.
+import { mount } from "@reactogenic/core";
+import { Page } from "../page.tsx";
+
+function Widget() {
+  mount("./behaviors/nope", "w1");
+  return <div id="w2" />;
+}
+
+export default function MountPage() {
+  return (
+    <Page title="Mount">
+      <Widget />
+    </Page>
+  );
+}

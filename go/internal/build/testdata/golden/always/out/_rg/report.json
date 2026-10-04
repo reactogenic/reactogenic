@@ -1,0 +1,833 @@
+{
+  "base": "/",
+  "inline": "always",
+  "specialize": true,
+  "pages": [
+    {
+      "pathname": "/",
+      "file": "pages/index.rtsx",
+      "output": "index.html",
+      "document": {
+        "raw": 4233,
+        "gzip": 1606
+      },
+      "html": {
+        "raw": 1168,
+        "gzip": 535
+      },
+      "css": {
+        "raw": 2821,
+        "gzip": 1002,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "1a5f6468"
+      },
+      "js": {
+        "raw": 198,
+        "gzip": 153,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "df8e53f4"
+      },
+      "components": [
+        {
+          "name": "Each",
+          "count": 3
+        },
+        {
+          "name": "HomePage",
+          "count": 1
+        },
+        {
+          "name": "Item",
+          "count": 4
+        },
+        {
+          "name": "Items",
+          "count": 2
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "Section",
+          "count": 1
+        },
+        {
+          "name": "SideMenu",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "@reactogenic/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "path": "<entry>",
+          "bytes": 4
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 36,
+        "selectors": 63,
+        "selectorsDropped": 37,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 1,
+        "positionTryDropped": 1,
+        "sources": [
+          {
+            "file": "@reactogenic/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 404,
+            "bytesOut": 349
+          },
+          {
+            "file": "@reactogenic/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 4,
+            "bytesIn": 609,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 13,
+            "bytesIn": 2306,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 7,
+            "bytesIn": 1571,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 2,
+            "bytesIn": 3279,
+            "bytesOut": 2281
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1382,
+            "bytesOut": 366
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/actions/",
+      "file": "pages/actions/index.rtsx",
+      "output": "actions/index.html",
+      "document": {
+        "raw": 6545,
+        "gzip": 2455
+      },
+      "html": {
+        "raw": 1411,
+        "gzip": 634
+      },
+      "css": {
+        "raw": 3668,
+        "gzip": 1237,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "3ed21ca5"
+      },
+      "js": {
+        "raw": 1420,
+        "gzip": 695,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "9cd9b99a"
+      },
+      "components": [
+        {
+          "name": "ActionsPage",
+          "count": 1
+        },
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 3
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/menu-keys",
+          "id": "actions",
+          "flags": {
+            "RG_MENU_TYPEAHEAD": true
+          }
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "@reactogenic/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/menu-keys",
+          "path": "@reactogenic/ui/src/behaviors/menu-keys.ts",
+          "bytes": 850
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers",
+          "path": "@reactogenic/ui/src/behaviors/invokers.ts",
+          "bytes": 330
+        },
+        {
+          "path": "<entry>",
+          "bytes": 46
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 35,
+        "selectors": 63,
+        "selectorsDropped": 36,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "@reactogenic/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 404,
+            "bytesOut": 307
+          },
+          {
+            "file": "@reactogenic/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 1,
+            "bytesIn": 609,
+            "bytesOut": 416
+          },
+          {
+            "file": "@reactogenic/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 1,
+            "bytesIn": 2306,
+            "bytesOut": 1651
+          },
+          {
+            "file": "@reactogenic/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 1,
+            "bytesIn": 1571,
+            "bytesOut": 1219
+          },
+          {
+            "file": "@reactogenic/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3279,
+            "bytesOut": 0
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1382,
+            "bytesOut": 366
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/dialog/",
+      "file": "pages/dialog/index.rtsx",
+      "output": "dialog/index.html",
+      "document": {
+        "raw": 4493,
+        "gzip": 1792
+      },
+      "html": {
+        "raw": 1169,
+        "gzip": 534
+      },
+      "css": {
+        "raw": 2746,
+        "gzip": 1022,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "06a2bd82"
+      },
+      "js": {
+        "raw": 532,
+        "gzip": 317,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "5baafe54"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 2
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "DialogPage",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "@reactogenic/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers",
+          "path": "@reactogenic/ui/src/behaviors/invokers.ts",
+          "bytes": 330
+        },
+        {
+          "path": "<entry>",
+          "bytes": 8
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 40,
+        "selectors": 63,
+        "selectorsDropped": 41,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
+        "positionTryDropped": 1,
+        "sources": [
+          {
+            "file": "@reactogenic/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 404,
+            "bytesOut": 307
+          },
+          {
+            "file": "@reactogenic/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 1,
+            "bytesIn": 609,
+            "bytesOut": 416
+          },
+          {
+            "file": "@reactogenic/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 0,
+            "bytesIn": 2306,
+            "bytesOut": 1832
+          },
+          {
+            "file": "@reactogenic/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 7,
+            "bytesIn": 1571,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3279,
+            "bytesOut": 0
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1382,
+            "bytesOut": 366
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/guide/",
+      "file": "pages/guide/index.rtsx",
+      "output": "guide/index.html",
+      "document": {
+        "raw": 1990,
+        "gzip": 969
+      },
+      "html": {
+        "raw": 901,
+        "gzip": 498
+      },
+      "css": {
+        "raw": 1074,
+        "gzip": 502,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "e28e8351"
+      },
+      "components": [
+        {
+          "name": "GuidePage",
+          "count": 1
+        },
+        {
+          "name": "Intro",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 15,
+        "rulesDropped": 1,
+        "selectors": 15,
+        "selectorsDropped": 1,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 1,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 1,
+            "bytesIn": 1382,
+            "bytesOut": 1146
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/guide/more/",
+      "file": "pages/guide/more/index.rtsx",
+      "output": "guide/more/index.html",
+      "document": {
+        "raw": 1807,
+        "gzip": 901
+      },
+      "html": {
+        "raw": 718,
+        "gzip": 433
+      },
+      "css": {
+        "raw": 1074,
+        "gzip": 502,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "e28e8351"
+      },
+      "components": [
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MorePage",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 15,
+        "rulesDropped": 1,
+        "selectors": 15,
+        "selectorsDropped": 1,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 1,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 1,
+            "bytesIn": 1382,
+            "bytesOut": 1146
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/links/",
+      "file": "pages/links/index.rtsx",
+      "output": "links/index.html",
+      "document": {
+        "raw": 3249,
+        "gzip": 1391
+      },
+      "html": {
+        "raw": 819,
+        "gzip": 447
+      },
+      "css": {
+        "raw": 2186,
+        "gzip": 861,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "e3ae4903"
+      },
+      "js": {
+        "raw": 198,
+        "gzip": 153,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "df8e53f4"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "LinksPage",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 3
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        }
+      ],
+      "modules": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays",
+          "path": "@reactogenic/ui/src/behaviors/overlays.ts",
+          "bytes": 194
+        },
+        {
+          "path": "<entry>",
+          "bytes": 4
+        }
+      ],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 46,
+        "selectors": 63,
+        "selectorsDropped": 47,
+        "customPropertiesDropped": 2,
+        "keyframesDropped": 1,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "@reactogenic/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 404,
+            "bytesOut": 289
+          },
+          {
+            "file": "@reactogenic/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 0,
+            "bytesIn": 609,
+            "bytesOut": 490
+          },
+          {
+            "file": "@reactogenic/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 13,
+            "bytesIn": 2306,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 1,
+            "bytesIn": 1571,
+            "bytesOut": 1211
+          },
+          {
+            "file": "@reactogenic/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3279,
+            "bytesOut": 0
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1382,
+            "bytesOut": 366
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/plain/",
+      "file": "pages/plain/index.rtsx",
+      "output": "plain/index.html",
+      "document": {
+        "raw": 1606,
+        "gzip": 821
+      },
+      "html": {
+        "raw": 558,
+        "gzip": 332
+      },
+      "css": {
+        "raw": 1033,
+        "gzip": 520,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "5039d10c"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "PlainPage",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 62,
+        "rulesDropped": 53,
+        "selectors": 63,
+        "selectorsDropped": 54,
+        "customPropertiesDropped": 2,
+        "keyframesDropped": 1,
+        "positionTryDropped": 1,
+        "sources": [
+          {
+            "file": "@reactogenic/ui/src/tokens.css",
+            "rules": 1,
+            "rulesDropped": 0,
+            "bytesIn": 404,
+            "bytesOut": 289
+          },
+          {
+            "file": "@reactogenic/ui/src/button.css",
+            "rules": 4,
+            "rulesDropped": 1,
+            "bytesIn": 609,
+            "bytesOut": 416
+          },
+          {
+            "file": "@reactogenic/ui/src/dialog.css",
+            "rules": 13,
+            "rulesDropped": 13,
+            "bytesIn": 2306,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/dropdown-menu.css",
+            "rules": 7,
+            "rulesDropped": 7,
+            "bytesIn": 1571,
+            "bytesOut": 0
+          },
+          {
+            "file": "@reactogenic/ui/src/side-menu.css",
+            "rules": 22,
+            "rulesDropped": 22,
+            "bytesIn": 3279,
+            "bytesOut": 0
+          },
+          {
+            "file": "site.css",
+            "rules": 15,
+            "rulesDropped": 10,
+            "bytesIn": 1382,
+            "bytesOut": 366
+          }
+        ]
+      }
+    }
+  ],
+  "blobs": [
+    {
+      "kind": "css",
+      "hash": "1a5f6468",
+      "size": {
+        "raw": 2821,
+        "gzip": 1002
+      },
+      "delivery": "inline",
+      "pages": [
+        "/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "df8e53f4",
+      "size": {
+        "raw": 198,
+        "gzip": 153
+      },
+      "delivery": "inline",
+      "pages": [
+        "/",
+        "/links/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "3ed21ca5",
+      "size": {
+        "raw": 3668,
+        "gzip": 1237
+      },
+      "delivery": "inline",
+      "pages": [
+        "/actions/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "9cd9b99a",
+      "size": {
+        "raw": 1420,
+        "gzip": 695
+      },
+      "delivery": "inline",
+      "pages": [
+        "/actions/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "06a2bd82",
+      "size": {
+        "raw": 2746,
+        "gzip": 1022
+      },
+      "delivery": "inline",
+      "pages": [
+        "/dialog/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "5baafe54",
+      "size": {
+        "raw": 532,
+        "gzip": 317
+      },
+      "delivery": "inline",
+      "pages": [
+        "/dialog/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "e28e8351",
+      "size": {
+        "raw": 1074,
+        "gzip": 502
+      },
+      "delivery": "inline",
+      "pages": [
+        "/guide/",
+        "/guide/more/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "e3ae4903",
+      "size": {
+        "raw": 2186,
+        "gzip": 861
+      },
+      "delivery": "inline",
+      "pages": [
+        "/links/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "5039d10c",
+      "size": {
+        "raw": 1033,
+        "gzip": 520
+      },
+      "delivery": "inline",
+      "pages": [
+        "/plain/"
+      ]
+    }
+  ],
+  "public": [
+    "favicon.svg",
+    "robots.txt"
+  ]
+}

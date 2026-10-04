@@ -1,0 +1,13 @@
+// "/edit/": an element the user edits. Bold makes a `<b>` in it, Enter a
+// `<div>`: the page is not pruned.
+import { Layout } from "../../layout.tsx";
+
+export default function EditPage() {
+  return (
+    <Layout title="Edit">
+      <div id="editor" className="editor" contentEditable suppressContentEditableWarning>
+        notes
+      </div>
+    </Layout>
+  );
+}
