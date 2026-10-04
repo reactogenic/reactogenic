@@ -16,13 +16,48 @@ reactogenic build [-p tsconfig.json] [--pages <dir>] [--out <dir>] [--base <path
 | --- | --- | --- |
 | `-p` | `tsconfig.json` in the working directory | the project, as for `check` |
 | `--pages` | `pages` next to the tsconfig | the root of the routes |
-| `--out` | `dist` next to the tsconfig | emptied first; refused if it holds the tsconfig or the pages |
-| `--base` | `/` | the path the site is served under: prefixes the URLs of the build's own files and the pages' root-relative links (*Packaging*) |
+| `--out` | `dist` next to the tsconfig | emptied when the build writes; refused unless it is the builder's to empty (*The output directory*) |
+| `--base` | `/` | the path the site is served under: prefixes the URLs of the build's own files and the pages' root-relative links (*Packaging*). `docs`, `/docs` and `/docs/` are one base; a URL with a scheme, a host, a query or a fragment is a usage error |
 | `--inline` | `auto` | *Packaging* |
 | `--no-specialize` | | the control of the bet: one unpruned CSS bundle, every behaviour with every flag on (*The control*) |
 | `--report` | | print the byte report (*The report*); it is always written to `<out>/_rg/report.json` |
 
-Exit status as `check`: 0, 1 with diagnostics, 2 on a usage error.
+Exit status as `check`: 0, 1 with diagnostics, 2 on a usage error. A path
+given to a flag is relative to the working directory.
+
+| Printed | Where |
+| --- | --- |
+| diagnostics, as `check --pretty=false` writes them, by file and position; a warning does not stop the build | stdout |
+| with `--report`, the byte report | stdout, after them |
+| `7 pages written to dist` | stdout, last |
+| a usage error; an output that cannot be written (status 1) | stderr |
+
+### The output directory
+
+The build **empties** `--out`, so it has to be the builder's to empty. Checked
+before anything is built; a refusal is a usage error.
+
+| `--out` is refused when | |
+| --- | --- |
+| it holds the project (the tsconfig's directory), `--pages` or `public/`: it is one of them, or an ancestor | the build would delete its own source |
+| it is inside `--pages` or `public/` | the next build would read this one's output |
+| it is not a directory | |
+| it is not empty and has no `_rg/report.json` | it is not a previous output of the builder — `_rg/` and an `index.html` are not enough: only the builder writes the report. Empty it yourself, or name another |
+
+```
+$ reactogenic build --out .
+reactogenic build: --out /site holds the project (/site): the build empties its output directory
+```
+
+- Directories are compared by what they are, not by their names: through a
+  symbolic link, or in another case on a file system that folds it, the
+  project is still the project.
+- It is emptied **when the build writes**, not before: a build that stops on
+  a diagnostic leaves the last output as it was. The report is written
+  first, so an output that was cut short is still known as one.
+- The directory itself stays, and a `.git` in it: an output that is a
+  checkout of the branch it is published from. A directory that holds
+  nothing else counts as empty.
 
 ## The pipeline
 
@@ -78,14 +113,15 @@ as strings.
 
 ## Routes
 
-`index.rtsx` (or `index.tsx`) of a directory under `--pages` is a page; its
-pathname is the directory, with a trailing slash.
+`index.rtsx` (or `index.tsx`; with both, `index.rtsx`) of a directory under
+`--pages` is a page; its pathname is the directory, with a trailing slash.
 
 ```
 pages/index.rtsx                 /
 pages/guide/index.rtsx           /guide/
 pages/guide/install.rtsx         not a page: a segment or a module of /guide/
 pages/reference/cli/index.rtsx   /reference/cli/
+public/favicon.svg               /favicon.svg: copied as it is
 ```
 
 - The page is the module's **default export**, a component without props that
@@ -99,7 +135,8 @@ pages/reference/cli/index.rtsx   /reference/cli/
 | --- | --- | --- |
 | page-no-default | `index.rtsx` has no default export that is a component: the module's `default` is not a function | the file |
 | page-not-document | the page's root element is not `<html>`: what it rendered does not start with `<html` | the page's `export default` — found in the syntax, so not one in a comment or a template; for `export { Page as default }`, the `Page as default` |
-| pages-not-found | `--pages` is not a directory, or holds no page | |
+| pages-not-found | `--pages` is not a directory, or holds no page. Found before the project is checked: without a page there is nothing to build | |
+| public-conflict | a file of `public/` — the directory next to `--pages` — is where the build writes one of its own: a page's `index.html`, anything under `_rg/` | the file of `public/` |
 
 ## Shell code in phase 2
 
@@ -330,6 +367,22 @@ The first step lowers nesting and does not minify: esbuild then writes
 report's numbers per source file come from (*The report*). The pruner reads
 either form.
 
+The first step is **one esbuild build for the site**: every page's module is
+an entry, and esbuild gives each entry the CSS its modules import, in import
+order (the JS it makes of them is thrown away).
+
+| | In the CSS build |
+| --- | --- |
+| the modules | the program's, as in the render bundle: its resolutions, its texts (*One resolver*) |
+| what is in a page's sheet | every stylesheet a module of the page imports — also of a module the page uses nothing of: a package's `sideEffects` is not asked. `import { Button } from "@reactogenic/ui"` brings the whole design system's CSS, and pruning takes out what the page has no element for |
+| `react`, `react-dom` | not read: they hold no stylesheet |
+| `url(…)` | left as written: nothing is processed (*Not in phase 2*). Write it from the root, to a file of `public/` |
+
+| Code | Condition |
+| --- | --- |
+| css-bundle | what esbuild cannot make a sheet of: a stylesheet that is not there, at the import that names it (TypeScript does not say so — `*.css` is declared — and the render bundle reads no CSS); CSS that does not read |
+| css-warning (warning) | what esbuild says of a stylesheet, at its position: `"widht" is not a known CSS property`, with its note (`Did you mean "width" instead?`) |
+
 | | Rule |
 | --- | --- |
 | a selector | kept iff some element of the page **may** match. Type, class, id and static attributes are matched exactly; combinators against the real tree |
@@ -499,18 +552,40 @@ pages is **one blob**, by content hash.
 | `always` | inlined: one request per page |
 | `never` | a file |
 
-- Files: `<out>/_rg/<name>-<hash>.css` / `.js`, the hash from the content, so
-  they can be cached forever.
+- Files: `<out>/_rg/<name>-<hash>.css` / `.js`, the hash from the content
+  (SHA-256, eight hex digits), so they can be cached forever. The name is
+  `page` — `site` for the control's two files — and never a page's own: a
+  blob's URL depends on its content alone, so what one page ships does not
+  change another page's bytes.
 - Inlined: `<style>` at the end of `<head>`; `<script type="module">` at the
   end of `<body>`. A linked script is `<script type="module" src>`; a linked
   stylesheet `<link rel="stylesheet">`.
 - A page with no behaviours has no `<script>`. A page whose CSS is empty has
   no `<style>`.
+- The page is React's HTML, to the byte, but for what packaging writes into
+  it: the two elements above, and the base. It is not parsed and serialised
+  again.
+- A blob that cannot stand inside its element is a file, whatever `--inline`
+  says: CSS that holds `</style`, a script that holds `</script` or `<!--`
+  (esbuild escapes the first two in what it prints; `<!--` it does not).
+
+```html
+<!-- /guide/, --inline auto: its CSS is /guide/more/'s too, 1074 B; it mounts nothing -->
+<!doctype html><html lang="en"><head>…<link rel="stylesheet" href="/_rg/page-e28e8351.css"></head><body>…</body></html>
+<!-- /dialog/: its CSS and its script are its own -->
+<!doctype html><html lang="en"><head>…<style>…</style></head><body>…<script type="module">…</script></body></html>
+```
 - `--base /docs/`: the URLs of the files above carry it, and so does every
   root-relative `href` of the page — the links the page check read, after it
   read them: `/guide/` → `/docs/guide/`. The source is written once, for any
   base. `//host` and a URL with a scheme are left alone: a link to another
   site of the origin is written in full.
+  - One rule for both: what the check takes for a root-relative link is what
+    gets the base — `<base href>` is neither. The rest of the attribute
+    stays as written: `/guide/more/?from=plain#top` →
+    `/docs/guide/more/?from=plain#top`, `/guide` → `/docs/guide`.
+  - `public/` is under the base because the site is: its files are written
+    where they were (`<out>/favicon.svg`, served as `/docs/favicon.svg`).
 
 > OPEN: the other root-relative URLs of a page (`src`, `srcset`, `action`,
 > `url()` in CSS) get the base by the same rule; which attributes, when the
@@ -528,13 +603,53 @@ root, that is every link: the check is off whenever `--base` is set).
 ## The report
 
 `<out>/_rg/report.json`, and `--report` prints it: per page, the bytes of
-HTML, CSS and JS (raw, gzip, brotli), how each blob is delivered, the
+HTML, CSS and JS (raw, gzip), how each blob is delivered, the
 components rendered, the behaviours mounted with their flags, and per
 behaviour module its bytes in the page's script (from esbuild's metafile) —
 *why is this byte here*. The rows add up to the script: the mounted modules,
 the files they import, the generated entry (`<entry>`), and what is of no
 input — the helpers esbuild adds for a dynamic `import()` — as `<runtime>`.
 CSS: rules kept and dropped per source file.
+
+```
+/actions/  pages/actions/index.rtsx
+                  raw     gzip
+  HTML           1411      634
+  CSS            3668     1237   inline
+  JS             1420      695   inline
+  document       6545     2455   actions/index.html
+  components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
+  behaviours @reactogenic/ui/behaviors/overlays
+             @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true
+             @reactogenic/ui/behaviors/invokers
+  JS bytes      194 B  node_modules/@reactogenic/ui/src/behaviors/overlays.ts
+                850 B  node_modules/@reactogenic/ui/src/behaviors/menu-keys.ts
+                330 B  node_modules/@reactogenic/ui/src/behaviors/invokers.ts
+                 46 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  node_modules/@reactogenic/ui/src/tokens.css
+               3 kept,   1 dropped  node_modules/@reactogenic/ui/src/button.css
+              12 kept,   1 dropped  node_modules/@reactogenic/ui/src/dialog.css
+               6 kept,   1 dropped  node_modules/@reactogenic/ui/src/dropdown-menu.css
+               0 kept,  22 dropped  node_modules/@reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+css  3ed21ca5     3668     1237   inline                   /actions/
+css  e28e8351     1074      502   _rg/page-e28e8351.css    /guide/ /guide/more/
+```
+
+| | |
+| --- | --- |
+| HTML, CSS, JS | the page alone — with its doctype and the base, without what packaging puts in it — and its two blobs. They do not depend on `--inline` |
+| document | the file as written: what the request for the page carries. With a blob inlined, the page and the blob |
+| a behaviour | a module and the element it is mounted on, once, however many components mounted it, with the flags any of them turned on |
+| the last lines | the site's blobs: kind, hash, raw, gzip, `inline` or its file, the pages it serves |
+| CSS rules | of the sheet before it is minified; a file whose rules all went is a row: that is the saving |
+| files | named from the project directory, as esbuild names them: nothing in the report is the machine's, and two builds of one input write the same report |
+| the control | no rows per module or per source file: its two files are the site's |
+| brotli | not in the report: Go's standard library has no encoder, and the builder takes no dependency to count with. The measuring scripts have it (plan.md, RGP2-050) |
+
+Two builds of the same input are the same bytes: the pages, the blobs and
+their names, the report.
 
 ## The control
 
@@ -565,6 +680,11 @@ for (const [i, id] of t[decodeURIComponent(location.pathname).replace(/(\/index\
   answers to `/syntax/`, `/syntax` and `/syntax/index.html` — as its own
   script does, which is in the page wherever it is served. A page that
   mounts nothing is not in the table.
+- Every page gets both files — also a page that mounts nothing, or imports
+  no stylesheet: the control does not know. They are packaged by the same
+  rule (`--inline`), as `_rg/site-<hash>.css` and `.js`.
+- The CSS goes through the same steps but the pruning: bundled, nesting
+  lowered, minified.
 - The mount-* reports are those of the default build, page by page.
 
 The difference between the two builds is what component awareness is worth
@@ -585,4 +705,4 @@ The difference between the two builds is what component awareness is worth
 | source maps for the emitted JS | |
 | the tsconfig's emit options in the render bundle | esbuild compiles a program file with its own defaults for `useDefineForClassFields`, `experimentalDecorators` and the like: shell code is function components |
 | `async` components, `use()`, Suspense | the renderer is synchronous; the engine has no timers |
-| asset pipeline (images, fonts), `public/` | a `public` directory next to `pages` is copied as is; nothing is processed |
+| asset pipeline (images, fonts), `public/` | a `public` directory next to `pages` is copied as is — its files, a link to a file as the file; nothing is processed. A link to one of its files is a link to a file of the output (*Checks*); a `url()` in CSS is left as written |

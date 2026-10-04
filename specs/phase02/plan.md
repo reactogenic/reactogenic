@@ -82,6 +82,19 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 // report — a diagnostic of a page as a whole: its file, no position; check.Print writes
 // `pages/guide/index.rtsx: error idref-not-found: Page /guide/: …`
 func Page(file, pathname, code, message string) Report
+
+// build — RGP2-030: the driver
+func Main(args []string, cwd string, stdout, stderr io.Writer) int // `reactogenic build`: the exit status
+func CheckOut(opts Options) error                                  // may --out be emptied
+func Run(opts Options) (reports []report.Report, bytes *Report, err error)
+// bytes: the byte report, nil when an error among the reports stopped the build (nothing written)
+
+// what the driver's CSS build and packaging share with the stages
+func render.Source(program, path) *rtsx.SourceFile          // the one resolver, for an esbuild plugin:
+func render.Resolve(program, importer, specifier) string    //   where the program resolved an import, "" → esbuild's
+func render.Load(program, path) (*rtsx.SourceFile, api.OnLoadResult, error)
+func render.Message(program, dir, code string, message api.Message) report.Report // at the author's position
+func pagecheck.RootRelative(href string) (path string, ok bool) // the links Check reads, and --base prefixes
 ```
 
 **The build-time protocol** between the engine and `@reactogenic/core`: while
@@ -208,7 +221,7 @@ tests for both sides.
 
 ## M2 — What the builder decides
 
-### RGP2-020 — CSS pruning · L
+### RGP2-020 — CSS pruning · L · done
 `go/internal/build/cssprune`: builder.md, *CSS*, on the flat, minified CSS
 esbuild's public API produces.
 - A CSS reader for that form (rules, at-rules with blocks and statements,
@@ -226,10 +239,18 @@ esbuild's public API produces.
   removed; and pruning is idempotent.
 - **Done when:** the corpus passes, with the design system's CSS and a page
   of each kind among it.
-- **State:** built and passing on the two modelled design systems of the
-  research (`testdata/docs`, `testdata/components`) and four adversarial
-  sheets. Left for RGP2-025: add `packages/ui`'s CSS and one built page of
-  each kind to `corpus()` in `corpus_test.go` — the task is done then.
+- **Done:** the corpus passes on the two modelled design systems of the
+  research (`testdata/docs`, `testdata/components`), four adversarial sheets,
+  and — added with RGP2-030 — the design system itself: `packages/ui`'s CSS
+  (the files, not a copy: `testdata/ui/all.css`) against six pages the
+  builder built, one of each kind (the golden output of `internal/build`'s
+  fixture site). Of the bundle (7 178 B minified, 2 013 gzip) a page keeps
+  27–61% (gzip): 2 102 selectors dropped over the corpus, every one checked
+  by cascadia.
+  - Seen on the built pages, not fixed: an at-rule the pruner does not know
+    is kept as it is, so `@position-try --rg-menu-edge` (60 B, of
+    `dropdown-menu.css`) is on pages that have no menu. Like `@keyframes`,
+    it could go when nothing kept names it.
 
 ### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
@@ -276,7 +297,7 @@ their CSS, the three behaviours, the JSX augmentation (components.md).
 
 ## M3 — The build
 
-### RGP2-030 — `reactogenic build` · L
+### RGP2-030 — `reactogenic build` · L · done
 `go/internal/build`: routes, the pipeline of builder.md, packaging, the
 report, the command in `go/cmd/reactogenic`.
 - The page's CSS: one esbuild build with every page as an entry (CSS in
@@ -288,6 +309,43 @@ report, the command in `go/cmd/reactogenic`.
 - The binary's size is printed by `build-binaries.sh`; the growth (esbuild +
   the engine, measured ≈ +7.3 MB on 27.4) goes into decisions.md.
 - Depends on: 011, 020, 021, 022.
+- **Done:** `go/internal/build` (`build.Main` is the command, `build.Run`
+  the build), `go/cmd/reactogenic`. The fixture site
+  (`testdata/site`, seven pages on the real `@reactogenic/ui`) builds in
+  ≈ 0.1 s; its whole output is golden in six modes (`testdata/golden`:
+  `auto`, `always`, `never`, `control`, `base`, `base-control`), built twice
+  and compared, and built once more by the compiled binary (`TestBinary`).
+  - What each page ships, on the fixture (raw bytes, minified):
+
+    | Page | Uses | CSS | JS | Control: CSS / JS |
+    | --- | --- | --- | --- | --- |
+    | `/plain/` | a `Button` that is a link | 1 106 | — | 7 177 / 1 613, on every page |
+    | `/guide/`, `/guide/more/` | text | 1 074, one file for both | — | |
+    | `/links/` | a menu of links | 2 186 | 198 | |
+    | `/` | a `SideMenu` | 2 894 | 198, the same script | |
+    | `/dialog/` | a `Dialog` | 2 819 | 532 | |
+    | `/actions/` | an action menu with typeahead, a `Dialog` | 3 668 | 1 420 | |
+
+  - Exported for it, and nothing else: `render.Source`, `render.Resolve`,
+    `render.Load` (the one resolver, for the CSS build's plugin),
+    `render.Message` (an esbuild message at the author's position),
+    `pagecheck.RootRelative` (one rule for the links that are checked and
+    the links that get the base).
+  - The report has gzip and no brotli: no encoder in Go's standard library,
+    and no dependency taken to count with. `bench/` measures it (RGP2-050).
+  - In a browser, once, by hand (a script that is not in the repository:
+    RGP2-050 owns the browser checks): the fixture built by the compiled
+    binary in four modes — default, `--inline never`, `--base /docs/`, the
+    control under `/docs/` — served over HTTP, in Chrome 154 (headless, by
+    `packages/ui`'s Playwright). 32 of 32 checks: `/plain/` has no script;
+    the dialog of `/dialog/` opens from its button, is modal, Esc closes it
+    and focus returns — also with the engine's `command` taken away, so by
+    the page's own script; the action menu of `/actions/` opens, arrow keys
+    move the focus and wrap, Home, End, typeahead, an item opens the dialog;
+    the menu of links has no arrow keys; a link leads to a page under the
+    base, with its linked stylesheet applied. Not run: WebKit, Firefox.
+  - Not verified: Windows (paths, the `--out` checks); a project whose
+    packages are not linked into `node_modules` by a workspace.
 
 ### RGP2-040 — The docs site · M
 `site/`: a private workspace package. `layout.rtsx` and four pages under
