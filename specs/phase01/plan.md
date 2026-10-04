@@ -1135,7 +1135,7 @@ errors. ide.md, *Diagnostics*, has the table of what a report becomes.
   pulled diagnostics with no edit to it.
 - Depends on: 106.
 
-### RGP1-108 — Slots, segments, rename · L · done (two renames are TypeScript's own: a string literal, the prop `children`)
+### RGP1-108 — Slots, segments, rename · L · done
 Two seams. The **front** reads an open document with the same transform
 (`internal/lsp/source.go`: slot groups, tag pairs, `#name`) and moves,
 filters or answers a request (`front_source.go`). The **fork** gained two
@@ -1153,9 +1153,9 @@ occurrences over before write-back and takes the edits or the refusal.
   answer now).
 - *Slot names* (`TestSlotCompletion`): TS's completion at the copied name
   already works in a file being typed; the front keeps the `$` names and
-  appends those written under the owner — which also serves the second tag
-  of a group, and `$Case` under a `Switch`. Its own items resolve to
-  themselves.
+  adds the owner's other slots (review, below) — which also serves the
+  second tag of a group, and `$Case` under a `Switch`. Its own items resolve
+  to themselves.
 - *Segments* (`TestSegments`): `#name` → the file of the lookup order;
   after `#`, the siblings. The names come from the server's file system
   (`reactogenic/siblings`): a buffer never saved is listed.
@@ -1164,20 +1164,25 @@ occurrences over before write-back and takes the edits or the refusal.
   reference in code that no virtual text holds is renamed by the source's
   scopes, and a name there that is not a reference refuses; a stopped file
   that holds the name refuses. The post-check transpiles the result, all
-  passes, and also refuses on a new transpiler error — `Table` renamed to
-  `table` (its slots become orphans) was caught by it, not by a rule.
+  passes, and also refuses on a new transpiler error.
   `prepareRename` runs the rename with the name unchanged. `TestRenameTable`
   (18 cases), `TestRenameShorthandBoth`, `TestRenameArgProp` (`&&name` on a
   component: its prop has no token), `TestRenameRefused` and the three
   tests of code that is left out.
-- *The generated test* (`TestRenameEveryName`): every word outside a string
-  in the `.ts`, `.tsx` and `.rtsx` files of two fixtures, renamed to a fresh
-  name, applied, all diagnostics pulled, put back. 367 names: 224 renamed
-  (587 edits) with no diagnostic left; the rest refused by `prepareRename`
-  — 124 not a name to TS, 8 a module (`from`: a file rename, which this
-  client does not take), 6 declared in a library, and the table's refusals:
-  `&&selected` from its arg, `children` of a slot from its body (2),
-  `#intro` (2). Under the race detector every fourth name.
+- *The generated test* (`TestRenameEveryName`): every word — in strings and
+  texts too — of the `.ts`, `.tsx` and `.rtsx` files of three fixtures,
+  renamed to a fresh name, applied, all diagnostics pulled, put back. The
+  JSX types declare every element and attribute, in a package (under
+  `[name: string]: any` a renamed attribute is no error). The third fixture
+  has code that no virtual text holds; after each rename what hides it is
+  taken away and the diagnostics pulled again. 488 words: 253 renamed (682
+  edits) with no diagnostic left; the rest refused by `prepareRename` — 134
+  not a name to TS, 61 declared in `node_modules`, 2 in the library, 18 a
+  module (`from`, a specifier: a file rename, which this client does not
+  take), and the table's refusals: a string (9), `children` of a slot from
+  its body (3), `#intro` (3), a name in left-out code (3), `&&selected`
+  from its arg, `children` of an element with a body. Under the race
+  detector every fourth word.
 - *Found by it*, in the fork's rename, each the same in a plain `.tsx`:
   - the prop of a generic component (`<Each items=…>`) passes upstream's
     `node_modules` check and its declaration in `node_modules` is edited —
@@ -1186,20 +1191,59 @@ occurrences over before write-back and takes the edits or the refusal.
     edits nothing — now not offered;
   - a `Switch` or `Match` under another name has no token: not offered
     (`TestRenameNotOffered`).
-- *TypeScript's own, left as they are* (`TestRenameIsTypeScripts`: the same
-  edits in a `.tsx` file): a string literal is renamed where TS matches it
-  and not in the type that declares it; the prop `children`, without the
-  element bodies that are its value. Both leave type errors. The generated
-  test leaves them out (words inside strings; `children` in `.tsx`).
-  **Rejected:** refusing a rename of `children` — it is the name of every
-  tree node's property too.
+- *Review* (12 findings, each reproduced by a test that failed first):
+  - *Left-out code* (`rename.go`, `leftOut`; `source.go`): read in every
+    mapped file that holds the name, with or without an occurrence. What is
+    left out is read off the map — a JSX child with no copy of anything it
+    holds — not "has no copy": `on`, `slot` and the later tags of a slot
+    group have none in code that is lowered. There a component's tag is
+    renamed with its twin; an attribute's name (bare too), a slot or
+    intrinsic tag, a member, a name nothing declares refuse, in
+    `prepareRename` as well. `TestRenameTagInLeftOutCode`,
+    `TestRenameRefusedByLeftOutCode`, `TestRenameIsNotRefusedByLoweredNames`.
+  - *What upstream renames in part* (`ls/host_rename.go`, for every file):
+    a string — refused (it edited `lib.dom.d.ts` and other functions'
+    strings); an object's property typed by the library — refused (it
+    edited `lib.es5.d.ts`); the quoted key of a binding pattern — added to
+    the occurrences (a hyphenated slot's container; `{ "sub-item": sub }` in
+    `.tsx`); `children` — refused when an element of that prop's type has a
+    body (`checker/rtsx.go`: the prop's name); a tag across component and
+    intrinsic — refused; an attribute nothing declares — not offered.
+    `rename_whole_test.go`. The headline holds without exemptions; what is
+    still TypeScript's own is name-dependent (a new name that is taken).
+    **Rejected:** refusing on any new diagnostic after the edits — a second
+    check of the whole program per rename.
+  - *Slot names* (`reactogenic/slots`, `rtsx.PropsAt`): the list is the
+    owner's `$` props from the checker, at the owner's tag — under a
+    `Match`, in a `$Case`, the tag still open, next to nested slots — with
+    TS's items for the props it lists and the front's for the rest. A second
+    request per completion, sent after TS's answer. No list in a closing
+    tag. `TestSlotCompletionOfTheOwner`.
+  - *References* add the other tags in every `.rtsx` file of the answer —
+    open, or read from disk (`TestReferencesListEveryTag`). The answer's
+    range is set back part by part (`TestClosingTagWithMembers`).
+    `prepareRename` shows a quoted name as it is written
+    (`TestPrepareRenameOfAQuotedName`).
+  - *Unsaved `.ts` files*: the extension's rename middleware refuses a
+    rename whose edit reaches a dirty document the server is not attached
+    to. The editor suite (VS Code 1.140.0, darwin-arm64): the new test
+    fails without the middleware ("Missing expected rejection"); with it,
+    trusted 23, untrusted 3, monorepo 6, transpiled 6 — the sixth is the
+    file being typed that ide.md's Testing row claimed.
+  - *Left*: a front-made slot item has the slot's type as its detail, not
+    its documentation (TS's items have both); a slot under an `Each` lists
+    `Each`'s props (loop-produced slots are phase 2); the refusals of
+    `host_rename.go` apply to `.ts` / `.tsx` documents of a client that
+    attaches the server to them, where VS Code's TypeScript would rename in
+    part; the middleware was run on macOS only.
 - *`reactogenic/transpiled`* (`TestTranspiled`, `TestTranspiledSteps`): the
   virtual text of the document's program and its step. The extension's
   suite runs the command against the real server in both the `trusted` and
   the `transpiled` window; the stand-in is now a server *without* the
   request (`test/editor/old-server.mjs`: "too old"). The editor suite, once
   (VS Code 1.140.0, darwin-arm64): trusted 22, untrusted 3, monorepo 6,
-  transpiled 5 — the last after one fix of the new test.
+  transpiled 5 — the last after one fix of the new test (after the review:
+  below).
 - *Left*: prop completion in `<$Icon ▮>` (ide.md, *Not in the first
   release*); a client is told why a rename of a lowered name is not offered
   only in TS's words ("You cannot rename this element"); `prepareRename`

@@ -343,6 +343,46 @@ export const run = runner(() => {
       }
     });
 
+    // ide.md, *Rename*: the server is attached to .rtsx documents only, and
+    // computes its edit of a .ts file from the file on disk.
+    it("a rename into a .ts file with unsaved changes is refused; saved, it is edited", async () => {
+      const shaped = await open("src/shaped.rtsx");
+      await until("the server's answer for shaped.rtsx", async () => {
+        const hovers = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", shaped.document.uri, at(shaped.document, "shape.wide", 7));
+        return hovers.length > 0;
+      });
+      const rename = async () =>
+        await vscode.commands.executeCommand<vscode.WorkspaceEdit>("vscode.executeDocumentRenameProvider", shaped.document.uri, at(shaped.document, "shape.wide", 7), "broad");
+      const shape = await open("src/shape.ts");
+      const saved = shape.document.getText();
+      // One line above the declaration, not saved: every position below it moves.
+      await shape.edit((builder) => builder.insert(new vscode.Position(0, 0), "// unsaved\n"));
+      assert.equal(shape.document.isDirty, true);
+      try {
+        await assert.rejects(rename, /Rename refused: shape\.ts has unsaved changes, and the Reactogenic server reads it from disk/);
+        assert.equal(shape.document.getText(), `// unsaved\n${saved}`, "nothing was edited");
+      } finally {
+        await vscode.window.showTextDocument(shape.document);
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+      }
+      assert.equal(shape.document.isDirty, false);
+      // Saved, the same rename edits both files, each at its name.
+      const edit = await rename();
+      const edits = edit.entries().flatMap(([uri, list]) => list.map((e) => `${uri.path.split("/").pop()} ${e.range.start.line}:${e.range.start.character} ${e.newText}`));
+      assert.deepEqual(edits.sort(), ["shape.ts 3:2 broad", "shaped.rtsx 3:26 broad"]);
+      for (const [uri, list] of edit.entries()) {
+        const document = await vscode.workspace.openTextDocument(uri);
+        assert.deepEqual(
+          list.map((e) => document.getText(e.range)),
+          ["wide"],
+        );
+      }
+      await vscode.window.showTextDocument(shape.document);
+      await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+      await vscode.window.showTextDocument(shaped.document);
+      await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    });
+
     // The command's other answers, and the refresh: test/editor/transpiled.ts.
     it("Show Transpiled TSX: shows the TSX beside the source", async () => {
       await open("src/page.rtsx");

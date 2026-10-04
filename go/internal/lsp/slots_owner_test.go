@@ -183,6 +183,33 @@ func TestReferencesListEveryTag(t *testing.T) {
 	check(", the page closed")
 }
 
+// Asked from a .tsx document — by a client that attaches the server to it —
+// the answer names the .rtsx file, and has every tag there too: the closing
+// tag of an element that is emitted without one.
+func TestReferencesFromATsxFile(t *testing.T) {
+	const card, page = "src/card.tsx", "src/x.rtsx"
+	c := start(t, lsptest.With(lsptest.Core, map[string]string{
+		card: "import type { Slot } from \"@reactogenic/core\";\nexport function Card(props: { $Title?: Slot<{ children?: string }>; children?: string }) {\n  return <div />;\n}\n",
+		page: "import { Card } from \"./card\";\nexport const a = (\n  <Card>\n    <$Title>T</$Title>\n  </Card>\n);\n",
+	}))
+	c.Open(card)
+	for _, open := range []bool{false, true} {
+		if open {
+			c.Open(page)
+		}
+		var locations []lsptest.Location
+		c.Request("textDocument/references", map[string]any{"textDocument": map[string]any{"uri": c.URI(card)}, "position": c.At(card, "Card(", 1, 1), "context": map[string]any{"includeDeclaration": true}}, &locations)
+		var found []string
+		for _, l := range locations {
+			found = append(found, c.Rel(l.URI)+" "+l.Range.String())
+		}
+		sort.Strings(found)
+		if got, want := strings.Join(found, ", "), "src/card.tsx 2:17-2:21, src/x.rtsx 1:10-1:14, src/x.rtsx 3:4-3:8, src/x.rtsx 5:5-5:9"; got != want {
+			t.Errorf("the page open: %v: references\n  %s\nwant\n  %s", open, got, want)
+		}
+	}
+}
+
 // ide.md, *Span map*, "Closing tags likewise": on the closing tag of a
 // member-expression tag that is emitted self-closing — `</Kit.Dialog>` — the
 // request is answered at the opening tag, and the answer's own range is the

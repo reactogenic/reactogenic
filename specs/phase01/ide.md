@@ -150,9 +150,15 @@ of editor features it may answer.
   back; it reads the groups off the document's text with the same transform.
   - **Closing tags** likewise. An element whose children are all slots is
     emitted self-closing, so its `</Card>` has no copy: it is answered at
-    the opening tag name, paired on the source tree.
+    the opening tag name, paired on the source tree. The range is set back
+    part by part: on `</Kit.Panel>` it is the closing tag's `Kit`, or its
+    `Panel`. Completion is the exception: the name of a closing tag is not
+    chosen, and one that has no copy lists nothing.
   - **References and highlights** add what TS cannot list: the other tags
-    of a group, an element's other tag name. On a tag TS highlights the
+    of a group, an element's other tag name — references in every `.rtsx`
+    file of the answer, whichever document asks (the container's declaration
+    of a slot lists every tag in the pages; a file that is not open is read
+    from disk, as the server reads it). On a tag TS highlights the
     element's two tags, whole; of a rebuilt element neither is source text,
     and the front highlights its names.
 - **Syntactic features run on the source tree**, not the virtual text:
@@ -317,7 +323,8 @@ of the server:
 `.ts` and `.tsx` files of the same project are in the server's program (for
 types across the boundary), but the client attaches it to `.rtsx` documents
 only (*The `.ts` side*). It reads them from disk: an unsaved `.ts` edit
-reaches `.rtsx` files on save.
+reaches `.rtsx` files on save, and a rename's edit of such a file is made
+for the saved text (*Rename*: refused while the file has unsaved changes).
 
 **A document without a file name** — an untitled one, `untitled:Untitled-1` —
 has no extension to find the mapper by. The language id of `didOpen` decides:
@@ -483,12 +490,26 @@ what the task left for closed ones.
 
 ### Slots
 
-- After `<$` inside a component's children: its declared slots — TS's
-  property completion at the copied name, filtered to `$` names, with the
-  `$` names already written under the same owner appended last (TS omits
-  props that are already there; a keyed slot is filled many times). The
-  inserted text is the bare name. Under a `Switch`, which is lowered away:
-  `$Case`.
+- After `<$` inside a component's children: **exactly its `$` props**. The
+  front asks the checker for them at the owner's tag (`reactogenic/slots`,
+  its own request: the props of a component at its tag name, of a slot's
+  value at the slot's name), so the list does not depend on what the
+  half-typed tag did to the tree:
+
+  | `<$` typed | Lists |
+  | --- | --- |
+  | under a component, or a slot element (recursive slots) | that owner's `$` props, written or not — a keyed slot is filled many times |
+  | under a `Match`, in a `$Case` | the same: the owner is the component above them, also while the tag is still open (`<$`, `<$T`, `<$>`) and TS has no token to answer at |
+  | next to a slot element with slots of its own | the owner's, not the nested component's |
+  | under a `Switch`, which is lowered away | `$Case` |
+  | in a closing tag | nothing |
+
+  TS's property completion at the copied name supplies the items — with
+  their documentation — for the props not written yet; the front makes the
+  others, last, with the slot's type as their detail. An optional slot is
+  labelled `$Icon?`, as TS labels it; the inserted text is the bare name.
+  When the owner has no type (it is being typed too): TS's `$` items, and
+  the `$` names written under the owner.
 - Inside a slot tag: completion and checking of the slot's props (free: the
   attribute names are the object's keys).
 - Hover on a slot tag — any element of its group, either tag — shows the
@@ -543,21 +564,29 @@ source range):
 | a tag name with a closing tag | every edit inside a tag name is repeated at the same offset in the element's other tag name (on the source tree: components, intrinsics, slot elements; `<UI.Button>`) |
 | a slot tag | every `<$X` / `</$X>` of its slot group; refused unless the new name starts with `$` |
 | any other tag; the name in `slot={…}` | refused when the rename would add or take its `$`: the `$` makes the slot element, and the attachment |
-| a reference in code that no virtual text holds — the children a segment root overwrites | renamed with its declaration, which the source's own scopes find; a name there that is not a reference (a member, a type) refuses |
+| any tag, in any file | refused when the rename would move it between a component and an intrinsic element (`Box` → `box`, `my-box`): the first letter, or a hyphen, decides what a tag refers to |
+| code that no virtual text holds — the children a segment root overwrites, a slot element that a later one replaces — in every mapped file that holds the name, with or without an occurrence | a binding read in an expression, and the tag of a component (both its tags), are renamed with their declaration, which the source's own scopes find. Any other name there refuses: an attribute's (a bare one too: the prop, the binding, or both), a slot's or an intrinsic tag, a member, a type, a name that nothing in the file declares |
 | an occurrence that cannot be written back | refuses the whole rename, as an error naming the place — generated code: the `children` that a slot's body becomes, the prop of `&&name` |
 | a file that is stopped or has a syntax error, and holds the name | refuses: what is left out of its virtual text may be an occurrence |
+| the key of a binding pattern written as a string — `{ "$sub-item": $sub }`, how a container destructures a slot whose name is no identifier | an occurrence: TS's search does not list it, the server adds it (in `.tsx` files too) |
+| a string (`is="loading"`, `mode === "a"`) | refused: TS finds the strings of its type wherever they are written — another function's, the library's — and not always the type that declares them |
+| the prop `children` | refused when an element of that prop's type has a body, naming the element: the body is the prop's value and has no name. Without such an element, a rename like any other |
+| an attribute that nothing declares (`data-tone`, `aria-label` on an element) | not offered: renamed, it is another attribute |
+| an occurrence in a file of the standard library | refused, as one in `node_modules` |
+| a `.ts` / `.tsx` file with unsaved changes in the editor | the extension refuses, naming the file: the server reads it from disk, and its edit is for the saved text |
 
 Then a post-check: the edits are applied in memory to each touched `.rtsx`
 and the result is transpiled; the rename is refused if the file gains a
-syntax error or a transpiler error (`Table` renamed to `table`: its slots
-are orphans), or a bare attribute flips between bound and `true` (the new
-name captured it).
+syntax error or a transpiler error, or a bare attribute flips between bound
+and `true` (the new name captured it).
 
 A refusal is an LSP error (`RequestFailed`) that names the place.
 `prepareRename` runs the same rename with the name unchanged, in the
-document's project, and refuses where that refuses — and where a rename
-would edit nothing (an intrinsic tag), or a declaration in `node_modules`
-(TS's own check lets the prop of a generic component through).
+document's project, and refuses where that refuses — every row above that
+does not depend on the new name — and where a rename would edit nothing (an
+intrinsic tag), or a declaration in `node_modules` (TS's own check lets the
+prop of a generic component through). The name it shows is the name as it
+is written: `$sub-item`, not the quoted key TS has for it.
 
 ```tsx
 <tr slot={$Row} &row &&selected />       // .rtsx — `row`, the arg of $Row, renamed to `line`
@@ -567,10 +596,15 @@ would edit nothing (an intrinsic tag), or a declaration in `node_modules`
 
 TypeScript's own, the same in a `.tsx` file:
 - what is no name to it is not offered — a `Switch` or `Match` under any
-  name: the tag is lowered away, its import dropped;
-- a string literal is renamed where TS matches it, not in the type that
-  declares it; the prop `children`, without the element bodies that are its
-  value. Both leave type errors.
+  name (the tag is lowered away, its import dropped), a string in the type
+  that declares it, the quoted key of a binding pattern where it stands;
+- the new name is not checked against the names in scope: a binding renamed
+  to the name of another one leaves TS2300, or captures its references.
+  (The generated test of *Testing* renames to names that are not taken.)
+
+**Rejected:** refusing on any new diagnostic of the program after the edits
+— it would cover the collision too, at the price of a second check of the
+whole program per rename.
 
 ### Commands
 
@@ -872,10 +906,10 @@ tree-sitter grammar (JetBrains takes the TextMate one).
 | Layer | Test |
 | --- | --- |
 | transform | conformance corpus: the span map validates; virtual nodes map to the same source span as `emit.Map`; no source offset has two projections that answer the same feature, except shorthand; the output of a source that parses is TSX, or marked as holding a construct as written; tolerant mode over typing-like mutants of the fixtures never panics and never loses the file |
-| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent. Diagnostics: every project of `check`'s goldens that has no syntax error, and the Vite test app — both hosts run on one directory, and each `.rtsx` document's pulled errors and warnings are `check`'s lines for the file (severity, code, message, position, related locations); each row of the table of *Diagnostics*; the tolerance rules as pulled, and over the Vite test app being typed — an attribute at the end of every opening tag, a child under it, character by character: off the typed line a state shows syntax errors, the file's one mistake in another statement, and nothing else; a document's project in nested tsconfigs — one above lists the file, nobody lists it — as `check -p` on the nearest; a refresh request and the changed answer after each kind of change, with no edit to the document — another document edited, opened or closed unsaved, a `.ts` file, a tsconfig, a segment file and the `.tsx` sibling created and deleted, a segment's content changed (`segment-self`). Slots and segments: `<$` in a component with props that are not slots, after a keyed slot's first entry, with every slot written, under a `Switch`; hover, definition, references, highlights and `prepareRename` from every tag of a group, each with its own range; `#name` for each extension of the lookup, and the siblings after `#` — a buffer never saved among them. Rename: one case per row of the table — the exact edits, applied, and no diagnostic in the project afterwards; each refusal as an error with its place, and from `prepareRename` where it does not depend on the new name; and **every name** of two fixture projects (each word outside a string, in `.ts`, `.tsx` and `.rtsx`) renamed to a fresh name, applied, the diagnostics of all files pulled, put back: renamed without a diagnostic, or refused by `prepareRename` |
+| server | a Go test client runs the server in-process over a pipe (race-instrumented), one scenario per feature row above on a fixture project, plus the binary itself: a session and its exit statuses. The client behaves as VS Code does: UTF-16, pull diagnostics with refresh, watched-file events where the server registered a watcher, and the capabilities that change answers — hierarchical symbols, line folding, completion items resolved, code actions as literals, edits as document changes; it answers `workspace/configuration` from settings a test supplies, applies the edits it is given, sends `exit` with its pipes still open, and fails the test on a server request it did not answer. The advertised capabilities are compared, key for key, with the feature table; the registrations, with the two kinds of watching. A bare connection drives what a client does wrong: an exit without shutdown, input that is not LSP, documents and positions that should not be sent. Diagnostics: every project of `check`'s goldens that has no syntax error, and the Vite test app — both hosts run on one directory, and each `.rtsx` document's pulled errors and warnings are `check`'s lines for the file (severity, code, message, position, related locations); each row of the table of *Diagnostics*; the tolerance rules as pulled, and over the Vite test app being typed — an attribute at the end of every opening tag, a child under it, character by character: off the typed line a state shows syntax errors, the file's one mistake in another statement, and nothing else; a document's project in nested tsconfigs — one above lists the file, nobody lists it — as `check -p` on the nearest; a refresh request and the changed answer after each kind of change, with no edit to the document — another document edited, opened or closed unsaved, a `.ts` file, a tsconfig, a segment file and the `.tsx` sibling created and deleted, a segment's content changed (`segment-self`). Slots and segments: `<$` in a component with props that are not slots, after a keyed slot's first entry, with every slot written, under a `Switch`, after a slot filled under a `Match` or in the cases of a `Switch`, typed under a `Match` and in a `$Case` (open, with a letter, closed), before a slot element with slots of its own, in a closing tag; hover, definition, references, highlights and `prepareRename` from every tag of a group, each with its own range, and from each part of a member tag's closing tag; references asked from the container — the slot's declaration, the component's — with the page open and closed; `#name` for each extension of the lookup, and the siblings after `#` — a buffer never saved among them. Rename: one case per row of the table — the exact edits, applied, and no diagnostic in the project afterwards; each refusal as an error with its place, and from `prepareRename` where it does not depend on the new name; and **every word** of three fixture projects (`.ts`, `.tsx` and `.rtsx`; strings and texts included; every element and attribute declared, so that a renamed attribute is an error) renamed to a fresh name, applied, the diagnostics of all files pulled, put back: renamed without a diagnostic, or refused by `prepareRename`. One of the three has code that no virtual text holds: after each rename what hides that code is taken away, and there is no diagnostic then either |
 | reporting layer | on programs built with the transform tolerant and strict: a stopped file reports no TS diagnostic and its importers are still checked — code left out, and a construct left as written; a file with a syntax error in each mode, and a statement that does not parse next to one that does; a failure of the transpiler; for every file of a project, the per-file form equals the whole-program form (suggestions aside), declaration errors of a project that emits included; a report's range is source text; the merge rule, case by case, and an error in `&&name` through the whole layer |
 | `check` | golden output recorded from the overlay model before the migration; reproduced on the mapped program except the listed differences (plan.md, RGP1-106). Project shapes as goldens: `.rtsx` only, Vite's template, a file of two projects, a cross-project import, references in either order, a missing reference, an `include` that names extensions, a project that emits declarations, `paths`, a `contentMappers` entry, a segment under `node16` / `nodenext`, a segment loop, a segment without a file, a syntax error in an `.rtsx` (one the parser reports twice included) and in a `.tsx` file, an unlowered construct, a warning, TypeScript's style checks; `--watch`: an edit, a segment file created and deleted, a referenced project's directory |
 | grammar | scope assertions per construct, each also directly before `>` and as a bare sigil; equality with `source.tsx` on plain TSX; no `invalid.*` token in any `.rtsx` of the repo; regenerating changes nothing |
-| extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX*: the emitted text beside the source, refreshed on an edit, a file being typed — and, against a stand-in server without the request, "too old". The suite also runs against a packaged `.vsix` and its bundled binary |
+| extension | binary resolution unit tests; an editor suite in an isolated VS Code profile: language id, one slot-term diagnostic, exactly one hover and one definition result, an untitled document, the server's process and its exact command line through restarts, crashes and a binary that never answers; a second, untrusted window: no server process; a third, a package of a monorepo: which CLI runs, and its lockfile above the folder; a fourth, *Show transpiled TSX*: the emitted text beside the source, refreshed on an edit, a file being typed — and, against a stand-in server without the request, "too old"; a rename into a `.ts` file with unsaved changes: refused, and after a revert both files edited. The suite also runs against a packaged `.vsix` and its bundled binary |
 | plugin | `tsserver` driven over stdio: no TS2307, references at source positions, rename refused |
 | stock mapper | a Go test host speaks the protocol over pipes: the handshake, a slot and a shorthand through a valid map, every import form, a broken file, a construct left as written, a panic, concurrent transforms, the end of input; the corpus through it, and its typing-like mutants — no mistake reported twice or not at all, no panic behind an answer. `scripts/e2e-stock-mapper.sh` runs `typescript@next`'s `tsc --runExternalCode` on a project, each run with exactly its expected errors, and `reactogenic check` on the same tsconfig — by hand: it needs the network |

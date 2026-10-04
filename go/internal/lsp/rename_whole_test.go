@@ -94,6 +94,31 @@ func TestRenameOfAString(t *testing.T) {
 	}
 }
 
+// The property of an object that a type of the library gives its shape — a
+// PropertyDescriptor's `value` — is a name of its own to TypeScript's check,
+// and its references are the library's declaration too: no rename edits a
+// file of the library.
+func TestRenameIntoTheLibrary(t *testing.T) {
+	for _, rel := range []string{"src/plain.ts", "src/mapped.rtsx"} {
+		c := start(t, map[string]string{rel: "export const descriptor: PropertyDescriptor = { value: 1 };\n"})
+		c.Open(rel)
+		at := c.At(rel, "value", 1, 2)
+		edit, err := c.Rename(rel, at, "fresh")
+		for _, line := range c.Edits(edit) {
+			if !strings.HasPrefix(line, rel+" ") {
+				t.Errorf("%s: the rename edits %s", rel, line)
+			}
+		}
+		const refusal = "You cannot rename elements that are defined in the standard TypeScript library"
+		if err == nil || !strings.Contains(err.Error(), refusal) {
+			t.Errorf("%s: rename: %v %q", rel, err, c.Edits(edit))
+		}
+		if _, _, err := c.PrepareRename(rel, at); err == nil || !strings.Contains(err.Error(), refusal) {
+			t.Errorf("%s: prepareRename: %v", rel, err)
+		}
+	}
+}
+
 // A slot whose name is no identifier is declared, and destructured, under a
 // quoted key: `{ "$sub-item": $sub }`. TypeScript's search does not take the
 // key of a binding pattern for a reference; the rename does.

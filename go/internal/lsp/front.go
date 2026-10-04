@@ -391,6 +391,13 @@ func (f *front) clientMessage(msg message) (handled bool, forward []byte) {
 		if positional[msg.Method] && open && msg.ID != nil {
 			return f.position(msg, uri, text, encoding)
 		}
+		if msg.Method == "textDocument/references" && msg.ID != nil {
+			// Asked from any other document — a .tsx file, by a client that
+			// attaches the server to it: the answer may name .rtsx files.
+			f.mu.Lock()
+			f.pending[string(*msg.ID)] = request{Method: msg.Method, uri: uri, slotTag: -1, ownerAt: -1}
+			f.mu.Unlock()
+		}
 	}
 	return false, nil
 }
@@ -473,7 +480,7 @@ func (f *front) answer(req request, result json.RawMessage) (json.RawMessage, bo
 		out, err := json.Marshal(r)
 		return out, err == nil
 	}
-	if req.src != nil {
+	if req.src != nil || req.Method == "textDocument/references" {
 		return f.sourceAnswer(req, result)
 	}
 	return nil, false

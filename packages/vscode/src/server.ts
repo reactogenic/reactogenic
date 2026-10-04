@@ -5,6 +5,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { CloseAction, type ErrorHandler, LanguageClient, type LanguageClientOptions, RevealOutputChannelOn, State } from "vscode-languageclient/node";
 import { registerAutoInsert } from "./autoInsert";
+import { refuseUnsaved } from "./rename";
 import { type Binary, decidingDir, LOCKFILES, lockfileDirs, MIN_CLI_VERSION, type Resolution, resolveServer, runnable, statusOf } from "./resolve";
 import { SELECTOR } from "./selector";
 
@@ -251,6 +252,16 @@ export class Server implements vscode.Disposable {
       errorHandler: {
         error: (error, message, count) => fallback().error(error, message, count),
         closed: () => (this.client !== client || this.starting?.client === client ? { action: CloseAction.DoNotRestart, handled: true } : fallback().closed()),
+      },
+      middleware: {
+        // The server's edit of a file it reads from disk is for the saved text.
+        provideRenameEdits: async (document, position, newName, token, next) => {
+          const edit = await next(document, position, newName, token);
+          if (edit) {
+            refuseUnsaved(edit, vscode.workspace.textDocuments);
+          }
+          return edit;
+        },
       },
       diagnosticCollectionProvider: {
         create: (_name, source) => (source === "pull" ? this.problems : vscode.languages.createDiagnosticCollection("reactogenic.project")),

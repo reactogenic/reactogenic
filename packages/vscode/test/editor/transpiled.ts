@@ -67,6 +67,29 @@ export const run = runner(() => {
       await until("the refresh after the revert", () => tsx.document.getText().includes('$Label={{ children: "Save" }}'), 10_000);
     });
 
+    // ide.md, *Tolerance*: a file being typed keeps a transpiled text —
+    // lowered around what does not parse — and the status bar names the step.
+    it("a file being typed: the TSX is lowered around the syntax error", async () => {
+      const page = await open("src/page.rtsx");
+      const [tsx] = shown();
+      const label = page.document.getText().indexOf("<$Label>Save</$Label>");
+      // The text is retyped and the closing tag has lost its `>`: `<$Label>Store</$Label`.
+      await page.edit((builder) => builder.replace(new vscode.Range(page.document.positionAt(label + 8), page.document.positionAt(label + 21)), "Store</$Label"));
+      try {
+        await until("a syntax error in the source", () => vscode.languages.getDiagnostics(page.document.uri).some((d) => d.source === "ts" && Number(code(d)) < 2000), 10_000);
+        // Still lowered: the slot being typed is a prop, with the new text.
+        const text = await until("the refresh", () => tsx.document.getText().includes('children: "Store"') && tsx.document.getText(), 10_000);
+        assert.match(text, /<Button size=\{size\} \$Icon=\{\{ className: "icon"/);
+        assert.match(text, /\$Label=\{\{ children: "Store" \}\}/);
+        assert.doesNotMatch(text, /<\$Label/);
+        assert.ok(text.startsWith('import { Button, type Size } from "./button";'), text);
+      } finally {
+        await vscode.window.showTextDocument(page.document, { viewColumn: page.viewColumn });
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+      }
+      await until("the refresh after the revert", () => tsx.document.getText().includes('$Label={{ children: "Save" }} />'), 10_000);
+    });
+
     it("the command in the transpiled document itself does nothing", async () => {
       const [tsx] = shown();
       await vscode.window.showTextDocument(tsx.document, { viewColumn: tsx.viewColumn });

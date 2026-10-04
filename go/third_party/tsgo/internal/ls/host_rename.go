@@ -344,7 +344,8 @@ func quotedBindingKeys(program *compiler.Program, ch *checker.Checker, name stri
 	}
 	var keys []*ReferenceEntry
 	for _, file := range program.SourceFiles() {
-		if !strings.Contains(file.Text(), name) {
+		// The name in quotes: few files have it, the library's seldom.
+		if text := file.Text(); !strings.Contains(text, `"`+name+`"`) && !strings.Contains(text, "'"+name+"'") && !strings.Contains(text, "`"+name+"`") {
 			continue
 		}
 		for _, node := range getPossibleSymbolReferenceNodes(file, name, nil /*container*/) {

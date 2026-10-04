@@ -165,10 +165,11 @@ func TestRenameIsNotRefusedByLoweredNames(t *testing.T) {
 		"src/jsx.d.ts": renameApp["src/jsx.d.ts"],
 		rel: `import { Match, Switch } from "@reactogenic/core";
 import type { Slot, KeyedSlot } from "@reactogenic/core";
-export function List({ on, slot, is, $Row }: { on: boolean; slot: string; is: "a" | "b"; $Row: KeyedSlot<{ title?: string }> }) {
+export function List({ on, slot, is, $Row, $Item }: { on: boolean; slot: string; is: "a" | "b"; $Row: KeyedSlot<{ title?: string }>; $Item?: Slot<{ title?: string }, { key: string }> }) {
   return (
     <ul title={slot}>
       <Match on={on}><li slot={$Row} key="a" /></Match>
+      <li slot={$Item} &key="k" />
       <Switch on={is}>
         <$Case is="a">a</$Case>
         <$Case default>b</$Case>
@@ -180,6 +181,7 @@ export const list = (
   <List on slot="s" is="a">
     <$Row key="a" title="A" />
     <$Row key="b" title="B"></$Row>
+    <$Item key={({ key }) => key} title="I" { key }>{key}</$Item>
   </List>
 );
 `,
@@ -188,7 +190,7 @@ export const list = (
 	if got := lsptest.Lines(c.Diagnostics(rel)); len(got) != 0 {
 		t.Fatalf("the fixture has errors: %q", got)
 	}
-	for needle, to := range map[string]string{"on: boolean": "open", "slot: string": "place", "is: ": "which", "title?": "label"} {
+	for needle, to := range map[string]string{"on: boolean": "open", "slot: string": "place", "is: ": "which", "title?": "label", "key: string": "id"} {
 		at := c.At(rel, needle, 1, 1)
 		if _, _, err := c.PrepareRename(rel, at); err != nil {
 			t.Errorf("`%s`: prepareRename: %v", needle, err)

@@ -421,7 +421,7 @@ func (f *front) twinReferences(req request, result json.RawMessage) (json.RawMes
 // file, and for one that cannot be read.
 func (f *front) sourceOf(req request, uri string) *request {
 	// The requesting document is named as the client names it.
-	if uri == f.names.clientName(req.uri) {
+	if req.src != nil && uri == f.names.clientName(req.uri) {
 		return &req
 	}
 	name := f.names.serverName(uri)
@@ -615,15 +615,15 @@ func (f *front) slotsAnswered(req request, answer message) (body []byte) {
 }
 
 // isFlow: the element is one the transform lowers away around its children —
-// a `Match`, a `Switch`, an `Each`, a `$Case` of a `Switch`. A slot element
-// under it is a slot of what is above it.
+// a `Match`, a `Switch`, a `$Case` of a `Switch`. A slot element under it is
+// a slot of what is above it.
 func (s *sourceTree) isFlow(element *rtsx.Node) bool {
 	if element.Kind != rtsx.KindJsxElement {
 		return false
 	}
 	tag := element.AsJsxElement().OpeningElement.TagName()
 	switch syntax.FrameworkExport(tag) {
-	case "Match", "Switch", "Each":
+	case "Match", "Switch":
 		return true
 	}
 	above := owner(element)

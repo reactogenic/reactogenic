@@ -1,0 +1,5 @@
+import type { Shape } from "./shape";
+
+export function Shaped(shape: Shape) {
+  return <i hidden={shape.wide} />;
+}

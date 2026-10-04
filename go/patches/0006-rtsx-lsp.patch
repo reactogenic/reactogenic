@@ -377,10 +377,10 @@ index 0000000..d2c8013
 +func (hostScript) SpanMap() *spanmap.SpanMap  { return nil }
 diff --git a/internal/ls/host_rename.go b/internal/ls/host_rename.go
 new file mode 100644
-index 0000000..f0c445d
+index 0000000..c42fd60
 --- /dev/null
 +++ b/internal/ls/host_rename.go
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,402 @@
 +// Reactogenic: a rename whose occurrences in content-mapped files are written
 +// back by the host of the built-in mapper. Not part of upstream: added by
 +// go/patches/0006-rtsx-lsp.patch.
@@ -727,7 +727,8 @@ index 0000000..f0c445d
 +	}
 +	var keys []*ReferenceEntry
 +	for _, file := range program.SourceFiles() {
-+		if !strings.Contains(file.Text(), name) {
++		// The name in quotes: few files have it, the library's seldom.
++		if text := file.Text(); !strings.Contains(text, `"`+name+`"`) && !strings.Contains(text, "'"+name+"'") && !strings.Contains(text, "`"+name+"`") {
 +			continue
 +		}
 +		for _, node := range getPossibleSymbolReferenceNodes(file, name, nil /*container*/) {
