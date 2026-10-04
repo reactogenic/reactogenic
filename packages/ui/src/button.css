@@ -1,0 +1,28 @@
+@layer rg.components {
+  .rg-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.4em 0.8em;
+    border: 1px solid var(--rg-line);
+    border-radius: var(--rg-radius);
+    background: var(--rg-bg);
+    color: var(--rg-fg);
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+
+    &[data-variant="ghost"] {
+      border-color: transparent;
+      background: none;
+    }
+    &:hover {
+      background: var(--rg-hover);
+    }
+    &:disabled {
+      background: none;
+      color: var(--rg-muted);
+      cursor: default;
+    }
+  }
+}

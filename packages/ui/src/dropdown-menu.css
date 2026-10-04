@@ -1,0 +1,59 @@
+@layer rg.components {
+  .rg-menu {
+    box-sizing: border-box;
+    padding: 0.25rem;
+    border: 1px solid var(--rg-line);
+    border-radius: var(--rg-radius);
+    background: var(--rg-bg);
+    color: var(--rg-fg);
+    box-shadow: 0 8px 30px #0003;
+    list-style: none;
+
+    /* The popover's implicit anchor is its invoker, so there is no rule per
+       use site. `position-anchor: auto` says so: its initial value differs
+       between engines, and without `position-area` the newer one gives
+       `anchor()` nothing to resolve against. `anchor()` insets, not
+       `position-area`: that one does not flip in WebKit on a page taller
+       than the viewport. Without anchor positioning the UA's centred popover
+       remains. */
+    @supports (top: anchor(bottom)) {
+      position-anchor: auto;
+      inset: auto;
+      top: anchor(bottom);
+      left: anchor(left);
+      min-width: anchor-size(width);
+      margin: 0.25rem 0;
+      position-try-fallbacks: flip-block;
+
+      &[data-align="end"] {
+        left: auto;
+        right: anchor(right);
+      }
+    }
+
+    :is(a, button) {
+      display: flex;
+      box-sizing: border-box;
+      width: 100%;
+      padding: 0.4em 0.75em;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: start;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    :is(a, button:enabled):is(:hover, :focus-visible) {
+      background: var(--rg-hover);
+    }
+    [aria-current] {
+      font-weight: 600;
+    }
+    :disabled {
+      color: var(--rg-muted);
+      cursor: default;
+    }
+  }
+}

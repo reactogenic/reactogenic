@@ -1,0 +1,62 @@
+// Dialog (specs/phase02/components.md): a live modal `<dialog>` where it is
+// written. Opening, closing, focus and the inert page are the browser's.
+import type { ComponentProps, ReactNode } from "react";
+import { Each, mount, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import { Button, type ButtonProps } from "./button.rtsx";
+import "./tokens.css";
+import "./dialog.css";
+
+export interface DialogProps {
+  /** Names the dialog for a button elsewhere: `command="show-modal" commandfor="…"`. Generated when absent. */
+  id?: string;
+  /** Option: how the user may dismiss it — HTML's attribute and meaning. Default "any". */
+  closedby?: "any" | "closerequest" | "none";
+  /** A button rendered where the dialog is written, which opens it. */
+  $Trigger?: Slot<ButtonProps>;
+  /** The accessible name. */
+  $Title: Slot<ComponentProps<"h2">>;
+  /** Footer buttons, in order. Each closes the dialog unless it is a link. */
+  $Action?: KeyedSlot<ButtonProps>;
+  /** The body. */
+  children?: ReactNode;
+}
+
+export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, children }: DialogProps) {
+  const generated = useShellId("d");
+  const dialog = id ?? generated;
+  const title = dialog + "-t";
+  // Page-level, both: Back must not restore it open; its buttons are dead
+  // below the floor without the fallback (components.md, *Behaviours*).
+  mount("@reactogenic/ui/behaviors/overlays");
+  mount("@reactogenic/ui/behaviors/invokers");
+  return (
+    <>
+      <Button slot={$Trigger} command="show-modal" commandfor={dialog} />
+      <dialog id={dialog} className="rg-dialog" closedby aria-labelledby={title}>
+        <div data-part="panel">
+          <header>
+            <h2 slot={$Title} id={title} />
+            {/* The first focusable element of the dialog, so that is where focus goes when it opens. */}
+            <button type="button" data-part="close" command="close" commandfor={dialog} aria-label="Close">✕</button>
+          </header>
+          <div data-part="body">{children}</div>
+          {$Action !== undefined ? (
+            <footer>
+              <Each items={Object.keys($Action)} { item: key }>
+                <Button key={key} slot={$Action} command="close" commandfor={dialog} />
+              </Each>
+            </footer>
+          ) : null}
+        </div>
+        {/* Light dismiss where `closedby` is missing (Safari): the dialog is the
+            whole viewport and this is everything around the panel. After the
+            panel, or the dialog would focus it first. */}
+        {closedby === "any" ? (
+          <form method="dialog" data-part="scrim">
+            <button tabIndex={-1} aria-hidden="true" />
+          </form>
+        ) : null}
+      </dialog>
+    </>
+  );
+}

@@ -1,0 +1,42 @@
+// Button (specs/phase02/components.md): `<button>`, or `<a>` when it has
+// `href`. Its behaviour is declarative — a link, a command on a dialog, a
+// popover's target — so it is legal shell code: no handlers.
+import type { ButtonHTMLAttributes } from "react";
+import { mount } from "@reactogenic/core";
+import "./tokens.css";
+import "./button.css";
+
+/** The commands the `invokers` behaviour covers below the browser floor: a dialog's. A popover is targeted with `popoverTarget`. */
+export type Command = "show-modal" | "close" | "request-close";
+
+type Passed = "id" | "disabled" | "commandfor" | "popoverTarget" | "popoverTargetAction" | "aria-label" | "aria-haspopup" | "aria-current" | "children";
+
+export interface ButtonProps extends Pick<ButtonHTMLAttributes<HTMLButtonElement>, Passed> {
+  /** With `href` the button is a link: `<a>`. */
+  href?: string;
+  /** Option: `data-variant` on the element. */
+  variant?: "solid" | "ghost";
+  /** What it does to the dialog `commandfor` names. */
+  command?: Command;
+}
+
+export function Button({ href, variant, children, ...rest }: ButtonProps) {
+  // Only a variant that differs from the default is in the HTML.
+  const dataVariant = variant === "ghost" ? variant : undefined;
+  if (href !== undefined) {
+    return (
+      <a className="rg-button" data-variant={dataVariant} id={rest.id} href aria-label={rest["aria-label"]} aria-current={rest["aria-current"]}>
+        {children}
+      </a>
+    );
+  }
+  // Below the floor a command button is dead without the fallback (components.md, *Behaviours*).
+  if (rest.command !== undefined) {
+    mount("@reactogenic/ui/behaviors/invokers");
+  }
+  return (
+    <button type="button" className="rg-button" data-variant={dataVariant} {...rest}>
+      {children}
+    </button>
+  );
+}
