@@ -17,7 +17,7 @@ reactogenic build [-p tsconfig.json] [--pages <dir>] [--out <dir>] [--base <path
 | `-p` | `tsconfig.json` in the working directory | the project, as for `check` |
 | `--pages` | `pages` next to the tsconfig | the root of the routes |
 | `--out` | `dist` next to the tsconfig | emptied first; refused if it holds the tsconfig or the pages |
-| `--base` | `/` | the path the site is served under; prefixes asset URLs |
+| `--base` | `/` | the path the site is served under: prefixes the URLs of the build's own files and the pages' root-relative links (*Packaging*) |
 | `--inline` | `auto` | *Packaging* |
 | `--no-specialize` | | the control of the bet: one unpruned CSS bundle, every behaviour with every flag on (*The control*) |
 | `--report` | | print the byte report (*The report*); it is always written to `<out>/_rg/report.json` |
@@ -284,9 +284,30 @@ page can check:
 | command-target | `command="show-modal"`, `close` or `request-close` whose target is not a `<dialog>`; `show-popover`, `hide-popover`, `toggle-popover`, or any `popovertarget`, whose target has no `popover` |
 | link-not-found | a root-relative `href` (`/guide/slot/`) that is neither a page nor a file of the output; `#fragment` and query are ignored for the match |
 
+| | Rule |
+| --- | --- |
+| an id | compared as written (case-sensitive); `id=""` is none |
+| one id | `commandfor`, `popovertarget`, `anchor`, `for` on a `<label>`; empty, it names nothing: reported |
+| a list of ids | `aria-labelledby`, `aria-describedby`, `aria-controls`, `for` on an `<output>`: space-separated, each checked; an empty list is no mistake |
+| `href="#x"` | an id — as written or percent-decoded — or an `<a name>`. `#`, `#top` and a text directive (`#:~:text=…`) are not references |
+| a command | the six keywords, case-insensitive; a custom command (`--x`) is the page's own. A keyword without `commandfor` commands nothing: command-target |
+| a missing target | idref-not-found alone, not command-target as well |
+| a root-relative link | `href` of any element but `<base>`, starting with one `/`. It is a route — `/guide/`, also written `/guide` (the host redirects) or `/guide/index.html` (the file) — or a file of the output: `/favicon.svg`, `/demo/` for `demo/index.html` |
+| its path | what a browser requests, in the names of the site's directories: tabs and line breaks dropped, `\` a `/`, dot segments resolved (also `%2e`), then each segment percent-decoded (`/se%C3%B1or/` is `pages/señor/`). Not Go's `url.Parse`: `/guide//` is not `/guide/`, `%2F` is not a separator, and a `%` that encodes nothing stands for itself — `/100%` is checked, not passed |
+| not checked | a URL with a scheme or a host (`https:`, `mailto:`, `//host`, `/\host`); a relative one (`slot/`, `../x/`, `?tab=2`) |
+| `--base /docs/` | not seen by the check. A page links to the site from its root, whatever the base — `/guide/`, as `pathname()` names it — and is checked as rendered, before packaging prefixes the link (*Packaging*). So `/docs/guide/` is link-not-found: it is no route, and would be served as `/docs/docs/guide/` |
+| `<template>` | its content is not of the page: neither its ids nor its references. The element itself is: its `id` counts, here and for mount-no-element |
+| repeated | one report per page for the same attribute on the same element name: a link of the layout is on every item of a list |
+
 They are reported at the page (file and pathname) with the offending
 attribute's text; mapping an attribute back to its `.rtsx` position needs
 provenance the renderer does not carry (*Not in phase 2*).
+
+```
+pages/guide/index.rtsx: error idref-not-found: Page /guide/: `commandfor="install"` on `<button>` names no element of the page
+pages/guide/index.rtsx: error command-target: Page /guide/: `command="show-modal"` on `<button>` needs a `<dialog>`: `commandfor="nav"` is a `<nav>`
+pages/guide/index.rtsx: error link-not-found: Page /guide/: `href="/guide/slot/"` on `<a>` is neither a page nor a file of the output
+```
 
 ## CSS
 
@@ -432,19 +453,24 @@ if (hasAction) mount("@reactogenic/ui/behaviors/menu-keys", id, { RG_MENU_TYPEAH
 
 ```js
 // generated entry for a page whose record holds two such mounts
-import a from "@reactogenic/ui/behaviors/menu-keys";
-import b from "@reactogenic/ui/behaviors/overlays";
-a(document.getElementById("m1")); a(document.getElementById("m2")); b();
+import m0 from "@reactogenic/ui/behaviors/menu-keys";
+import m1 from "@reactogenic/ui/behaviors/overlays";
+m0(document.getElementById("m1"));
+m0(document.getElementById("m2"));
+m1();
 ```
 
 | | Rule |
 | --- | --- |
 | module | the default export is `(root: HTMLElement) => void`, or `() => void` for a page-level behaviour (mounted without an id; run once per page however often it is mounted) |
+| the entry | one import per distinct module, in the order they are first mounted, resolved by esbuild from the project directory (through a symbolic link too: files are named from the real one); one call per mount, in render order. One module on one element twice is one call. A module is the **file** it resolves to: two spellings of it are one import, and one page-level call |
 | flags | bare `declare const RG_…: boolean` identifiers — never an options object, an imported constant or a class member: esbuild removes code only on parser-time constants (research.md) |
+| a flag | an identifier that starts with `RG_` and that the module reads **free** — nothing binds it; `declare` binds nothing. Exactly what `Define` replaces, so esbuild is asked: each file is transformed with every `RG_…` name of its text defined as a marker, and the names whose marker comes out are its flags. `RG_lower`, `RG_$` are flags; a name in a comment, a string, a property, or `const RG_X = false` of the module's own is not |
 | a page's flags | per module, the **union** over the page's mounts. So a flag only *adds* behaviour. What must differ between two use sites on one page is an attribute on the root, read at run time |
-| every flag is defined | the builder defines each `RG_…` identifier found in the module's source — `false` unless a mount set it. A flag the builder did not see would be a `ReferenceError` at run time |
-| no top-level side effects | a module that should have been dropped must be absent from the metafile; the builder checks it |
-| build | one `api.Build` per page: generated entry, `Bundle`, minify, ES modules, `Define` = the page's flags, `Metafile`. No splitting |
+| every flag is defined | the builder defines each flag of the module and of every module it imports — `false` unless a mount set it. A flag the builder did not see would be a `ReferenceError` at run time, so the built script is asked the same question: a free `RG_…` left in it (one written `RG_\u0041` in the source) is mount-flag, and no script |
+| no top-level side effects | the builder **reads** each module once per site: it bundles `import "<module>"` alone — nothing of it used — ignoring `sideEffects` and `@__PURE__` annotations. Whatever is left in that output ran at the top level: mount-side-effect. State and constants are not code that runs (`let typed = ""`, `new WeakMap()`, a class, an enum); a call is (`["a", "b"].join(",")`, `matchMedia(…)`, `"command" in HTMLButtonElement.prototype`) — it belongs in the function. The same read resolves the module and lists the files whose flags are its own |
+| … of a module with flags | read as a page builds it — every flag defined: once all on, once all off, and what is left of either counts. `const DELAY = RG_SLOW ? 500 : 100` is a constant; `if (RG_X) document.title = "x"` runs. What runs only under a mix (`RG_A && !RG_B`) is not seen |
+| build | one `api.Build` per page: generated entry, `Bundle`, minify, ES modules, `Define` = the page's flags, `Metafile`. No splitting. Every input of its metafile is a file some mounted module reaches |
 
 `mountX(root)` per use site is layout.md's own design for clones opened from
 islands, so phase 2's behaviours carry over.
@@ -452,8 +478,14 @@ islands, so phase 2's behaviours carry over.
 | Code | Condition |
 | --- | --- |
 | mount-not-found | the module of a `mount()` does not resolve |
-| mount-no-element | the id of a `mount()` is not on the page |
-| mount-flag | a flag passed to `mount()` that the module does not declare |
+| mount-no-element | the id of a `mount()` is not on the page (a `<template>`'s content is not) |
+| mount-flag | a flag passed to `mount()` — on or off — that is no flag of the module or of a module it imports; a flag the page's script reads and the builder did not find |
+| mount-side-effect | a module, or one it imports, runs code when it is imported; reported at that file, with the statement that stays, once per file however the mounts spell the module |
+| mount-error | anything else esbuild says of a module — an import of its own that does not resolve, no default export: its message, at its position |
+
+The first three are reported as the page checks are — at the page, naming
+the mount: ``Page /syntax/: `mount("@reactogenic/ui/behaviors/menu-keys")`:
+no element of the page has `id="m9"` ``.
 
 ## Packaging
 
@@ -473,6 +505,21 @@ pages is **one blob**, by content hash.
   stylesheet `<link rel="stylesheet">`.
 - A page with no behaviours has no `<script>`. A page whose CSS is empty has
   no `<style>`.
+- `--base /docs/`: the URLs of the files above carry it, and so does every
+  root-relative `href` of the page — the links the page check read, after it
+  read them: `/guide/` → `/docs/guide/`. The source is written once, for any
+  base. `//host` and a URL with a scheme are left alone: a link to another
+  site of the origin is written in full.
+
+> OPEN: the other root-relative URLs of a page (`src`, `srcset`, `action`,
+> `url()` in CSS) get the base by the same rule; which attributes, when the
+> asset pipeline is specified (*Not in phase 2*).
+
+**Rejected:** the base written into the links by the author (the source is
+then built for one base, and shell code has no way to learn it: `pathname()`
+is the route); checking links with the base stripped and passing those
+outside it as "another site of the origin" (with links written from the
+root, that is every link: the check is off whenever `--base` is set).
 - The rule is about caching, not size: a file costs ≈180–330 B of headers per
   request, so a small blob used once is always cheaper inline, and one shared
   by many pages is cheaper as a file from the second page.
@@ -483,7 +530,10 @@ pages is **one blob**, by content hash.
 HTML, CSS and JS (raw, gzip, brotli), how each blob is delivered, the
 components rendered, the behaviours mounted with their flags, and per
 behaviour module its bytes in the page's script (from esbuild's metafile) —
-*why is this byte here*. CSS: rules kept and dropped per source file.
+*why is this byte here*. The rows add up to the script: the mounted modules,
+the files they import, the generated entry (`<entry>`), and what is of no
+input — the helpers esbuild adds for a dynamic `import()` — as `<runtime>`.
+CSS: rules kept and dropped per source file.
 
 ## The control
 
@@ -494,6 +544,27 @@ page rendered would: same HTML, and
 | --- | --- | --- |
 | CSS | per page, pruned against its HTML | one file for the site: the unpruned bundle of everything any page imports |
 | JS | per page: the modules it mounted, its flags | one file for the site: every behaviour mounted on any page, every flag on, and a table from pathname to that page's mounts |
+
+```js
+// the control's entry: every flag is defined `true`
+import m0 from "@reactogenic/ui/behaviors/overlays";
+import m1 from "@reactogenic/ui/behaviors/menu-keys";
+const m = [m0, m1], t = {
+  "/": [[0]],
+  "/syntax/": [[0], [1, "m1"], [1, "m2"]],
+};
+for (const [i, id] of t[decodeURIComponent(location.pathname).replace(/(\/index\.html|\/)?$/, "/")] || [])
+  id ? m[i](document.getElementById(id)) : m[i]();
+```
+
+- The table's keys carry `--base` (`/docs/syntax/`), in the names of the
+  directories: `location.pathname` is what the browser encodes of them
+  (`/se%C3%B1or/` for `pages/señor/`), so it is decoded (a pathname that is
+  not valid percent-encoding throws: it is no page of the site). A page
+  answers to `/syntax/`, `/syntax` and `/syntax/index.html` — as its own
+  script does, which is in the page wherever it is served. A page that
+  mounts nothing is not in the table.
+- The mount-* reports are those of the default build, page by page.
 
 The difference between the two builds is what component awareness is worth
 (plan.md, RGP2-050).
