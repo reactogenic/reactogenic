@@ -1,4 +1,10 @@
 @layer rg.components {
+  /* `$Header` and `$Footer` hold whatever the author writes — other
+     components too. So every rule here goes through the side menu's own
+     structure: its parts are children of the root (`>`), and its items live
+     in the sections (`> :is(section, details)`), where the only author content
+     is a label. Nothing matches inside `[data-part="header"]` or
+     `[data-part="footer"]`. */
   .rg-sidemenu {
     box-sizing: border-box;
     padding: 1rem;
@@ -6,59 +12,57 @@
     color: var(--rg-fg);
     overflow: auto;
 
-    ul {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    ul ul {
-      padding-inline-start: 0.75rem;
-    }
-    /* A section's title, and the summary of a collapsible section. */
-    :is(h2, summary) {
-      margin: 1rem 0 0.25rem;
-      padding: 0 0.75rem;
-      color: var(--rg-muted);
-      font-size: 0.8125rem;
-      font-weight: 600;
-    }
-    /* A group of items reads as an item. */
-    li summary {
-      margin: 0;
-      padding: 0.3em 0.75em;
-      color: inherit;
-      font-size: inherit;
-      font-weight: inherit;
-    }
-    summary {
-      cursor: pointer;
-    }
-    a {
-      display: block;
-      padding: 0.3em 0.75em;
-      border-radius: 6px;
-      color: inherit;
-      text-decoration: none;
+    > :is(section, details) {
+      ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      ul ul {
+        padding-inline-start: 0.75rem;
+      }
+      /* A section's title, and the summary of a collapsible section. */
+      > :is(h2, summary) {
+        margin: 1rem 0 0.25rem;
+        padding: 0 0.75rem;
+        color: var(--rg-muted);
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+      /* A group of items reads as an item. */
+      li > details > summary {
+        padding: 0.3em 0.75em;
+      }
+      summary {
+        cursor: pointer;
+      }
+      a {
+        display: block;
+        padding: 0.3em 0.75em;
+        border-radius: 6px;
+        color: inherit;
+        text-decoration: none;
 
-      &:hover {
+        &:hover {
+          background: var(--rg-hover);
+        }
+      }
+      a[aria-current] {
         background: var(--rg-hover);
+        color: var(--rg-accent);
+        font-weight: 600;
       }
     }
-    [aria-current] {
-      background: var(--rg-hover);
-      color: var(--rg-accent);
-      font-weight: 600;
-    }
-    [data-part="header"] {
+    > [data-part="header"] {
       padding: 0 0.75rem 0.5rem;
     }
-    [data-part="footer"] {
+    > [data-part="footer"] {
       margin-top: 1rem;
       padding: 0 0.75rem;
       color: var(--rg-muted);
       font-size: 0.8125rem;
     }
-    [data-part="close"] {
+    > [data-part="close"] {
       display: block;
       margin-inline-start: auto;
       padding: 0.25em 0.5em;
@@ -82,7 +86,7 @@
       border: 0;
       border-inline-end: 1px solid var(--rg-line);
 
-      :is([data-part="close"], [data-part="scrim"]) {
+      > :is([data-part="close"], [data-part="scrim"]) {
         display: none;
       }
     }
@@ -116,7 +120,7 @@
       /* Everything beside the drawer. A tap on it is a tap inside the
          popover: nothing closes until its click, and nothing behind it is
          reached. */
-      [data-part="scrim"] {
+      > [data-part="scrim"] {
         position: fixed;
         inset: 0 0 0 var(--rg-sidemenu-width);
         padding: 0;

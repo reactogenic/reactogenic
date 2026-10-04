@@ -73,7 +73,7 @@ beforeAll(async () => {
 });
 
 test("the spec has the examples this suite knows", () => {
-  expect(cases.map((example) => example.name)).toEqual(["Dialog/1", "Dialog/2", "DropdownMenu/1", "DropdownMenu/2", "SideMenu/1"]);
+  expect(cases.map((example) => example.name)).toEqual(["Button/1", "Dialog/1", "Dialog/2", "DropdownMenu/1", "DropdownMenu/2", "DropdownMenu/3", "SideMenu/1"]);
 });
 
 describe("emitted HTML equals the spec's", () => {
@@ -84,6 +84,10 @@ describe("emitted HTML equals the spec's", () => {
 
 describe("what an example mounts", () => {
   const mounts = (name: string) => distinct(rendered.get(name)!.mounts);
+
+  test("a button that is a link: nothing", () => {
+    expect(mounts("Button/1")).toEqual([]);
+  });
 
   test("a dialog: overlays and invokers, both page-level", () => {
     expect(mounts("Dialog/1")).toEqual([{ module: OVERLAYS }, { module: INVOKERS }]);
@@ -98,6 +102,14 @@ describe("what an example mounts", () => {
     expect(mounts("DropdownMenu/2")).toEqual([
       { module: OVERLAYS },
       { module: MENU_KEYS, id: "m2", flags: { RG_MENU_TYPEAHEAD: false } },
+      { module: INVOKERS },
+    ]);
+  });
+
+  test("typeahead turns the flag of that mount on", () => {
+    expect(mounts("DropdownMenu/3")).toEqual([
+      { module: OVERLAYS },
+      { module: MENU_KEYS, id: "m3", flags: { RG_MENU_TYPEAHEAD: true } },
       { module: INVOKERS },
     ]);
   });

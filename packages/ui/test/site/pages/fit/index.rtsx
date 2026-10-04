@@ -1,0 +1,43 @@
+// "/fit/": dialogs whose content is larger than the viewport — the panel must
+// stay inside it and the body scroll — and a dialog written inside the
+// author's own <form>.
+import { Dialog } from "@reactogenic/ui";
+import { DocsLayout } from "../../layout.rtsx";
+
+const lines = Array.from({ length: 120 }, (_, index) => index + 1);
+
+export default function Page() {
+  return (
+    <DocsLayout title="Fit">
+      <h1>Fit</h1>
+      <Dialog id="wide">
+        <$Trigger>Wide</$Trigger>
+        <$Title>Install</$Title>
+        <pre>pnpm add @reactogenic/core@alpha @reactogenic/vite@alpha react react-dom</pre>
+      </Dialog>{" "}
+      <Dialog id="url">
+        <$Trigger>URL</$Trigger>
+        <$Title>https://example.com/a-title-that-is-one-unbreakable-word-and-wider-than-a-phone</$Title>
+        https://example.com/an-unbreakable-address/that-is-much-wider-than-the-panel/of-a-dialog-on-a-phone
+      </Dialog>{" "}
+      <Dialog id="tall">
+        <$Trigger>Tall</$Trigger>
+        <$Title>Changelog</$Title>
+        {lines.map((line) => (
+          <p key={line}>Line {line}</p>
+        ))}
+        <$Action key="ok">Got it</$Action>
+      </Dialog>
+      <form action="/guide/slots/" method="get">
+        <input name="q" defaultValue="hello" />
+        <Dialog id="confirm">
+          <$Trigger>Delete…</$Trigger>
+          {/* The author's id on the title: it is the one the dialog is named by. */}
+          <$Title id="sure">Sure?</$Title>
+          This cannot be undone.
+          <$Action key="cancel">Cancel</$Action>
+        </Dialog>
+      </form>
+    </DocsLayout>
+  );
+}

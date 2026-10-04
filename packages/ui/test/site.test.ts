@@ -4,9 +4,12 @@
 import type { ComponentType } from "react";
 import { describe, expect, test } from "vitest";
 import Actions from "./site/pages/actions/index.rtsx";
+import Fit from "./site/pages/fit/index.rtsx";
 import Flow from "./site/pages/guide/flow/index.rtsx";
 import Slots from "./site/pages/guide/slots/index.rtsx";
 import Index from "./site/pages/index.rtsx";
+import Menus from "./site/pages/menus/index.rtsx";
+import Nested from "./site/pages/nested/index.rtsx";
 import Plain from "./site/pages/plain/index.rtsx";
 import { distinct, normalise, Page } from "./stand-in.ts";
 
@@ -61,10 +64,26 @@ describe("Dialog", () => {
   test("light dismiss is a scrim after the panel; the close button is the dialog's first focusable element", () => {
     const dialog = html.slice(html.indexOf('<dialog id="d1"'), html.indexOf("</dialog>"));
     expect(dialog).toContain('<dialog id="d1" class="rg-dialog" closedby="any" aria-labelledby="d1-t">');
-    expect(dialog.endsWith('</div><form data-part="scrim" method="dialog"><button tabindex="-1" aria-hidden="true"></button></form>')).toBe(true);
+    const scrim = '<button type="button" data-part="scrim" command="close" commandfor="d1" tabindex="-1" aria-hidden="true">';
+    expect(dialog.endsWith(`</div>${scrim}</button>`)).toBe(true);
     const focusable = [...dialog.matchAll(/<(?:button|a|input)\b[^>]*>/g)].map((match) => match[0]);
     expect(focusable[0]).toBe('<button type="button" data-part="close" command="close" commandfor="d1" aria-label="Close">');
-    expect(focusable.at(-1)).toBe('<button tabindex="-1" aria-hidden="true">');
+    expect(focusable.at(-1)).toBe(scrim);
+  });
+
+  test("the scrim is a button of the dialog, never a form: inside the author's <form> a nested form is dropped by the parser", () => {
+    const fit = build("/fit/", Fit).html;
+    const form = fit.slice(fit.indexOf("<form "), fit.indexOf("</form>"));
+    expect(form).toContain('<dialog id="confirm"');
+    expect(form.slice(1)).not.toContain("<form");
+    // Every button the dialog puts in the author's form is `type="button"`: none submits it.
+    expect([...form.matchAll(/<button\b[^>]*>/g)].filter((match) => !match[0].includes(' type="button"'))).toEqual([]);
+  });
+
+  test("the author's id on $Title is the one the dialog is named by", () => {
+    const fit = build("/fit/", Fit).html;
+    expect(fit).toContain('<dialog id="confirm" class="rg-dialog" closedby="any" aria-labelledby="sure">');
+    expect(fit).toContain('<h2 id="sure">Sure?</h2>');
   });
 
   test("closedby other than any has no scrim; without $Action there is no footer", () => {
@@ -87,15 +106,66 @@ describe("DropdownMenu", () => {
     expect(mounts).toContainEqual({ module: MENU_KEYS, id: "actions", flags: { RG_MENU_TYPEAHEAD: true } });
     expect(html).toContain(
       '<button type="button" class="rg-button" id="actions-t" popovertarget="actions" aria-haspopup="menu">Actions</button>' +
-        '<div id="actions" class="rg-menu" popover role="menu" aria-labelledby="actions-t">' +
+        '<div id="actions" class="rg-menu" data-typeahead popover role="menu" aria-labelledby="actions-t">' +
         '<button type="button" role="menuitem" autofocus command="show-modal" commandfor="shortcuts">Keyboard shortcuts…</button>',
     );
     expect(html).toContain('<button type="button" role="menuitem" disabled>Print</button>');
   });
 
+  test("typeahead is the menu's: the flag is the page's, the attribute says which menu asked", () => {
+    const { html, mounts } = build("/menus/", Menus);
+    expect(mounts).toContainEqual({ module: MENU_KEYS, id: "one", flags: { RG_MENU_TYPEAHEAD: true } });
+    expect(mounts).toContainEqual({ module: MENU_KEYS, id: "two", flags: { RG_MENU_TYPEAHEAD: false } });
+    expect(html).toContain('<div id="one" class="rg-menu" data-typeahead popover role="menu" aria-labelledby="one-t">');
+    expect(html).toContain('<div id="two" class="rg-menu" popover role="menu" aria-labelledby="two-t">');
+  });
+
+  test("the author's id on $Trigger is the one an action menu is named by", () => {
+    const { html } = build("/menus/", Menus);
+    expect(html).toContain('<button type="button" class="rg-button" id="mine" popovertarget="three" aria-haspopup="menu">Three</button>');
+    expect(html).toContain('<div id="three" class="rg-menu" popover role="menu" aria-labelledby="mine">');
+    expect(html).not.toContain("three-t");
+  });
+
+  test("a disabled link is a link without its href, in a menu and as a Button; the first focus skips every disabled item", () => {
+    const { html } = build("/menus/", Menus);
+    expect(html).toContain(
+      '<a role="menuitem" aria-disabled="true">Disabled link</a>' +
+        '<button type="button" role="menuitem" disabled>Print</button>' +
+        '<button type="button" role="menuitem" autofocus command="show-modal" commandfor="shortcuts">Open</button>' +
+        '<a href="/" role="menuitem">Home</a>',
+    );
+    // A menu of links stays one: `href` decides, not `disabled`.
+    expect(html).toContain('<ul id="links" class="rg-menu" popover><li><a aria-disabled="true">Not yet</a></li><li><a href="/">Home</a></li></ul>');
+    expect(html).toContain('<a class="rg-button" id="off" aria-disabled="true">A disabled link button</a>');
+  });
+
   test("generated ids count per page, whatever ids the author gave", () => {
     // The layout's menu is `versions` (the author's); the page's own is the builder's.
     expect(build("/actions/", Actions).html).toContain('<div id="m2" class="rg-menu" popover role="menu" aria-labelledby="m2-t">');
+  });
+});
+
+// The builder's own checks (builder.md, *Checks on the page*), stood in for:
+// the components must never be what makes a page fail them.
+describe("references by id", () => {
+  const pages: [string, ComponentType][] = [
+    ["/", Index],
+    ["/actions/", Actions],
+    ["/fit/", Fit],
+    ["/guide/flow/", Flow],
+    ["/guide/slots/", Slots],
+    ["/menus/", Menus],
+    ["/nested/", Nested],
+    ["/plain/", Plain],
+  ];
+
+  test.each(pages)("%s: every reference names an element of the page, and no id is there twice", (pathname, component) => {
+    const { html } = build(pathname, component);
+    const ids = [...html.matchAll(/<[a-z][^>]*? id="([^"]*)"/g)].map((match) => match[1]!);
+    expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
+    const references = [...html.matchAll(/ (commandfor|popovertarget|aria-labelledby|aria-describedby|aria-controls|for)="([^"]*)"/g)];
+    expect(references.filter(([, , id]) => !ids.includes(id!)).map(([, attribute, id]) => `${attribute}="${id}"`)).toEqual([]);
   });
 });
 

@@ -6,21 +6,45 @@ import { Each, mount, pathname, useShellId, type KeyedSlot, type Slot } from "@r
 import "./tokens.css";
 import "./side-menu.css";
 
-/** A link, or — with nested `$Item`s and no `href` — a disclosure of them. */
-export interface SideMenuItemProps {
+// The two unions below are named member by member: a type error then says
+// which case the author wrote ("'href' does not exist in type
+// 'SideMenuGroupProps'").
+
+/** An item that is a link. */
+export interface SideMenuLinkProps {
   href?: string;
   /** The label. */
   children?: ReactNode;
-  $Item?: KeyedSlot<SideMenuItemProps>;
+  $Item?: undefined;
 }
 
-/** A group of items, titled or not. */
-export interface SideMenuSectionProps {
-  title?: string;
-  /** Option: absent = not collapsible; `false` = collapsible, open. */
-  collapsed?: boolean;
+/** An item that is a disclosure of nested items. It has no `href`: its label opens it. */
+export interface SideMenuGroupProps {
+  /** The label: the disclosure's summary. */
+  children?: ReactNode;
   $Item: KeyedSlot<SideMenuItemProps>;
 }
+
+/** A link — or, with nested `$Item`s, a disclosure of them: one or the other, never both. */
+export type SideMenuItemProps = SideMenuLinkProps | SideMenuGroupProps;
+
+/** A section that is always open, titled or not. */
+export interface SideMenuPlainSectionProps {
+  title?: string;
+  collapsed?: undefined;
+  $Item: KeyedSlot<SideMenuItemProps>;
+}
+
+/** A section that opens and closes: a disclosure, so it has a title — what opens it. */
+export interface SideMenuCollapsibleSectionProps {
+  title: string;
+  /** Option: `false` = collapsible, open. Always open on the page it holds. */
+  collapsed: boolean;
+  $Item: KeyedSlot<SideMenuItemProps>;
+}
+
+/** A group of items. `collapsed` absent = not collapsible. */
+export type SideMenuSectionProps = SideMenuPlainSectionProps | SideMenuCollapsibleSectionProps;
 
 export interface SideMenuProps {
   id?: string;
@@ -57,22 +81,23 @@ function Items({ $Item }: { $Item: KeyedSlot<SideMenuItemProps> }) {
   );
 }
 
-function Item({ href, children, $Item }: SideMenuItemProps) {
-  if ($Item !== undefined) {
+// Not destructured: `$Item` tells the two cases apart, and `href` is the link's only.
+function Item(item: SideMenuItemProps) {
+  if (item.$Item !== undefined) {
     // Every disclosure around the current page is open.
-    const open = holdsCurrent($Item);
+    const open = holdsCurrent(item.$Item);
     return (
       <li>
         <details open>
-          <summary>{children}</summary>
-          <Items $Item={$Item} />
+          <summary>{item.children}</summary>
+          <Items $Item={item.$Item} />
         </details>
       </li>
     );
   }
   return (
     <li>
-      <a href aria-current={isCurrent(href) ? "page" : undefined}>{children}</a>
+      <a href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>{item.children}</a>
     </li>
   );
 }

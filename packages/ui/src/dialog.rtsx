@@ -1,7 +1,7 @@
 // Dialog (specs/phase02/components.md): a live modal `<dialog>` where it is
 // written. Opening, closing, focus and the inert page are the browser's.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, mount, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import { Each, isAssigned, mount, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
 import { Button, type ButtonProps } from "./button.rtsx";
 import "./tokens.css";
 import "./dialog.css";
@@ -24,7 +24,9 @@ export interface DialogProps {
 export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, children }: DialogProps) {
   const generated = useShellId("d");
   const dialog = id ?? generated;
-  const title = dialog + "-t";
+  // A slot's props replace the attachment's: the author's `id` on the title is
+  // then the one the dialog is named by.
+  const title = (isAssigned($Title) ? $Title.id : undefined) ?? dialog + "-t";
   // Page-level, both: Back must not restore it open; its buttons are dead
   // below the floor without the fallback (components.md, *Behaviours*).
   mount("@reactogenic/ui/behaviors/overlays");
@@ -50,12 +52,10 @@ export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, childr
         </div>
         {/* Light dismiss where `closedby` is missing (Safari): the dialog is the
             whole viewport and this is everything around the panel. After the
-            panel, or the dialog would focus it first. */}
-        {closedby === "any" ? (
-          <form method="dialog" data-part="scrim">
-            <button tabIndex={-1} aria-hidden="true" />
-          </form>
-        ) : null}
+            panel, or the dialog would focus it first. A button of the dialog,
+            not a `<form method="dialog">`: inside the author's own form the
+            parser drops a nested form, and its button would submit theirs. */}
+        {closedby === "any" ? <button type="button" data-part="scrim" command="close" commandfor={dialog} tabIndex={-1} aria-hidden="true" /> : null}
       </dialog>
     </>
   );

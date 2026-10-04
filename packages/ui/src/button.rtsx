@@ -12,7 +12,7 @@ export type Command = "show-modal" | "close" | "request-close";
 type Passed = "id" | "disabled" | "commandfor" | "popoverTarget" | "popoverTargetAction" | "aria-label" | "aria-haspopup" | "aria-current" | "children";
 
 export interface ButtonProps extends Pick<ButtonHTMLAttributes<HTMLButtonElement>, Passed> {
-  /** With `href` the button is a link: `<a>`. */
+  /** With `href` the button is a link: `<a>` — without its `href` when it is `disabled`. */
   href?: string;
   /** Option: `data-variant` on the element. */
   variant?: "solid" | "ghost";
@@ -24,8 +24,18 @@ export function Button({ href, variant, children, ...rest }: ButtonProps) {
   // Only a variant that differs from the default is in the HTML.
   const dataVariant = variant === "ghost" ? variant : undefined;
   if (href !== undefined) {
+    // A disabled link is HTML's placeholder link — `<a>` without `href`: not
+    // focusable, not a link — and says so to assistive technology.
     return (
-      <a className="rg-button" data-variant={dataVariant} id={rest.id} href aria-label={rest["aria-label"]} aria-current={rest["aria-current"]}>
+      <a
+        className="rg-button"
+        data-variant={dataVariant}
+        id={rest.id}
+        href={rest.disabled ? undefined : href}
+        aria-disabled={rest.disabled ? "true" : undefined}
+        aria-label={rest["aria-label"]}
+        aria-current={rest["aria-current"]}
+      >
         {children}
       </a>
     );

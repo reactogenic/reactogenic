@@ -1,0 +1,51 @@
+// "/menus/": two action menus on one page, one with typeahead and one
+// without; a menu at the right edge of the viewport; the author's own id on a
+// trigger; disabled items, a link among them.
+import { Button, DropdownMenu } from "@reactogenic/ui";
+import { DocsLayout } from "../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <DocsLayout title="Menus">
+      <h1>Menus</h1>
+      <DropdownMenu id="one" typeahead>
+        <$Trigger>One</$Trigger>
+        <$Item key="alpha" command="show-modal" commandfor="shortcuts">Alpha</$Item>
+        <$Item key="beta" href="/">Beta</$Item>
+      </DropdownMenu>{" "}
+      <DropdownMenu id="two">
+        <$Trigger>Two</$Trigger>
+        <$Item key="alpha" command="show-modal" commandfor="shortcuts">Alpha</$Item>
+        <$Item key="beta" href="/">Beta</$Item>
+      </DropdownMenu>{" "}
+      {/* The author's id on the trigger: it is the one the menu is named by. */}
+      <DropdownMenu id="three">
+        <$Trigger id="mine">Three</$Trigger>
+        <$Item key="link" href="/guide/slots/" disabled>Disabled link</$Item>
+        <$Item key="print" disabled>Print</$Item>
+        <$Item key="open" command="show-modal" commandfor="shortcuts">Open</$Item>
+        <$Item key="home" href="/">Home</$Item>
+      </DropdownMenu>{" "}
+      <DropdownMenu id="links">
+        <$Trigger>Links</$Trigger>
+        <$Item key="off" href="/guide/slots/" disabled>Not yet</$Item>
+        <$Item key="home" href="/">Home</$Item>
+      </DropdownMenu>{" "}
+      <Button id="off" href="/guide/slots/" disabled>A disabled link button</Button>
+      {/* In the middle of a phone: the menu is wider than what is left on either side. */}
+      <div className="middle">
+        <DropdownMenu id="middle">
+          <$Trigger>Middle</$Trigger>
+          <$Item key="long" href="/">A rather long label for a menu item that is wide</$Item>
+        </DropdownMenu>
+      </div>
+      {/* At the right edge: the menu is wider than what is left of the viewport. */}
+      <div className="right">
+        <DropdownMenu id="edge">
+          <$Trigger>Edge</$Trigger>
+          <$Item key="long" href="/">A rather long label for a menu item that is wide</$Item>
+        </DropdownMenu>
+      </div>
+    </DocsLayout>
+  );
+}

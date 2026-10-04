@@ -215,7 +215,8 @@ declare const RG_MENU_TYPEAHEAD: boolean;
 
 export default function mountMenuKeys(root: HTMLElement): void {
   root.addEventListener("keydown", onKey);
-  if (RG_MENU_TYPEAHEAD) root.addEventListener("keydown", onType);
+  // the flag: is the code in the page; the attribute: did this menu ask
+  if (RG_MENU_TYPEAHEAD && root.hasAttribute("data-typeahead")) root.addEventListener("keydown", onType);
 }
 function onKey(e: KeyboardEvent) { … }
 function onType(e: KeyboardEvent) { … }

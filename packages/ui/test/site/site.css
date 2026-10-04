@@ -30,6 +30,14 @@ main {
 .end {
   text-align: end;
 }
+.middle {
+  text-align: center;
+}
+/* At the right edge of the viewport, whatever the layout. */
+.right {
+  position: absolute;
+  inset: 8rem 0.5rem auto auto;
+}
 /* Something to scroll: the scroll lock and the menu's flip need a tall page. */
 .tall {
   height: 150vh;

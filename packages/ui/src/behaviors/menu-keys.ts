@@ -12,14 +12,20 @@ declare const RG_MENU_TYPEAHEAD: boolean;
 export default function mountMenuKeys(root: HTMLElement): void {
   root.addEventListener("keydown", onKey);
   root.addEventListener("click", onPick);
-  if (RG_MENU_TYPEAHEAD) {
+  // The flag is the page's — the union of its menus: it only says whether the
+  // code is here. Which menu asked is an attribute on its root.
+  if (RG_MENU_TYPEAHEAD && root.hasAttribute("data-typeahead")) {
     root.addEventListener("keydown", onType);
   }
 }
 
+// An item that can be focused and activated: a disabled button, or a
+// disabled link (`<a>` without `href`, `aria-disabled`), is neither.
+const ITEM = "[role=menuitem]:not(:disabled, [aria-disabled=true])";
+
 // The items focus can move to.
 function itemsOf(menu: HTMLElement): HTMLElement[] {
-  return [...menu.querySelectorAll<HTMLElement>("[role=menuitem]:not(:disabled)")];
+  return [...menu.querySelectorAll<HTMLElement>(ITEM)];
 }
 
 // Closes the menu with focus back on its trigger — the element that labels
@@ -47,7 +53,7 @@ function onKey(event: KeyboardEvent): void {
 // Activating an item closes the menu, before the item acts: a dialog it
 // opens then returns focus to the trigger, not to an item that is gone.
 function onPick(event: MouseEvent): void {
-  if ((event.target as Element).closest("[role=menuitem]")) {
+  if ((event.target as Element).closest(ITEM)) {
     close(event.currentTarget as HTMLElement);
   }
 }

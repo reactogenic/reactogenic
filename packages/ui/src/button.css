@@ -19,7 +19,8 @@
     &:hover {
       background: var(--rg-hover);
     }
-    &:disabled {
+    /* A disabled link has no `href`: it says so with `aria-disabled`. */
+    &:is(:disabled, [aria-disabled="true"]) {
       background: none;
       color: var(--rg-muted);
       cursor: default;
