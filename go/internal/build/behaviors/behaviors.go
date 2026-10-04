@@ -27,7 +27,7 @@ import (
 type Options struct {
 	// Dir is the project directory, absolute: the specifier of a `mount()`
 	// is resolved from it, by esbuild — as an import written in a file of
-	// that directory would be.
+	// that directory would be. It may be reached through a symbolic link.
 	Dir string
 	// Base is `--base`, the path the site is served under: the control
 	// looks a page up by `location.pathname`, which carries it. "" is "/".
@@ -35,17 +35,32 @@ type Options struct {
 	// Cache keeps what is learned of a behaviour module for the next page
 	// that mounts it. Optional: without one, each call learns it again.
 	Cache *Cache
+
+	// root is Dir with its symbolic links resolved (resolved): the directory
+	// esbuild names files from — it resolves the links of its working
+	// directory, and a path of its metafile is from there.
+	root string
+}
+
+// resolved is the options of a build that has started.
+func (o Options) resolved() Options {
+	o.root = o.Dir
+	if real, err := filepath.EvalSymlinks(o.Dir); err == nil {
+		o.root = real
+	}
+	return o
 }
 
 // ModuleBytes is one input of a page's script and what it costs there: the
 // *why is this byte here* of the report (builder.md, *The report*).
 type ModuleBytes struct {
-	// Module is the specifier of the `mount()` that brought the file, for a
-	// mounted module's own file; "" for a file one of them imports, and for
-	// the generated entry.
+	// Module is the specifier of the `mount()` that brought the file — the
+	// first, when mounts spell one file differently — for a mounted module's
+	// own file; "" for a file one of them imports, for the generated entry
+	// and for esbuild's helpers.
 	Module string
 	// Path is the file, from the project directory, as esbuild's metafile
-	// names it; Entry for the generated entry.
+	// names it; Entry for the generated entry, Runtime for the helpers.
 	Path string
 	// Bytes are the file's bytes in the script; 0 for a file that is in the
 	// graph and left nothing — a feature the page's flags turned off.
@@ -56,14 +71,21 @@ type ModuleBytes struct {
 // mount calls.
 const Entry = "<entry>"
 
+// Runtime is the Path of what is in a script and of no input: the helpers
+// esbuild adds for what a module's syntax needs — a dynamic `import()` in a
+// bundle that is not split. A script without them has no such row.
+const Runtime = "<runtime>"
+
 // Build returns the script of one page — "" when the page mounted nothing:
 // no `<script>` — and what each input costs in it, the mounted modules
-// first, in the order of the entry, then what they import, then the entry.
+// first, in the order of the entry, then what they import, then the entry,
+// then esbuild's helpers if there are any: the bytes add up to the script.
 //
 // The reports are mount-not-found, mount-no-element (an id is looked up in
 // page.HTML), mount-flag, mount-side-effect and mount-error; with any, there
 // is no script.
 func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, reports []report.Report) {
+	opts = opts.resolved()
 	p := planOf(page)
 	if len(p.specs) == 0 {
 		return "", nil, nil
@@ -72,6 +94,7 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 	if reports = mistakes(page, p, mods, opts); len(reports) > 0 {
 		return "", nil, reports
 	}
+	p, mods = p.byFile(mods)
 	// Every flag is defined: one the builder did not define would be a
 	// ReferenceError when the page loads. On only when a mount of this page
 	// turned it on — the union over the page's mounts.
@@ -84,6 +107,9 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 	js, meta, errs := opts.bundle(p.entry(), define)
 	if len(errs) > 0 {
 		return "", nil, opts.buildErrors(page, p.specs, errs)
+	}
+	if reports = undefined(page, js); len(reports) > 0 {
+		return "", nil, reports
 	}
 
 	// The bytes, by input. Nothing may be in the script that no mounted
@@ -120,7 +146,28 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 		modules = append(modules, ModuleBytes{Path: file, Bytes: bytes[file]})
 	}
 	modules = append(modules, ModuleBytes{Path: Entry, Bytes: bytes[stdin]})
+	// What is of no input is esbuild's own.
+	rest := len(js)
+	for _, m := range modules {
+		rest -= m.Bytes
+	}
+	switch {
+	case rest < 0:
+		return "", nil, []report.Report{report.Page(page.File, page.Pathname, "internal", fmt.Sprintf("the inputs of the page's script add up to %d B, the script is %d B", len(js)-rest, len(js)))}
+	case rest > 0:
+		modules = append(modules, ModuleBytes{Path: Runtime, Bytes: rest})
+	}
 	return js, modules, nil
+}
+
+// undefined reports the flags a built script reads and nothing defined
+// (undefinedFlags): with one, there is no script.
+func undefined(page render.Page, js string) []report.Report {
+	var reports []report.Report
+	for _, flag := range undefinedFlags(js) {
+		reports = append(reports, report.Page(page.File, page.Pathname, "mount-flag", fmt.Sprintf("the page's script reads the flag `%s`, which is not defined: the builder finds a flag by its name in the text of a module, written without an escape", flag)))
+	}
+	return reports
 }
 
 // BuildControl returns the one script of a site built with --no-specialize:
@@ -132,8 +179,11 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 // The reports are those of Build, for every page. A site that mounts nothing
 // has no script.
 func BuildControl(pages []render.Page, opts Options) (js string, reports []report.Report) {
+	opts = opts.resolved()
 	var site plan           // the modules of the site, in the order they are first mounted
+	var files []string      // per module, its file: a module is one, however a page spells it
 	var first []render.Page // per module, the first page that mounts it
+	define := map[string]string{}
 	type row struct {
 		pathname string
 		calls    []call
@@ -144,13 +194,21 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 		if len(p.specs) == 0 {
 			continue
 		}
-		reports = append(reports, mistakes(page, p, opts.modules(p.specs), opts)...)
+		mods := opts.modules(p.specs)
+		if wrong := mistakes(page, p, mods, opts); len(wrong) > 0 {
+			reports = append(reports, wrong...)
+			continue
+		}
+		p, mods = p.byFile(mods)
 		r := row{pathname: strings.TrimSuffix(base(opts.Base), "/") + page.Pathname}
 		for _, c := range p.calls {
-			i := slices.Index(site.specs, p.specs[c.module])
+			i := slices.Index(files, mods[c.module].file)
 			if i < 0 {
-				i = len(site.specs)
-				site.specs, first = append(site.specs, p.specs[c.module]), append(first, page)
+				i = len(files)
+				files, site.specs, first = append(files, mods[c.module].file), append(site.specs, p.specs[c.module]), append(first, page)
+				for flag := range mods[c.module].flags {
+					define[flag] = "true"
+				}
 			}
 			r.calls = append(r.calls, call{i, c.id})
 		}
@@ -158,12 +216,6 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 	}
 	if len(site.specs) == 0 || len(reports) > 0 {
 		return "", reports
-	}
-	define := map[string]string{}
-	for _, m := range opts.modules(site.specs) {
-		for flag := range m.flags {
-			define[flag] = "true"
-		}
 	}
 
 	// import m0 from "…";
@@ -202,12 +254,15 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 	if len(reports) > 0 {
 		return "", reports
 	}
+	if reports = undefined(first[0], js); len(reports) > 0 {
+		return "", reports
+	}
 	return js, nil
 }
 
 // plan is a page's mounts as its script runs them.
 type plan struct {
-	specs []string        // the distinct modules, in the order they are first mounted: one import each
+	specs []string        // the distinct modules, in the order they are first mounted: one import each. As the mounts spell them until they are read; then by file (byFile)
 	calls []call          // in render order
 	on    map[string]bool // the flags a mount turned on
 }
@@ -240,6 +295,29 @@ func planOf(page render.Page) plan {
 	return p
 }
 
+// byFile is the plan with its modules distinct by the file they resolve to,
+// once they are read: two spellings of one module are one import — under the
+// first — and their calls the calls of one module, so a page-level
+// behaviour still runs once.
+func (p plan) byFile(mods []*module) (plan, []*module) {
+	q := plan{on: p.on}
+	var distinct []*module
+	to := make([]int, len(mods)) // an index in p.specs → in q.specs
+	for i, m := range mods {
+		to[i] = slices.IndexFunc(distinct, func(d *module) bool { return d.file == m.file })
+		if to[i] < 0 {
+			to[i] = len(distinct)
+			distinct, q.specs = append(distinct, m), append(q.specs, p.specs[i])
+		}
+	}
+	for _, c := range p.calls {
+		if c.module = to[c.module]; !slices.Contains(q.calls, c) {
+			q.calls = append(q.calls, c)
+		}
+	}
+	return q, distinct
+}
+
 // imports writes one import per module, each on a line of its own: line i+1
 // of an entry is the import of specs[i] (buildErrors).
 func (p plan) imports(entry *strings.Builder) {
@@ -270,8 +348,10 @@ func (p plan) entry() string {
 
 // controlPathname is the page the control's script is on, as the table
 // names it: a page answers to `/guide/`, to `/guide` on a host that does not
-// redirect, and to the file it is written to, `/guide/index.html`.
-const controlPathname = `location.pathname.replace(/(\/index\.html|\/)?$/, "/")`
+// redirect, and to the file it is written to, `/guide/index.html`. The table
+// names a page as its directories are named, `location.pathname` as the
+// browser encodes that (`/se%C3%B1or/`): it is decoded.
+const controlPathname = `decodeURIComponent(location.pathname).replace(/(\/index\.html|\/)?$/, "/")`
 
 // mistakes returns what is wrong with a page's mounts, in render order.
 func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.Report {
@@ -286,10 +366,13 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 	for _, m := range page.Mounts {
 		mod := mods[slices.Index(p.specs, m.Module)]
 		mount := fmt.Sprintf("`mount(%q)`", m.Module)
-		if once(m.Module) {
+		// What is wrong with a module is said once, however the mounts spell it.
+		if once(m.Module) && (mod.file == "" || once("\x00file\x00"+mod.file)) {
 			switch {
 			case mod.notFound:
 				reports = append(reports, report.Page(page.File, page.Pathname, "mount-not-found", mount+": the module does not resolve from the project directory"))
+			case mod.unread != "":
+				reports = append(reports, report.Page(page.File, page.Pathname, "internal", mount+": "+mod.unread))
 			case len(mod.errors) > 0:
 				reports = append(reports, opts.buildErrors(page, nil, mod.errors)...)
 			case len(mod.effects) > 0:
@@ -304,15 +387,16 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 		}
 		for _, flag := range sortedKeys(m.Flags) {
 			if !mod.flags[flag] && once(m.Module+"\x00flag\x00"+flag) {
-				reports = append(reports, report.Page(page.File, page.Pathname, "mount-flag", fmt.Sprintf("%s: the module does not declare the flag `%s`", mount, flag)))
+				reports = append(reports, report.Page(page.File, page.Pathname, "mount-flag", fmt.Sprintf("%s: the module has no flag `%s`", mount, flag)))
 			}
 		}
 	}
 	return reports
 }
 
-// elementIDs are the ids of a page's elements, a template's content aside:
-// what `document.getElementById` finds when the script runs.
+// elementIDs are the ids of a page's elements, a template's content aside —
+// the template itself is an element of the page: what
+// `document.getElementById` finds when the script runs.
 func elementIDs(src string) map[string]bool {
 	ids := map[string]bool{}
 	z := html.NewTokenizer(strings.NewReader(src))
@@ -327,15 +411,14 @@ func elementIDs(src string) map[string]bool {
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			name, more := z.TagName()
-			if string(name) == "template" {
-				template++
-				continue
-			}
 			for more {
 				var key, value []byte
 				if key, value, more = z.TagAttr(); string(key) == "id" && len(value) > 0 && template == 0 {
 					ids[string(value)] = true
 				}
+			}
+			if string(name) == "template" {
+				template++
 			}
 		}
 	}
@@ -380,8 +463,8 @@ func (o Options) bundle(entry string, define map[string]string) (js string, meta
 // with: a byte of nobody's.
 func (o Options) esbuild(entry string, set func(*api.BuildOptions)) (js string, meta metafile, errors []api.Message) {
 	options := api.BuildOptions{
-		Stdin:         &api.StdinOptions{Contents: entry, ResolveDir: o.Dir, Sourcefile: stdin, Loader: api.LoaderJS},
-		AbsWorkingDir: o.Dir,
+		Stdin:         &api.StdinOptions{Contents: entry, ResolveDir: o.root, Sourcefile: stdin, Loader: api.LoaderJS},
+		AbsWorkingDir: o.root,
 		Bundle:        true,
 		Format:        api.FormatESModule,
 		Platform:      api.PlatformBrowser,
@@ -457,7 +540,7 @@ func (o Options) buildErrors(page render.Page, specs []string, errors []api.Mess
 			reports = append(reports, report.Page(page.File, page.Pathname, "mount-error", text))
 		default:
 			reports = append(reports, report.Report{
-				File: filepath.ToSlash(filepath.Join(o.Dir, l.File)), Line: l.Line, Col: l.Column + 1, Code: "mount-error", Message: e.Text,
+				File: o.path(l.File), Line: l.Line, Col: l.Column + 1, Code: "mount-error", Message: e.Text,
 				Related: []report.Report{{Severity: report.Message, Message: "mounted on the page " + page.Pathname}},
 			})
 		}
