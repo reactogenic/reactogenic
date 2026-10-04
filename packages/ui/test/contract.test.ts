@@ -1,0 +1,108 @@
+// The HTML contract (RGP2-025): every `.rtsx` example of
+// specs/phase02/components.md, taken from the spec at test time — never
+// copied — transpiled by phase 1 and rendered by React's static renderer
+// with a stand-in for the builder, gives the HTML the spec shows after it.
+// And what each example mounts is what the spec's *Behaviours* table says.
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { ComponentType } from "react";
+import { beforeAll, describe, expect, test } from "vitest";
+import { distinct, normalise, Page, type Mount } from "./stand-in.ts";
+
+const OVERLAYS = "@reactogenic/ui/behaviors/overlays";
+const INVOKERS = "@reactogenic/ui/behaviors/invokers";
+const MENU_KEYS = "@reactogenic/ui/behaviors/menu-keys";
+
+interface Example {
+  name: string; // "Dialog/1": the `##` heading and the example's number under it
+  rtsx: string;
+  html: string;
+  pathname: string; // from `<!-- emitted for the page /x/ -->`, else "/"
+}
+
+// A ```tsx block whose first line is `// .rtsx …` or `// name.rtsx …`, and
+// the ```html block that follows it.
+function examples(spec: string): Example[] {
+  const found: Example[] = [];
+  const counts = new Map<string, number>();
+  let heading = "";
+  let rtsx: string | undefined;
+  for (const match of spec.matchAll(/^## +(.+)$|^```(\w+)\n([\s\S]*?)^```$/gm)) {
+    const [, title, language, body] = match;
+    if (title !== undefined) {
+      heading = title.replace(/`/g, "");
+    } else if (language === "tsx" && /^\/\/ (\w+)?\.rtsx\b/.test(body!)) {
+      rtsx = body!.slice(body!.indexOf("\n") + 1); // without the `// .rtsx` line: inside JSX it would be text
+    } else if (language === "html" && rtsx !== undefined) {
+      const n = (counts.get(heading) ?? 0) + 1;
+      counts.set(heading, n);
+      found.push({ name: `${heading}/${n}`, rtsx, html: body!, pathname: /emitted for the page (\S+)/.exec(body!)?.[1] ?? "/" });
+      rtsx = undefined;
+    } else {
+      rtsx = undefined;
+    }
+  }
+  return found;
+}
+
+const spec = readFileSync(resolve(import.meta.dirname, "../../../specs/phase02/components.md"), "utf8");
+const cases = examples(spec);
+// Rendered once, in the spec's order, as one page: its ids count on from
+// example to example (`m1`, then `m2`), as the spec's HTML does.
+const rendered = new Map<string, { html: string; mounts: Mount[] }>();
+
+beforeAll(async () => {
+  const dir = resolve(import.meta.dirname, "../.examples");
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir);
+  const page = new Page("/");
+  for (const [index, example] of cases.entries()) {
+    const file = join(dir, `example${index + 1}.rtsx`);
+    writeFileSync(
+      file,
+      `import { Button, Dialog, DropdownMenu, SideMenu } from "@reactogenic/ui";\n` +
+        `void [Button, Dialog, DropdownMenu, SideMenu];\n` +
+        `export default function Example() {\n  return (\n    <>\n${example.rtsx}    </>\n  );\n}\n`,
+    );
+    const module = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as { default: ComponentType };
+    const before = page.mounts.length;
+    const html = page.render(module.default, example.pathname);
+    rendered.set(example.name, { html, mounts: page.mounts.slice(before) });
+  }
+});
+
+test("the spec has the examples this suite knows", () => {
+  expect(cases.map((example) => example.name)).toEqual(["Dialog/1", "Dialog/2", "DropdownMenu/1", "DropdownMenu/2", "SideMenu/1"]);
+});
+
+describe("emitted HTML equals the spec's", () => {
+  test.each(cases)("$name", ({ name, html }) => {
+    expect(normalise(rendered.get(name)!.html)).toBe(normalise(html));
+  });
+});
+
+describe("what an example mounts", () => {
+  const mounts = (name: string) => distinct(rendered.get(name)!.mounts);
+
+  test("a dialog: overlays and invokers, both page-level", () => {
+    expect(mounts("Dialog/1")).toEqual([{ module: OVERLAYS }, { module: INVOKERS }]);
+    expect(mounts("Dialog/2")).toEqual([{ module: OVERLAYS }, { module: INVOKERS }]);
+  });
+
+  test("a menu of links: overlays only", () => {
+    expect(mounts("DropdownMenu/1")).toEqual([{ module: OVERLAYS }]);
+  });
+
+  test("an action menu adds menu-keys on that menu, with its flag — and invokers for the item with a command", () => {
+    expect(mounts("DropdownMenu/2")).toEqual([
+      { module: OVERLAYS },
+      { module: MENU_KEYS, id: "m2", flags: { RG_MENU_TYPEAHEAD: false } },
+      { module: INVOKERS },
+    ]);
+  });
+
+  test("a side menu: overlays only", () => {
+    expect(mounts("SideMenu/1")).toEqual([{ module: OVERLAYS }]);
+  });
+});

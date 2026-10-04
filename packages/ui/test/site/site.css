@@ -1,0 +1,44 @@
+/* The example site's own CSS: unlayered, so it wins over the design system's. */
+body {
+  display: grid;
+  grid-template: "header header" auto "nav main" 1fr / 16rem minmax(0, 1fr);
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--rg-bg);
+  color: var(--rg-fg);
+  font: 1rem/1.6 system-ui, sans-serif;
+}
+.site-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--rg-line);
+}
+.site-logo {
+  margin-inline-end: auto;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+main {
+  grid-area: main;
+  max-width: 46rem;
+  padding: 1rem 2rem 4rem;
+}
+.end {
+  text-align: end;
+}
+/* Something to scroll: the scroll lock and the menu's flip need a tall page. */
+.tall {
+  height: 150vh;
+}
+@media (width < 50rem) {
+  body {
+    display: block;
+  }
+  .site-header {
+    padding-inline-start: 3.5rem;
+  }
+}
