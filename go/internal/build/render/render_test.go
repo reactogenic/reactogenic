@@ -16,6 +16,7 @@ import (
 
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/microsoft/TypeScript/tsc/rtsx"
+	"modernc.org/quickjs"
 
 	"github.com/reactogenic/reactogenic/go/internal/check"
 	"github.com/reactogenic/reactogenic/go/internal/mapper"
@@ -282,13 +283,16 @@ func TestShellErrors(t *testing.T) {
 	}
 }
 
-// A loop without an end is ended, reported, and the next page renders.
+// A loop without an end is ended, reported — at the loop: the column is
+// wherever the timeout struck — and the next page renders. The timeout is
+// also the bundle's, to load: three seconds are some sixty times what that
+// takes, for a race-detector build.
 func TestTimeout(t *testing.T) {
 	f := load(t, "runaway")
 	slices.Reverse(f.routes) // the loop first
-	pages, reports := Render(f.program, f.routes, Options{Timeout: 2 * time.Second})
+	pages, reports := Render(f.program, f.routes, Options{Timeout: 3 * time.Second})
 	if len(reports) != 1 || reports[0].Code != "shell-error" || reports[0].File != f.dir+"/pages/loop/index.rtsx" || reports[0].Line != 2 ||
-		reports[0].Message != "Rendering did not end in 2s: a loop without an end?" {
+		reports[0].Message != "Rendering did not end in 3s: a loop without an end?" {
 		t.Errorf("reports: %+v", reports)
 	}
 	if len(pages) != 1 || pages[0].Pathname != "/" || pages[0].HTML != `<html lang="en"><head></head><body>fine</body></html>` {
@@ -319,6 +323,52 @@ func TestBundleError(t *testing.T) {
 	}
 	if len(reports) == 1 && reports[0].Message != `No loader is configured for ".svg" files: logo.svg` {
 		t.Errorf("message: %s", reports[0].Message)
+	}
+}
+
+// The sandbox (js/sandbox.js): the clock and the dice throw; a date that is
+// given is a value, and `Date` is still `Date`.
+func TestSandbox(t *testing.T) {
+	f := load(t, "runaway")
+	b, reports := build(f.program, f.routes, f.dir, variant{platform: api.PlatformBrowser})
+	if b == nil {
+		t.Fatalf("no bundle: %q", lines(f.dir, reports))
+	}
+	e, thrown, err := start(b.code, 30*time.Second)
+	if err != nil || thrown != nil {
+		t.Fatalf("the engine: %v, %+v", err, thrown)
+	}
+	defer e.close()
+	const irreproducible = " makes the shell irreproducible"
+	for _, c := range []struct{ expression, want string }{
+		{`Date.now()`, "shell-nondeterministic: Date.now()" + irreproducible},
+		{`new Date()`, "shell-nondeterministic: new Date()" + irreproducible},
+		{`Date()`, "shell-nondeterministic: Date()" + irreproducible},
+		{`new (new Date(0).constructor)()`, "shell-nondeterministic: new Date()" + irreproducible}, // not a way round
+		{`Math.random()`, "shell-nondeterministic: Math.random()" + irreproducible},
+		{`crypto.getRandomValues(new Uint8Array(1))`, "shell-nondeterministic: crypto.getRandomValues()" + irreproducible},
+		{`crypto.randomUUID()`, "shell-nondeterministic: crypto.randomUUID()" + irreproducible},
+		{`performance.now()`, "shell-nondeterministic: performance.now()" + irreproducible},
+		{`new Date(0).toISOString()`, "1970-01-01T00:00:00.000Z"},
+		{`new Date(Date.UTC(2026, 9, 4)).getUTCDay()`, "0"},
+		{`Date.parse("2026-10-04T00:00:00Z")`, "1791072000000"},
+		{`new Date(0) instanceof Date`, "true"},
+		{`Object.prototype.toString.call(new Date(0))`, "[object Date]"},
+		{`class Day extends Date {}; new Day(0).getTime()`, "0"},
+		{`Math.max(1, 2)`, "2"},
+		{`typeof __reactogenic_build`, "undefined"}, // only while a page renders
+	} {
+		got, err := e.vm.Eval(`(() => { try { return String(eval(`+strconv.Quote(c.expression)+`)); } catch (error) { return String(error); } })()`, quickjs.EvalGlobal)
+		if err != nil || got != c.want {
+			t.Errorf("%s: %v, %v; want %s", c.expression, got, err, c.want)
+		}
+	}
+	// `console` takes any method, and collects the six that print.
+	if _, err := e.vm.Eval(`console.group("g"); console.error("no", { a: 1 }, new TypeError("t")); console.table([1])`, quickjs.EvalGlobal); err != nil {
+		t.Fatal(err)
+	}
+	if printed := e.console(); len(printed) != 1 || printed[0].Level != "error" || printed[0].Text != `no {"a":1} TypeError: t` {
+		t.Errorf("console: %+v", printed)
 	}
 }
 

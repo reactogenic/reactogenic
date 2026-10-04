@@ -38,6 +38,7 @@ type Options struct {
 	// `react-dom` are resolved from it. "": the program's own.
 	Dir string
 	// Timeout ends a page that does not finish rendering — a loop without an
-	// end. 0: thirty seconds.
+	// end — and, the same, the bundle that does not finish loading. 0: thirty
+	// seconds.
 	Timeout time.Duration
 }
