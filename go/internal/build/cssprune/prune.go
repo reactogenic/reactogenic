@@ -21,11 +21,19 @@
 //     builder writes `<!doctype html>`, which makes classes and ids
 //     case-sensitive. Without exactly that doctype the page may be in quirks
 //     mode, and they are matched whatever their case.
-//   - No script adds a class, a data-* attribute or an element
-//     (components.md, *CSS convention*): state is written only where it is
-//     "maybe". Where the browser's tree is not the one written — <template>,
-//     <noscript>, <selectedcontent>, markup inside a <select> — the page is
-//     not pruned.
+//   - The page is given as it was rendered, before the builder's own script
+//     is in it, and that script is given with it (PruneWith): what it names
+//     — a class, an id, an attribute, a custom property, an animation — is
+//     "maybe" too, and a script that changes the tree leaves the page
+//     unpruned. A name the script computes (`"is-" + state`) is not seen:
+//     a behaviour names what it writes (builder.md, *Behaviours*). Without
+//     the script, nothing may write but the attributes that are "maybe".
+//   - A script of the page's own — a <script>, an event handler attribute, a
+//     `javascript:` URL — is not read: the page is not pruned. Nor is it
+//     where the browser's tree is not the one written — <template>,
+//     <noscript>, <selectedcontent>, markup inside a <select>.
+//   - A stylesheet the builder did not bundle — a <link>, an @import — may
+//     read any custom property and name any animation: they all stay.
 //   - The sheet is valid where validity is positional: an @import or a
 //     @namespace that follows a rule is dead, and stays dead — everything
 //     before it is kept as it is.
@@ -76,6 +84,7 @@ package cssprune
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -91,10 +100,13 @@ type Stats struct {
 	SelectorsDropped  int
 	Properties        int // custom property declarations dropped
 	Keyframes         int // @keyframes dropped
-	// Unpruned: the page holds a <template>, a <noscript>, a
-	// <selectedcontent> or a <select> with more than options in it, and the
-	// sheet came back as it was.
+	// Unpruned: the sheet came back as it was. The page holds a <template>,
+	// a <noscript>, a <selectedcontent> or a <select> with more than options
+	// in it; or a script of its own; or its script changes the tree.
 	Unpruned bool
+	// Why says which, for the report: "the page has a <template>". "" for a
+	// page that was pruned.
+	Why string
 	// Sources is the same per source file, when the sheet names them:
 	// esbuild writes `/* path/to/file.css */` before each file of a bundle
 	// unless it minifies whitespace. Empty otherwise.
@@ -111,14 +123,41 @@ type Source struct {
 // Prune returns css without what doc, the parsed page, cannot use. An error
 // means the CSS could not be read (an unbalanced bracket, an unterminated
 // string): nothing was pruned, and out is empty.
+//
+// It is PruneWith for a page without a script.
 func Prune(css string, doc *html.Node) (out string, stats Stats, err error) {
-	return new(pruner).prune(css, doc)
+	return PruneWith(css, doc, Options{})
+}
+
+// Options is what a page has besides its HTML.
+type Options struct {
+	// Script is the page's built script (behaviors.Build); "" for a page
+	// that mounts nothing. A behaviour changes the page after it has loaded,
+	// so what the script names is runtime state (builder.md, CSS): a class,
+	// an id or an attribute it names is "maybe", a custom property or an
+	// animation it names is read; and when it names an API that changes the
+	// tree, the page is not pruned.
+	Script string
+}
+
+// PruneWith is Prune for a page and its script. doc is the page as it was
+// rendered — before packaging puts the builder's script into it: a
+// `<script>` that is in doc is the page's own, and such a page is not
+// pruned.
+func PruneWith(css string, doc *html.Node, opts Options) (out string, stats Stats, err error) {
+	return (&pruner{script: opts.Script}).prune(css, doc)
 }
 
 type pruner struct {
-	m     matcher
-	stats Stats
-	anon  int // anonymous layers seen in this round
+	m      matcher
+	stats  Stats
+	anon   int    // anonymous layers seen in this round
+	script string // Options.Script
+
+	// other: a stylesheet the builder did not bundle is on the page — a
+	// <link>, an @import. It may read any custom property and name any
+	// animation.
+	other bool
 
 	// What the page itself names: in attributes (style, SVG's presentation
 	// attributes) and in <style> elements.
@@ -146,12 +185,17 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 	}
 	freeze(rules)
 	p.selectors(rules, false)
+	p.other = p.other || imports(rules)
 	// Custom properties and @keyframes, to a fixed point: dropping one may
 	// empty a rule, which may empty an at-rule, whose prelude was the last
-	// to name another.
+	// to name another. With a sheet that is not here, nothing says what is
+	// read: none is dropped.
 	for {
 		p.anon = 0
 		p.resolve(rules, "", &layers{})
+		if p.other {
+			break
+		}
 		r := refs{dashed: maps.Clone(p.named.dashed), words: maps.Clone(p.named.words)}
 		p.collect(rules, &r)
 		if !p.sweep(rules, &r) {
@@ -179,7 +223,13 @@ func (p *pruner) prune(css string, doc *html.Node) (string, Stats, error) {
 func (p *pruner) page(doc *html.Node) bool {
 	p.named = refs{dashed: map[string]bool{}, words: map[string]bool{}}
 	p.m.quirks = !standards(doc)
-	ok := true
+	p.stats.Why = ""
+	no := func(why string) {
+		if p.stats.Why == "" {
+			p.stats.Why = why
+		}
+	}
+	const inSelect = "the page has a <select> that holds more than options"
 	// in: 1 inside a <select>, 2 inside one of its options, where the older
 	// parser keeps text only.
 	var walk func(n *html.Node, in int)
@@ -189,28 +239,51 @@ func (p *pruner) page(doc *html.Node) bool {
 				p.m.root = n
 			}
 			p.m.els = append(p.m.els, n)
+			plain := true // an element like any other: not one a <select> may hold
 			switch tag := strings.ToLower(n.Data); tag {
 			case "template", "noscript", "selectedcontent":
-				ok = false
-			case "option", "optgroup", "hr", "script":
-				if ok = ok && in < 2; in == 1 && tag == "option" {
-					in = 2
+				no("the page has a <" + tag + ">")
+			case "script":
+				// A script of the page's own: what it writes is not known.
+				// The builder's is not in the page yet (PruneWith).
+				if runs(n) {
+					no(ownScript)
 				}
+				plain = false
+			case "option":
+				if plain = false; in == 1 {
+					in = 2
+				} else if in == 2 {
+					no(inSelect)
+				}
+			case "optgroup", "hr":
+				plain = false
 			case "select":
-				ok, in = ok && in == 0, 1
+				if in != 0 {
+					no(inSelect)
+				}
+				plain, in = false, 1
 			case "style":
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					if c.Type == html.TextNode {
 						p.named.all(c.Data)
+						p.other = p.other || strings.Contains(strings.ToLower(c.Data), "@import")
 					}
 				}
-				fallthrough
-			default:
-				ok = ok && in == 0
+			case "link":
+				if rel, _ := attribute(n, "rel"); slices.ContainsFunc(strings.Fields(rel), func(r string) bool { return strings.EqualFold(r, "stylesheet") }) {
+					p.other = true
+				}
+			}
+			if in != 0 && (plain || in == 2 && n.Data != "option") {
+				no(inSelect)
 			}
 			for _, a := range n.Attr {
 				if a.Key == "style" || strings.Contains(a.Val, "--") {
 					p.named.all(a.Val)
+				}
+				if handler(a.Key) || urlAttribute[strings.ToLower(a.Key)] && javascriptURL(a.Val) {
+					no(ownScript)
 				}
 			}
 		}
@@ -220,7 +293,83 @@ func (p *pruner) page(doc *html.Node) bool {
 	}
 	walk(doc, 0)
 	p.m.memo = map[memoKey]tri{}
-	return ok
+	if p.stats.Why == "" && p.script != "" {
+		p.m.script = scriptNames(p.script)
+		if p.m.script.changesTree() {
+			no("the page's script changes the tree")
+		}
+		for name := range p.m.script.words {
+			p.named.words[name] = true
+			if strings.HasPrefix(name, "--") {
+				p.named.dashed[name] = true
+			}
+		}
+	}
+	return p.stats.Why == ""
+}
+
+const ownScript = "the page has a script of its own"
+
+// runs reports whether a <script> element is one a browser executes: a
+// classic script, a module — not a data block (`application/ld+json`, an
+// import map), and not an element with no source and nothing in it.
+func runs(script *html.Node) bool {
+	if kind, typed := attribute(script, "type"); typed {
+		switch kind = strings.ToLower(strings.TrimSpace(kind)); {
+		case kind == "" || kind == "module":
+		case strings.Contains(kind, "javascript") || strings.Contains(kind, "ecmascript") ||
+			strings.Contains(kind, "jscript") || strings.Contains(kind, "livescript"):
+		default:
+			return false
+		}
+	}
+	// `xlink:href`, of SVG's script, among them.
+	for _, a := range script.Attr {
+		if k := strings.ToLower(a.Key); k == "src" || k == "href" {
+			return true
+		}
+	}
+	for c := script.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// handler reports whether an attribute may be an event handler: `on` and a
+// name. More than the handlers there are — `<x-list once>` is not one — and
+// that is the safe side.
+func handler(key string) bool {
+	return len(key) > 2 && (key[0] == 'o' || key[0] == 'O') && (key[1] == 'n' || key[1] == 'N')
+}
+
+// The attributes that hold a URL a browser may run.
+var urlAttribute = set("href", "src", "action", "formaction", "data", "ping", "poster", "background", "cite", "longdesc", "manifest")
+
+// javascriptURL: a URL parser drops leading spaces and controls, and tabs
+// and line breaks wherever they are.
+func javascriptURL(value string) bool {
+	value = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return -1
+		}
+		return r
+	}, value)
+	value = strings.TrimLeftFunc(value, func(r rune) bool { return r <= ' ' })
+	const scheme = "javascript:"
+	return len(value) >= len(scheme) && strings.EqualFold(value[:len(scheme)], scheme)
+}
+
+// imports reports whether the sheet still imports another: one the builder
+// did not bundle.
+func imports(rules []*rule) bool {
+	for _, r := range rules {
+		if r.kind == kAt && r.name == "import" || (r.kind == kGroup || r.kind == kLayer) && imports(r.rules) {
+			return true
+		}
+	}
+	return false
 }
 
 // standards reports whether the page is surely not in quirks mode: it starts
