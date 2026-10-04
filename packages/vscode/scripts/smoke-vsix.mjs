@@ -40,9 +40,10 @@ for (const file of files) {
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rtsx-vsix-"));
   try {
-    // bsdtar (Windows, macOS) reads zip; GNU tar does not.
+    // Windows' own tar (bsdtar) reads zip. By its path: under Git Bash `tar`
+    // is GNU tar, which reads no zip and takes `C:` for a host.
     if (process.platform === "win32") {
-      execFileSync("tar", ["-xf", path.resolve(file)], { cwd: dir });
+      execFileSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"), ["-xf", path.resolve(file)], { cwd: dir });
     } else {
       execFileSync("unzip", ["-q", path.resolve(file), "-d", dir]);
     }
