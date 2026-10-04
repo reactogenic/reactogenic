@@ -68,6 +68,8 @@ func TestSuspends(t *testing.T) {
 		"clock.tsx:3:22 error shell-nondeterministic: Date.now() makes the shell irreproducible",
 		// The component, at its element: what it returned is a promise.
 		"pages/async/index.tsx:16:9 error shell-react: The shell cannot suspend: `Feed` is an async component",
+		// A class with an effect is the hook's mistake in the older form.
+		"pages/class/index.tsx:23:9 error shell-react: The shell cannot use React state or effects: `componentDidMount` of `Ticker`",
 		"pages/lazy/index.tsx:9:9 error shell-react: The shell cannot suspend: a `lazy` component", // where it is rendered, not where `lazy()` made it
 		"pages/quiet/index.tsx:9:16 error shell-react: The shell cannot suspend: `<Suspense>`",     // `createElement(React.Suspense, …)`, with nothing in it that suspends
 		"pages/suspense/index.tsx:10:9 error shell-react: The shell cannot suspend: `<Suspense>`",  // the element — not the fallback, silently
@@ -81,8 +83,8 @@ func TestSuspends(t *testing.T) {
 		t.Errorf("reports\n got  %s\n want %s", strings.Join(got, "\n      "), strings.Join(want, "\n      "))
 	}
 	// Context is render-time React, by `use` too; a `lazy` component that
-	// nothing renders is nothing.
-	if len(pages) != 1 || pages[0].Pathname != "/context/" || !strings.Contains(pages[0].HTML, "<p>dark dark</p>") {
+	// nothing renders is nothing; a class that only renders is a component.
+	if len(pages) != 1 || pages[0].Pathname != "/context/" || !strings.Contains(pages[0].HTML, `<section data-tone="plain"><p>dark dark</p></section>`) {
 		t.Errorf("pages: %+v", pages)
 	}
 }

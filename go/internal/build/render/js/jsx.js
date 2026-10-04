@@ -77,6 +77,20 @@ function suspends(what) {
   return coded("shell-react", "The shell cannot suspend: " + what);
 }
 
+// A class component is a component like any other while it only renders:
+// its state is a constant, and an error boundary catches nothing in a
+// static render. One with an effect is `useEffect` in the older form — the
+// static renderer never calls it, and the page is its initial state.
+const EFFECTS = ["componentDidMount", "componentDidUpdate", "componentWillUnmount", "getSnapshotBeforeUpdate"];
+
+function effects(type) {
+  for (const name of EFFECTS) {
+    if (typeof type.prototype[name] === "function") {
+      throw coded("shell-react", "The shell cannot use React state or effects: `" + name + "` of `" + (type.displayName || type.name || "Anonymous") + "`");
+    }
+  }
+}
+
 // shell-handler and shell-react's boundary, when the element is made. A
 // Suspense boundary renders its fallback for anything its content throws —
 // a shell rule among it — so there is none in the shell; a `lazy` component
@@ -85,6 +99,7 @@ function suspends(what) {
 function check(type, props) {
   if (type === SUSPENSE) throw suspends("`<Suspense>`");
   if (typeof type === "object" && type !== null && type.$$typeof === LAZY) throw suspends("a `lazy` component");
+  if (typeof type === "function" && type.prototype != null && type.prototype.isReactComponent) effects(type);
   if (typeof type !== "string" || props == null) return;
   for (const name in props) {
     if (name !== "children" && typeof props[name] === "function") {
