@@ -1,0 +1,46 @@
+import type { ComponentProps, ReactNode } from "react";
+import { Each, type Slot } from "@reactogenic/core";
+import { NAV, type NavItem } from "../nav.ts";
+import { mount, pathname, useShellId } from "../shell.ts";
+import "./layout.css";
+
+export interface DocsLayoutProps {
+  title: string;
+  $Title?: Slot<ComponentProps<"h1">>;
+  $NavLink?: Slot<ComponentProps<"a">, { item: NavItem; active: boolean }>;
+  $Aside?: Slot<ComponentProps<"aside">>;
+  children?: ReactNode;
+}
+
+// The shared layout: every page renders its document through it.
+export function DocsLayout({ title, $Title, $NavLink, $Aside, children }: DocsLayoutProps) {
+  const current = pathname();
+  const menu = useShellId("m");
+  mount("ui/behaviors/overlays");
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <title>{title}</title>
+      </head>
+      <body>
+        <nav id={menu} aria-label="Docs">
+          <ul>
+            <Each items={NAV} { item }>
+              <li key={item.href}>
+                <a slot={$NavLink} href={item.href} aria-current={item.href === current ? "page" : undefined} &item &active={item.href === current}>
+                  {item.label}
+                </a>
+              </li>
+            </Each>
+          </ul>
+        </nav>
+        <main>
+          <h1 slot={$Title} className="title">{title}</h1>
+          {children}
+        </main>
+        <aside slot={$Aside} className="aside" />
+      </body>
+    </html>
+  );
+}

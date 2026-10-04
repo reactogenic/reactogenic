@@ -1,0 +1,12 @@
+function wait(): string {
+  for (let i = 0; i >= 0; i++) {}
+  return "done";
+}
+
+export default function LoopPage() {
+  return (
+    <html lang="en">
+      <body>{wait()}</body>
+    </html>
+  );
+}

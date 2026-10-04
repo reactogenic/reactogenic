@@ -2,11 +2,10 @@
 package build
 
 // The builder's dependencies, held here until the packages that use them
-// land (plan.md, RGP2-010…): esbuild as the linker (public API only), the
-// embedded engine that executes pages, the HTML parser of the page checks.
+// land (plan.md, RGP2-020, RGP2-021): the HTML parser of the page checks,
+// the selector matcher of the CSS pruner's tests. esbuild and the engine are
+// internal/build/render's.
 import (
 	_ "github.com/andybalholm/cascadia"
-	_ "github.com/evanw/esbuild/pkg/api"
 	_ "golang.org/x/net/html"
-	_ "modernc.org/quickjs"
 )

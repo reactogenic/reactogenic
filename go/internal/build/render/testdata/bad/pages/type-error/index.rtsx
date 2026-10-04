@@ -1,0 +1,13 @@
+import { Page } from "../../ui/page";
+
+const tags = undefined as unknown as string[];
+
+// Characters outside the BMP before the mistake, on its line: a column is
+// counted in characters, whatever the engine and the source map count in.
+export default function TypeErrorPage() {
+  return (
+    <Page title="TypeError">
+      <p title="😀😀">{"😀"}{tags.map((tag) => tag.toUpperCase())}</p>
+    </Page>
+  );
+}

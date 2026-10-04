@@ -1,0 +1,13 @@
+const alt = "Logo";
+import logo from "../logo.svg";
+
+export default function UnbundledPage() {
+  return (
+    <html lang="en">
+      <body>
+        <img src={logo} alt />
+        <section #part />
+      </body>
+    </html>
+  );
+}

@@ -1,0 +1,25 @@
+import type { ComponentProps, ReactNode } from "react";
+import type { Slot } from "@reactogenic/core";
+import { mount, useShellId } from "../shell.ts";
+
+export interface DialogProps {
+  title: string;
+  modal?: boolean;
+  $Trigger?: Slot<ComponentProps<"button">>;
+  children?: ReactNode;
+}
+
+export function Dialog({ title, modal = false, $Trigger, children }: DialogProps) {
+  const id = useShellId("d");
+  const label = useShellId();
+  mount("ui/behaviors/invokers", id, { RG_DIALOG_MODAL: modal });
+  return (
+    <>
+      <button slot={$Trigger} type="button" popoverTarget={id}>Open</button>
+      <dialog id={id} aria-labelledby={label} aria-modal={modal}>
+        <h2 id={label}>{title}</h2>
+        {children}
+      </dialog>
+    </>
+  );
+}

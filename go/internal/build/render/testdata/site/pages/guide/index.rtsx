@@ -1,0 +1,16 @@
+import { Match } from "@reactogenic/core";
+import { DocsLayout } from "../../ui/layout";
+
+export default function GuidePage() {
+  return (
+    <DocsLayout title="Guide">
+      <$NavLink { item, active }>
+        <Match on={active}><b>&rsaquo;</b></Match>
+        {item.label}
+      </$NavLink>
+      <$Aside>On this page</$Aside>
+      <section #intro />
+      <section #examples className="band" />
+    </DocsLayout>
+  );
+}

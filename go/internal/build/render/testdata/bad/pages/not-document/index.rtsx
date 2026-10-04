@@ -1,0 +1,8 @@
+// A page renders the whole document: this one starts at <main>.
+function Content() {
+  return <main>No document</main>;
+}
+
+export default function NotDocumentPage() {
+  return <Content />;
+}

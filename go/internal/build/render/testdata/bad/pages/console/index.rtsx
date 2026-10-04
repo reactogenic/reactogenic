@@ -1,0 +1,12 @@
+import { Page } from "../../ui/page";
+
+const SECTIONS = ["intro", "slots"];
+
+export default function ConsolePage() {
+  console.log("sections", SECTIONS, SECTIONS.length);
+  return (
+    <Page title="Console">
+      <p>{SECTIONS.join(", ")}</p>
+    </Page>
+  );
+}

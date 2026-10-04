@@ -1,0 +1,7 @@
+export default function AfterPage() {
+  return (
+    <html lang="en">
+      <body>fine</body>
+    </html>
+  );
+}

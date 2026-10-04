@@ -1,0 +1,2 @@
+build-id.ts(2,9): warning shell-console: console.warn: build id
+build-id.ts(3,30): error shell-nondeterministic: Math.random() makes the shell irreproducible

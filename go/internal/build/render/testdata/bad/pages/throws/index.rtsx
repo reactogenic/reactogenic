@@ -1,0 +1,29 @@
+import { Each } from "@reactogenic/core";
+import { Page } from "../../ui/page";
+
+const PLANS = ["free", "team", "enterprise"];
+
+function Price({ plan }: { plan: string }) {
+  if (plan === "enterprise") {
+    throw new Error("no price for " + plan);
+  }
+  return <b>{plan}</b>;
+}
+
+function Plans() {
+  return (
+    <ul>
+      <Each items={PLANS} { item }>
+        <li key={item}><Price plan={item} /></li>
+      </Each>
+    </ul>
+  );
+}
+
+export default function ThrowsPage() {
+  return (
+    <Page title="Throws">
+      <Plans />
+    </Page>
+  );
+}
