@@ -1,0 +1,30 @@
+/* research/css.md, Verification: no order statement, so the first block orders `reset`.
+   Each conflict is on a property of its own, so a browser shows which layer won. */
+@layer reset { .gone { margin: 0 } }
+@layer components { .A { color: red } }
+@layer reset { .A { color: blue } }
+
+@layer ui.base, ui.parts;
+@layer ui.base { .gone2 { margin: 0 } }
+@layer ui.parts { .A { padding-left: 1px } .gone3 { padding: 1px } }
+@layer ui { @layer late { .gone4 { margin: 0 } } @layer extra { .A { margin-top: 1px } } }
+@layer ui.late { .A { margin-top: 2px } }
+
+@media print { @layer print { .gone5 { margin: 0 } } @layer reset { .gone6 { margin: 0 } } }
+@media screen { @layer shown { .gone5 { margin: 0 } } }
+@supports (display: grid) { @layer grid { .A { margin-left: 1px } } }
+@layer grid { .gone7 { margin: 0 } }
+@layer print { .A { outline-width: 1px } }
+@layer between { .A { margin-bottom: 1px } }
+@layer shown { .A { margin-bottom: 2px } }
+
+@layer { .gone8 { margin: 0 } }
+@layer { @layer inner { .gone9 { margin: 0 } } }
+@layer { .A { gap: 0 } }
+
+@layer tokens { :root { --only-here: 1px } }
+@layer after-tokens { .A { padding-top: 1px } }
+@layer tokens { .A { padding-top: 2px } }
+
+@scope (.A) to (.stop) { .gone10 { border-color: red } :scope { border-color: green } > .in { border-color: blue } > .gone11 { border-color: red } .in { .deep { border-color: red } } }
+@scope (.gone12) { .in { border-width: 3px } }

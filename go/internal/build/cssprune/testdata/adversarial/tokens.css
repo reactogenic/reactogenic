@@ -1,0 +1,56 @@
+/* Custom properties and @keyframes: who reads what. */
+@property --angle { syntax: "<angle>"; inherits: false; initial-value: 0deg }
+@property --never { syntax: "<length>"; inherits: false; initial-value: 0px }
+
+:root {
+  color-scheme: light dark;
+  --space: 4px;
+  --space-2: calc(var(--space) * 2);
+  --space-3: calc(var(--space) * 3);
+  --fg: light-dark(#111, #eee);
+  --bg: light-dark(#fff, #000);
+  --accent: var(--accent-base);
+  --accent-base: #36c;
+  --dead: 1px;
+  --dead-chain-a: var(--dead-chain-b);
+  --dead-chain-b: var(--dead-chain-c);
+  --dead-chain-c: 2px;
+  --only-gone: 3px;
+  --theme: dark;
+  --density: compact;
+  --from-attr: 5px;
+  --from-style: 6px;
+  --anim: pulse;
+  --anim-dead: wobble;
+  --angle: 10deg;
+  --shadow: 0 1px 2px #0003, 0 0 0 1px var(--ring);
+  --ring: #0001;
+  --json: { "a": [1, 2], "b": "}" };
+  --self: var(--self);
+  --Case: 1px;
+  --case: 2px;
+  --esc\61 ped: 3px;
+}
+@media (prefers-contrast: more) { :root { --ring: #000; --dead: 2px } }
+@media (prefers-reduced-motion: reduce) { :root { --dead: 0 } }
+
+body { margin: var(--space-2); color: var(--fg); background: var(--bg) }
+.card { padding: var(--space); box-shadow: var(--shadow); border-color: var(--accent); width: var(--case); height: var(--escaped) }
+.gone { margin: var(--only-gone) var(--space-3) }
+@container style(--theme: dark) { .card { color: white } }
+@container style(--density: compact) { .gone { padding: 0 } }
+
+@keyframes spin { to { rotate: var(--angle) } }
+@keyframes pulse { 50% { opacity: .5 } }
+@keyframes wobble { 50% { translate: 1px } }
+@keyframes fade-in { from { opacity: 0 } }
+@keyframes fade-out { to { opacity: 0 } }
+@keyframes "quoted name" { to { opacity: 0 } }
+@keyframes from-attr { to { opacity: 0 } }
+@keyframes unused { to { opacity: 0; width: var(--dead-chain-a) } }
+@-webkit-keyframes legacy { to { opacity: 0 } }
+
+.card[aria-busy="true"]::after { animation: spin 1s linear infinite }
+.card:hover { animation: var(--anim) 2s }
+.card:popover-open { animation-name: fade-in, "quoted name"; -webkit-animation: legacy 1s }
+.gone { animation: fade-out 1s }

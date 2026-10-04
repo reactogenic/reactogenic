@@ -1,0 +1,17 @@
+/* Tabs. Props: variant = "underline" | "pills". Slots: $Tab(keyed) $Panel(keyed). States: [aria-selected], [hidden]. */
+.Tabs {
+  [data-part="list"] { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--color-border); overflow-x: auto; }
+  [data-slot="tab"] {
+    padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--color-fg-muted); white-space: nowrap;
+    &:hover { color: var(--color-fg); }
+    &[aria-selected="true"] { color: var(--color-accent); font-weight: 600; }
+  }
+  [data-slot="panel"] { padding-top: var(--space-4); }
+  &[data-variant="underline"] [data-slot="tab"] { border-bottom: 2px solid transparent; margin-bottom: -1px;
+    &[aria-selected="true"] { border-color: var(--color-accent); } }
+  &[data-variant="pills"] {
+    [data-part="list"] { border: 0; padding: var(--space-1); background: var(--color-bg-subtle); border-radius: var(--radius-md); width: fit-content; }
+    [data-slot="tab"] { border-radius: var(--radius-sm);
+      &[aria-selected="true"] { background: var(--color-bg-raised); box-shadow: var(--shadow-sm); color: var(--color-fg); } }
+  }
+}

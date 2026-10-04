@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SideMenu · Reactogenic</title>
+{{CSS}}
+</head>
+<body>
+<div class="Page" data-layout="docs">
+<header data-slot="header">
+  <button class="SideMenuToggle" popovertarget="drawer" aria-label="Open menu">☰</button>
+  <a data-part="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="currentColor"/></svg>Reactogenic</a>
+  <nav data-part="nav" aria-label="Main">
+    <a href="/guide">Guide</a>
+    <a href="/api" aria-current="page">API</a>
+    <a href="/changelog">Changelog</a>
+  </nav>
+  <button class="Button" data-variant="ghost" data-size="sm" commandfor="search" command="show-modal">Search <kbd>/</kbd></button>
+  <div class="Dropdown" data-placement="bottom-end" data-size="sm" data-variant="menu">
+  <button data-slot="trigger" popovertarget="ver" aria-expanded="false" aria-haspopup="menu">v0.2</button>
+  <div data-part="menu" id="ver" popover role="menu">
+    <a data-slot="item" role="menuitem" aria-current="true" href="/">v0.2 (latest)</a>
+    <a data-slot="item" role="menuitem" href="/v0.1/">v0.1</a>
+    <div data-slot="separator" role="separator"></div>
+    <a data-slot="item" role="menuitem" href="/changelog">Changelog</a>
+  </div>
+</div>
+</header>
+<aside data-slot="aside">
+<nav class="SideMenu" data-variant="rail" data-density="compact" aria-label="Docs">
+  <p data-slot="title">Documentation</p>
+  <div data-slot="group">
+    <p data-part="group-label">Start</p>
+    <ul>
+      <li><a data-slot="item" href="/guide">Getting started</a></li>
+      <li><a data-slot="item" href="/guide/install">Installation</a></li>
+      <li><a data-slot="item" href="/guide/first-page">Your first page<span data-part="badge" data-tone="new">new</span></a></li>
+    </ul>
+  </div>
+  <div data-slot="group">
+    <p data-part="group-label">Syntax</p>
+    <ul>
+      <li><a data-slot="item" href="/guide/slots">Slots</a></li>
+      <li><a data-slot="item" href="/guide/shorthand">Shorthand props</a></li>
+      <li><a data-slot="item" href="/guide/flow">Match and Switch</a></li>
+      <li><a data-slot="item" href="/guide/segments">Segment roots</a></li>
+      <li><a data-slot="item" href="/guide/each">Each</a></li>
+    </ul>
+  </div>
+  <div data-slot="group">
+    <p data-part="group-label">Layout</p>
+    <ul>
+      <li><a data-slot="item" href="/api" aria-current="page">SideMenu</a></li>
+      <li><a data-slot="item" href="/api/dialog">Dialog</a></li>
+      <li><a data-slot="item" href="/api/dropdown">Dropdown</a></li>
+    </ul>
+  </div>
+</nav>
+</aside>
+<main data-part="main">
+  <article class="Prose">
+    <h1>SideMenu</h1>
+    <p data-part="lead">A navigation rail with groups, links and an optional footer.</p>
+    <div class="Dropdown" data-placement="bottom-start" data-size="md" data-variant="menu">
+      <button data-slot="trigger" popovertarget="copy" aria-expanded="false" aria-haspopup="menu">Copy</button>
+      <div data-part="menu" id="copy" popover role="menu">
+        <p data-slot="label">Copy page as</p>
+        <button data-slot="item" role="menuitem"><svg data-slot="icon-start" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="currentColor"/></svg>Markdown<span data-slot="shortcut">⌘M</span></button>
+        <button data-slot="item" role="menuitem"><svg data-slot="icon-start" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="currentColor"/></svg>Link<span data-slot="shortcut">⌘L</span></button>
+        <div data-slot="separator" role="separator"></div>
+        <button data-slot="item" role="menuitem" commandfor="source" command="show-modal">View source…</button>
+      </div>
+    </div>
+    <h2 id="props">Props<a data-part="anchor" href="#props" aria-label="Link to this section">#</a></h2>
+    <table>
+      <thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>variant</code></td><td><code>"rail" | "drawer"</code></td><td><code>"rail"</code></td><td>How the menu is presented.</td></tr>
+        <tr><td><code>collapsible</code></td><td><code>boolean</code></td><td><code>false</code></td><td>Groups become disclosure widgets.</td></tr>
+        <tr><td><code>density</code></td><td><code>"normal" | "compact"</code></td><td><code>"normal"</code></td><td>Vertical rhythm of the items.</td></tr>
+      </tbody>
+    </table>
+    <h2 id="slots">Slots<a data-part="anchor" href="#slots" aria-label="Link to this section">#</a></h2>
+    <dl><dt>$Title</dt><dd>Heading above the groups.</dd><dt>$Group</dt><dd>Keyed. One per section of links.</dd><dt>$Item</dt><dd>A link. Marked current when its href is the page's pathname.</dd><dt>$Footer</dt><dd>Optional. Rendered below the groups.</dd></dl>
+    <h3 id="example">Example<a data-part="anchor" href="#example" aria-label="Link to this section">#</a></h3>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 1 of this page costs exactly its own bytes and nothing else.</p>
+    <pre><code>&lt;<span data-tok="tag">SideMenu</span> <span data-tok="attr">density</span>=<span data-tok="str">"compact"</span>&gt;
+  &lt;<span data-tok="tag">$Title</span>&gt;Documentation&lt;/<span data-tok="tag">$Title</span>&gt;
+&lt;/<span data-tok="tag">SideMenu</span>&gt;</code></pre>
+    <div class="Callout" data-tone="tip"><p data-slot="title">Tip</p><p>Leave <code>$Footer</code> empty and its rules are not shipped.</p></div>
+    <details><summary>Accessibility notes</summary><p>The current link carries <code>aria-current="page"</code>.</p></details>
+    <nav class="Pager" aria-label="Pagination"><a data-slot="prev" href="/guide/each"><small>Previous</small><span>Each</span></a><a data-slot="next" href="/api/dialog"><small>Next</small><span>Dialog</span></a></nav>
+  </article>
+  <nav data-slot="toc" aria-label="On this page"><h2>On this page</h2><a href="#props" data-depth="2" aria-current="true">Props</a><a href="#slots" data-depth="2">Slots</a><a href="#example" data-depth="3">Example</a></nav>
+</main>
+<footer data-slot="footer"><span>MIT licensed. Built with Reactogenic.</span><a href="https://github.com/reactogenic/reactogenic">GitHub</a></footer>
+<nav class="SideMenu" data-variant="drawer" data-density="normal" id="drawer" popover aria-label="Docs">
+  <button data-part="close" popovertarget="drawer" popovertargetaction="hide" aria-label="Close menu">×</button>
+  <div data-slot="group">
+    <p data-part="group-label">Start</p>
+    <ul>
+      <li><a data-slot="item" href="/guide">Getting started</a></li>
+      <li><a data-slot="item" href="/guide/install">Installation</a></li>
+      <li><a data-slot="item" href="/guide/first-page">Your first page</a></li>
+    </ul>
+  </div>
+  <div data-slot="group">
+    <p data-part="group-label">Syntax</p>
+    <ul>
+      <li><a data-slot="item" href="/guide/slots">Slots</a></li>
+      <li><a data-slot="item" href="/guide/shorthand">Shorthand props</a></li>
+      <li><a data-slot="item" href="/guide/flow">Match and Switch</a></li>
+      <li><a data-slot="item" href="/guide/segments">Segment roots</a></li>
+      <li><a data-slot="item" href="/guide/each">Each</a></li>
+    </ul>
+  </div>
+  <div data-slot="group">
+    <p data-part="group-label">Layout</p>
+    <ul>
+      <li><a data-slot="item" href="/api" aria-current="page">SideMenu</a></li>
+      <li><a data-slot="item" href="/api/dialog">Dialog</a></li>
+      <li><a data-slot="item" href="/api/dropdown">Dropdown</a></li>
+    </ul>
+  </div>
+</nav>
+<dialog class="Dialog" data-variant="command" id="search" closedby="any" aria-label="Search">
+  <div data-part="header"><input data-part="search" type="search" placeholder="Search the docs" autofocus></div>
+  <div data-slot="contents" role="listbox"><p data-part="empty">Type to search.</p></div>
+  <div data-part="hint"><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+  <template id="search-result"><a data-part="result" role="option"><span></span><small></small></a></template>
+</dialog>
+<dialog class="Dialog" data-size="lg" data-variant="modal" id="source" closedby="any" aria-labelledby="source-title">
+  <div data-part="header"><div><h2 data-slot="title" id="source-title">SideMenu.tsx</h2><p data-slot="description">The component as the compiler executes it.</p></div><button data-part="close" commandfor="source" command="close" aria-label="Close">×</button></div>
+  <div data-slot="contents" class="Prose"><pre><code><span data-tok="kw">export function</span> SideMenu(props) { <span data-tok="com">/* … */</span> }</code></pre></div>
+  <div data-slot="actions"><button class="Button" data-variant="secondary" data-size="md" commandfor="source" command="close">Close</button><a class="Button" data-variant="primary" data-size="md" href="https://github.com/reactogenic/reactogenic">Open on GitHub</a></div>
+</dialog>
+</div>
+</body>
+</html>

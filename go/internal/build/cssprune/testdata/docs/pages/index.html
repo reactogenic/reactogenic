@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reactogenic · Reactogenic</title>
+{{CSS}}
+</head>
+<body>
+<div class="Page" data-layout="landing">
+<header data-slot="header">
+  <a data-part="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="currentColor"/></svg>Reactogenic</a>
+  <nav data-part="nav" aria-label="Main">
+    <a href="/guide">Guide</a>
+    <a href="/api">API</a>
+    <a href="/changelog">Changelog</a>
+  </nav>
+  <div class="Dropdown" data-placement="bottom-end" data-size="sm" data-variant="menu">
+  <button data-slot="trigger" popovertarget="ver" aria-expanded="false" aria-haspopup="menu">v0.2</button>
+  <div data-part="menu" id="ver" popover role="menu">
+    <a data-slot="item" role="menuitem" aria-current="true" href="/">v0.2 (latest)</a>
+    <a data-slot="item" role="menuitem" href="/v0.1/">v0.1</a>
+    <div data-slot="separator" role="separator"></div>
+    <a data-slot="item" role="menuitem" href="/changelog">Changelog</a>
+  </div>
+</div>
+</header>
+<main data-part="main">
+  <section data-part="hero">
+    <h1>Framework-owned components with typed slots</h1>
+    <p>Your code lives in the slots; the compiler owns everything around them, so each screen ships exactly the HTML, CSS and JS it needs.</p>
+    <div data-part="actions">
+      <a class="Button" data-variant="primary" data-size="lg" href="/guide">Get started</a>
+      <a class="Button" data-variant="ghost" data-size="lg" href="https://github.com/reactogenic/reactogenic">GitHub</a>
+    </div>
+  </section>
+  <section data-part="features">
+    <article class="Card" data-variant="outline" data-interactive>
+      <svg data-slot="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"/></svg>
+      <h2 data-slot="title">Slots</h2>
+      <p data-slot="body">A slot is data plus an optional render function. Never a component.</p>
+    </article>
+    <article class="Card" data-variant="outline" data-interactive>
+      <svg data-slot="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"/></svg>
+      <h2 data-slot="title">Compiled shell</h2>
+      <p data-slot="body">Layout components run in the compiler and leave no React behind.</p>
+    </article>
+    <article class="Card" data-variant="outline" data-interactive>
+      <svg data-slot="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"/></svg>
+      <h2 data-slot="title">Typed end to end</h2>
+      <p data-slot="body">TypeScript 7 checks the emitted TSX; errors land on your source.</p>
+    </article>
+  </section>
+</main>
+<footer data-slot="footer"><span>MIT licensed. Built with Reactogenic.</span><a href="https://github.com/reactogenic/reactogenic">GitHub</a></footer>
+</div>
+</body>
+</html>

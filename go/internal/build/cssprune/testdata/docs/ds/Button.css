@@ -1,0 +1,28 @@
+/* Button. Props: variant = "primary" | "secondary" | "ghost" | "danger"; size = "sm" | "md" | "lg"; block?: boolean.
+   Slots: $IconStart $IconEnd. States: :hover :active :disabled [aria-busy]. */
+.Button {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4); border: 1px solid transparent; border-radius: var(--radius-md);
+  font-size: var(--text-sm); font-weight: 600; line-height: 1.25; white-space: nowrap; user-select: none;
+  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
+  &:active { transform: translateY(1px); }
+  &:disabled, &[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+  &[aria-busy="true"] { color: transparent; position: relative; pointer-events: none;
+    &::after { content: ""; position: absolute; width: 1em; height: 1em; border: 2px solid var(--color-fg-muted); border-top-color: transparent; border-radius: 50%; animation: Button-spin 0.7s linear infinite; }
+  }
+  [data-slot="icon-start"], [data-slot="icon-end"] { flex: none; width: 1.1em; height: 1.1em; }
+
+  &[data-variant="primary"] { background: var(--color-accent); color: var(--color-accent-fg);
+    &:hover { background: color-mix(in srgb, var(--color-accent) 88%, var(--color-fg)); } }
+  &[data-variant="secondary"] { background: var(--color-bg); border-color: var(--color-border-strong);
+    &:hover { background: var(--color-bg-subtle); } }
+  &[data-variant="ghost"] { color: var(--color-fg-muted);
+    &:hover { background: var(--color-bg-subtle); color: var(--color-fg); } }
+  &[data-variant="danger"] { background: var(--color-danger); color: var(--color-accent-fg);
+    &:hover { background: color-mix(in srgb, var(--color-danger) 88%, var(--color-fg)); } }
+
+  &[data-size="sm"] { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); border-radius: var(--radius-sm); }
+  &[data-size="lg"] { padding: var(--space-3) var(--space-5); font-size: var(--text-md); border-radius: var(--radius-lg); }
+  &[data-block] { display: flex; width: 100%; }
+}
+@keyframes Button-spin { to { transform: rotate(360deg); } }
