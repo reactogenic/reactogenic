@@ -2,9 +2,12 @@
 // written. Opening, closing, focus and the inert page are the browser's.
 import type { ComponentProps, ReactNode } from "react";
 import { Each, isAssigned, mount, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
-import { Button, type ButtonProps } from "./button.rtsx";
+import { Button, type ButtonLinkProps, type TriggerProps } from "./button.rtsx";
 import "./tokens.css";
 import "./dialog.css";
+
+/** A footer button: a link — or a button, which closes the dialog. */
+export type DialogActionProps = ButtonLinkProps | TriggerProps;
 
 export interface DialogProps {
   /** Names the dialog for a button elsewhere: `command="show-modal" commandfor="…"`. Generated when absent. */
@@ -12,13 +15,19 @@ export interface DialogProps {
   /** Option: how the user may dismiss it — HTML's attribute and meaning. Default "any". */
   closedby?: "any" | "closerequest" | "none";
   /** A button rendered where the dialog is written, which opens it. */
-  $Trigger?: Slot<ButtonProps>;
+  $Trigger?: Slot<TriggerProps>;
   /** The accessible name. */
   $Title: Slot<ComponentProps<"h2">>;
   /** Footer buttons, in order. Each closes the dialog unless it is a link. */
-  $Action?: KeyedSlot<ButtonProps>;
+  $Action?: KeyedSlot<DialogActionProps>;
   /** The body. */
   children?: ReactNode;
+}
+
+// With `href` a link; otherwise it closes the dialog `dialog` names. Two
+// elements, because a link takes no command (`ButtonLinkProps`).
+function Action({ dialog, ...action }: DialogActionProps & { dialog: string }) {
+  return action.href !== undefined ? <Button {...action} /> : <Button command="close" commandfor={dialog} {...action} />;
 }
 
 export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, children }: DialogProps) {
@@ -45,7 +54,7 @@ export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, childr
           {$Action !== undefined ? (
             <footer>
               <Each items={Object.keys($Action)} { item: key }>
-                <Button key={key} slot={$Action} command="close" commandfor={dialog} />
+                <Action key={key} slot={$Action} dialog />
               </Each>
             </footer>
           ) : null}

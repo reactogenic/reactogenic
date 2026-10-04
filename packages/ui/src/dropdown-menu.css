@@ -1,9 +1,21 @@
 @layer rg.components {
-  /* The last of the menu's fallbacks: half a rem from the viewport's left
-     edge — the menu is at most a rem narrower than the viewport. */
+  /* For a menu wider than the room on either side of its trigger: under
+     it, half a rem from the viewport's left edge — the menu is at most a rem
+     narrower than the viewport. */
   @position-try --rg-menu-edge {
     left: 0.5rem;
     right: auto;
+  }
+  /* The last resort, which always fits: the viewport's corner, over the
+     trigger — the menu is at most a rem smaller than the viewport, both
+     ways, and scrolls. For a menu taller than the room above and below its
+     trigger, or one that is at the viewport's edge and has no room below. */
+  @position-try --rg-menu-corner {
+    top: 0.5rem;
+    bottom: auto;
+    left: 0.5rem;
+    right: auto;
+    margin: 0;
   }
 
   .rg-menu {
@@ -13,6 +25,12 @@
        squeezed into what is left. */
     width: max-content;
     max-width: calc(100vw - 1rem);
+    /* Never taller than the viewport either: a popover is fixed, so what of
+       it is outside the viewport cannot be scrolled to. What does not fit
+       scrolls inside the menu (`overflow` is the user agent's `auto` for a
+       popover; said here, because the menu depends on it). */
+    max-height: calc(100dvh - 1rem);
+    overflow: auto;
     padding: 0.25rem;
     border: 1px solid var(--rg-line);
     border-radius: var(--rg-radius);
@@ -27,9 +45,11 @@
        `anchor()` nothing to resolve against. `anchor()` insets, not
        `position-area`: that one does not flip in WebKit on a page taller
        than the viewport. The fallbacks, in order: above the trigger; at its
-       other edge; both; and, for a menu wider than the room on either side
-       (a phone), against the viewport's edge. Without anchor positioning the
-       UA's centred popover remains. */
+       other edge; both; for a menu wider than the room on either side (a
+       phone), against the viewport's edge; and where none of these fits, in
+       the viewport's corner. Five, and no more: Chromium tries five
+       fallbacks and never a sixth (measured in 153). Without anchor
+       positioning the UA's centred popover remains. */
     @supports (top: anchor(bottom)) {
       position-anchor: auto;
       inset: auto;
@@ -42,7 +62,7 @@
         flip-inline,
         flip-block flip-inline,
         --rg-menu-edge,
-        --rg-menu-edge flip-block;
+        --rg-menu-corner;
 
       &[data-align="end"] {
         left: auto;

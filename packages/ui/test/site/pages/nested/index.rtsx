@@ -1,7 +1,9 @@
 // "/nested/": components in a side menu's free slots — a dialog and a menu in
 // $Header, an action menu in $Footer. Each keeps its own look and its own
 // parts: the side menu's rules are for the side menu's structure only.
-import { Dialog, DropdownMenu, SideMenu } from "@reactogenic/ui";
+// Also here: a button outside the drawer for the dialog written inside it, a
+// toggle with the author's own content, and a same-page link in each overlay.
+import { Button, Dialog, DropdownMenu, SideMenu } from "@reactogenic/ui";
 import "../../site.css";
 
 export default function Page() {
@@ -15,8 +17,12 @@ export default function Page() {
       <body>
         <header className="site-header">
           <a className="site-logo" href="/">Example</a>
+          {/* Outside the drawer: below the breakpoint the dialog it opens is inside a closed popover. */}
+          <Button id="find" variant="ghost" command="show-modal" commandfor="search">Find</Button>
         </header>
         <SideMenu id="nav" label="Docs">
+          {/* The author's own content names the toggle; `label` names only the fallback icon. */}
+          <$Toggle>Menu</$Toggle>
           <$Header>
             <Dialog id="search">
               <$Trigger>Search</$Trigger>
@@ -27,11 +33,13 @@ export default function Page() {
               <$Trigger>v1</$Trigger>
               <$Item key="v1" href="/nested/" current>v1</$Item>
               <$Item key="v0" href="/">v0</$Item>
+              <$Item key="here" href="#content">On this page</$Item>
             </DropdownMenu>
           </$Header>
           <$Section key="guide" title="Guide">
             <$Item key="nested" href="/nested/">Nested</$Item>
             <$Item key="intro" href="/">Introduction</$Item>
+            <$Item key="here" href="#content">On this page</$Item>
           </$Section>
           <$Footer>
             <DropdownMenu id="tools">
@@ -41,18 +49,20 @@ export default function Page() {
             </DropdownMenu>
           </$Footer>
         </SideMenu>
-        <main>
+        <main id="content">
           <h1>Nested</h1>
           {/* The same components outside the side menu: what they must look like inside it. */}
           <Dialog id="plain">
             <$Trigger>Plain</$Trigger>
             <$Title>Search</$Title>
             <p>results</p>
+            <$Action key="here" href="#content">On this page</$Action>
           </Dialog>{" "}
           <DropdownMenu id="plain-ver">
             <$Trigger>v1</$Trigger>
             <$Item key="v1" href="/nested/" current>v1</$Item>
             <$Item key="v0" href="/">v0</$Item>
+            <$Item key="here" href="#content">On this page</$Item>
           </DropdownMenu>
         </main>
       </body>

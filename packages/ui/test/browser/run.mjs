@@ -1,5 +1,8 @@
 // Behaviour in real browsers (RGP2-025): `pnpm --filter @reactogenic/ui test:browser`.
 // Not part of `pnpm test`: CI has no browsers. First: `npx playwright install chromium webkit`.
+// A check named `control` or `limit` asserts what happens without the thing
+// under test, or what the spec says does not work (components.md, *Known
+// limits*): it fails when that stops being true.
 //
 // Builds test/site with the stand-in builder (build.mjs) — once as it ships
 // and once without any script, the control — serves both, and checks them in
@@ -24,6 +27,7 @@ const { chromium, webkit, firefox } = await import(process.env.PLAYWRIGHT ?? "pl
 
 const WIDE = { width: 1200, height: 800 };
 const NARROW = { width: 400, height: 700 }; // below the 50rem breakpoint
+const SHORT = { width: 400, height: 260 }; // a phone on its side; 1280 × 1024 zoomed to 400% is 320 × 256
 
 function serve(dir) {
   const reports = [];
@@ -60,6 +64,13 @@ const engines = {
   chrome: () => chromium.launch({ channel: "chrome", ignoreDefaultArgs: ["--disable-back-forward-cache"] }),
   webkit: () => webkit.launch(),
   firefox: () => firefox.launch(),
+};
+
+// Takes the Navigation API away from an engine that has it: a browser
+// below the floor.
+const noNavigation = () => {
+  delete window.navigation;
+  delete Window.prototype.navigation;
 };
 
 // Takes `command` / `commandfor` away from an engine that has them: the
@@ -331,7 +342,7 @@ async function suite(name, launch, site, control) {
       };
       await check(`in a side menu's $Header, ${width}: a dialog keeps its close button, its scrim and its look`, async () => {
         await drawer();
-        await page.click('button[commandfor="search"]');
+        await page.click('#nav button[commandfor="search"]');
         await settle(page);
         equal(await page.evaluate(probe.dialog, "search"), true, "open and modal");
         equal(await page.evaluate(probe.active), "close", "focus");
@@ -374,8 +385,85 @@ async function suite(name, launch, site, control) {
         await settle(page);
         equal(await page.evaluate(probe.dialog, "search"), false, "open after Esc");
       });
+      // Below the breakpoint the closed drawer is `display: none` by the
+      // user agent's rule, and nothing inside a box that is not there is
+      // rendered — the top layer included.
+      await check(`a dialog written in a side menu's $Header, ${width}: a button outside the drawer opens it, and it is seen`, async () => {
+        if (await page.evaluate(probe.popover, "nav")) {
+          await page.click('#nav > [data-part="close"]');
+          await settle(page);
+        }
+        await page.click("#find");
+        await settle(page);
+        equal(await page.evaluate(probe.dialog, "search"), true, "open and modal");
+        equal(await page.evaluate(() => document.getElementById("search").checkVisibility()), true, "the dialog is rendered");
+        const panel = await page.evaluate(probe.rect, '#search > [data-part="panel"]');
+        equal(panel.width > 0 && panel.left >= 0 && panel.right <= viewport.width, true, `the panel ${JSON.stringify(panel)} is on screen`);
+        equal(await page.evaluate(probe.active), "close", "focus");
+        if (width === "narrow") {
+          const nav = await page.evaluate(probe.rect, "#nav");
+          equal([await page.evaluate(probe.popover, "nav"), nav.right <= 0], [false, true], `[the drawer is open, its box ${JSON.stringify(nav)} is beside the viewport]`);
+        }
+        await page.keyboard.press("Escape");
+        await settle(page);
+        equal(await page.evaluate(probe.dialog, "search"), false, "open after Esc");
+        if (width === "narrow") {
+          equal(await page.evaluate(() => getComputedStyle(document.getElementById("nav")).display), "none", "the drawer's display, the dialog closed");
+          // The drawer's scrim is there only while the drawer is open.
+          equal(await page.evaluate(() => document.elementFromPoint(380, 400).closest("[data-part=scrim]")), null, "a scrim over the page");
+        }
+      });
       await page.context().close();
     }
+  }
+
+  // ---- A same-page link inside an open overlay ----
+  {
+    // `leave` opens an overlay of /nested/ and follows the `#content` link in
+    // it: the page is not left, so `pagehide` never comes.
+    const follow = async (server, viewport, leave, options) => {
+      const page = await open(server.origin, "/nested/", viewport, options);
+      await leave(page);
+      await settle(page);
+      const state = await page.evaluate(() => [location.hash, [...document.querySelectorAll(":popover-open, dialog[open]")].map((element) => element.id), getComputedStyle(document.documentElement).overflow]);
+      await page.context().close();
+      return state;
+    };
+    const hasNavigation = async () => {
+      const page = await open(site.origin, "/plain/", WIDE);
+      const has = await page.evaluate(() => "navigation" in window);
+      await page.context().close();
+      return has;
+    };
+    const cases = {
+      drawer: [NARROW, "nav", async (page) => (await page.click(".rg-sidemenu-toggle"), await settle(page), await page.click('#nav > section a[href="#content"]'))],
+      "menu of links": [WIDE, "plain-ver", async (page) => (await page.click('[popovertarget="plain-ver"]'), await settle(page), await page.click('#plain-ver a[href="#content"]'))],
+      dialog: [WIDE, "plain", async (page) => (await page.click('button[commandfor="plain"]'), await settle(page), await page.click("#plain footer a"))],
+    };
+    for (const [what, [viewport, id, leave]] of Object.entries(cases)) {
+      await check(`a same-page link in an open ${what} closes it`, async () => {
+        equal(await follow(site, viewport, leave), ["#content", [], "visible"], "[the fragment, what is open, overflow of <html>]");
+      });
+      await check(`control, no script: the same link leaves the ${what} open over the page`, async () => {
+        equal((await follow(control, viewport, leave)).slice(0, 2), ["#content", [id]], "[the fragment, what is open]");
+      });
+      // components.md, *Known limits*.
+      await check(`limit, without the Navigation API (below the floor): the same link leaves the ${what} open`, async () => {
+        equal((await follow(site, viewport, leave, { init: noNavigation })).slice(0, 2), ["#content", [id]], "[the fragment, what is open]");
+      });
+    }
+    // The page is at #content already: the link changes no hash.
+    const [viewport, , leave] = cases.drawer;
+    const again = async (page) => {
+      await leave(page);
+      await settle(page);
+      equal(await page.evaluate(probe.popover, "nav"), false, "the drawer is open after the first click");
+      await leave(page);
+    };
+    await check("the same link a second time, to the fragment the page is at: the drawer closes again", async () => {
+      equal(await hasNavigation(), true, "the engine has the Navigation API");
+      equal(await follow(site, viewport, again), ["#content", [], "visible"], "[the fragment, what is open, overflow of <html>]");
+    });
   }
 
   // ---- DropdownMenu ----
@@ -610,6 +698,32 @@ async function suite(name, launch, site, control) {
       near(menu.top, trigger.bottom + 4, "the menu's top");
     });
     await phone.context().close();
+
+    const short = await open(site.origin, "/menus/", SHORT);
+    await check("menu taller than the room above and below its trigger: inside the viewport, and it scrolls to its last item", async () => {
+      await short.click('[popovertarget="tall"]');
+      await settle(short);
+      equal(await short.evaluate(probe.popover, "tall"), true, "open");
+      const menu = await short.evaluate(probe.rect, "#tall");
+      equal([menu.top >= 0, menu.bottom <= SHORT.height, menu.left >= 0, menu.right <= SHORT.width], [true, true, true, true], `the menu ${JSON.stringify(menu)} inside the viewport`);
+      equal(await short.evaluate(probe.scrolls, "#tall"), [false, true], "the menu scrolls [x, y]");
+      await short.evaluate(() => document.querySelector("#tall > li:last-child > a").focus());
+      const last = await short.evaluate(probe.rect, "#tall > li:last-child > a");
+      equal([last.top >= menu.top, last.bottom <= menu.bottom], [true, true], `the last item ${JSON.stringify(last)}, focused, inside the menu`);
+      await short.keyboard.press("Escape");
+      await settle(short);
+    });
+    await check("the same menu where it fits: under its trigger, and nothing to scroll", async () => {
+      const roomy = await open(site.origin, "/menus/", { width: 400, height: 1400 });
+      await roomy.click('[popovertarget="tall"]');
+      await settle(roomy);
+      const trigger = await roomy.evaluate(probe.rect, '[popovertarget="tall"]');
+      const menu = await roomy.evaluate(probe.rect, "#tall");
+      near(menu.top, trigger.bottom + 4, "the menu's top");
+      equal(await roomy.evaluate(probe.scrolls, "#tall"), [false, false], "the menu scrolls [x, y]");
+      await roomy.context().close();
+    });
+    await short.context().close();
   }
 
   // ---- SideMenu ----
@@ -706,6 +820,59 @@ async function suite(name, launch, site, control) {
       await touch.waitForURL("**/guide/flow/", { timeout: 5000 });
     });
     await touch.context().close();
+  }
+
+  // ---- The user's preferences: reduced motion, forced colours ----
+  {
+    await check("reduced motion: the dialog and the drawer have no transition", async () => {
+      const still = async (context) => {
+        const page = await open(site.origin, "/", NARROW, { context });
+        const durations = await page.evaluate(() => ["d1", "nav"].map((id) => getComputedStyle(document.getElementById(id)).transitionDuration.split(", ").every((duration) => parseFloat(duration) === 0)));
+        const reduce = await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+        await page.context().close();
+        return [reduce, ...durations];
+      };
+      equal(await still({ reducedMotion: "no-preference" }), [false, false, false], "no preference: [reduce, the dialog is still, the drawer is still]");
+      equal(await still({ reducedMotion: "reduce" }), [true, true, true], "reduce: [reduce, the dialog is still, the drawer is still]");
+    });
+    // In forced colours a background is the canvas and a shadow is gone:
+    // what is left to tell a surface from the page under it is its border.
+    await check("forced colours: every surface of the top layer has a border; the current item is marked by more than a background", async () => {
+      const page = await open(site.origin, "/guide/flow/", NARROW, { context: { forcedColors: "active" } });
+      // [the border's style, at least 1px, not the colour of the surface]
+      const edge = (selector, side) =>
+        page.evaluate(
+          ([s, name]) => {
+            const style = getComputedStyle(document.querySelector(s));
+            return [style.getPropertyValue(`border-${name}-style`), parseFloat(style.getPropertyValue(`border-${name}-width`)) >= 1, style.getPropertyValue(`border-${name}-color`) !== style.backgroundColor];
+          },
+          [selector, side],
+        );
+      await page.click(".rg-sidemenu-toggle");
+      await settle(page);
+      equal(await edge("#nav", "right"), ["solid", true, true], "the drawer's edge towards the page");
+      equal(await page.evaluate(() => Number(getComputedStyle(document.querySelector("#nav a[aria-current]")).fontWeight) >= 600), true, "the current item is bold");
+      await page.click('#nav > [data-part="close"]');
+      await settle(page);
+      await page.click("#actions-t");
+      await settle(page);
+      equal(await edge("#actions", "top"), ["solid", true, true], "the menu");
+      await page.keyboard.press("Escape");
+      await settle(page);
+      await page.click('header button[commandfor="shortcuts"]');
+      await settle(page);
+      equal(await edge('#shortcuts > [data-part="panel"]', "top"), ["solid", true, true], "the dialog's panel");
+      await page.context().close();
+    });
+    await check("side menu toggle: named by its own content — or, the icon, by the menu's label", async () => {
+      const count = async (path, name) => {
+        const page = await open(site.origin, path, NARROW);
+        const found = await page.getByRole("button", { name, exact: true }).count();
+        await page.context().close();
+        return found;
+      };
+      equal([await count("/", "Documentation"), await count("/nested/", "Menu"), await count("/nested/", "Docs")], [1, 1, 0], '[the icon as "Documentation", "Menu", "Menu" as "Docs"]');
+    });
   }
 
   // ---- overlays: Back to a page left with an open overlay ----
@@ -806,7 +973,7 @@ async function suite(name, launch, site, control) {
         },
       });
       equal(await page.evaluate(() => "command" in HTMLButtonElement.prototype), true, "the engine has command");
-      equal(await page.evaluate(() => window.listened), ["pagehide"], "listeners the page's script added");
+      equal(await page.evaluate(() => window.listened), ["pagehide", "navigate"], "listeners the page's script added");
       await page.context().close();
     });
     await check("a page with nothing that opens ships no script", async () => {
