@@ -2,8 +2,8 @@
 
 Specs: [research.md](research.md) (why), [builder.md](builder.md) (the
 pipeline), [components.md](components.md) (the three components),
-[decisions.md](decisions.md). Tasks are `RGP2-xxx`; sizes S / M / L as in
-phase 1.
+[decisions.md](decisions.md), [bet.md](bet.md) (the measurement). Tasks are
+`RGP2-xxx`; sizes S / M / L as in phase 1.
 
 **Outcome.** `reactogenic build` compiles a documentation site for
 Reactogenic — four pages using `SideMenu`, `Dialog`, `DropdownMenu` — into
@@ -585,7 +585,7 @@ ship: `/guide/` and `/reference/cli/` need `overlays` alone, `/` adds
 
 ## M4 — The bet
 
-### RGP2-050 — Measure · M
+### RGP2-050 — Measure · M · done
 `bench/`: the measuring scripts of the research (bytes raw / gzip / brotli
 per page, requests, JS to parse, a warm 4-page session), run on three builds
 of the site: the default; `--inline always`; and the control,
@@ -610,7 +610,7 @@ fails:
 | T2 JS per page | ≤ 1.5 KB raw (≈ 0.7 KB brotli) on the heaviest page | refutes above 5 KB brotli — a micro-runtime, not compilation |
 | T3 against React | ≥ 100× below the best React build of an equivalent site (Astro + React islands + Radix: 317 KB raw, measured in research/baselines.md) | |
 | T4 precision | deleting the *Install* dialog from `/` — it has its own `$Trigger`: nothing else refers to it — removes its markup, the CSS rules only it matched and the `invokers` behaviour from that page, and nothing else of it; and every other page's HTML as rendered, CSS and script are the same bytes. Compared under `--inline always`: sharing couples how pages are delivered, not what they are (builder.md, *Packaging*) | refutes |
-| T5 awareness | against the control: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | |
+| T5 awareness | against the control: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one — in raw bytes, as T2 and T3 are (it gave no unit until it was measured: bet.md has all three) | |
 | T6 authoring | the authoring rule of RGP2-040: no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source | refutes |
 | T7 behaviour | the browser checks pass on the built site | refutes |
 | T8 requests | ≤ 3 per page, cold | |
@@ -625,6 +625,46 @@ What the table cannot measure on this site, and where it is tested instead:
 
 The result, with the tables, is written to `specs/phase02/bet.md`.
 - Depends on: 040.
+- **Done:** `bench/site.mjs`, `bench/delta.mjs`, `bench/verify.mjs`
+  (`bench/lib.mjs` is what they share), their reports in `bench/results/`,
+  and [bet.md](bet.md). **The bet is undecided**: every threshold that
+  refutes holds, and T5 does not.
+
+  | | Measured | |
+  | --- | --- | --- |
+  | T1 | the report's rows add up to each page's script (563, 252, 1,446, 252 B); no `<runtime>` row; the only statements that run are the mount calls | pass |
+  | T2 | `/syntax/`: 1,446 B raw, 591 B brotli | pass |
+  | T3 | 219× raw, 152× brotli, at the worst pairing — against another site of the same shape | pass |
+  | T4 | the *Install* dialog deleted from `/`: 1,070 B of markup in one span, 14 selectors that name `.rg-dialog`, `invokers`; the other pages the same bytes | pass |
+  | T5 | CSS 22.8% and 23.2% raw on two pages (15.9%, 16.3% brotli); JS 12.1% on `/syntax/`, which mounts everything the site has | **fail** |
+  | T6 | 21 source files; nothing found | pass |
+  | T7 | 688 checks pass, 8 known, none fails: Chromium 153, WebKit 26.6 | pass |
+  | T8 | 2 requests per page: the document and the favicon | pass |
+
+  - Four builds, not three: `--inline never` too — the default's blobs as
+    files. Under `auto` the default build *is* `--inline always`'s on this
+    site.
+  - The control's script is 1,405 B of behaviours and 240 B of its own:
+    the table is reported apart, and T5 is given against both.
+  - Found by measuring, and the owner's (decisions.md, K, L): over a
+    four-page visit the control transfers 19.8% less than the default
+    build — per-page sheets share nothing; T5's JS half cannot hold on a
+    page that mounts everything.
+  - The validity probe: each of the 119 selectors `cssprune` takes for
+    known — its three tables of names, and 16 forms of each `:nth-*()` —
+    parses in Chromium 153 and WebKit 26.6. No name leaves the table.
+  - The computed-style comparison: 248, all equal — at rest, dark, reduced
+    motion, hover, keyboard focus, each overlay open — and it sees a rule
+    taken out of one page.
+  - Corrected on the way: builder.md's "gzip: 0–5 B above `gzip -9`" (from
+    76 B below to 3 B above, on the docs site).
+  - **Not run:** Firefox — the checks and the probe; Safari proper; the
+    floor's versions (Chrome 135, Firefox 147, Safari 26.2); a touch
+    device; Windows; `--base` (the site's own suite builds under one);
+    `--no-specialize --inline always`; time (CPU, parse, paint).
+  - **Not built**, so not measured: the React baseline and a hand-written
+    floor *of this site* — T3 is against the research's site, and no ratio
+    to a floor is claimed; a catalog of ~20 components (*Later*).
 
 ### RGP2-060 — CI and docs · S
 A `site` job (build + the byte report as an artifact); getting-started gains

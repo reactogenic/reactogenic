@@ -830,6 +830,13 @@ the layout's CSS (over 250 B gzipped), on all four pages                        
   its CSS, its script — depend on no other page; how they are delivered
   does (plan.md, T4).
 
+> OPEN (for the owner, decisions.md, K): a blob is shared only when it is
+> the same bytes, and pruned sheets seldom are. On the docs site the four
+> pages' sheets are four blobs — 7,179 B of each the same rules — so every
+> one is inlined, nothing is cached from page to page, and over a four-page
+> visit the control transfers 19.8% less (bet.md). Recommended: the rules
+> every page keeps as one file, the page's own rest beside it.
+
 **Rejected:** `(pages − 1) × bytes > 1024` (the first draft: no unit, and
 `pages` was the site's — the 176 B of `overlays` were a file on a 200-page
 site and inline on a 4-page one, for the same visitor).
@@ -914,7 +921,7 @@ css  e28e8351     1074      502   _rg/page-e28e8351.css    /guide/ /guide/more/
 | a blob's delivery | `inline`, or its file. Under `auto` a blob that pages share is a file when its gzip column is over 250: the script of `/` and `/links/` above is under it, the sheet of the two guide pages over (*Packaging*) |
 | files | the project's own, from the project directory: `site.css`. A package's, by the package and the path in it: `@reactogenic/ui/src/dialog.css` — whether the install put it in `node_modules/`, in pnpm's store or behind a link out of the project. Nothing in the report is the machine's: two builds of one input write the same report, on any checkout |
 | a file of no package, outside the project | where it is, from the project directory: `../shared/tokens.css` |
-| gzip | DEFLATE at level 9, as Go's `compress/gzip` writes it: 0–5 B above what `gzip -9` gives on a page's files, under 1%. The measuring scripts have the reference numbers |
+| gzip | DEFLATE at level 9, as Go's `compress/gzip` writes it: within 1% of what `gzip -9` (zlib) gives — on the docs site from 76 B below, on its largest page's HTML, to 3 B above, on a 252 B script (`bench/site.mjs`). The measuring scripts have the reference numbers |
 | the control | no rows per module or per source file: its two files are the site's |
 | brotli | not in the report: Go's standard library has no encoder, and the builder takes no dependency to count with. The measuring scripts have it (plan.md, RGP2-050) |
 

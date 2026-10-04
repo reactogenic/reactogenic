@@ -33,7 +33,8 @@ touch something CLAUDE.md fixes or that are a matter of taste. What was
 ## For the owner
 
 Not decided here: each would relitigate something CLAUDE.md or a phase 1
-spec fixes, or is a choice between two specs. The recommended option is
+spec fixes, or is a choice between two specs — K and L are what the
+measurement leaves open ([bet.md](bet.md)). The recommended option is
 first; the place in the spec carries an `> OPEN:`.
 
 | | Question | Options | Where |
@@ -48,6 +49,8 @@ first; the place in the spec carries an `> OPEN:`.
 | H | **A dialog under a closed popover** of the author's own opens modal and unseen; only `SideMenu`'s drawer is seen to | **1. a page check, `dialog-in-popover`** (no byte; the failure is silent otherwise). 2. a documented limit, as now | components.md, `Dialog`; builder.md, *Checks on the page* |
 | I | **A disabled menu item** is skipped by focus, arrow keys and typeahead; APG's menu pattern keeps it focusable | **1. APG's**: `aria-disabled="true"` on a button item too, the arrow keys stop at it. 2. as now (two wave-1 decisions with tests) | components.md, `DropdownMenu` |
 | J | **Links into the current page** in a `SideMenu` (`/guide/#install`) are not marked and open no group — so the docs site's groups each start with an "Overview" link | **1. such an item opens its disclosures and stays unmarked.** 2. as now | components.md, `SideMenu` |
+| K | **Per-page sheets share nothing.** Measured (bet.md): the docs site's four pruned sheets are four blobs — 7,179 B of each the same rules — so each is inlined in its page, and over a four-page visit the control, with one cached sheet, transfers 19.8% less (brotli). Decision 10 shares a blob only when it is the same bytes | **1. two blobs per page: the rules every page of the site keeps, as one file, and the page's own rest** (≈ 7.2 KB once, then ≈ 1.8 KB on two pages and under 0.1 KB on two — estimated, not built; the order of rules has to survive the split: a rule that moves behind one it preceded can win where it lost). 2. as now: the cold page is what is optimised. 3. per-page pruning only where it saves more than the request it costs a visit | builder.md, *Packaging* |
+| L | **T5 and the verdict.** T5's JS half ("≥ 30% smaller on every page that ships one") cannot hold on a page that mounts everything the site mounts — `/syntax/`: 12.1%, 0.0% without the control's table — and T5 gave no unit: its CSS half holds raw (22.8%, 23.2%) and not compressed (≤ 16.3%). By plan.md's rule the bet is then neither confirmed nor refuted | **1. the verdict stays "undecided" and T5 is measured again on a catalog of ~20 components** (plan.md, *Later*), where a page that uses everything is not the common case. 2. T5 restated after the fact — "on every page that mounts less than the site does", in raw bytes — under which it holds here: a threshold moved to where the number is | plan.md, RGP2-050; bet.md |
 
 ## Binary size
 
