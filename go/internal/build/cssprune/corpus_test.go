@@ -23,6 +23,7 @@ import (
 //	docs         the modelled design system of research/css.md: 12 files, 4 pages
 //	components   the three components of research/components.md, 4 pages
 //	adversarial  sheets written to break the pruner, each with its page
+//	ui           packages/ui's CSS and the fixture site's, 6 pages the builder built
 type sheet struct {
 	name  string
 	entry string
@@ -46,6 +47,12 @@ func corpus(t testing.TB) []sheet {
 		name := strings.TrimSuffix(filepath.Base(css), ".css")
 		out = append(out, sheet{"adversarial/" + name, css, []string{strings.TrimSuffix(css, ".css") + ".html"}})
 	}
+	// The design system itself, and pages the builder built with it: the
+	// fixture site of internal/build, as its golden output has it — a page
+	// of each kind (a drawer, nothing that opens, a menu of links, a dialog,
+	// an action menu with a dialog, text). Last, so that the sheets above
+	// keep their places.
+	out = append(out, sheet{"ui", "testdata/ui/all.css", append(glob("../testdata/golden/never/out/index.html"), glob("../testdata/golden/never/out/*/index.html")...)})
 	return out
 }
 
@@ -82,6 +89,9 @@ func loadPages(t testing.TB, s sheet) []page {
 			t.Fatal(err)
 		}
 		name := strings.TrimSuffix(filepath.Base(file), ".html")
+		if name == "index" { // a built page: named by its directory, `out` for "/"
+			name = filepath.Base(filepath.Dir(file))
+		}
 		out = append(out, page{name, string(src), parsePage(t, string(src))})
 		if strings.Contains(string(src), "<template") {
 			doc := parsePage(t, string(src))
