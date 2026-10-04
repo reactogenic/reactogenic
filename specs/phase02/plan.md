@@ -57,16 +57,17 @@ func Prune(css string, doc *html.Node) (out string, stats Stats, err error)
 
 // pagecheck — RGP2-021
 func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report
-func (Options) Check(…) []report.Report            // the same under --base: Options{Base: "/docs/"}
 // files: the output's other files, by their path from its root ("/favicon.svg")
+// --base is not its business: the page is checked as rendered, before packaging prefixes its links
 
 // behaviors — RGP2-022
 type Options struct {
-	Dir   string // the project directory: `mount()` specifiers resolve from it
+	Dir   string // the project directory: `mount()` specifiers resolve from it; it may be a symbolic link
 	Base  string // --base, for the control's table
 	Cache *Cache // optional: a module is read once per site (&behaviors.Cache{}, shared by the pages' builds)
 }
-type ModuleBytes struct{ Module, Path string; Bytes int } // an input of the script: the mount's specifier, the file, its bytes
+type ModuleBytes struct{ Module, Path string; Bytes int } // an input of the script: the mount's specifier, the file, its bytes;
+                                                          // Path behaviors.Entry, behaviors.Runtime for what is of no file: the rows add up to len(js)
 func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, reports []report.Report)
 func BuildControl(pages []render.Page, opts Options) (js string, reports []report.Report)   // --no-specialize
 // mount-no-element reads the ids off page.HTML: no parsed document is passed
@@ -163,13 +164,18 @@ esbuild's public API produces.
 ### RGP2-022 — Behaviours: the page's JS · M · done
 `behaviors`: the generated entry from a page's mounts, one `api.Build` per
 page with the page's `Define`s, the metafile's bytes per module.
-- Every `RG_…` identifier of a mounted module's source, and of the modules
-  it imports, is defined; the union over mounts; mount-not-found,
-  mount-no-element, mount-flag.
+- Every free `RG_…` identifier of a mounted module's source, and of the
+  modules it imports, is defined — found by a `Transform` of each file with
+  the names defined as markers; the built script is asked again, as the
+  backstop; the union over mounts; mount-not-found, mount-no-element,
+  mount-flag.
 - The read of a module (builder.md, *Behaviours*): a build of
   `import "<module>"` alone, before the page's — `Define` is fixed when a
-  build starts. It gives the flags, and mount-side-effect: what is left of a
-  module nobody uses.
+  build starts. It gives the files, and mount-side-effect: what is left of a
+  module nobody uses — for a module with flags, of two more builds, every
+  flag on and every flag off.
+- A module is the file it resolves to; the project directory's symbolic
+  links are resolved before esbuild is given it.
 - The metafile check: every input of a page's script is a file a mounted
   module reaches.
 - `--no-specialize` (builder.md, *The control*): one script for the site.
@@ -202,6 +208,8 @@ report, the command in `go/cmd/reactogenic`.
 - The page's CSS: one esbuild build with every page as an entry (CSS in
   import order per entry; the JS outputs are discarded), then `cssprune`.
 - `--inline`, `--base`, `--no-specialize`, `--report`; `public/` copied.
+  `--base`: `pagecheck.Check` first, on the page as rendered; then the base
+  is prefixed to the root-relative `href`s (builder.md, *Packaging*).
 - Golden tests: a fixture site's whole `dist/`, both modes.
 - The binary's size is printed by `build-binaries.sh`; the growth (esbuild +
   the engine, measured ≈ +7.3 MB on 27.4) goes into decisions.md.
