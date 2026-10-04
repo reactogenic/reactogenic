@@ -37,12 +37,16 @@ type thrown struct {
 
 // owner is a component of an exception's stack, and where its element was
 // written: a position in the text of a module, as esbuild's jsxDEV gives it
-// (1-based, columns in UTF-16 code units). No file: the page itself.
+// (1-based, columns in UTF-16 code units) — or, for an element made by
+// `createElement`, the engine's stack where it was made — or nothing: an
+// element that a package made.
 type owner struct {
 	Name         string `json:"name"`
+	Page         bool   `json:"page"` // the page itself: the root
 	FileName     string `json:"fileName"`
 	LineNumber   int    `json:"lineNumber"`
 	ColumnNumber int    `json:"columnNumber"`
+	Stack        string `json:"stack"`
 }
 
 // printed is one call of `console`, and the engine's stack there.

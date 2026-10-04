@@ -1,6 +1,8 @@
 package render
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -41,6 +43,30 @@ func position(file *rtsx.SourceFile, span emit.Span) (name string, at emit.Span,
 // `    at Dialog (<eval>:120:17)`, `    at <eval>:3:1`.
 var frameAt = regexp.MustCompile(`:(\d+):(\d+)\)?$`)
 
+// frame is a line of an engine stack that the bundle's source map knows: a
+// module of the bundle, and a 0-based line and UTF-16 column in its text.
+type frame struct {
+	source       string
+	line, column int
+}
+
+// frames reads an engine stack, innermost first.
+func (r *run) frames(stack string) []frame {
+	var out []frame
+	for line := range strings.SplitSeq(stack, "\n") {
+		m := frameAt.FindStringSubmatch(strings.TrimRight(line, " \r"))
+		if m == nil {
+			continue
+		}
+		bundleLine, _ := strconv.Atoi(m[1])
+		bundleColumn, _ := strconv.Atoi(m[2])
+		if source, srcLine, srcColumn, ok := r.bundle.sites.lookup(bundleLine, bundleColumn); ok {
+			out = append(out, frame{source, srcLine, srcColumn})
+		}
+	}
+	return out
+}
+
 // project returns the program's module of that name when it is the
 // project's own code: a library's is not where the author looks.
 func (r *run) project(name string) *rtsx.SourceFile {
@@ -55,29 +81,20 @@ func (r *run) project(name string) *rtsx.SourceFile {
 // project's code: frames of the builder's own modules, of React and of other
 // packages are passed over.
 func (r *run) thrownAt(stack string) (site, bool) {
-	for line := range strings.SplitSeq(stack, "\n") {
-		m := frameAt.FindStringSubmatch(strings.TrimRight(line, " \r"))
-		if m == nil {
-			continue
-		}
-		bundleLine, _ := strconv.Atoi(m[1])
-		bundleColumn, _ := strconv.Atoi(m[2])
-		source, srcLine, srcColumn, ok := r.bundle.sites.lookup(bundleLine, bundleColumn)
-		if !ok {
-			continue
-		}
-		if file := r.project(source); file != nil {
-			return site{file, offsetAt(file.Text(), srcLine, srcColumn)}, true
+	for _, f := range r.frames(stack) {
+		if file := r.project(f.source); file != nil {
+			return site{file, offsetAt(file.Text(), f.line, f.column)}, true
 		}
 	}
 	return site{}, false
 }
 
 // writtenAt is where the element of a component of an exception's stack was
-// written.
+// written: esbuild's position of a JSX element; for an element made by
+// `createElement`, the call.
 func (r *run) writtenAt(o owner) (site, bool) {
 	if o.FileName == "" || o.LineNumber < 1 {
-		return site{}, false
+		return r.thrownAt(o.Stack)
 	}
 	file := r.project(strings.ReplaceAll(o.FileName, `\`, "/"))
 	if file == nil {
@@ -109,8 +126,9 @@ func attribute(at site, name string) site {
 
 // exception reports what a page threw — route nil: what a module threw while
 // the bundle loaded. The exception's name is the code when the builder threw
-// it (shell-handler, shell-nondeterministic, page-no-default); anything else
-// is shell-error, with the exception's message.
+// it (shell-handler, shell-react, shell-nondeterministic, shell-error for
+// what the engine lacks, page-no-default); anything else is shell-error,
+// with the exception's message.
 func (r *run) exception(route *Route, t *thrown) report.Report {
 	out := report.Report{Code: "shell-error", Message: t.Message}
 	switch {
@@ -126,7 +144,8 @@ func (r *run) exception(route *Route, t *thrown) report.Report {
 		}
 	}
 	// The component stack, as related lines: each component where its
-	// element was written; the page itself at its `export default`.
+	// element was written; the page itself at its `export default`; a
+	// component whose element a package made, without a position.
 	for i, o := range t.Owners {
 		related := report.Report{Severity: report.Message, Message: "in " + o.Name}
 		if i == 0 && t.After {
@@ -134,10 +153,10 @@ func (r *run) exception(route *Route, t *thrown) report.Report {
 		}
 		if written, ok := r.writtenAt(o); ok {
 			related.File, related.Span, related.Line, related.Col = position(written.file, emit.Span{Pos: written.pos, End: written.pos})
-		} else if route != nil {
+		} else if o.Page && route != nil {
 			related.File, related.Span, related.Line, related.Col = r.pageAt(route)
 		}
-		if !found && out.File == "" { // no frame of the project's — React's own exception, or a package's: the nearest element
+		if !found && out.File == "" { // no frame of the project's — React's own exception, or a package's: the nearest element that has a place
 			out.File, out.Span, out.Line, out.Col = related.File, related.Span, related.Line, related.Col
 		}
 		out.Related = append(out.Related, related)
@@ -145,8 +164,89 @@ func (r *run) exception(route *Route, t *thrown) report.Report {
 	switch {
 	case found:
 		out.File, out.Span, out.Line, out.Col = position(at.file, emit.Span{Pos: at.pos, End: at.pos})
-	case out.File == "" && route != nil:
+	case out.File != "":
+	case route != nil:
 		out.File, out.Line, out.Col = route.File, 1, 1
+	default:
+		r.loading(&out, t.Stack)
 	}
 	return out
 }
+
+// loading places what a module that is not the project's threw while the
+// bundle loaded — a package that reads the clock at its top level: no frame
+// is the project's and there is no component. The report is at the
+// project's import that leads to the module; where it threw is a related
+// line.
+func (r *run) loading(out *report.Report, stack string) {
+	for _, f := range r.frames(stack) {
+		if strings.HasPrefix(f.source, namespace+":") {
+			continue
+		}
+		thrown := report.Report{Severity: report.Message, Message: "thrown here", File: f.source, Line: f.line + 1, Col: f.column + 1}
+		if text, err := os.ReadFile(filepath.FromSlash(f.source)); err == nil { // columns count characters
+			thrown.Line, thrown.Col = emit.LineCol(string(text), offsetAt(string(text), f.line, f.column))
+		}
+		out.Related = append(out.Related, thrown)
+		if at, ok := r.importOf(f.source); ok {
+			out.File, out.Span, out.Line, out.Col = position(at.file, emit.Span{Pos: at.pos, End: at.pos})
+		} else {
+			out.File, out.Line, out.Col = thrown.File, thrown.Line, thrown.Col
+		}
+		return
+	}
+}
+
+// importOf is the import of the project's that leads to a module of the
+// bundle, by the shortest way: the specifier, in the project file that wrote
+// it.
+func (r *run) importOf(name string) (site, bool) {
+	seen := map[string]bool{name: true}
+	for queue := []string{name}; len(queue) > 0; queue = queue[1:] {
+		for _, e := range r.bundle.importers[queue[0]] {
+			if file := r.project(e.importer); file != nil {
+				for _, specifier := range file.Imports() {
+					if specifier.Text() == e.specifier {
+						return site{file, rtsx.TokenStart(file, specifier)}, true
+					}
+				}
+			}
+			if !seen[e.importer] {
+				seen[e.importer] = true
+				queue = append(queue, e.importer)
+			}
+		}
+	}
+	return site{}, false
+}
+
+// defaultExport finds a module's default export in its syntax — not in its
+// text, where a comment or a template may hold the words: `export default`
+// of a statement, or `X as default` of an export list.
+func defaultExport(file *rtsx.SourceFile) (emit.Span, bool) {
+	text := file.Text()
+	for _, statement := range file.Statements.Nodes {
+		start := rtsx.TokenStart(file, statement)
+		if statement.Kind == rtsx.KindExportDeclaration {
+			if clause := statement.AsExportDeclaration().ExportClause; clause != nil && clause.Kind == rtsx.KindNamedExports {
+				for _, specifier := range clause.Elements() {
+					if rtsx.NodeText(specifier.Name()) == "default" {
+						return emit.Span{Pos: rtsx.TokenStart(file, specifier), End: specifier.End()}, true
+					}
+				}
+			}
+			continue
+		}
+		if !strings.HasPrefix(text[start:], "export") {
+			continue
+		}
+		next := rtsx.SkipTrivia(text, start+len("export"))
+		if rest, ok := strings.CutPrefix(text[next:], "default"); ok && !identifier.MatchString(rest) {
+			return emit.Span{Pos: start, End: next + len("default")}, true
+		}
+	}
+	return emit.Span{}, false
+}
+
+// identifier: the text goes on as a name (`export defaults`).
+var identifier = regexp.MustCompile(`^[\p{L}\p{N}_$]`)

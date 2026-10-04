@@ -3,7 +3,6 @@ package render
 import (
 	"cmp"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -29,8 +28,7 @@ type run struct {
 // record; when the bundle cannot be made, or a module throws while it loads,
 // no page has.
 //
-// The caller stops on a report that is an error: shell-react is found in the
-// text, so its page renders and is returned all the same.
+// The caller stops on a report that is an error.
 func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []report.Report) {
 	dir := opts.Dir
 	if dir == "" {
@@ -56,11 +54,6 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 		return nil, sorted(reports)
 	}
 	r := &run{program, b}
-	// shell-react is in the text, before anything runs: the imports of the
-	// modules the pages reach.
-	for _, file := range b.files {
-		reports = append(reports, shellReact(file)...)
-	}
 
 	engine, thrown, err := start(b.code, timeout)
 	if err != nil {
@@ -117,20 +110,12 @@ func isDocument(html string) bool {
 	return ok && (strings.HasPrefix(rest, ">") || strings.HasPrefix(rest, " "))
 }
 
-var exportDefault = regexp.MustCompile(`(?m)^[ \t]*export\s+default\b`)
-
 // pageAt is where a page is in its file, as its author wrote it: at its
 // `export default`.
 func (r *run) pageAt(route *Route) (name string, at emit.Span, line, col int) {
 	if file := r.program.GetSourceFile(route.File); file != nil {
-		text := file.Text()
-		if source, _, _, mapped := rtsx.MappedFile(file); mapped {
-			text = source
-		}
-		if found := exportDefault.FindStringIndex(text); found != nil {
-			pos := found[1] - len(strings.TrimLeft(text[found[0]:found[1]], " \t"))
-			line, col = emit.LineCol(text, pos)
-			return route.File, emit.Span{Pos: pos, End: found[1]}, line, col
+		if span, ok := defaultExport(file); ok {
+			return position(file, span)
 		}
 	}
 	return route.File, emit.Span{}, 1, 1
