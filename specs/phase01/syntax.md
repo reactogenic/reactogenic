@@ -849,7 +849,8 @@ JsxAttribute ::= … | ("&" | "&&") JsxAttributeName [ "=" JsxAttributeValue ]
 
 `&` and `&&` cannot start an attribute in today's TSX (TypeScript, esbuild
 and Babel all reject them), so the forms are free to reserve. No whitespace
-after `&` / `&&`. Only on an attachment (`slot={$X}`); anywhere else is
+after `&` / `&&`, and the name is an identifier: `&#seg` is a syntax error
+(TS1003). Only on an attachment (`slot={$X}`); anywhere else is
 arg-without-slot.
 
 ### Typing behaviour
@@ -1275,7 +1276,9 @@ JsxSegmentRoot  ::= '#' JsxIdentifier          // JsxIdentifier allows hyphens: 
 ```
 
 No whitespace between `#` and the name (tsgo's scanner already rejects a
-lone `#`). At most one per element (segment-id), and no value or namespace:
+lone `#`), and none is needed before `#`, as before any JSX attribute:
+`<section#intro />` and `<section hidden#intro />` are roots, and the `id`
+they become is set apart (`<section hidden id="intro">`). At most one per element (segment-id), and no value or namespace:
 `#about-us="x"` and `#about:us` are segment-syntax. Unrelated to
 class private names (`#x`), which never occur in attribute position.
 

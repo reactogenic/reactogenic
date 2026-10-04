@@ -59,7 +59,9 @@ func rewrite(d *rtsx.Diagnostic, out transpiler.Output, src string, at emit.Span
 		return "slot-key-no-args", fmt.Sprintf("`%s` has no args to key by: its body is not a function", note.Name), nil, true
 	case note.Kind == "slot-entry-key" && d.Code() == 2464:
 		return "slot-key-inline", fmt.Sprintf("A key of `%s` is a string or a number; a key function is written inline: `key={(args) => …}`", note.Name), nil, true
-	case note.Kind == "slot-arg" && d.Code() == 2322:
+	case note.Kind == "slot-arg" && d.Code() == 2322 && arg(1) == "never":
+		// Args of a slot whose body is not a function are `never`
+		// (NoArgs); an arg of the wrong type keeps TS's message.
 		return "slot-no-args", fmt.Sprintf("`%s` takes no args: its body is not a function", note.Name), nil, true
 	case note.Kind == "shorthand-true" && d.Code() == 2322:
 		// TS's message is accurate; add the likely cause.

@@ -146,6 +146,7 @@ func TestSlotArgs(t *testing.T) {
 		"src/button.rtsx:13:7 slot-args-missing", // a function slot without its args: `$Icon` needs `&size`
 		"src/button.rtsx:15:28 slot-no-args",     // an arg to a slot whose body is not a function
 		"src/button.rtsx:16:7 slot-list",         // a slot typed as an array
+		"src/button.rtsx:17:24 TS2322",           // an arg of the wrong type: TS's own message
 	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("got  %q\nwant %q", got, want)

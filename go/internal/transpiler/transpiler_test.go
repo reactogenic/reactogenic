@@ -181,6 +181,36 @@ func TestReadFile(t *testing.T) {
 	}
 }
 
+// A segment root needs no space before `#`; the `id` it becomes does.
+func TestSegmentRootWithoutSpace(t *testing.T) {
+	read := func(p string) (string, bool) { return "export default () => null;\n", p == "seg.rtsx" }
+	for src, want := range map[string]string{
+		"<section#seg />":             `<section id="seg" >`,
+		"<section hidden#seg />":      `<section hidden id="seg" >`,
+		"<section title=\"t\"#seg />": `<section title="t" id="seg" >`,
+		"<Ui.Panel#seg />":            `<Ui.Panel id="seg" >`,
+		"<section #seg />":            `<section id="seg" >`,
+		"<section\n#seg />":           "<section\nid=\"seg\" >",
+	} {
+		out, err := Transpile(Input{Files: map[string]string{"input.rtsx": "export const a = " + src + ";\n"}, Entry: "input.rtsx", ReadFile: read})
+		if err != nil || len(out.Diagnostics) != 0 {
+			t.Errorf("%s: %v %+v", src, err, out.Diagnostics)
+			continue
+		}
+		if !strings.Contains(out.TSX, want) {
+			t.Errorf("%s: no %q in\n%s", src, want, out.TSX)
+		}
+	}
+}
+
+// `&#seg` is no arg: the name of an arg is an identifier.
+func TestArgNamedAsSegment(t *testing.T) {
+	out, err := Transpile(Input{Files: map[string]string{"input.rtsx": "export const a = <i slot={$Icon} &#seg />;\n"}, Entry: "input.rtsx"})
+	if err != nil || len(out.Diagnostics) != 1 || out.Diagnostics[0].Code != "TS1003" || out.Diagnostics[0].Col != 35 {
+		t.Errorf("got %v %+v\n%s", err, out.Diagnostics, out.TSX)
+	}
+}
+
 // ide.md, *Span map* (RGP1-102): names are copied, a shorthand's two copies
 // are listed, and every tag of a slot's elements is in its group.
 func TestEditorExports(t *testing.T) {

@@ -52,8 +52,8 @@ func (p *Parser) parseJsxArgAttribute() *ast.Node {
 	}
 	prefixEnd := p.scanner.TokenEnd()
 	p.nextToken()
-	if p.scanner.TokenStart() != prefixEnd || !tokenIsIdentifierOrKeyword(p.token) {
-		p.parseErrorAtCurrentToken(diagnostics.Identifier_expected) // `& size`, `&{…}`
+	if p.scanner.TokenStart() != prefixEnd || !tokenIsIdentifierOrKeyword(p.token) || p.token == ast.KindPrivateIdentifier {
+		p.parseErrorAtCurrentToken(diagnostics.Identifier_expected) // `& size`, `&{…}`, `&#seg`
 	}
 	p.scanJsxIdentifier()
 	name := p.parseIdentifierNameErrorOnUnicodeEscapeSequence()

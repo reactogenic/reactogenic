@@ -129,6 +129,7 @@ export function Button({ size, $Icon, $Label, $List }: ButtonProps) {
       <span slot={$Label} />
       <span slot={$Label} &tone />
       <span slot={$List} />
+      <i slot={$Icon} &size={1} />
     </button>
   );
 }

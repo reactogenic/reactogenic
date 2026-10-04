@@ -33,7 +33,13 @@ func segments(c *passContext) []emit.Edit {
 		local := c.unique("_"+tagIdentifier(c.tagText(opening))+"_"+camel(name), "#"+name)
 		c.note(origin, "segment", name, c.tagText(opening))
 
-		edits = append(edits, emit.Edit{Span: origin, Pieces: []emit.Piece{emit.Synth(fmt.Sprintf("id=%q", name), origin)}})
+		// `<section#intro />`, `<section hidden#seg />`: TSX needs no space
+		// before `#`; `id` does.
+		id := fmt.Sprintf("id=%q", name)
+		if before := c.text[origin.Pos-1]; before != ' ' && before != '\t' && before != '\n' && before != '\r' {
+			id = " " + id
+		}
+		edits = append(edits, emit.Edit{Span: origin, Pieces: []emit.Piece{emit.Synth(id, origin)}})
 		mount := emit.Synth("<"+local+" />", origin)
 		if opening.Kind == rtsx.KindJsxSelfClosingElement && !strings.HasSuffix(c.text[:opening.End()], "/>") {
 			// A recovered element still missing its `/>`: only the id.

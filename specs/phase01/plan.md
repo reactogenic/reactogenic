@@ -966,7 +966,9 @@ per tsconfig plus the layer.
   root's overwritten children no longer counts as a mount. On the first run
   of `--watch`, a file of a *referenced* project that changes while that run
   is under way is seen at its next change. Not run: Windows.
-- *Found in the review fixes, older than this task, not touched*:
+- *Found in the review fixes, older than this task* — both fixed after the
+  merge of M8's branches (a space before the `id`; the rewording only when
+  the arg's type is `never`, with a wrongly typed arg in `TestSlotArgs`):
   - Pass 4's output is the one text no later pass parses, and it is not
     always TSX: `<section#intro />` (no space before `#`) emits
     `<sectionid="intro" …>`. No transpiler error for it, the file is not
@@ -1322,10 +1324,11 @@ test inputs — 0 differ; 15,554 `.tsx` files of five public repositories
 TypeScript `.tsx` tests — 3 differ; all as before the fixes. 20,000
 generated attribute lists: 0 problems.
 *Left*: the editor suite was not re-run (nothing in it reads tokens).
-Found, not fixed, in the transform: a segment root directly after another
-attribute is emitted without a space (`<section hidden#seg />` →
-`<section hiddenid="seg" >`), and `&#seg` emits `{ "#seg": #seg }` with no
-diagnostic.
+Found in the transform, fixed after the merge of M8's branches: a segment
+root directly after another attribute was emitted without a space
+(`<section hidden#seg />` → `<section hiddenid="seg" >`), and `&#seg`
+emitted `{ "#seg": #seg }` with no diagnostic — now TS1003, in the parser
+(patch 0002).
 - Vendored TSX grammar with its notices, the generator, the generated
   `rtsx.tmLanguage.json`, the two language configurations. A `grammar` step
   in CI's `js` job.
