@@ -1,0 +1,19 @@
+import { Page } from "../../ui/page";
+
+function Toolbar({ label }: { label: string }) {
+  return (
+    <div className="toolbar">
+      <button type="button" onClick={() => alert(label)}>{label}</button>
+    </div>
+  );
+}
+
+export default function HandlerPage() {
+  return (
+    <Page title="Handler">
+      <$Actions>
+        <Toolbar label="Save" />
+      </$Actions>
+    </Page>
+  );
+}

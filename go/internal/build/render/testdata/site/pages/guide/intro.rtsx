@@ -1,0 +1,5 @@
+import { pathname } from "../../shell.ts";
+
+export default function Intro() {
+  return <p>A slot is a prop value, on {pathname()}.</p>;
+}

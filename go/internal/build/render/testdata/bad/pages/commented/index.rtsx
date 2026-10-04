@@ -1,0 +1,12 @@
+/*
+export default function Old() { return null; }
+*/
+const note = `
+export default function InATemplate() {}
+`;
+
+function Content() {
+  return <main>{note.length}</main>;
+}
+
+export default function CommentedPage() { return <Content />; }

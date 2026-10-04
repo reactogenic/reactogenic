@@ -1,0 +1,23 @@
+import type { ComponentProps, ReactNode } from "react";
+import type { Slot } from "@reactogenic/core";
+
+export interface PageProps {
+  title: string;
+  $Actions?: Slot<ComponentProps<"div">>;
+  children?: ReactNode;
+}
+
+// The document of every page here; what a page does wrong is in its body.
+export function Page({ title, $Actions, children }: PageProps) {
+  return (
+    <html lang="en">
+      <head>
+        <title>{title}</title>
+      </head>
+      <body>
+        <div slot={$Actions} className="actions" />
+        {children}
+      </body>
+    </html>
+  );
+}

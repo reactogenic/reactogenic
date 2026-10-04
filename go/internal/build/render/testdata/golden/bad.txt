@@ -1,0 +1,55 @@
+pages/by-hand/index.tsx(6,3): error shell-handler: The shell cannot handle events: `onClick` on `<button>`
+  in Row
+  pages/by-hand/index.tsx:9:1 - in ByHandPage
+pages/child/index.rtsx(15,7): error shell-error: Minified React error #31; visit https://react.dev/errors/31?args[]=object%20with%20keys%20%7Bx%2C%20y%7D for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+  pages/child/index.rtsx:15:7 - after Coordinates
+  pages/child/index.rtsx:12:1 - in ChildPage
+pages/clone/index.tsx(8,14): error shell-handler: The shell cannot handle events: `onClick` on `<button>`
+  pages/clone/index.tsx:5:1 - in ClonePage
+pages/commented/index.rtsx(12,1): error page-not-document: The page's root element is not `<html>`: a page renders the whole document
+pages/console/index.rtsx(6,11): warning shell-console: console.log: sections ["intro","slots"] 2
+pages/crypto/index.rtsx(6,18): error shell-nondeterministic: crypto.getRandomValues() makes the shell irreproducible
+  pages/crypto/index.rtsx:3:1 - in CryptoPage
+pages/export-as/index.rtsx(5,10): error page-not-document: The page's root element is not `<html>`: a page renders the whole document
+pages/handler/index.rtsx(6,29): error shell-handler: The shell cannot handle events: `onClick` on `<button>`
+  pages/handler/index.rtsx:15:9 - in Toolbar
+  pages/handler/index.rtsx:11:1 - in HandlerPage
+pages/key-spread/index.rtsx(6,41): error shell-error: row boom
+  pages/key-spread/index.rtsx:15:7 - in Row
+  pages/key-spread/index.rtsx:12:1 - in KeySpreadPage
+pages/lib-handler/index.tsx(7,9): error shell-handler: The shell cannot handle events: `onClick` on `<button>`
+  pages/lib-handler/index.tsx:7:9 - in LibButton
+  pages/lib-handler/index.tsx:3:1 - in LibHandlerPage
+pages/lib-state/index.tsx(7,9): error shell-react: The shell cannot use React state or effects: `useState`
+  pages/lib-state/index.tsx:7:9 - in LibCounter
+  pages/lib-state/index.tsx:3:1 - in LibStatePage
+pages/locale/index.tsx(6,28): error shell-error: Number.prototype.toLocaleString() needs Intl, which the builder's engine does not have
+  pages/locale/index.tsx:3:1 - in LocalePage
+pages/new-date/index.rtsx(9,28): error shell-nondeterministic: new Date() makes the shell irreproducible
+  pages/new-date/index.rtsx:6:1 - in NewDatePage
+pages/no-default/index.rtsx(1,1): error page-no-default: The page has no default export that is a component
+pages/not-document/index.rtsx(6,1): error page-not-document: The page's root element is not `<html>`: a page renders the whole document
+pages/performance/index.rtsx(6,34): error shell-nondeterministic: performance.now() makes the shell irreproducible
+  pages/performance/index.rtsx:3:1 - in PerformancePage
+pages/pragma/index.tsx(7,31): error shell-handler: The shell cannot handle events: `onClick` on `<button>`
+  pages/pragma/index.tsx:3:1 - in PragmaPage
+pages/random/index.rtsx(4,25): error shell-nondeterministic: Math.random() makes the shell irreproducible
+  pages/random/index.rtsx:3:1 - in RandomPage
+pages/recursion/index.rtsx(4,10): error shell-error: InternalError: stack overflow
+  pages/recursion/index.rtsx:7:1 - in RecursionPage
+pages/spread/index.rtsx(6,22): error shell-handler: The shell cannot handle events: `onChange` on `<input>`
+  pages/spread/index.rtsx:12:7 - in Field
+  pages/spread/index.rtsx:9:1 - in SpreadPage
+pages/throws/index.rtsx(8,15): error shell-error: no price for enterprise
+  pages/throws/index.rtsx:17:24 - in Price
+  pages/throws/index.rtsx:16:7 - in Each
+  pages/throws/index.rtsx:26:7 - in Plans
+  pages/throws/index.rtsx:23:1 - in ThrowsPage
+pages/type-error/index.rtsx(10,27): error shell-error: TypeError: cannot read property 'map' of undefined
+  pages/type-error/index.rtsx:7:1 - in TypeErrorPage
+stamp.ts(4,19): error shell-nondeterministic: Date.now() makes the shell irreproducible
+  pages/date-now/index.rtsx:11:7 - in Footer
+  pages/date-now/index.rtsx:8:1 - in DateNowPage
+ui/counter.rtsx(8,19): error shell-react: The shell cannot use React state or effects: `useState`
+  pages/state/index.rtsx:7:7 - in Counter
+  pages/state/index.rtsx:4:1 - in StatePage

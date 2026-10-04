@@ -1,0 +1,5 @@
+function ExportAsPage() {
+  return <main>not a document</main>;
+}
+
+export { ExportAsPage as default };

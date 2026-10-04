@@ -1,0 +1,13 @@
+import { Page } from "../../ui/page";
+
+function depth(n: number): number {
+  return depth(n + 1) + 1;
+}
+
+export default function RecursionPage() {
+  return (
+    <Page title="Recursion">
+      <p>{depth(0)}</p>
+    </Page>
+  );
+}

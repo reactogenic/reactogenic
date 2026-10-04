@@ -43,7 +43,7 @@ tsconfig ─▶ program (phase 1: mapper + tsgo) ─▶ diagnostics ─ any erro
 | program, diagnostics | phase 1 | `mapper.RegisterStrict`, `rtsx.NewProgram`, `report.Program`: what `check` prints, `build` prints, and stops |
 | bundling, minifying, lowering | esbuild `pkg/api`, in-process, public API only | never forked; `Splitting` off; `Write: false` |
 | execution | `modernc.org/quickjs` embedded in the binary | no Node at build time |
-| serialisation | React's own `renderToStaticMarkup`, from the project's `react-dom` | shell HTML is what React renders for the same component |
+| serialisation | React's own `renderToStaticMarkup`, from the project's `react-dom` | shell HTML is what React renders for the same component, under `TZ=UTC` |
 | everything component-aware | ours | the record, the checks, CSS pruning, behaviour selection, packaging |
 
 **One resolver.** Every import of a project file is resolved by the program
@@ -51,6 +51,26 @@ tsconfig ─▶ program (phase 1: mapper + tsgo) ─▶ diagnostics ─ any erro
 program's (`file.Text()` — the emitted TSX for an `.rtsx` module): what is
 built is what was checked. esbuild resolves only what the program does not
 hold (assets, behaviour modules).
+
+| An import made by a program file | Resolved by |
+| --- | --- |
+| the program resolved it to a module with code (`./layout` → `layout.rtsx`, a `paths` alias, a workspace package's `.ts`) | the program |
+| the program resolved it to a package's declarations (`lib` → `node_modules/lib/index.d.ts`) | esbuild: the package's JavaScript, from the importing file |
+| the program resolved it to declarations of the project's own (`~/legacy.js` → `legacy.d.ts`, through a `paths` alias or not) | the program: the JavaScript beside the declarations (`legacy.js`; `.mjs` for `.d.mts`, `.cjs` for `.d.cts`) |
+| `*.css` | nobody, in the render bundle: an empty module (*CSS*) |
+| anything else (`./logo.svg`) | esbuild; no loader is render-bundle (below) |
+
+| An import made by **any** module of the bundle but React's own | Resolved to |
+| --- | --- |
+| `react`, `react/jsx-runtime`, `react/jsx-dev-runtime` | the builder's `react` and JSX runtime, which wrap the project's React (*Shell code in phase 2*, *The record*) |
+
+esbuild reads no `tsconfig.json`: the JSX settings are the builder's, and a
+program file is compiled with esbuild's defaults for the rest
+(*Not in phase 2*).
+
+| Code | Condition |
+| --- | --- |
+| render-bundle | the render bundle cannot be made: an import that esbuild cannot resolve or load, at the import in the `.rtsx`; a page that is not a module of the program (the tsconfig does not include it: it was not checked); no `react` or `react-dom` in the project (one report, without a file: *react and react-dom are not installed in …*), or a `react-dom` whose static renderer the builder does not know (*The record*). No page is rendered |
 
 **No `text/template`, `html/template` or reflection-heavy package in the
 binary**: one `template.Execute` costs 18.6 MB (research.md). HTML is written
@@ -75,11 +95,11 @@ pages/reference/cli/index.rtsx   /reference/cli/
 - No route table file in phase 2: the table is derived, and still gives the
   check (*Checks*: link-not-found).
 
-| Code | Condition |
-| --- | --- |
-| page-no-default | `index.rtsx` has no default export that is a component |
-| page-not-document | the page's root element is not `<html>` |
-| pages-not-found | `--pages` is not a directory, or holds no page |
+| Code | Condition | Reported at |
+| --- | --- | --- |
+| page-no-default | `index.rtsx` has no default export that is a component: the module's `default` is not a function | the file |
+| page-not-document | the page's root element is not `<html>`: what it rendered does not start with `<html` | the page's `export default` — found in the syntax, so not one in a comment or a template; for `export { Page as default }`, the `Page as default` |
+| pages-not-found | `--pages` is not a directory, or holds no page | |
 
 ## Shell code in phase 2
 
@@ -90,8 +110,8 @@ layout.md's shell rules read for now:
 | --- | --- | --- |
 | S2 no variance | no `Match`, `Switch`, `Each`, `?:`, `.map()` | **no *runtime* variance.** Anything computed while the page is executed is a compile-time value — loops over constants, conditionals on props and on the pathname. Nothing conditional is left *in the output* |
 | S3 compile-time values | literals, constants, props | whatever execution yields; there is nothing else to read |
-| S4 deterministic | no `Date`, `Math.random`, I/O | enforced by the engine: they throw |
-| S1 no React runtime | no hooks, state, effects, handlers | no handlers, state, effects or refs (below). Pure render-time React — components, `children`, `useId`'s replacement — is the same code React runs |
+| S4 deterministic | no `Date`, `Math.random`, I/O | enforced by the engine: the clock and the dice throw, and the time zone is UTC on every machine (*The engine*) |
+| S1 no React runtime | no hooks, state, effects, handlers | no handlers, state, effects or refs (below) — in the project's code and in a package's alike. Pure render-time React — components, `children`, `Children`, `cloneElement`, context, `useId`'s replacement — is the same code React runs, on React's own elements |
 | S5 containers unlooped | | folded into S2 |
 
 This is the one reading under which the design system's own components
@@ -103,15 +123,77 @@ forbidding it is a fake constraint.
 
 | Code | Message | How it is found |
 | --- | --- | --- |
-| shell-handler | The shell cannot handle events: `onClick` on `<button>` | a function-valued prop on a host element, when the element is created |
-| shell-react | The shell cannot use React state or effects: `useState` | an import of `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useInsertionEffect`, `useRef`, `useImperativeHandle`, `useSyncExternalStore`, `useTransition`, `useDeferredValue`, `useOptimistic`, `useActionState` from `react` in a module a page reaches; reported at the import |
-| shell-nondeterministic | `Date.now()` makes the shell irreproducible | `Date.now`, `new Date()` without arguments, `Math.random`, `crypto.getRandomValues`, `performance.now` throw in the engine |
-| shell-error | the message of the exception | anything else thrown while a page renders |
+| shell-handler | The shell cannot handle events: `onClick` on `<button>` | a function-valued prop on a host element, when the element is created — by JSX, `createElement` or `cloneElement`, by the project or by a package |
+| shell-react | The shell cannot use React state or effects: `useState` | `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useInsertionEffect`, `useRef`, `useImperativeHandle`, `useSyncExternalStore`, `useTransition`, `useDeferredValue`, `useOptimistic`, `useActionState` throw when a page **calls** them — however the hook was reached: imported, re-exported, renamed, `React.useState`, `React["useState"]`, `const { useRef } = React`, in a compiled package |
+| shell-nondeterministic | `Date.now()` makes the shell irreproducible | `Date.now`, `new Date()` without arguments, `Date()`, `Math.random`, `crypto.getRandomValues`, `crypto.randomUUID`, `performance.now` throw in the engine; so does a date string that is not ISO 8601 — *A date string that is not ISO 8601 ("Oct 4 2026") makes the shell irreproducible*. `new Date(2026, 9, 4)` is a compile-time value: midnight, UTC |
+| shell-error | the message of the exception, after its name when it is not a plain `Error`: `TypeError: cannot read property 'map' of undefined` | anything else thrown while a page renders. Among it, what the engine itself ends: `InternalError: stack overflow` (a call depth of 10 000), and a page that does not finish in 30 s — *Rendering did not end in 30s: a loop without an end?*; and what the engine lacks — *Number.prototype.toLocaleString() needs Intl, which the builder's engine does not have* |
+| shell-console (warning) | `console.log: ` and what was printed | `console` is collected: nobody reads the console of a build. At the call |
 
-Every one is reported at the `.rtsx` (or `.tsx`) position, through the render
-bundle's source map and the file's span map, with the component stack as
-related lines. `build` reports them; `check` and the editor do not yet
+Every one is found by **executing** the page, and ends it: one error per
+page, the first. A hook in a module that a page imports and does not render
+— a barrel that also exports an island's component — is not an error: as for
+the record, what counts is what ran, not the import graph. **Rejected:**
+shell-react from the imports of the pages' module closure — it missed
+re-exports, `const { useRef } = React` and compiled packages, and failed
+pages that render none of it.
+
+Every one is reported at the `.rtsx` (or `.tsx`, `.ts`) position, through the
+render bundle's source map and the file's span map, with the component stack
+as related lines. `build` reports them; `check` and the editor do not yet
 (*Not in phase 2*).
+
+```
+pages/pricing/index.rtsx(8,15): error shell-error: no price for enterprise
+  pages/pricing/index.rtsx:17:24 - in Price
+  pages/pricing/index.rtsx:16:7 - in Each
+  pages/pricing/index.rtsx:26:7 - in Plans
+  pages/pricing/index.rtsx:23:1 - in PricingPage
+```
+
+| | Where |
+| --- | --- |
+| the position | the innermost frame of the exception's stack that is in the project's code — not React's, not a package's: the helper that read the clock, not the component that called it; the call of the hook. Columns count characters, as in `check` |
+| shell-handler | narrowed to the attribute: `onClick` of `<button onClick={…}>`. A function that arrives through a spread (`<input {...props} />`): the element. By `createElement` or `cloneElement`: the call, or its statement |
+| the component stack | the **owners**, as React's own stacks have them: each component at the place its element was written, the page last, at its `export default` |
+| a component whose element is not JSX with a position | `<Row {...rest} key="r" />` — a key after a spread, which esbuild compiles to `createElement`: the element all the same, from the engine's stack. Made by `React.createElement` by hand, or by a package: the line has no position (`  in Row`) |
+| an exception in a package's code (its component has a handler, calls a hook, throws) | no frame is the project's: the nearest element of the component stack that the project wrote — `<LibButton>` |
+| an exception of React's own (an object as a child) | no frame is the project's: the element of the component called last, its line reading `after Coordinates`. React's production build words it as an error number and a link |
+| a module's top level | what a module throws or prints while it loads is no page's: reported once, and no page is rendered |
+| a package's top level | no frame is the project's and there is no component: at the project's import that leads to the package, by the shortest way, with where it threw as a related line |
+
+```
+ids.ts(1,21): error shell-nondeterministic: Math.random() makes the shell irreproducible
+  node_modules/seed/index.js:3:19 - thrown here
+```
+| an error that several pages share (a layout's) | reported once |
+
+### The engine
+
+Shell code runs in `modernc.org/quickjs`: ES2023, and nothing of a host.
+What that means for the code of a page:
+
+| | In the engine |
+| --- | --- |
+| the time zone | **UTC, on every machine**: the build machine's zone is not in the page. `new Date(2026, 9, 4)` is `2026-10-04T00:00:00.000Z`; `getHours()`, `getDay()`, `setMonth()` are their `UTC` counterparts; `getTimezoneOffset()` is `0`; `toString()` is what V8 writes under `TZ=UTC` |
+| date strings | ISO 8601 as ECMAScript defines it — `2026-10-04`, `2026-10-04T12:00` (no zone: UTC), `2026-10-04T12:00+02:00` — and what `toString()` and `toUTCString()` write. Any other string is parsed as each engine likes, and in local time: shell-nondeterministic |
+| `Intl` | **there is none**: `Intl.NumberFormat` is a `ReferenceError`. The methods that would answer without it — a number unformatted, strings compared by code unit — throw shell-error instead: `toLocaleString`, `toLocaleDateString`, `toLocaleTimeString` (of `Number`, `BigInt`, `Date`), `localeCompare`, `toLocaleUpperCase`, `toLocaleLowerCase`. Format in code: `toFixed`, `padStart`, a table of month names |
+| not there (a `ReferenceError`) | `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `structuredClone`, `atob`, `btoa`, `queueMicrotask`, `setTimeout`, `setInterval`, `fetch`, `Temporal`, `process`, `require`; no `Array.fromAsync` |
+| `Math`'s transcendental functions | the engine's: `Math.tan(1)` is `1.557407724654902` here and `1.5574077246549023` in V8. The standard leaves the last digit to the implementation: round what is rendered |
+
+```tsx
+const day = new Date(2026, 9, 4);
+<time dateTime={day.toISOString()}>{day.getDate()}.{day.getMonth() + 1}.</time>
+```
+
+```html
+<time dateTime="2026-10-04T00:00:00.000Z">4.10.</time>   <!-- in Berlin, in Tokyo, in CI -->
+```
+
+Beyond that the engine is held to V8: every fixture page is what React in
+Node renders under `TZ=UTC`, to the byte (plan.md, the differential test).
+**Rejected:** refusing local time (`new Date(2026, 9, 4)` an error — the
+natural way to write a date); the machine's zone (a laptop and CI build
+different pages from one source); an engine with `Intl` (ICU's data, or cgo).
 
 ### What shell code can ask the builder
 
@@ -144,10 +226,51 @@ it is what executing the page **recorded**:
 | mounts: `(module, id, flags)` | `mount()` | the page's JS |
 | components rendered, with counts | the builder's JSX runtime | the report |
 
-The JSX runtime is the builder's own (`jsxImportSource` set for the render
-bundle only): it wraps `react/jsx-runtime`, counts function components by
-name, and raises shell-handler. Type checking is untouched — it still sees
-React's JSX types.
+In the render bundle, `react` and React's JSX runtime are the builder's own,
+for every module: the project's files (`jsxImportSource`), a file with a
+`@jsxImportSource` pragma, a package compiled against `react/jsx-runtime` or
+`React.createElement`. They wrap the project's React. An element is made by
+React and **left as React made it** — `element.type` is the component, so
+`child.type === Tab`, `Children`, `cloneElement` and a component's statics
+work as in React:
+
+```tsx
+function Tabs({ children }: { children: ReactNode }) {
+  const tabs = Children.toArray(children).filter((child) => isValidElement(child) && child.type === Tab);
+  return <ul data-tabs={tabs.length}>{tabs}</ul>;   // the Tabs's own Tab children, as in React
+}
+```
+
+| What the builder adds | Where |
+| --- | --- |
+| shell-handler | when an element is made: `jsx`, `jsxs`, `createElement`, `cloneElement` |
+| shell-react | the twelve hooks of the bundle's `react` throw |
+| where an element was written, and by which component | noted beside the element (by its props object), from esbuild's `jsxDev` position: the element is not touched |
+| the count, and the component stack of an exception | React's static renderer calls a function component through the builder — the **one change** made to its text, where it reads `Component(props, secondArg)` |
+
+Type checking is untouched — it still sees React's types.
+
+- A component is counted when React **calls** it: an element that is made
+  and never rendered (an unused fallback, a slot nobody attaches, a child
+  that `Tabs` drops) is not in the record.
+- By name: `function Page` of two modules is one entry. A `memo` and a
+  `forwardRef` are counted by the function they wrap; an element made by
+  hand or by a package counts as any other. A class is rendered and not
+  counted.
+- The renderer is found by its path in the project's `react-dom` and changed
+  by its text: a React whose static renderer is elsewhere, or calls its
+  components otherwise, is render-bundle — never a page without a record.
+- One React: the project's. A package that would resolve a copy of its own
+  gets the project's.
+
+**Rejected:** a function of the builder's as the element's `type`, calling
+the component (the first implementation: `child.type === Tab` is false and
+the statics are gone — a page silently different from React's); checking a
+host element's props when it is rendered (a second change to the renderer,
+and the element's position is lost).
+- What React adds is the page's too — the HTML is React's, to the byte: an
+  empty `<head>` when the page has none, `<link rel="preload" as="image">`
+  for an `<img srcSet>`, a `<meta>` written in the body moved into the head.
 
 ## Checks on the page
 
@@ -168,8 +291,9 @@ provenance the renderer does not carry (*Not in phase 2*).
 ## CSS
 
 **Authoring.** Plain `.css`, imported by the module that needs it
-(`import "./dialog.css"`). esbuild bundles a page's CSS in import order,
-lowers nesting and minifies. The design system's convention
+(`import "./dialog.css"`). TypeScript 7 checks side-effect imports: a project
+declares the module once (`declare module "*.css";`), or `check` says TS2882.
+esbuild bundles a page's CSS in import order, lowers nesting and minifies. The design system's convention
 ([components.md](components.md), *CSS convention*) is what makes pruning
 exact rather than heuristic.
 
@@ -302,8 +426,12 @@ The difference between the two builds is what component awareness is worth
 | islands, `Dynamic`, `<template>` delivery, holes | layout.md stands; nothing here blocks it — the engine already renders what React renders |
 | a dev server, watch mode, HMR | out of scope |
 | view transitions | out of scope |
-| shell rules in `check` and the editor | `build` reports them; the rules that are static (shell-react) move to `internal/report` later |
+| shell rules in `check` and the editor | `build` reports them: every one is found by executing the page |
+| every violation of a page in one build | the first one ends the page |
+| `Intl`, a time zone other than UTC | *The engine* |
 | `.rtsx` positions for the page checks | needs attribute provenance through the renderer |
 | Markdown, highlighted code samples | a second front end; samples are plain `<pre>` |
 | source maps for the emitted JS | |
+| the tsconfig's emit options in the render bundle | esbuild compiles a program file with its own defaults for `useDefineForClassFields`, `experimentalDecorators` and the like: shell code is function components |
+| `async` components, `use()`, Suspense | the renderer is synchronous; the engine has no timers |
 | asset pipeline (images, fonts), `public/` | a `public` directory next to `pages` is copied as is; nothing is processed |

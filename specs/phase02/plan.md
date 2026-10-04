@@ -50,7 +50,14 @@ type Page struct {
 	Mounts     []Mount        // in render order, duplicates kept
 	Components map[string]int // function components rendered, by name
 }
+type Options struct {
+	Dir     string        // the project's directory: react and react-dom are resolved from it; "": the program's
+	Timeout time.Duration // of one page; 0: 30 s
+}
 func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []report.Report)
+// Pages: those that rendered, in the order of routes. Reports: errors (the caller
+// stops on one) and warnings (shell-console). Mount.Flags holds what the use site
+// passed, `false` included; nil when it passed none.
 
 // cssprune — RGP2-020
 func Prune(css string, doc *html.Node) (out string, stats Stats, err error)
@@ -78,31 +85,67 @@ and `pathname()`, `useShellId()`, `mount()` of `@reactogenic/core` use it when
 it is there (builder.md, *What shell code can ask the builder*). Its absence
 means React: `location.pathname`, `React.useId()`, nothing.
 
-### RGP2-010 — The render bundle · M
+- `id(prefix)` is the prefix and a counter per prefix, per page, from 1:
+  `d1`, `d2`, `m1`. No prefix (`""`, `undefined`): `r`.
+- It is there only while a page renders: not while a module loads.
+- The render bundle's own globals: `__reactogenic_render(pathname)` returns
+  `{ html, mounts, components }` or throws; `__reactogenic_render_json` is
+  the same as JSON, for the engine; `__reactogenic_console()` hands over what
+  `console` collected.
+
+### RGP2-010 — The render bundle · M · done
 One esbuild build, in memory: a generated entry that imports every page and
 React's static renderer and exposes `render(pathname)`.
 - The plugin: `OnResolve` answers from the program for every import a program
   file makes (one resolver); `OnLoad` returns `file.Text()` — emitted TSX for
   `.rtsx` — with the `tsx` loader, automatic JSX, `jsxImportSource` the
   builder's own runtime (a virtual module wrapping `react/jsx-runtime`:
-  counts components, raises shell-handler).
+  raises shell-handler, notes where an element was written). `react` and
+  `react/jsx-runtime` are the builder's for **every** module of the bundle
+  but React's own: a compiled package's elements and hooks are under the
+  same rules (builder.md, *The record*).
 - `.css` imports load as empty here; `process.env.NODE_ENV` is
   `"production"`; an external source map, kept in memory.
 - React's renderer: `renderToStaticMarkup` of the project's `react-dom`. The
   legacy static build runs in the engine with no polyfill (research); the
   public `react-dom/server` entry needs `MessageChannel` and `TextEncoder`
   stubs. Either, as long as the output equals Node's.
-- shell-react: reported from the program's imports of the pages' module
-  closure, before anything is executed.
+- shell-react: the hooks of the bundle's `react` throw when a page calls
+  them (builder.md: not from the imports — that missed re-exports and
+  compiled packages, and failed pages that render none of it).
 - **Done when:** the bundle of a three-page fixture loads in Node and renders
   the same HTML as `react-dom/server` there.
+- **Done:** `go/internal/build/render/bundle.go`. The renderer is the legacy
+  static build, reached by path in the project's react-dom
+  (`cjs/react-dom-server-legacy.browser.production.js`: not in its `exports`
+  — a React that moves it is a render-bundle error, not a wrong page). The
+  JSX is compiled with `jsxDev`: esbuild hands each element's position to the
+  runtime, which is how a component stack has positions; React's production
+  `jsx` does the work. The entry and the builder's three modules are virtual
+  (`reactogenic:entry`, `:sandbox`, `:jsx`, `:react`). The pages' module
+  closure is the program files esbuild loaded.
+  - **Elements are React's, untouched.** Components are counted, and an
+    exception gets its component stack, because React's static renderer
+    calls a function component through the builder: `bundle.go`, `hooked`
+    rewrites `Component(props, secondArg)` in the renderer's text (two
+    places, `renderWithHooks`) as it is loaded. A renderer without that call
+    is a render-bundle error. The published react-dom 19.0.0, 19.1.0, 19.2.0
+    and 19.3.0 all have the file and the two calls (read, not rendered:
+    only 19.3.0 is tested); 18.3.1 ships the file minified under another
+    name — render-bundle. The first implementation put a wrapper function
+    in `element.type`: `child.type === Tab` was false, and no fixture read
+    `element.type`.
+  - The metafile is kept: who imports what is how a package that throws as
+    it loads is reported at the project's import.
 
-### RGP2-011 — Execution · L
+### RGP2-011 — Execution · L · done
 `modernc.org/quickjs`, one runtime per build: the sandbox prelude, the
 bundle, then `render(pathname)` per route.
 - The prelude makes `Date.now`, argument-less `new Date()`, `Math.random`,
   `crypto.getRandomValues`, `performance.now` throw shell-nondeterministic;
   `console` is collected and printed as warnings.
+- The prelude pins the time zone to UTC and makes what needs `Intl` throw
+  (builder.md, *The engine*).
 - An exception becomes a diagnostic at the source position: the engine's
   stack → the bundle's source map → the program file's position → the span
   map for `.rtsx` (`emit.Map`) — `report`'s output format, with the component
@@ -117,6 +160,33 @@ bundle, then `render(pathname)` per route.
   three intrinsics render; each shell-* error is reported at its `.rtsx`
   line and column; the differential test passes.
 - Depends on: 010.
+- **Done:** `engine.go`, `position.go`, `js/`. Measured, darwin-arm64: the
+  four-page fixture is checked, bundled and rendered in ≈ 0.1 s.
+  - The differential test compares three renderings of every fixture page:
+    the engine; the same bundle in Node under `TZ=Asia/Tokyo`; and an oracle
+    in Node under `TZ=UTC` — the same pages with the public
+    `react-dom/server` and React itself: nothing of the builder's is in it
+    (no JSX runtime, no `react` wrapper, no sandbox, no changed renderer).
+    Equal to the byte, on Node 25. It needs `node` and the root's
+    `node_modules`: CI's `go` job installs them. Among the pages: one that
+    reads `element.type`, one of dates, one with a compiled package.
+  - `TestTimeZone` runs the goldens and the sandbox's cases again under
+    `TZ=Asia/Tokyo`, `America/New_York` and `UTC` (the test binary, with
+    `TZ` set): the engine by itself does follow `TZ`.
+  - **The engine's call depth has to be bounded by us** (10 000): with the
+    engine's default a function that recurses without end overflows the Go
+    stack, which is fatal to the process — no `recover`. Bounded, it is
+    shell-error at the call.
+  - The six targets, `CGO_ENABLED=0`, stripped, with the package linked
+    (`scripts/build-binaries.sh`): darwin-arm64 27.3 → 34.5 MB, darwin-x64
+    28.6 → 36.5, linux-arm64 26.4 → 33.7, linux-x64 27.9 → 35.9, win32-arm64
+    26.5 → 33.7, win32-x64 28.2 → 36.3 (+26–29%).
+  - Not verified: Windows paths (the six targets build; the tests ran on
+    macOS); React other than 19.3 — its static renderer reads no clock, so
+    the sandbox has no exemption for React's own code, and the builder
+    depends on its text in one place (above); whether `Math`'s
+    transcendental functions give the same last digit on amd64 as on arm64
+    (Go may fuse a multiply-add on arm64; the tests ran on arm64 only).
 
 ### RGP2-012 — `@reactogenic/core`: `pathname`, `useShellId`, `mount` · S
 In `packages/core`, with the protocol above and the React fallbacks; unit

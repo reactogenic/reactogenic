@@ -1,0 +1,9 @@
+import { BUILD_ID } from "../build-id.ts";
+
+export default function TopLevelPage() {
+  return (
+    <html lang="en">
+      <body data-build={BUILD_ID}>top level</body>
+    </html>
+  );
+}

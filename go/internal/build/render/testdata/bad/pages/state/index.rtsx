@@ -1,0 +1,10 @@
+import { Page } from "../../ui/page";
+import { Counter } from "../../ui/counter";
+
+export default function StatePage() {
+  return (
+    <Page title="State">
+      <Counter />
+    </Page>
+  );
+}

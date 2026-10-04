@@ -1,0 +1,14 @@
+import { Page } from "../../ui/page";
+import { stamp } from "../../stamp.ts";
+
+function Footer() {
+  return <footer>{stamp("Built")}</footer>;
+}
+
+export default function DateNowPage() {
+  return (
+    <Page title="Date.now">
+      <Footer />
+    </Page>
+  );
+}

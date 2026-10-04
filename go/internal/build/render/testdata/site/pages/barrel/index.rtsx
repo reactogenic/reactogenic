@@ -1,0 +1,12 @@
+import { Card } from "../../kit/index";
+import { DocsLayout } from "../../ui/layout";
+
+export default function BarrelPage() {
+  return (
+    <DocsLayout title="Barrel">
+      <Card title="Card">
+        <p>Only Card is rendered.</p>
+      </Card>
+    </DocsLayout>
+  );
+}
