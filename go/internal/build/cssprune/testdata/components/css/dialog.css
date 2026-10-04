@@ -1,0 +1,17 @@
+.rg-dialog {
+  box-sizing: border-box; width: min(32rem, 100vw - 2rem); padding: 0;
+  border: 1px solid var(--rg-line); border-radius: 12px; background: var(--rg-bg); color: var(--rg-fg);
+  box-shadow: 0 20px 60px #0004;
+  opacity: 0; translate: 0 8px;
+  transition: opacity .15s, translate .15s, overlay .15s allow-discrete, display .15s allow-discrete;
+}
+.rg-dialog[open] { opacity: 1; translate: 0 0; }
+@starting-style { .rg-dialog[open] { opacity: 0; translate: 0 8px; } }
+.rg-dialog::backdrop { background: #0006; }
+.rg-dialog > header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem .5rem; }
+.rg-dialog h2 { flex: 1; margin: 0; font-size: 1.125rem; }
+.rg-x { padding: .25em .5em; border: 0; border-radius: 6px; background: none; color: var(--rg-muted); font: inherit; cursor: pointer; }
+.rg-x:hover { background: var(--rg-hover); }
+.rg-dialog-body { padding: .5rem 1.25rem 1rem; overflow: auto; }
+.rg-dialog > footer { display: flex; justify-content: flex-end; gap: .5rem; padding: .75rem 1.25rem; border-top: 1px solid var(--rg-line); }
+:root:has(.rg-dialog:modal) { overflow: hidden; }

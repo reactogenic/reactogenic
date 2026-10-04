@@ -212,6 +212,10 @@ esbuild's public API produces.
   removed; and pruning is idempotent.
 - **Done when:** the corpus passes, with the design system's CSS and a page
   of each kind among it.
+- **State:** built and passing on the two modelled design systems of the
+  research (`testdata/docs`, `testdata/components`) and four adversarial
+  sheets. Left for RGP2-025: add `packages/ui`'s CSS and one built page of
+  each kind to `corpus()` in `corpus_test.go` — the task is done then.
 
 ### RGP2-021 — Page checks · S
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
@@ -284,7 +288,13 @@ per page, requests, JS to parse, a warm 4-page session), run on three builds
 of the site: the default; `--inline always`; and the control,
 `--no-specialize`. Browser checks of the built site (Playwright): the
 behaviour list of RGP2-025 on real output, and the computed-style comparison
-of pruned against unpruned CSS on every page.
+of pruned against unpruned CSS on every page. With it, the validity probe of
+RGP2-020 in Chromium, Firefox and WebKit: for every name of
+`knownPseudoClass` and `knownPseudoElement` (`cssprune/selector.go`) and the
+forms `validNth` accepts, insert `SEL, p {}` and count `cssRules` — a name a
+browser of the floor rejects must leave the table. Checked so far in
+Chromium 153 and WebKit 26.6 only; never in Firefox, nor at the floor's
+versions.
 
 The bet is **confirmed** if all hold, **refuted** if any of the marked ones
 fails:

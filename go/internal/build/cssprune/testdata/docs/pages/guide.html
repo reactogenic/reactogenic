@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · Reactogenic</title>
+{{CSS}}
+</head>
+<body>
+<div class="Page" data-layout="docs">
+<header data-slot="header">
+  <button class="SideMenuToggle" popovertarget="drawer" aria-label="Open menu">☰</button>
+  <a data-part="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="currentColor"/></svg>Reactogenic</a>
+  <nav data-part="nav" aria-label="Main">
+    <a href="/guide" aria-current="page">Guide</a>
+    <a href="/api">API</a>
+    <a href="/changelog">Changelog</a>
+  </nav>
+  <button class="Button" data-variant="ghost" data-size="sm" commandfor="search" command="show-modal">Search <kbd>/</kbd></button>
+  <div class="Dropdown" data-placement="bottom-end" data-size="sm" data-variant="menu">
+  <button data-slot="trigger" popovertarget="ver" aria-expanded="false" aria-haspopup="menu">v0.2</button>
+  <div data-part="menu" id="ver" popover role="menu">
+    <a data-slot="item" role="menuitem" aria-current="true" href="/">v0.2 (latest)</a>
+    <a data-slot="item" role="menuitem" href="/v0.1/">v0.1</a>
+    <div data-slot="separator" role="separator"></div>
+    <a data-slot="item" role="menuitem" href="/changelog">Changelog</a>
+  </div>
+</div>
+</header>
+<aside data-slot="aside">
+<nav class="SideMenu" data-variant="rail" data-collapsible data-density="normal" aria-label="Docs">
+  <p data-slot="title">Documentation</p>
+  <details data-slot="group" open>
+    <summary data-part="group-label">Start</summary>
+    <ul>
+      <li><a data-slot="item" href="/guide" aria-current="page">Getting started</a></li>
+      <li><a data-slot="item" href="/guide/install">Installation</a></li>
+      <li><a data-slot="item" href="/guide/first-page">Your first page<span data-part="badge" data-tone="new">new</span></a></li>
+    </ul>
+  </details>
+  <details data-slot="group" open>
+    <summary data-part="group-label">Syntax</summary>
+    <ul>
+      <li><a data-slot="item" href="/guide/slots">Slots</a></li>
+      <li><a data-slot="item" href="/guide/shorthand">Shorthand props</a></li>
+      <li><a data-slot="item" href="/guide/flow">Match and Switch</a></li>
+      <li><a data-slot="item" href="/guide/segments">Segment roots</a></li>
+      <li><a data-slot="item" href="/guide/each">Each</a></li>
+    </ul>
+  </details>
+  <details data-slot="group" open>
+    <summary data-part="group-label">Layout</summary>
+    <ul>
+      <li><a data-slot="item" href="/api">SideMenu</a></li>
+      <li><a data-slot="item" href="/api/dialog">Dialog</a></li>
+      <li><a data-slot="item" href="/api/dropdown">Dropdown</a></li>
+    </ul>
+  </details>
+</nav>
+</aside>
+<main data-part="main">
+  <article class="Prose">
+    <h1>Getting started</h1>
+    <p data-part="lead">Install the compiler, write one page, build it.</p>
+    <div class="Tabs" data-variant="underline">
+      <div data-part="list" role="tablist"><button data-slot="tab" role="tab" aria-selected="true" aria-controls="t-pnpm">pnpm</button><button data-slot="tab" role="tab" aria-selected="false" aria-controls="t-npm">npm</button></div>
+      <div data-slot="panel" role="tabpanel" id="t-pnpm"><pre><code>pnpm add -D @reactogenic/cli @reactogenic/core</code></pre></div>
+      <div data-slot="panel" role="tabpanel" id="t-npm" hidden><pre><code>npm install -D @reactogenic/cli @reactogenic/core</code></pre></div>
+    </div>
+    <h2 id="first-page">Your first page<a data-part="anchor" href="#first-page" aria-label="Link to this section">#</a></h2>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 1 of this page costs exactly its own bytes and nothing else.</p>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 2 of this page costs exactly its own bytes and nothing else.</p>
+    <pre data-title="pages/index.rtsx"><code><span data-tok="kw">import</span> { Page, SideMenu } <span data-tok="kw">from</span> <span data-tok="str">"@reactogenic/core"</span>;
+
+<span data-tok="kw">export default function</span> Index() {
+  <span data-tok="kw">return</span> (
+<span data-line="mark">    &lt;<span data-tok="tag">Page</span> <span data-tok="attr">layout</span>=<span data-tok="str">"docs"</span>&gt;</span>
+      &lt;<span data-tok="tag">$Aside</span>&gt;&lt;<span data-tok="tag">SideMenu</span> <span data-tok="attr">collapsible</span> /&gt;&lt;/<span data-tok="tag">$Aside</span>&gt;
+      <span data-tok="com">// your content</span>
+    &lt;/<span data-tok="tag">Page</span>&gt;
+  );
+}</code></pre>
+    <div class="Callout" data-tone="note"><p data-slot="title">Note</p><p>The shell is compiled once per pathname. Nothing in it may be conditional.</p></div>
+    <h2 id="build">Build<a data-part="anchor" href="#build" aria-label="Link to this section">#</a></h2>
+    <p>Run <code>reactogenic build</code>. Press <kbd>/</kbd> to search these docs.</p>
+    <ul><li>One HTML file per page.</li><li>One CSS payload per page, holding only the rules that page can use.</li><li>Raw JS only for the behaviours on the page.</li></ul>
+    <h3 id="output">Output<a data-part="anchor" href="#output" aria-label="Link to this section">#</a></h3>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 1 of this page costs exactly its own bytes and nothing else.</p>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 2 of this page costs exactly its own bytes and nothing else.</p>
+    <div class="Callout" data-tone="warning"><p data-slot="title">Warning</p><p>There is no dev server in phase 2.</p></div>
+    <nav class="Pager" aria-label="Pagination"><a data-slot="next" href="/guide/install"><small>Next</small><span>Installation</span></a></nav>
+  </article>
+  <nav data-slot="toc" aria-label="On this page"><h2>On this page</h2><a href="#first-page" data-depth="2" aria-current="true">Your first page</a><a href="#build" data-depth="2">Build</a><a href="#output" data-depth="3">Output</a></nav>
+</main>
+<footer data-slot="footer"><span>MIT licensed. Built with Reactogenic.</span><a href="https://github.com/reactogenic/reactogenic">GitHub</a></footer>
+<nav class="SideMenu" data-variant="drawer" data-density="normal" id="drawer" popover aria-label="Docs">
+  <button data-part="close" popovertarget="drawer" popovertargetaction="hide" aria-label="Close menu">×</button>
+  <div data-slot="group">
+    <p data-part="group-label">Start</p>
+    <ul>
+      <li><a data-slot="item" href="/guide" aria-current="page">Getting started</a></li>
+      <li><a data-slot="item" href="/guide/install">Installation</a></li>
+      <li><a data-slot="item" href="/guide/first-page">Your first page</a></li>
+    </ul>
+  </div>
+  <div data-slot="group">
+    <p data-part="group-label">Syntax</p>
+    <ul>
+      <li><a data-slot="item" href="/guide/slots">Slots</a></li>
+      <li><a data-slot="item" href="/guide/shorthand">Shorthand props</a></li>
+      <li><a data-slot="item" href="/guide/flow">Match and Switch</a></li>
+      <li><a data-slot="item" href="/guide/segments">Segment roots</a></li>
+      <li><a data-slot="item" href="/guide/each">Each</a></li>
+    </ul>
+  </div>
+  <div data-slot="group">
+    <p data-part="group-label">Layout</p>
+    <ul>
+      <li><a data-slot="item" href="/api">SideMenu</a></li>
+      <li><a data-slot="item" href="/api/dialog">Dialog</a></li>
+      <li><a data-slot="item" href="/api/dropdown">Dropdown</a></li>
+    </ul>
+  </div>
+</nav>
+<dialog class="Dialog" data-variant="command" id="search" closedby="any" aria-label="Search">
+  <div data-part="header"><input data-part="search" type="search" placeholder="Search the docs" autofocus></div>
+  <div data-slot="contents" role="listbox"><p data-part="empty">Type to search.</p></div>
+  <div data-part="hint"><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+  <template id="search-result"><a data-part="result" role="option"><span></span><small></small></a></template>
+</dialog>
+</div>
+</body>
+</html>

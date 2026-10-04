@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog · Reactogenic</title>
+{{CSS}}
+</head>
+<body>
+<div class="Page" data-layout="plain">
+<header data-slot="header">
+  <a data-part="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="currentColor"/></svg>Reactogenic</a>
+  <nav data-part="nav" aria-label="Main">
+    <a href="/guide">Guide</a>
+    <a href="/api">API</a>
+    <a href="/changelog" aria-current="page">Changelog</a>
+  </nav>
+  <div class="Dropdown" data-placement="bottom-end" data-size="sm" data-variant="menu">
+  <button data-slot="trigger" popovertarget="ver" aria-expanded="false" aria-haspopup="menu">v0.2</button>
+  <div data-part="menu" id="ver" popover role="menu">
+    <a data-slot="item" role="menuitem" aria-current="true" href="/">v0.2 (latest)</a>
+    <a data-slot="item" role="menuitem" href="/v0.1/">v0.1</a>
+    <div data-slot="separator" role="separator"></div>
+    <a data-slot="item" role="menuitem" href="/changelog">Changelog</a>
+  </div>
+</div>
+</header>
+<main data-part="main">
+  <article class="Prose">
+    <h1>Changelog</h1>
+    <h2 id="v0-2">0.2.0</h2>
+    <ul><li><strong>Builder.</strong> Pages compile to plain HTML, CSS and raw JS.</li><li>Layout components: <code>SideMenu</code>, <code>Dialog</code>, <code>Dropdown</code>.</li><li>See the <a href="/guide">guide</a>.</li></ul>
+    <hr>
+    <h2 id="v0-1">0.1.0</h2>
+    <ul><li>The <code>.rtsx</code> transpiler, <code>reactogenic check</code>, the language server.</li><li>The Vite plugin.</li></ul>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 1 of this page costs exactly its own bytes and nothing else.</p>
+    <p>Reactogenic compiles the shell of every page once. The layout components run in the compiler and leave plain HTML behind, so paragraph 2 of this page costs exactly its own bytes and nothing else.</p>
+  </article>
+</main>
+<footer data-slot="footer"><span>MIT licensed. Built with Reactogenic.</span><a href="https://github.com/reactogenic/reactogenic">GitHub</a></footer>
+</div>
+</body>
+</html>

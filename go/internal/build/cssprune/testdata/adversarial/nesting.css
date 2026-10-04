@@ -1,0 +1,48 @@
+/* research/css.md, Verification: what the prototype pruner got wrong. */
+.A { color: black; &:is(.x, .y) { color: red } &:is(.p, .q) { color: blue } }
+.B { :is(&.x, .q) { color: red } :is(&.z, .zz) { color: blue } }
+[data-v="Primary" i] { color: red }
+[data-v="Primary"] { color: blue }
+.list:has(.row) { border: 1px solid }
+.list > .row + .foot { margin: 0 }
+.list > .row ~ .foot2 { margin: 1px }
+.list:not(:has(.row)) .emptymsg { display: block }
+.list:not(:has(.emptymsg)) .foot { display: block }
+@container style(--theme: dark) { .A { color: white } }
+:root { --theme: dark; --used: 1px; --unused: 2px }
+.A { padding: var(--used) }
+.A { > .child { color: green } > .nochild { color: red } }
+.T { &[data-on] { color: red } &[data-off] { color: blue } }
+input[type="CHECKBOX"] { color: red }
+input[type="RADIO"] { color: red }
+
+/* Parents with lists, complex parents, deep nesting. */
+.C, .D { & .e { color: red } > .f { color: blue } + .g { color: green } ~ .h { color: pink } .i & { color: gold } &.j, .k & { color: teal } }
+.E .F, #G { .h { color: red } &.x { color: blue } }
+.M { .N, .O { .P { color: red } .Z { color: blue } } }
+.card {
+  padding: 1px;
+  &[data-variant="ghost"] { border: 0 }
+  &[data-variant="solid"] { border: 1px solid }
+  [data-slot="title"] { font-weight: 600; & + [data-slot="body"] { margin: 0 } & + [data-slot="footer"] { margin: 1px } }
+  [data-slot="footer"] { color: gray }
+  &:hover [data-slot="title"] { color: red }
+  &:has([data-slot="title"]) { gap: 1px }
+  &:has([data-slot="footer"]) { gap: 2px }
+  &:not(:has([data-slot="title"])) { gap: 3px }
+  @media (width >= 40rem) { padding: 2px; [data-slot="title"] { font-size: 2rem } [data-slot="footer"] { font-size: 1rem } }
+  @starting-style { opacity: 0 }
+  @supports (display: grid) { [data-slot="footer"] { display: grid } }
+}
+ul { li& { color: red } }
+ol { li& { color: red } }
+.Q { :not(&) { outline-color: red } :has(> &) { outline-color: blue } }
+.gone-parent { & .child { color: red } :is(&, .also-gone) { color: blue } }
+div, span { &:hover { color: red } &.gone { color: blue } }
+table, video { &:hover { color: red } }
+.L::before { &:hover { color: red } }
+& .top { color: red }
+&:hover { color: red }
+& .gone-top { color: red }
+.K { & { color: red } && { color: blue } }
+.gone-k { & { color: red } && { color: blue } }

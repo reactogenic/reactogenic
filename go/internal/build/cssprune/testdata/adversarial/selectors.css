@@ -1,0 +1,72 @@
+/* Every selector form the pruner reads, each with a twin that cannot match. */
+
+/* type, universal, class, id */
+main { a: b } aside { a: b } * { a: b } MAIN { a: b } ASIDE { a: b }
+.note { a: b } .Note { a: b } .note.warn { a: b } .note.info { a: b } .warn.note.big { a: b }
+#top { a: b } #Top { a: b } main#top.page { a: b } aside#top { a: b } p#top { a: b }
+.sm\:flex { a: b } .md\:flex { a: b } .\31 0 { a: b } .\32 0 { a: b } .a\.b { a: b } .a\.c { a: b } .é { a: b } .ü { a: b }
+
+/* attributes: presence, the six operators, the flags, quoting */
+[data-kind] { a: b } [data-nope] { a: b }
+[data-kind=note] { a: b } [data-kind="note"] { a: b } [data-kind='note'] { a: b } [data-kind=Note] { a: b } [data-kind=not] { a: b }
+[data-kind=NOTE i] { a: b } [data-kind=NOTES i] { a: b } [data-kind="NOTE" I] { a: b }
+[data-tags~=b] { a: b } [data-tags~=d] { a: b } [data-tags~="a b"] { a: b } [data-tags~=B i] { a: b } [data-tags~=B] { a: b }
+[lang|=en] { a: b } [lang|=fr] { a: b } [lang|=e] { a: b } [data-kind|=note] { a: b } [data-id|=n] { a: b } [data-id|=n-1] { a: b } [data-id|=x] { a: b }
+[href^="/guide"] { a: b } [href^="/api"] { a: b } [href^="/GUIDE" i] { a: b } [href^="/GUIDE"] { a: b } [href^=""] { a: b }
+[href$=".html"] { a: b } [href$=".pdf"] { a: b } [href$=".HTML" i] { a: b } [href$=".HTML"] { a: b }
+[href*="guide/sl"] { a: b } [href*="nope"] { a: b } [class*="ot"] { a: b } [class*="zz"] { a: b } [class~="warn"] { a: b } [class~="war"] { a: b }
+[data-empty=""] { a: b } [data-kind=""] { a: b } [data-empty] { a: b } [data-quote="a\"b"] { a: b } [data-quote="a\"c"] { a: b }
+input[type=CHECKBOX] { a: b } input[type=RADIO] { a: b } [type=checkbox] { a: b } [TYPE=checkbox] { a: b } a[rel=NoFollow] { a: b } a[rel=NoOpener] { a: b }
+form[method=POST] { a: b } form[method=GET] { a: b } [dir=RTL] { a: b } [dir=LTR] { a: b }
+[popovertarget] { a: b } [popoverTarget=menu] { a: b } [popovertarget=other] { a: b } svg[viewBox] { a: b } svg[viewbox] { a: b } svg[preserveAspectRatio] { a: b }
+
+/* combinators against the tree */
+main p { a: b } main > p { a: b } main > section > p { a: b } main > i { a: b } section > .note { a: b } section > .lone { a: b }
+h2 + p { a: b } h2 + ul { a: b } h2 ~ ul { a: b } ul ~ h2 { a: b } p + p { a: b } ul + p { a: b } li + li + li { a: b } li + li + li + li { a: b }
+body main section ul li a { a: b } body aside section ul li a { a: b } html > body > main { a: b } html > main { a: b } body > section { a: b }
+section p ~ ul > li > a[href] { a: b } section ul ~ p > a { a: b } .note ~ .note { a: b } .warn ~ .note { a: b } .note + .warn { a: b }
+main>p,main>ul,section>p,section>ul { a: b }
+
+/* :is(), :where() */
+:is(h2, h3) { a: b } :is(h4, h5) { a: b } :where(main, aside) > section { a: b } :where(aside, nav) > section { a: b }
+:is(section, article) :is(p, li) { a: b } :is(article, aside) :is(p, li) { a: b } :is(section p, article p) { a: b } :is(article p, aside p) { a: b }
+:is(main section, aside) > h2 { a: b } :is(aside section, nav) > h2 { a: b } p:is(.note, .tip) { a: b } p:is(.tip, .hint) { a: b } li:is(p) { a: b }
+:is() { a: b } :is(.note):is(.warn) { a: b } :is(.note):is(.info) { a: b } :is(:is(.note)) { a: b } :is(:is(.nope)) { a: b }
+section :is(h2 + p) { a: b } section :is(ul + p) { a: b }
+
+/* :not() */
+p:not(.note) { a: b } p:not(p) { a: b } :not(*) { a: b } li:not(.x):not(.y) { a: b } .warn:not(.note) { a: b } .note:not(.warn) { a: b }
+p:not(section p) { a: b } p:not(aside p) { a: b } p:not(.note, .plain) { a: b } p:not(.note, .plain, .nope) { a: b }
+:not(html, head, body, main, section, h2, p, ul, li, a, input, form, button, svg, title, meta, span) { a: b }
+:not(html, head, body, main, section, h2, p, ul, li, a, input, form, button, svg, title, meta, span, path, div) { a: b }
+p:not([data-kind]) { a: b } p:not([class]) { a: b } :root:not(html) { a: b } html:not(:root) { a: b } body:not(:root) { a: b }
+.note:not(:not(.warn)) { a: b } .note:not(:not(.nope)) { a: b }
+
+/* :has() */
+section:has(h2) { a: b } section:has(h4) { a: b } section:has(> h2) { a: b } main:has(> h2) { a: b } main:has(h2) { a: b }
+h2:has(+ p) { a: b } h2:has(+ ul) { a: b } h2:has(~ ul) { a: b } ul:has(~ h2) { a: b } ul:has(li + li) { a: b } ul:has(li + p) { a: b }
+section:has(ul > li > a) { a: b } section:has(ul > a) { a: b } section:has(h2, h4) { a: b } section:has(h4, h5) { a: b }
+:root:has(.note) { a: b } :root:has(.nope) { a: b } body:has(main):has(.warn) { a: b } body:has(main):has(.nope) { a: b }
+section:not(:has(h2)) { a: b } section:not(:has(h4)) { a: b } p:has(a) { a: b } li:has(> a[href]) { a: b } li:has(> a[name]) { a: b }
+main:has(section > ul > li + li > a) { a: b } main:has(section > ul > li + li + li + li) { a: b }
+
+/* runtime state: never decides */
+a:hover { a: b } a:focus-visible { a: b } button:disabled { a: b } input:checked { a: b } input:checked + span { a: b } input:checked + p { a: b }
+video:hover { a: b } .nope:focus { a: b } li:first-child { a: b } li:nth-child(2n + 1) { a: b } li:nth-child(even) > a { a: b } td:nth-child(2) { a: b }
+[hidden] { a: b } p[hidden] { a: b } video[hidden] { a: b } [aria-current=page] { a: b } a[aria-current] { a: b } nav [aria-current] { a: b }
+button[disabled] { a: b } button[aria-expanded=true] + ul { a: b } button[aria-expanded=true] + p { a: b } [data-state=open] { a: b } aside[data-state=open] { a: b }
+[open] > p { a: b } details[open] { a: b } input[value="x"] { a: b } [style*="color"] { a: b } video[style] { a: b } [inert] a { a: b } [selected] { a: b }
+p:not(:hover) { a: b } video:not(:hover) { a: b } p:not([hidden]) { a: b } :is(a, video):hover { a: b } :is(audio, video):hover { a: b }
+section:has(a:hover) { a: b } section:has(video:hover) { a: b } section:not(:has(a:hover)) { a: b } main:has(> section[hidden]) { a: b } main:has(> aside[hidden]) { a: b }
+h2:hover + p { a: b } h2:hover + ul { a: b } h2[hidden] ~ ul { a: b } ul[hidden] ~ h2 { a: b } :focus-visible { a: b } :root:has(dialog:modal) { a: b } :root:has(a:focus) { a: b }
+
+/* pseudo-elements: the element is what is matched */
+p::before { a: b } video::before { a: b } ::selection { a: b } a::after { a: b } .note::first-line { a: b } .nope::first-letter { a: b }
+li::marker { a: b } dd::marker { a: b } input::placeholder { a: b } textarea::placeholder { a: b } a:hover::before { a: b } video:hover::before { a: b }
+button::backdrop { a: b } dialog::backdrop { a: b } p:before { a: b } video:after { a: b }
+
+/* lists: trimmed, unless a selector that goes may be invalid somewhere */
+p, video { a: b } video, audio { a: b } p, video:hover, a:hover { a: b }
+p, video::-webkit-media-controls { a: b } video::-webkit-media-controls, audio::-webkit-media-controls { a: b }
+p, video:open { a: b } input::-moz-placeholder { a: b } textarea::-moz-placeholder { a: b } p, video:nth-child(2 of .x) { a: b }
+p:-moz-any(.note), .nope { a: b } p, .nope:state(x) { a: b }

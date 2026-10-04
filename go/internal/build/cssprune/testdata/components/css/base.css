@@ -1,0 +1,8 @@
+:root {
+  --rg-bg: #fff; --rg-fg: #18181b; --rg-muted: #71717a; --rg-line: #e4e4e7; --rg-hover: #f4f4f5; --rg-accent: #1d4ed8;
+  --rg-radius: 8px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --rg-bg: #18181b; --rg-fg: #fafafa; --rg-muted: #a1a1aa; --rg-line: #3f3f46; --rg-hover: #27272a; --rg-accent: #93c5fd; }
+}

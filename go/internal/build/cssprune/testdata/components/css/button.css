@@ -1,0 +1,7 @@
+.rg-btn {
+  display: inline-flex; align-items: center; gap: .4em;
+  padding: .4em .8em; border: 1px solid var(--rg-line); border-radius: var(--rg-radius);
+  background: var(--rg-bg); color: var(--rg-fg); font: inherit; text-decoration: none; cursor: pointer;
+}
+.rg-btn:hover { background: var(--rg-hover); }
+.rg-btn-ghost { border-color: transparent; background: none; }
