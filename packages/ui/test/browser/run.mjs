@@ -3,10 +3,14 @@
 //
 // Builds test/site with the stand-in builder (build.mjs) — once as it ships
 // and once without any script, the control — serves both, and checks them in
-// Chromium and WebKit ($ENGINES=chromium,webkit,chrome; `chrome` is the
-// installed stable; $PLAYWRIGHT for the builds of another Playwright). A
+// Chromium and WebKit ($ENGINES=chromium,webkit,chrome,firefox; `chrome` is
+// the installed stable; $PLAYWRIGHT for the builds of another Playwright). A
 // check that fails for a reason that is the engine's, not ours, is listed as
 // known, with the reason; anything else fails the run.
+//
+// `firefox` is here to be run and has never been: where this suite was
+// written Playwright's Firefox does not start (a sandboxed shell: "Could not
+// find profile folder"). Expect its first run to need `known` entries.
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -16,7 +20,7 @@ import { build } from "./build.mjs";
 
 // $PLAYWRIGHT names another Playwright (a path to its package): its browser
 // builds are other versions of the engines.
-const { chromium, webkit } = await import(process.env.PLAYWRIGHT ?? "playwright").then((module) => module.default ?? module);
+const { chromium, webkit, firefox } = await import(process.env.PLAYWRIGHT ?? "playwright").then((module) => module.default ?? module);
 
 const WIDE = { width: 1200, height: 800 };
 const NARROW = { width: 400, height: 700 }; // below the 50rem breakpoint
@@ -55,6 +59,7 @@ const engines = {
   chromium: () => chromium.launch({ channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] }),
   chrome: () => chromium.launch({ channel: "chrome", ignoreDefaultArgs: ["--disable-back-forward-cache"] }),
   webkit: () => webkit.launch(),
+  firefox: () => firefox.launch(),
 };
 
 // Takes `command` / `commandfor` away from an engine that has them: the
@@ -81,6 +86,17 @@ const probe = {
     const box = document.querySelector(selector).getBoundingClientRect();
     return { top: Math.round(box.top), bottom: Math.round(box.bottom), left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width) };
   },
+  // Does the element have something to scroll: [x, y]?
+  scrolls: (selector) => {
+    const element = document.querySelector(selector);
+    return [element.scrollWidth > element.clientWidth, element.scrollHeight > element.clientHeight];
+  },
+  // Computed values of `properties`, of every element `selector` matches.
+  look: ([selector, properties]) =>
+    [...document.querySelectorAll(selector)].map((element) => {
+      const style = getComputedStyle(element);
+      return properties.map((property) => style.getPropertyValue(property));
+    }),
 };
 
 function equal(actual, expected, what) {
@@ -222,6 +238,144 @@ async function suite(name, launch, site, control) {
       equal(await page.evaluate(probe.dialog, "d2"), false, "open after Esc");
     });
     await page.context().close();
+  }
+
+  // ---- Dialog: content larger than the viewport; inside the author's form ----
+  {
+    // The panel and the header's close button are inside the viewport, and
+    // the dialog itself is never what scrolls.
+    const fits = async (page, id, viewport) => {
+      const panel = await page.evaluate(probe.rect, `#${id} > [data-part="panel"]`);
+      equal([panel.left >= 0, panel.right <= viewport.width, panel.top >= 0, panel.bottom <= viewport.height], [true, true, true, true], `the panel ${JSON.stringify(panel)} inside the viewport`);
+      const close = await page.evaluate(probe.rect, `#${id} [data-part="close"]`);
+      equal([close.left >= panel.left, close.right <= panel.right, close.top >= panel.top], [true, true, true], `the close button ${JSON.stringify(close)} inside the panel`);
+      equal(await page.evaluate(probe.scrolls, `#${id}`), [false, false], "the dialog scrolls [x, y]");
+    };
+    const narrow = await open(site.origin, "/fit/", NARROW);
+    await check("dialog: a line wider than the panel scrolls in the body; the panel stays inside the viewport", async () => {
+      await narrow.click('button[commandfor="wide"]');
+      await settle(narrow);
+      await fits(narrow, "wide", NARROW);
+      equal(await narrow.evaluate(probe.scrolls, '#wide [data-part="body"]'), [true, false], "the body scrolls [x, y]");
+      await narrow.keyboard.press("Escape");
+      await settle(narrow);
+    });
+    await check("dialog: an unbreakable word in the title and in the body wraps; the panel stays inside the viewport", async () => {
+      await narrow.click('button[commandfor="url"]');
+      await settle(narrow);
+      await fits(narrow, "url", NARROW);
+      equal(await narrow.evaluate(probe.scrolls, '#url [data-part="body"]'), [false, false], "the body scrolls [x, y]");
+      await narrow.keyboard.press("Escape");
+      await settle(narrow);
+    });
+    await narrow.context().close();
+
+    const page = await open(site.origin, "/fit/", WIDE);
+    await check("dialog: a body taller than the viewport scrolls; header and footer stay; a click beside the panel still closes", async () => {
+      await page.click('button[commandfor="tall"]');
+      await settle(page);
+      await fits(page, "tall", WIDE);
+      equal(await page.evaluate(probe.scrolls, '#tall [data-part="body"]'), [false, true], "the body scrolls [x, y]");
+      await page.mouse.move(600, 400);
+      await page.mouse.wheel(0, 2000);
+      await settle(page);
+      equal(await page.evaluate(() => document.querySelector('#tall [data-part="body"]').scrollTop > 1000), true, "the wheel scrolled the body");
+      await fits(page, "tall", WIDE);
+      const footer = await page.evaluate(probe.rect, "#tall footer button");
+      equal(footer.top >= 0 && footer.bottom <= WIDE.height, true, `the action ${JSON.stringify(footer)} inside the viewport`);
+      equal(await page.evaluate(() => document.elementFromPoint(5, 400).getAttribute("data-part")), "scrim", "beside the panel");
+      await page.mouse.click(5, 400);
+      await settle(page);
+      equal(await page.evaluate(probe.dialog, "tall"), false, "open after a click beside the panel");
+    });
+    await check("dialog inside the author's <form>: the scrim is the dialog's, covers the viewport, closes it, and submits nothing", async () => {
+      equal(
+        await page.evaluate(() => {
+          const scrim = document.querySelector("#confirm [data-part=scrim]");
+          return [document.forms.length, scrim?.parentElement.id, [...document.forms[0].elements].filter((element) => element.type === "submit").length];
+        }),
+        [1, "confirm", 0],
+        "[forms of the page, the scrim's parent, submit buttons of the author's form]",
+      );
+      await page.click('button[commandfor="confirm"]');
+      await settle(page);
+      equal(await page.evaluate(probe.dialog, "confirm"), true, "open");
+      const scrim = await page.evaluate(probe.rect, "#confirm [data-part=scrim]");
+      equal([scrim.left, scrim.top, scrim.right, scrim.bottom], [0, 0, WIDE.width, WIDE.height], "the scrim");
+      await page.mouse.click(5, 5);
+      await settle(page);
+      equal(await page.evaluate(probe.dialog, "confirm"), false, "open after a click outside");
+      equal(new URL(page.url()).pathname + new URL(page.url()).search, "/fit/", "the page");
+    });
+    await page.context().close();
+  }
+
+  // ---- Components in a side menu's slots ----
+  {
+    // What a rule of the side menu would change: the same component outside
+    // the side menu is the measure.
+    const same = async (page, inside, outside, properties) => {
+      const a = await page.evaluate(probe.look, [inside, properties]);
+      const b = await page.evaluate(probe.look, [outside, properties]);
+      equal(a.length > 0, true, `${inside} matches`);
+      equal(a, b, `${properties.join(", ")} of ${inside} — want those of ${outside}`);
+    };
+    const box = ["display", "position", "padding-left", "padding-top", "margin-top", "color", "font-size", "font-weight", "background-color", "border-radius"];
+    for (const [width, viewport] of [["wide", WIDE], ["narrow", NARROW]]) {
+      const page = await open(site.origin, "/nested/", viewport);
+      const drawer = async () => {
+        if (width === "narrow" && !(await page.evaluate(probe.popover, "nav"))) {
+          await page.click(".rg-sidemenu-toggle");
+          await settle(page);
+        }
+      };
+      await check(`in a side menu's $Header, ${width}: a dialog keeps its close button, its scrim and its look`, async () => {
+        await drawer();
+        await page.click('button[commandfor="search"]');
+        await settle(page);
+        equal(await page.evaluate(probe.dialog, "search"), true, "open and modal");
+        equal(await page.evaluate(probe.active), "close", "focus");
+        const scrim = await page.evaluate(probe.rect, "#search [data-part=scrim]");
+        equal([scrim.left, scrim.top, scrim.right, scrim.bottom], [0, 0, viewport.width, viewport.height], "the scrim");
+        for (const part of ['> [data-part="panel"]', "h2", '[data-part="close"]', '[data-part="body"]', '[data-part="scrim"]']) {
+          await same(page, `#search ${part}`, `#plain ${part}`, box);
+        }
+        await page.mouse.click(viewport.width - 5, 5);
+        await settle(page);
+        equal(await page.evaluate(probe.dialog, "search"), false, "open after a click outside");
+      });
+      await check(`in a side menu's $Header, ${width}: a menu keeps its look`, async () => {
+        await drawer();
+        await page.click('[popovertarget="ver"]');
+        await settle(page);
+        equal(await page.evaluate(probe.popover, "ver"), true, "open");
+        for (const part of ["", " li", " a"]) {
+          await same(page, `#ver${part}`, `#plain-ver${part}`, box.filter((property) => property !== "display" || part !== ""));
+        }
+        await page.keyboard.press("Escape");
+        await settle(page);
+      });
+      await check(`in a side menu's $Footer, ${width}: an action menu has its keys, and its item opens the dialog in $Header`, async () => {
+        await drawer();
+        await page.click('[popovertarget="tools"]');
+        await settle(page);
+        const walk = [await page.evaluate(probe.active)];
+        for (const key of ["ArrowDown", "ArrowDown"]) {
+          await page.keyboard.press(key);
+          walk.push(await page.evaluate(probe.active));
+        }
+        equal(walk, ["Search…", "Home", "Search…"], "focus after each key");
+        await page.keyboard.press("Enter");
+        await settle(page);
+        equal([await page.evaluate(probe.popover, "tools"), await page.evaluate(probe.dialog, "search")], [false, true], "[menu open, dialog open]");
+        const close = await page.evaluate(probe.rect, '#search [data-part="close"]');
+        equal(close.width > 0 && close.left >= 0 && close.right <= viewport.width, true, `the dialog's close button ${JSON.stringify(close)} is on screen`);
+        await page.keyboard.press("Escape");
+        await settle(page);
+        equal(await page.evaluate(probe.dialog, "search"), false, "open after Esc");
+      });
+      await page.context().close();
+    }
   }
 
   // ---- DropdownMenu ----
@@ -367,6 +521,95 @@ async function suite(name, launch, site, control) {
       equal([/startsWith|toLowerCase/.test(script("/guide/flow/")), /startsWith|toLowerCase/.test(script("/actions/"))], [true, false], "[with the flag, without]");
     });
     await plain.context().close();
+
+    const menus = await open(site.origin, "/menus/", WIDE);
+    await check("typeahead is the menu's: on a page that has one with it, a menu without it has none", async () => {
+      const after = async (id, key) => {
+        await focusByKeyboard(menus, `[popovertarget="${id}"]`);
+        const walk = [await menus.evaluate(probe.active)];
+        await menus.keyboard.press(key);
+        walk.push(await menus.evaluate(probe.active));
+        await menus.keyboard.press("Escape");
+        await settle(menus);
+        return walk;
+      };
+      equal(await after("one", "b"), ["Alpha", "Beta"], "the menu with typeahead: focus before and after `b`");
+      equal(await after("two", "b"), ["Alpha", "Alpha"], "the menu without: focus before and after `b`");
+    });
+    await check("action menu: the author's id on $Trigger is the one that names the menu, and focus returns to it", async () => {
+      equal(
+        await menus.evaluate(() => [...document.querySelectorAll("[aria-labelledby]")].filter((element) => document.getElementById(element.getAttribute("aria-labelledby")) === null).map((element) => element.id)),
+        [],
+        "elements whose aria-labelledby names nothing",
+      );
+      equal(await menus.evaluate(() => document.getElementById("three").getAttribute("aria-labelledby")), "mine", "the menu's name");
+      await menus.click("#mine");
+      await settle(menus);
+      await menus.click('#three [commandfor="shortcuts"]');
+      await settle(menus);
+      equal([await menus.evaluate(probe.popover, "three"), await menus.evaluate(probe.dialog, "shortcuts")], [false, true], "[menu open, dialog open]");
+      await menus.keyboard.press("Escape");
+      await settle(menus);
+      equal(await menus.evaluate(probe.active), "mine", "focus");
+    });
+    await check("a disabled link item is no link: no href, aria-disabled; focus and the arrows skip it", async () => {
+      // [element, has href, aria-disabled, is a link, takes focus]
+      const disabled = (selector) =>
+        menus.evaluate(
+          (s) =>
+            [...document.querySelectorAll(s)].map((a) => {
+              a.focus();
+              return [a.localName, a.hasAttribute("href"), a.getAttribute("aria-disabled"), a.matches(":any-link"), document.activeElement === a];
+            }),
+          selector,
+        );
+      equal(await disabled("#three > a:first-child"), [["a", false, "true", false, false]], "in an action menu");
+      equal(await disabled("#links > li:first-child > a"), [["a", false, "true", false, false]], "in a menu of links");
+      equal(await disabled("a#off"), [["a", false, "true", false, false]], "a Button with href and disabled");
+      await menus.click("#mine");
+      await settle(menus);
+      const walk = [await menus.evaluate(probe.active)];
+      for (const key of ["ArrowDown", "ArrowDown", "Home", "End", "ArrowUp", "ArrowUp"]) {
+        await menus.keyboard.press(key);
+        walk.push(await menus.evaluate(probe.active));
+      }
+      equal(walk, ["Open", "Home", "Open", "Open", "Home", "Open", "Home"], "focus after each key");
+      await menus.keyboard.press("Escape");
+      await settle(menus);
+    });
+    await check("menu at the right edge: flips to the trigger's other edge, keeps its width, stays inside the viewport", async () => {
+      await menus.click('[popovertarget="edge"]');
+      await settle(menus);
+      const trigger = await menus.evaluate(probe.rect, '[popovertarget="edge"]');
+      const menu = await menus.evaluate(probe.rect, "#edge");
+      equal(WIDE.width - trigger.left < menu.width, true, "the menu is wider than what is left of the viewport");
+      equal([menu.left >= 0, menu.right <= WIDE.width], [true, true], `the menu ${JSON.stringify(menu)} inside the viewport`);
+      near(menu.right, trigger.right, "the menu's right edge");
+      equal(menu.bottom - menu.top < 60, true, `the label is one line (the menu is ${menu.bottom - menu.top}px tall)`);
+      await menus.keyboard.press("Escape");
+      await settle(menus);
+    });
+    await menus.context().close();
+
+    const phone = await open(site.origin, "/menus/", NARROW);
+    await check("menu on a narrow screen: never wider than the viewport", async () => {
+      await phone.click('[popovertarget="edge"]');
+      await settle(phone);
+      const menu = await phone.evaluate(probe.rect, "#edge");
+      equal([menu.left >= 0, menu.right <= NARROW.width], [true, true], `the menu ${JSON.stringify(menu)} inside the viewport`);
+      await phone.keyboard.press("Escape");
+      await settle(phone);
+    });
+    await check("menu wider than the room on either side of its trigger: against the viewport's edge, still under the trigger", async () => {
+      await phone.click('[popovertarget="middle"]');
+      await settle(phone);
+      const trigger = await phone.evaluate(probe.rect, '[popovertarget="middle"]');
+      const menu = await phone.evaluate(probe.rect, "#middle");
+      equal([NARROW.width - trigger.left < menu.width, trigger.right < menu.width], [true, true], "the menu fits on neither side");
+      equal([menu.left >= 0, menu.right <= NARROW.width], [true, true], `the menu ${JSON.stringify(menu)} inside the viewport`);
+      near(menu.top, trigger.bottom + 4, "the menu's top");
+    });
+    await phone.context().close();
   }
 
   // ---- SideMenu ----
@@ -537,6 +780,12 @@ async function suite(name, launch, site, control) {
       await page.click('#d1 [data-part="close"]');
       await settle(page);
       equal(await page.evaluate(probe.dialog, "d1"), false, "open after the close button");
+      // The scrim is a command button too.
+      await page.click('button[commandfor="d1"]');
+      await settle(page);
+      await page.mouse.click(5, 5);
+      await settle(page);
+      equal(await page.evaluate(probe.dialog, "d1"), false, "open after a click on the scrim");
       await page.click('header button[commandfor="shortcuts"]');
       await settle(page);
       equal(await page.evaluate(probe.dialog, "shortcuts"), true, "open from a button elsewhere");
