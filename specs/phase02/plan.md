@@ -245,12 +245,18 @@ esbuild's public API produces.
   (the files, not a copy: `testdata/ui/all.css`) against six pages the
   builder built, one of each kind (the golden output of `internal/build`'s
   fixture site). Of the bundle (7 178 B minified, 2 013 gzip) a page keeps
-  27–61% (gzip): 2 102 selectors dropped over the corpus, every one checked
+  25–61% (gzip): 2 140 selectors dropped over the corpus, every one checked
   by cascadia.
-  - Seen on the built pages, not fixed: an at-rule the pruner does not know
-    is kept as it is, so `@position-try --rg-menu-edge` (60 B, of
-    `dropdown-menu.css`) is on pages that have no menu. Like `@keyframes`,
-    it could go when nothing kept names it.
+  - Seen on the built pages, and fixed with the review of RGP2-030:
+    `@position-try --rg-menu-edge` (of `dropdown-menu.css`) was on pages
+    that have no menu, as any at-rule the pruner did not know. It goes when
+    nothing kept names it, as a custom property does: −73 B on `/`,
+    `/dialog/` and `/plain/`.
+  - With the same review: a page with a `contenteditable` element is not
+    pruned (what the user's editing creates is of no page as written); the
+    corpus has such a page, and three pages as they are served — under a
+    base, with the `<link>` and `<script>` of packaging, against a sheet
+    that selects on them (`internal/build/testdata/served`).
 
 ### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
@@ -319,11 +325,11 @@ report, the command in `go/cmd/reactogenic`.
 
     | Page | Uses | CSS | JS | Control: CSS / JS |
     | --- | --- | --- | --- | --- |
-    | `/plain/` | a `Button` that is a link | 1 106 | — | 7 177 / 1 613, on every page |
+    | `/plain/` | a `Button` that is a link | 1 033 | — | 7 177 / 1 613, on every page |
     | `/guide/`, `/guide/more/` | text | 1 074, one file for both | — | |
     | `/links/` | a menu of links | 2 186 | 198 | |
-    | `/` | a `SideMenu` | 2 894 | 198, the same script | |
-    | `/dialog/` | a `Dialog` | 2 819 | 532 | |
+    | `/` | a `SideMenu` | 2 821 | 198, the same script | |
+    | `/dialog/` | a `Dialog` | 2 746 | 532 | |
     | `/actions/` | an action menu with typeahead, a `Dialog` | 3 668 | 1 420 | |
 
   - Exported for it, and nothing else: `render.Source`, `render.Resolve`,
@@ -344,8 +350,45 @@ report, the command in `go/cmd/reactogenic`.
     move the focus and wrap, Home, End, typeahead, an item opens the dialog;
     the menu of links has no arrow keys; a link leads to a page under the
     base, with its linked stylesheet applied. Not run: WebKit, Firefox.
-  - Not verified: Windows (paths, the `--out` checks); a project whose
-    packages are not linked into `node_modules` by a workspace.
+  - Not verified: Windows (paths, the `--out` checks, the links).
+  - **After the review** (ten findings, each with a test that fails without
+    its fix):
+    - `-p` is the project as for `check`: `check.Program` walks
+      `references` and keeps the program of the project that lists the
+      pages (builder.md, *The project*). Vite's template builds.
+    - A page's CSS is pruned against the page **as it is served** — the
+      base in its links, the `<style>` / `<link>` and `<script>` of
+      packaging — in rounds, since how a sheet is delivered depends on the
+      sheet (builder.md, *CSS*). Fixture `testdata/served`, golden in three
+      modes; the JS is built before the CSS for it.
+    - The new output is written beside the old one and takes its place when
+      it is whole; `CheckOut` is asked again there, so `Run` is safe for any
+      caller. The tests that must be refused build a copy of the fixture in
+      a directory of their own; `/` and the repository's fixture are asked
+      of `CheckOut` alone.
+    - public-conflict also for a file where the build makes a directory.
+    - `pages` and `public` may be symbolic links.
+    - The report names a package's file by its package
+      (`@reactogenic/ui/src/dialog.css`), and counts no byte of esbuild's
+      source comments: the same report on any checkout — a copy of the
+      fixture that reaches its packages through a link out of the project
+      builds the golden output, report included.
+    - `--base`: decoded for the keys of the control's table; a `%` that
+      encodes nothing is a usage error.
+    - Specified as it is: `index.rtsx` beside `index.tsx` is `check`'s
+      ambiguous-module; gzip in the report is Go's DEFLATE, not `gzip -9`.
+    - Exported for it: `check.Program`; `cssprune.Whole`, and `Because` and
+      `PositionTries` in its `Stats`.
+  - In a browser again, on the output of the fixed binary (Chrome 154,
+    headless, by `packages/ui`'s Playwright; the script is still not in the
+    repository — RGP2-050): the fixture in seven modes, 164 of 164 checks
+    (the list above, per mode); under `--base /caf%C3%A9/`, the default
+    build 23 of 23 and the control 24 of 24 — it mounted nothing before;
+    computed styles of every element, pruned against the control: the
+    fixture's pages with their menus and dialogs open (13 comparisons), and
+    `testdata/served` in five modes — `/`, `/guide/`, and `/edit/` before
+    and after the user makes a word bold and adds a line (25 comparisons) —
+    all equal. Not run: WebKit, Firefox.
 
 ### RGP2-040 — The docs site · M
 `site/`: a private workspace package. `layout.rtsx` and four pages under
