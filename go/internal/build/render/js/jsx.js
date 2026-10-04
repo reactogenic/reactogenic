@@ -3,8 +3,8 @@
 // for every module of it, and the `jsxImportSource` of the files esbuild
 // compiles. The elements are React's own, untouched — `element.type` is the
 // component. It adds the record — which function components React called,
-// how often — and shell rules S1: a host element takes no function, and
-// nothing calls React's state, effects or refs (react.js).
+// how often — and shell rule S1: a host element takes no function, nothing
+// suspends, and nothing calls React's state, effects or refs (react.js).
 import { cloneElement as reactCloneElement, createElement as reactCreateElement } from "reactogenic:real/react";
 import { Fragment, jsx as reactJsx, jsxs as reactJsxs } from "reactogenic:real/react/jsx-runtime";
 
@@ -14,6 +14,7 @@ let counts = {}; // the page's components, by name
 let current = null; // the component being called: a frame
 let thrown = null; // { error, frame }: where the exception being thrown left a component
 let last = null; // the component called last
+let first = null; // { error, frame }: the first exception that left a component
 
 // Where each element of a component was made, by its props — the object
 // React hands to the component when it calls it: { source, stack, page,
@@ -26,10 +27,23 @@ export function start() {
   current = null;
   thrown = null;
   last = null;
+  first = null;
 }
 
 export function components() {
   return counts;
+}
+
+// What a component threw when the render ended all the same: something
+// swallowed it. React's static renderer does that for a Suspense boundary —
+// it renders the fallback and tells nobody — and a boundary is refused when
+// its element is made (check); this is for the one that was made past the
+// builder's runtime: an element written out as an object, by a package with
+// a JSX runtime of its own. The first such exception is the page's error.
+export function swallowed() {
+  if (first === null) return null;
+  thrown = first;
+  return first.error;
 }
 
 // The components an exception passed through, innermost first, each with
@@ -56,8 +70,21 @@ function coded(name, message) {
   return error;
 }
 
-// shell-handler, when the element is made.
+const SUSPENSE = Symbol.for("react.suspense");
+const LAZY = Symbol.for("react.lazy");
+
+function suspends(what) {
+  return coded("shell-react", "The shell cannot suspend: " + what);
+}
+
+// shell-handler and shell-react's boundary, when the element is made. A
+// Suspense boundary renders its fallback for anything its content throws —
+// a shell rule among it — so there is none in the shell; a `lazy` component
+// has nothing to wait for, and is an error where it is rendered, not where
+// it is made: an island's, exported beside the shell's, is nobody's mistake.
 function check(type, props) {
+  if (type === SUSPENSE) throw suspends("`<Suspense>`");
+  if (typeof type === "object" && type !== null && type.$$typeof === LAZY) throw suspends("a `lazy` component");
   if (typeof type !== "string" || props == null) return;
   for (const name in props) {
     if (name !== "children" && typeof props[name] === "function") {
@@ -87,9 +114,16 @@ export function call(type, props, secondArg) {
   const outer = current;
   current = last = frame;
   try {
-    return type(props, secondArg);
+    const result = type(props, secondArg);
+    // An `async` component: React would wait for it, and the render is one
+    // synchronous pass (builder.md, *Not in phase 2*).
+    if (result !== null && typeof result === "object" && typeof result.then === "function") {
+      throw suspends("`" + frame.name + "` is an async component");
+    }
+    return result;
   } catch (error) {
     if (thrown === null || thrown.error !== error) thrown = { error, frame };
+    if (first === null) first = thrown;
     throw error;
   } finally {
     current = outer;
@@ -150,5 +184,15 @@ export function cloneElement(element, props, ...children) {
 export function stateful(name) {
   return function () {
     throw coded("shell-react", "The shell cannot use React state or effects: `" + name + "`");
+  };
+}
+
+// `use` of a context is render-time React; of a promise, it suspends.
+export function usable(use) {
+  return function (value) {
+    if (value !== null && typeof value === "object" && typeof value.then === "function") {
+      throw suspends("`use` of a promise");
+    }
+    return use(value);
   };
 }

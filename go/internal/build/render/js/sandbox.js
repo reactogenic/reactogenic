@@ -128,6 +128,11 @@ define("crypto", {
   randomUUID: nondeterministic("crypto.randomUUID()"),
 });
 
+// When an object is freed is the collector's business — the engine's, and
+// what else was allocated: not there, as the timers are not.
+delete globalThis.WeakRef;
+delete globalThis.FinalizationRegistry;
+
 // The engine has no Intl, and its locale-sensitive methods answer without
 // one — a number unformatted, strings compared by code unit: not what the
 // same code gives in a browser. They throw, as `Intl` itself does by not

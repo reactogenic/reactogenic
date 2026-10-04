@@ -55,21 +55,48 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 	}
 	r := &run{program, b}
 
-	engine, thrown, err := start(b.code, timeout)
+	bytecode, err := compile(b.code)
 	if err != nil {
 		return nil, sorted(append(reports, report.Report{Code: "internal", Message: "render: " + err.Error()}))
 	}
-	defer engine.close()
-	reports = append(reports, r.printed(nil, engine.console())...)
-	if thrown != nil {
-		return nil, sorted(append(reports, r.exception(nil, thrown)))
+	// What the bundle does as it loads is no page's: the first runtime says
+	// it, once.
+	first, thrown, err := startCompiled(bytecode, timeout)
+	if err != nil {
+		return nil, sorted(append(reports, report.Report{Code: "internal", Message: "render: " + err.Error()}))
+	}
+	reports = append(reports, r.printed(nil, first.console())...)
+	if thrown != nil || len(routes) == 0 {
+		first.close()
+		if thrown != nil {
+			reports = append(reports, r.exception(nil, thrown))
+		}
+		return nil, sorted(reports)
 	}
 
 	var pages []Page
 	for i := range routes {
 		route := &routes[i]
+		// A runtime per page (builder.md, *Shell code in phase 2*): the
+		// bundle is loaded anew, so a page starts from what the modules are,
+		// not from what the pages before it left of them.
+		engine := first
+		if i > 0 {
+			if engine, thrown, err = startCompiled(bytecode, timeout); err != nil {
+				reports = append(reports, report.Report{File: route.File, Line: 1, Col: 1, Code: "internal", Message: "render: " + err.Error()})
+				continue
+			}
+			engine.console() // what loading prints was said, above
+			if thrown != nil {
+				// It loaded for the first page: only the timeout ends it now.
+				reports = append(reports, r.exception(route, thrown))
+				engine.close()
+				continue
+			}
+		}
 		result, err := engine.render(route.Pathname)
 		reports = append(reports, r.printed(route, engine.console())...)
+		engine.close()
 		switch {
 		case err != nil:
 			reports = append(reports, report.Report{File: route.File, Line: 1, Col: 1, Code: "internal", Message: err.Error()})

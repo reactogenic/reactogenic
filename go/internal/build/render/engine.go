@@ -10,9 +10,11 @@ import (
 	"modernc.org/quickjs"
 )
 
-// engine executes the render bundle (plan.md, RGP2-011): one runtime per
-// build. Nothing of the host is in it — no file system, no network, no
-// clock: the bundle's sandbox module sees to the clock.
+// engine executes the render bundle (plan.md, RGP2-011) for one page: a
+// runtime of its own, so nothing a page leaves behind — a module's state, a
+// global, a patched prototype — is there for the next (builder.md, *Shell
+// code in phase 2*). Nothing of the host is in it — no file system, no
+// network, no clock: the bundle's sandbox module sees to the clock.
 type engine struct {
 	vm      *quickjs.VM
 	timeout time.Duration
@@ -70,9 +72,38 @@ type rendered struct {
 	Error *thrown `json:"error"`
 }
 
-// start loads the bundle. What a module throws while it loads — at its top
-// level — is the *thrown returned: no page can render then.
+// start loads the bundle from its text. What a module throws while it loads
+// — at its top level — is the *thrown returned: no page can render then.
 func start(code string, timeout time.Duration) (*engine, *thrown, error) {
+	return boot(timeout, func(vm *quickjs.VM) error {
+		_, err := vm.Eval(code, quickjs.EvalGlobal)
+		return err
+	})
+}
+
+// compile is the bundle as the engine's bytecode: its text is read once, and
+// the runtime of each page loads it from there — 2.9 ms a runtime, where
+// reading the text again takes 27.6 (the fixture site's bundle, 388 kB, most
+// of it React's renderer; darwin-arm64).
+func compile(code string) ([]byte, error) {
+	vm, err := quickjs.NewVM()
+	if err != nil {
+		return nil, err
+	}
+	defer vm.Close()
+	return vm.Compile(code, quickjs.EvalGlobal)
+}
+
+// startCompiled is start, from the bundle's bytecode.
+func startCompiled(bytecode []byte, timeout time.Duration) (*engine, *thrown, error) {
+	return boot(timeout, func(vm *quickjs.VM) error {
+		_, err := vm.EvalBytecode(bytecode)
+		return err
+	})
+}
+
+// boot makes a runtime and loads the bundle into it.
+func boot(timeout time.Duration, bundle func(*quickjs.VM) error) (*engine, *thrown, error) {
 	vm, err := quickjs.NewVM()
 	if err != nil {
 		return nil, nil, err
@@ -83,7 +114,7 @@ func start(code string, timeout time.Duration) (*engine, *thrown, error) {
 	}
 	vm.SetMaxStackSize(maxDepth)
 	e := &engine{vm, timeout}
-	if _, err := vm.Eval(code, quickjs.EvalGlobal); err != nil {
+	if err := bundle(vm); err != nil {
 		return e, e.exception(err), nil
 	}
 	return e, nil, nil

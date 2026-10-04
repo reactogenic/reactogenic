@@ -37,6 +37,9 @@ pages/random/index.rtsx(4,25): error shell-nondeterministic: Math.random() makes
   pages/random/index.rtsx:3:1 - in RandomPage
 pages/recursion/index.rtsx(4,10): error shell-error: InternalError: stack overflow
   pages/recursion/index.rtsx:7:1 - in RecursionPage
+pages/shell-id/index.tsx(6,14): error shell-error: useShellId("d1"): a prefix cannot end in a digit: the counter follows it
+  pages/shell-id/index.tsx:14:9 - in Rows
+  pages/shell-id/index.tsx:10:1 - in ShellIdPage
 pages/spread/index.rtsx(6,22): error shell-handler: The shell cannot handle events: `onChange` on `<input>`
   pages/spread/index.rtsx:12:7 - in Field
   pages/spread/index.rtsx:9:1 - in SpreadPage
