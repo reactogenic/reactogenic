@@ -1,0 +1,61 @@
+// "/nested/": components in a side menu's free slots — a dialog and a menu in
+// $Header, an action menu in $Footer. Each keeps its own look and its own
+// parts: the side menu's rules are for the side menu's structure only.
+import { Dialog, DropdownMenu, SideMenu } from "@reactogenic/ui";
+import "../../site.css";
+
+export default function Page() {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Nested · Example</title>
+      </head>
+      <body>
+        <header className="site-header">
+          <a className="site-logo" href="/">Example</a>
+        </header>
+        <SideMenu id="nav" label="Docs">
+          <$Header>
+            <Dialog id="search">
+              <$Trigger>Search</$Trigger>
+              <$Title>Search</$Title>
+              <p>results</p>
+            </Dialog>{" "}
+            <DropdownMenu id="ver">
+              <$Trigger>v1</$Trigger>
+              <$Item key="v1" href="/nested/" current>v1</$Item>
+              <$Item key="v0" href="/">v0</$Item>
+            </DropdownMenu>
+          </$Header>
+          <$Section key="guide" title="Guide">
+            <$Item key="nested" href="/nested/">Nested</$Item>
+            <$Item key="intro" href="/">Introduction</$Item>
+          </$Section>
+          <$Footer>
+            <DropdownMenu id="tools">
+              <$Trigger>Tools</$Trigger>
+              <$Item key="search" command="show-modal" commandfor="search">Search…</$Item>
+              <$Item key="home" href="/">Home</$Item>
+            </DropdownMenu>
+          </$Footer>
+        </SideMenu>
+        <main>
+          <h1>Nested</h1>
+          {/* The same components outside the side menu: what they must look like inside it. */}
+          <Dialog id="plain">
+            <$Trigger>Plain</$Trigger>
+            <$Title>Search</$Title>
+            <p>results</p>
+          </Dialog>{" "}
+          <DropdownMenu id="plain-ver">
+            <$Trigger>v1</$Trigger>
+            <$Item key="v1" href="/nested/" current>v1</$Item>
+            <$Item key="v0" href="/">v0</$Item>
+          </DropdownMenu>
+        </main>
+      </body>
+    </html>
+  );
+}

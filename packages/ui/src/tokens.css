@@ -1,0 +1,24 @@
+/* Tokens of the design system (specs/phase02/components.md, *CSS convention*).
+   Every component imports this file before its own CSS, so the order of the
+   layers is declared once, here. Author CSS is unlayered: it wins without
+   specificity tricks. */
+@layer rg.base, rg.components;
+
+@layer rg.base {
+  :root {
+    /* The theme follows the OS: a toggle needs storage, so JS. */
+    color-scheme: light dark;
+    --rg-bg: light-dark(#fff, #18181b);
+    --rg-fg: light-dark(#18181b, #fafafa);
+    --rg-muted: light-dark(#71717a, #a1a1aa);
+    --rg-line: light-dark(#e4e4e7, #3f3f46);
+    --rg-hover: light-dark(#f4f4f5, #27272a);
+    --rg-accent: light-dark(#1d4ed8, #93c5fd);
+    --rg-scrim: #0006;
+    --rg-radius: 8px;
+  }
+}
+
+/* The breakpoint between the side menu as a column and as a drawer is 50rem.
+   It is written out in side-menu.css: a media query cannot read a custom
+   property. */

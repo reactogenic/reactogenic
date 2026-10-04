@@ -1,0 +1,17 @@
+// "/actions/": an action menu without typeahead — the page's script must not
+// hold that code — whose ids the builder names.
+import { DropdownMenu } from "@reactogenic/ui";
+import { DocsLayout } from "../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <DocsLayout title="Actions">
+      <h1>Actions</h1>
+      <DropdownMenu>
+        <$Trigger>Actions</$Trigger>
+        <$Item key="shortcuts" command="show-modal" commandfor="shortcuts">Keyboard shortcuts…</$Item>
+        <$Item key="source" href="https://github.com/reactogenic/reactogenic">Source</$Item>
+      </DropdownMenu>
+    </DocsLayout>
+  );
+}

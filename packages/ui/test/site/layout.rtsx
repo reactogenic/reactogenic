@@ -1,0 +1,59 @@
+// The example site's layout: every component of @reactogenic/ui, used the way
+// a page author would — no ids for what the components can name, no handlers,
+// no list of styles or scripts.
+import type { ReactNode } from "react";
+import { Button, Dialog, DropdownMenu, SideMenu } from "@reactogenic/ui";
+import "./site.css";
+
+export function DocsLayout({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{`${title} · Example`}</title>
+      </head>
+      <body>
+        <header className="site-header">
+          <a className="site-logo" href="/">Example</a>
+          {/* A menu of links: a disclosure, no JS of its own. */}
+          <DropdownMenu id="versions" align="end">
+            <$Trigger variant="ghost">0.1 alpha</$Trigger>
+            <$Item key="alpha1" href="/" current>0.1 alpha</$Item>
+            <$Item key="npm" href="https://www.npmjs.com/package/@reactogenic/cli">npm</$Item>
+          </DropdownMenu>
+          {/* A button elsewhere: the dialog is named by the author. */}
+          <Button variant="ghost" command="show-modal" commandfor="shortcuts">Shortcuts</Button>
+        </header>
+        <SideMenu id="nav" label="Documentation">
+          <$Header>Example docs</$Header>
+          <$Section key="start">
+            <$Item key="intro" href="/">Introduction</$Item>
+          </$Section>
+          <$Section key="guide" title="Guide">
+            <$Item key="syntax">
+              Syntax
+              <$Item key="slots" href="/guide/slots/">Slots</$Item>
+              <$Item key="flow" href="/guide/flow/">Flow control</$Item>
+            </$Item>
+          </$Section>
+          <$Section key="reference" title="Reference" collapsed>
+            <$Item key="actions" href="/actions/">Actions</$Item>
+          </$Section>
+          <$Footer>MIT licensed</$Footer>
+        </SideMenu>
+        <main>{children}</main>
+        <Dialog id="shortcuts">
+          <$Title>Keyboard shortcuts</$Title>
+          <dl>
+            <dt><kbd>Esc</kbd></dt>
+            <dd>Close a dialog or a menu</dd>
+            <dt><kbd>↑</kbd> <kbd>↓</kbd></dt>
+            <dd>Move through a menu of actions</dd>
+          </dl>
+          <$Action key="ok">Got it</$Action>
+        </Dialog>
+      </body>
+    </html>
+  );
+}

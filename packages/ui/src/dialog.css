@@ -1,0 +1,129 @@
+@layer rg.components {
+  /* The dialog is the whole viewport and transparent; the panel is the
+     surface. So everything around the panel can be the scrim — light dismiss
+     without `closedby`, which Safari lacks. `position: fixed` also when it is
+     closed: WebKit then paints the exit in place, not at the in-flow spot.
+     Every part is reached through child combinators: a rule here is for the
+     dialog's own structure, never for what an author put in its body. */
+  .rg-dialog {
+    position: fixed;
+    inset: 0;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 1rem;
+    border: 0;
+    background: none;
+    color: var(--rg-fg);
+    /* Never the scroller: the panel fits and its body scrolls. A dialog that
+       scrolled would carry the panel's header and the scrim out of view. */
+    overflow: hidden;
+    place-items: center;
+    opacity: 0;
+    /* Leaving the top layer is animated in Chromium only: an enhancement. */
+    transition:
+      opacity 0.15s,
+      overlay 0.15s allow-discrete,
+      display 0.15s allow-discrete;
+
+    /* `display` only when open: a closed dialog stays `display: none`. One
+       cell of a definite size — the viewport less the padding: an `auto`
+       track would grow with the panel, and the panel's percentages would
+       resolve against its own content. */
+    &[open] {
+      display: grid;
+      grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+      opacity: 1;
+
+      @starting-style {
+        opacity: 0;
+      }
+    }
+    &::backdrop {
+      background: var(--rg-scrim);
+    }
+
+    > [data-part="panel"] {
+      /* Above the scrim, which follows it in the dialog. */
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      width: min(32rem, 100%);
+      min-width: 0;
+      max-height: 100%;
+      border: 1px solid var(--rg-line);
+      border-radius: 12px;
+      background: var(--rg-bg);
+      box-shadow: 0 20px 60px #0004;
+      /* A word wider than the panel breaks; a line that must not break
+         (`<pre>`) scrolls in the body. */
+      overflow-wrap: break-word;
+
+      > header {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem 0.5rem;
+
+        > h2 {
+          flex: 1;
+          min-width: 0;
+          margin: 0;
+          font-size: 1.125rem;
+        }
+        > [data-part="close"] {
+          flex: none;
+          padding: 0.25em 0.5em;
+          border: 0;
+          border-radius: 6px;
+          background: none;
+          color: var(--rg-muted);
+          font: inherit;
+          cursor: pointer;
+
+          &:hover {
+            background: var(--rg-hover);
+          }
+        }
+      }
+      /* What is left of the panel's height; it scrolls, both ways. */
+      > [data-part="body"] {
+        min-height: 0;
+        padding: 0.5rem 1.25rem 1rem;
+        overflow: auto;
+      }
+      > footer {
+        display: flex;
+        flex: none;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        border-top: 1px solid var(--rg-line);
+      }
+    }
+    /* One button over the whole dialog, under the panel: its command closes
+       the dialog. */
+    > [data-part="scrim"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      background: none;
+      cursor: default;
+    }
+  }
+
+  /* Scroll lock: the page does not scroll behind a modal dialog. */
+  :root:has(.rg-dialog:modal) {
+    overflow: hidden;
+  }
+}

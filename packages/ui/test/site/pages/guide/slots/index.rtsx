@@ -1,0 +1,13 @@
+// "/guide/slots/": the layout alone — a side menu, a menu of links, a dialog
+// opened from the header.
+import { DocsLayout } from "../../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <DocsLayout title="Slots">
+      <h1>Slots</h1>
+      <p>A slot is data plus an optional render function, never a component.</p>
+      <div className="tall" />
+    </DocsLayout>
+  );
+}

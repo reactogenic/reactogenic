@@ -1,0 +1,83 @@
+@layer rg.components {
+  /* The last of the menu's fallbacks: half a rem from the viewport's left
+     edge — the menu is at most a rem narrower than the viewport. */
+  @position-try --rg-menu-edge {
+    left: 0.5rem;
+    right: auto;
+  }
+
+  .rg-menu {
+    box-sizing: border-box;
+    /* As wide as its longest item, whatever room is left beside the trigger:
+       a menu that does not fit there moves (the fallbacks below) — it is not
+       squeezed into what is left. */
+    width: max-content;
+    max-width: calc(100vw - 1rem);
+    padding: 0.25rem;
+    border: 1px solid var(--rg-line);
+    border-radius: var(--rg-radius);
+    background: var(--rg-bg);
+    color: var(--rg-fg);
+    box-shadow: 0 8px 30px #0003;
+    list-style: none;
+
+    /* The popover's implicit anchor is its invoker, so there is no rule per
+       use site. `position-anchor: auto` says so: its initial value differs
+       between engines, and without `position-area` the newer one gives
+       `anchor()` nothing to resolve against. `anchor()` insets, not
+       `position-area`: that one does not flip in WebKit on a page taller
+       than the viewport. The fallbacks, in order: above the trigger; at its
+       other edge; both; and, for a menu wider than the room on either side
+       (a phone), against the viewport's edge. Without anchor positioning the
+       UA's centred popover remains. */
+    @supports (top: anchor(bottom)) {
+      position-anchor: auto;
+      inset: auto;
+      top: anchor(bottom);
+      left: anchor(left);
+      min-width: anchor-size(width);
+      margin: 0.25rem 0;
+      position-try-fallbacks:
+        flip-block,
+        flip-inline,
+        flip-block flip-inline,
+        --rg-menu-edge,
+        --rg-menu-edge flip-block;
+
+      &[data-align="end"] {
+        left: auto;
+        right: anchor(right);
+      }
+    }
+
+    /* The items — the menu's own children, not what a label holds. */
+    > :is(a, button),
+    > li > a {
+      display: flex;
+      box-sizing: border-box;
+      width: 100%;
+      padding: 0.4em 0.75em;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: start;
+      text-decoration: none;
+      cursor: pointer;
+
+      &:is(:hover, :focus-visible) {
+        background: var(--rg-hover);
+      }
+      &[aria-current] {
+        font-weight: 600;
+      }
+      /* A disabled link has no `href`: it says so with `aria-disabled`. */
+      &:is(:disabled, [aria-disabled="true"]) {
+        background: none;
+        color: var(--rg-muted);
+        cursor: default;
+      }
+    }
+  }
+}
