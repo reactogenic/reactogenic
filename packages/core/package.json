@@ -1,6 +1,6 @@
 {
   "name": "@reactogenic/core",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Runtime of Reactogenic's .rtsx: slots, Match / Switch, Each.",
   "license": "MIT",
   "repository": {

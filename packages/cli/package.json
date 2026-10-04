@@ -1,6 +1,6 @@
 {
   "name": "@reactogenic/cli",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "The reactogenic command: type-checks .rtsx with TypeScript 7.",
   "license": "MIT",
   "repository": {
@@ -34,12 +34,12 @@
     "typecheck": "tsc --noEmit"
   },
   "optionalDependencies": {
-    "@reactogenic/cli-darwin-arm64": "0.1.0-alpha.0",
-    "@reactogenic/cli-darwin-x64": "0.1.0-alpha.0",
-    "@reactogenic/cli-linux-arm64": "0.1.0-alpha.0",
-    "@reactogenic/cli-linux-x64": "0.1.0-alpha.0",
-    "@reactogenic/cli-win32-arm64": "0.1.0-alpha.0",
-    "@reactogenic/cli-win32-x64": "0.1.0-alpha.0"
+    "@reactogenic/cli-darwin-arm64": "0.1.0-alpha.1",
+    "@reactogenic/cli-darwin-x64": "0.1.0-alpha.1",
+    "@reactogenic/cli-linux-arm64": "0.1.0-alpha.1",
+    "@reactogenic/cli-linux-x64": "0.1.0-alpha.1",
+    "@reactogenic/cli-win32-arm64": "0.1.0-alpha.1",
+    "@reactogenic/cli-win32-x64": "0.1.0-alpha.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
