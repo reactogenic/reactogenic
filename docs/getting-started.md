@@ -63,6 +63,47 @@ Errors about slots and segments are reported in their terms —
 `$Icon` needs `&size` ``. Use `reactogenic check --watch` while you work, and
 `--pretty=false` for `file(line,col)` output in CI.
 
+## Editor
+
+**VS Code** (and editors built on it): install *Reactogenic (.rtsx)* —
+`reactogenic.rtsx` on the Marketplace and on Open VSX. It brings
+
+- highlighting for `.rtsx`, with your theme's TSX colours and the slot,
+  arg, param and segment forms on top;
+- the language server: errors as you type — the same ones as `reactogenic
+  check`, in slot terms — hover, completion, go to definition, references,
+  rename, auto-import, quick fixes, closing tags;
+- `.rtsx` modules in your `.ts` and `.tsx` files: imports resolve, and
+  definitions and references reach into `.rtsx`.
+
+The server is the `reactogenic` binary of your project's `@reactogenic/cli`
+(0.1.0-alpha.1 or later), so the editor and `reactogenic check` always agree;
+without one, the extension runs the binary it ships. The `{}` item in the
+status bar says which one runs. *Reactogenic: Show Transpiled TSX* opens the
+`.tsx` a file becomes, beside it.
+
+| What | Where |
+| --- | --- |
+| a slot, from its tag | go to definition on `<$Icon>` → the `$Icon` declaration; rename renames every tag and the declaration |
+| a segment, from its root | go to definition on `#about-us` → `about-us.rtsx` |
+| every project error | the task *reactogenic: check* (Terminal → Run Task) |
+
+Rename is whole or refused: where a rename cannot be carried through — a
+name inside a string, a `.ts` file with unsaved changes — the server says
+why and changes nothing.
+
+**Other editors**: `reactogenic lsp --stdio` is a standard language server —
+point Neovim, Zed, Helix or a JetBrains IDE at it for `*.rtsx`.
+
+**Without our server**, from TypeScript 7.1: `@reactogenic/cli` is also a
+TypeScript *content mapper*, so plain `tsc` and the TS 7.1 language server
+can read `.rtsx` — experimental, with TypeScript's own messages:
+
+```jsonc
+// tsconfig.json
+"contentMappers": [{ "package": "@reactogenic/cli", "extensions": [".rtsx"] }]
+```
+
 ## The syntax in five minutes
 
 **Shorthand props.** A bare attribute passes the variable of the same name
@@ -163,3 +204,5 @@ const disabled = false;
 - [specs/phase01/vite.md](../specs/phase01/vite.md) — the Vite plugin.
 - [specs/phase01/diagnostics.md](../specs/phase01/diagnostics.md) —
   `reactogenic check` and how errors are mapped back.
+- [specs/phase01/ide.md](../specs/phase01/ide.md) — the language server, the
+  grammar and the VS Code extension.

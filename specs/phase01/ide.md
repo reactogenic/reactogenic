@@ -815,8 +815,13 @@ published to npm.
 - **Packaging**: one `.vsix` per platform (the six of `@reactogenic/cli`),
   each with its binary and the licences of the code in it, plus one universal
   `.vsix` without a binary (highlighting anywhere; the server if rows 1–3
-  find one). Every one holds the TS server plugin's folder.
-  `engines.vscode: ^1.91.0`, the language client's floor.
+  find one). Every one holds the TS server plugin's folder, the page the
+  Marketplace shows (`README.md`, written for users; the developer's notes
+  are `DEVELOPMENT.md`) and `CHANGELOG.md`.
+  `engines.vscode: ^1.91.0`, the language client's floor. Each `.vsix` is
+  checked as it ships (`scripts/smoke-vsix.mjs`): its files, and on its own
+  platform that the bundled binary answers `initialize` and ends with
+  status 0 — the `package` workflow, one runner per platform.
 
 ### The `.ts` side
 

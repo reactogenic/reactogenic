@@ -41,3 +41,10 @@ for target in "${targets[@]}"; do
 JSON
   echo "built $out/bin/$exe"
 done
+
+# The stripped sizes: a growth of more than 10% over the previous release
+# needs a note in specs/phase01/decisions.md (plan.md, RGP1-113).
+for target in "${targets[@]}"; do
+  exe=reactogenic; [[ "$target" == win32-* ]] && exe=reactogenic.exe
+  printf '%-12s %5.1f MB\n' "$target" "$(echo "$(wc -c < "$root/dist/npm/cli-$target/bin/$exe") / 1048576" | bc -l)"
+done

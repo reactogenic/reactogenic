@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Pack and publish the npm packages (RGP1-093).
+# Pack and publish the npm packages (RGP1-093) and the VS Code extension
+# (RGP1-113). A release, in this order: the version in packages/{cli,core,
+# vite}/package.json (cli's optionalDependencies too) and CHANGELOG.md; then
 #
 #   scripts/release.sh pack <version>      build and pack all nine into dist/release/
 #   scripts/release.sh publish <otp>       publish dist/release/*.tgz, binaries first
+#   pnpm install                           the lockfile: cli's platform packages exist only now
+#   scripts/release.sh vsix                the seven .vsix in dist/vsix/, from pack's binaries
+#   scripts/release.sh publish-vsix        dist/vsix/*.vsix to the Marketplace ($VSCE_PAT) and Open VSX ($OVSX_PAT)
 #
 # pack checks that every package.json carries <version>; publish uploads the
 # tarballs pack made, so what was tested is what is published. The dist-tag
@@ -68,8 +73,33 @@ publish)
     fi
   done
   ;;
+vsix)
+  # The binaries pack built — the ones on npm — never rebuilt.
+  version="$(node -p "require('$root/packages/cli/package.json').version")"
+  for target in "${platforms[@]}"; do
+    [[ "$(node -p "require('$root/dist/npm/cli-$target/package.json').version" 2>/dev/null)" == "$version" ]] ||
+      { echo "dist/npm/cli-$target is not $version: run pack first" >&2; exit 1; }
+  done
+  rm -rf "$root/dist/vsix"
+  (cd "$root/packages/vscode" && node scripts/package.mjs --pre-release && node scripts/smoke-vsix.mjs "$root"/dist/vsix/*.vsix)
+  ;;
+publish-vsix)
+  : "${VSCE_PAT:?the Marketplace token of the publisher reactogenic}" "${OVSX_PAT:?the Open VSX token of the namespace reactogenic}"
+  version="$(node -p "require('$root/packages/vscode/package.json').version")"
+  files=()
+  for target in "${platforms[@]}" universal; do
+    [[ -f "$root/dist/vsix/rtsx-$target-$version.vsix" ]] || { echo "missing rtsx-$target-$version.vsix: run vsix first" >&2; exit 1; }
+    files+=("$root/dist/vsix/rtsx-$target-$version.vsix")
+  done
+  # 0.1.x is a pre-release line: the Marketplace has no pre-release tags, a
+  # .vsix is one or is not (package.mjs --pre-release).
+  (cd "$root/packages/vscode" && pnpm exec vsce publish --pre-release --packagePath "${files[@]}")
+  for file in "${files[@]}"; do
+    pnpm dlx ovsx publish "$file" --pre-release
+  done
+  ;;
 *)
-  sed -n '2,10p' "$0" >&2
+  sed -n '2,13p' "$0" >&2
   exit 2
   ;;
 esac

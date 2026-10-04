@@ -56,7 +56,7 @@ jobs:
 
   vscode:
     # The editor suite (RGP1-110): the extension and the binary of this commit
-    # in a real VS Code, isolated profile, four windows (packages/vscode/README.md).
+    # in a real VS Code, isolated profile, five windows (packages/vscode/DEVELOPMENT.md).
     # Not a required check of the `main` ruleset.
     runs-on: ubuntu-latest
     steps:

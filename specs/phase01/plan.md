@@ -1604,7 +1604,24 @@ imports by its full name: gone with RGP1-106.)
   with `.rtsx` files and reports at `.rtsx` positions.
 - Depends on: 104.
 
-### RGP1-113 — Docs and release · S
+### RGP1-113 — Docs and release · S · prepared; publishing waits for your go-ahead
+*Done*: getting-started (*Editor*), the README, `CHANGELOG.md` (what
+`check` prints differently; the fixes) and the extension's own — its
+`README.md` is now the Marketplace page, the developer's notes are
+`DEVELOPMENT.md`. The extension is 0.1.1. `build-binaries.sh` prints the six
+sizes: 26.4–28.6 MB stripped (darwin-arm64 27.3; 19.4 in 0.1.0-alpha.0 — the
+language service, noted in decisions.md). `scripts/smoke-vsix.mjs` and the
+`package` workflow (seven `.vsix`, each platform's binary asked
+`initialize` on a runner of that platform); `release.sh vsix` and
+`publish-vsix`. Run here: the seven packaged from the six cross-compiled
+binaries, darwin-arm64's started; the editor suite against that `.vsix`
+(five windows, 41 tests, VS Code 1.140).
+*Left*: the npm version is still 0.1.0-alpha.0 — the bump needs the
+platform packages on the registry before the lockfile can name them, so it
+is the first step of the release (`release.sh`, the order in its header).
+The `package` workflow has not run (nothing is pushed): the five other
+binaries were never started. No icon — a brand decision. The last two
+lines of *Done when* need the published alpha.
 - getting-started (*Editor*), README, a changelog line for the `check`
   changes (moved columns, merged duplicates, project references).
 - Versions: npm `0.1.0-alpha.N`; the extension `0.1.N`, published as a

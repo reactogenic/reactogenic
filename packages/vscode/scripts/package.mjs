@@ -24,6 +24,7 @@ const out = path.join(repo, "dist/vsix");
 /** What every .vsix holds; paths are the same in the package and in the .vsix. */
 const FILES = [
   "README.md",
+  "CHANGELOG.md",
   "language-configuration.json",
   "tags-language-configuration.json",
   "syntaxes/rtsx.tmLanguage.json",

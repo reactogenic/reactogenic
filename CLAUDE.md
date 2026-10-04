@@ -159,7 +159,7 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
 | `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
-| `phase01/ide.md` | specified; M8 (RGP1-100–114) in progress |
+| `phase01/ide.md` | implemented (RGP1-100–112); 113 prepared — publishing on the owner's go-ahead; 114 (re-vendor) later |
 | `later/layout.md`, `later/persistent-state.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
@@ -174,6 +174,10 @@ over prose. Every desugaring as before/after `.rtsx` → `.tsx`. Open questions
 inline as `> OPEN:`; rejected ideas as **Rejected:** with the reason. Do not
 invent extensions beyond the lists above. Commit and
 push only when asked.
+
+Releases: `scripts/release.sh` (the order is in its header); `CHANGELOG.md`
+for the npm packages, `packages/vscode/CHANGELOG.md` for the extension, whose
+`README.md` is the Marketplace page (`DEVELOPMENT.md` is the developer's).
 
 `main` is protected (ruleset `main`): changes land through pull requests —
 no approvals required, squash merge only, and CI's `go`, `js` and `vendor`
