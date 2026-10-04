@@ -4,7 +4,7 @@ The npm packages (`@reactogenic/core`, `@reactogenic/vite`, `@reactogenic/cli`
 and its six platform packages) share one version. The VS Code extension has
 its own: [packages/vscode/CHANGELOG.md](packages/vscode/CHANGELOG.md).
 
-## 0.1.0-alpha.1 — unreleased
+## 0.1.0-alpha.1 — 2026-10-04
 
 IDE support (specs/phase01/ide.md).
 

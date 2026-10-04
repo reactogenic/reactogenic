@@ -11,3 +11,6 @@ packages/*/LICENSE
 
 # VS Code downloaded by the editor suite (packages/vscode, pnpm test:editor)
 .vscode-test/
+
+# release tokens (scripts/release.sh publish-vsix): never committed
+.env.release

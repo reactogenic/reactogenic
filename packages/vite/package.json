@@ -1,6 +1,6 @@
 {
   "name": "@reactogenic/vite",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Vite plugin for Reactogenic's .rtsx files.",
   "license": "MIT",
   "repository": {
