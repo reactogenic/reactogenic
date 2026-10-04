@@ -106,6 +106,11 @@ shell-react at the use site (shell-dynamic-code). No per-file annotation.
 
 ## Shell rules
 
+> Phase 2 builds shells by *executing* shell code once per pathname
+> ([phase02/builder.md](../phase02/builder.md), *Shell code in phase 2*):
+> S2 is read there as "no **runtime** variance". The table below is the
+> original statement.
+
 Shell code must be **shell-safe**:
 
 | # | Rule | Why |

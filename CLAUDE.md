@@ -1,8 +1,10 @@
 # Reactogenic — context for working in this repo
 
 You are working in `reactogenic/reactogenic`, a monorepo for a React-based UI
-framework. Current task: phase 1, following `specs/phase01/plan.md` task by
-task (`RGP1-xxx`). Specs come first: settle a task's spec, then implement.
+framework. Current task: phase 2 (the builder), following
+`specs/phase02/plan.md` task by task (`RGP2-xxx`); phase 1 is released
+(`specs/phase01/plan.md`, `RGP1-xxx`). Specs come first: settle a task's
+spec, then implement.
 
 Repo layout (see `specs/phase01/decisions.md`, RGP1-003): `go/` — our Go
 module (`go/internal/`, `go/cmd/reactogenic/`), vendored tsgo in
@@ -18,7 +20,24 @@ Conformance: `go/internal/conformance` runs the syntax.md examples plus
 The specs are the source of truth. When this file and a spec disagree, the
 spec wins; update this file.
 
-## Current phase: phase 1 (`specs/phase01/`)
+## Current phase: phase 2 (`specs/phase02/`)
+
+The builder: `reactogenic build` compiles pages in `.rtsx` plus the layout
+components of `@reactogenic/ui` (`SideMenu`, `Dialog`, `DropdownMenu`) into
+per-page plain HTML + CSS + minimal JS, **no React in the output**; the proof
+is a four-page docs site (`site/`) and a measured bet (`plan.md`, RGP2-050).
+No islands, no dev server, no view transitions.
+
+- `research.md` — esbuild is the linker (public Go API, in-process, never
+  forked); our compiler sits in front and executes pages in an embedded
+  engine (`modernc.org/quickjs`) with React's own static renderer.
+- `builder.md` — the pipeline: routes, the record of execution, page checks,
+  CSS pruned per page, behaviours (`mount()` + `Define` flags), packaging.
+- `components.md` — the three components on platform primitives.
+- `decisions.md` — what was decided, and what is **for review**.
+- Never link `text/template` / `html/template` into the binary: +18.6 MB.
+
+## Phase 1 (`specs/phase01/`) — released
 
 Scope, and nothing else:
 
@@ -160,7 +179,8 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
 | `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
 | `phase01/ide.md` | implemented and released (RGP1-100–113: npm 0.1.0-alpha.1, the extension 0.1.1); 114 (re-vendor) later |
-| `later/layout.md`, `later/persistent-state.md` | parked |
+| `phase02/*` | research and spec done (RGP2-001, 002); the builder in progress |
+| `later/layout.md`, `later/persistent-state.md` | parked; phase 2 reads the shell rules as in `phase02/builder.md` |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
 Phase 1 open decisions: how the plugin hands TSX
