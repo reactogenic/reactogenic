@@ -9,27 +9,27 @@
       "output": "index.html",
       "document": {
         "raw": 1340,
-        "gzip": 602
+        "gzip": 601
       },
       "html": {
         "raw": 1218,
         "gzip": 542
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
         {
@@ -73,27 +73,27 @@
       "output": "actions/index.html",
       "document": {
         "raw": 1568,
-        "gzip": 702
+        "gzip": 700
       },
       "html": {
         "raw": 1446,
         "gzip": 640
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
         {
@@ -147,29 +147,33 @@
       "output": "dialog/index.html",
       "document": {
         "raw": 1326,
-        "gzip": 603
+        "gzip": 601
       },
       "html": {
         "raw": 1204,
         "gzip": 538
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
+        {
+          "name": "Action",
+          "count": 1
+        },
         {
           "name": "Button",
           "count": 2
@@ -206,27 +210,27 @@
       "output": "guide/index.html",
       "document": {
         "raw": 1063,
-        "gzip": 567
+        "gzip": 566
       },
       "html": {
         "raw": 941,
         "gzip": 505
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
         {
@@ -250,27 +254,27 @@
       "output": "guide/more/index.html",
       "document": {
         "raw": 880,
-        "gzip": 501
+        "gzip": 500
       },
       "html": {
         "raw": 758,
         "gzip": 438
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
         {
@@ -297,20 +301,20 @@
         "gzip": 453
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
         {
@@ -350,27 +354,27 @@
       "output": "plain/index.html",
       "document": {
         "raw": 720,
-        "gzip": 398
+        "gzip": 397
       },
       "html": {
         "raw": 598,
         "gzip": 337
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-96dce8a3.css",
+        "url": "/docs/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1633,
-        "gzip": 813,
+        "raw": 1664,
+        "gzip": 823,
         "delivery": "file",
-        "url": "/docs/_rg/site-071d3561.js",
+        "url": "/docs/_rg/site-6141d4d6.js",
         "pages": 7,
-        "blob": "071d3561"
+        "blob": "6141d4d6"
       },
       "components": [
         {
@@ -392,13 +396,13 @@
   "blobs": [
     {
       "kind": "css",
-      "hash": "96dce8a3",
+      "hash": "1622bb1d",
       "size": {
-        "raw": 7177,
-        "gzip": 2010
+        "raw": 7531,
+        "gzip": 2093
       },
       "delivery": "file",
-      "file": "_rg/site-96dce8a3.css",
+      "file": "_rg/site-1622bb1d.css",
       "pages": [
         "/",
         "/actions/",
@@ -411,13 +415,13 @@
     },
     {
       "kind": "js",
-      "hash": "071d3561",
+      "hash": "6141d4d6",
       "size": {
-        "raw": 1633,
-        "gzip": 813
+        "raw": 1664,
+        "gzip": 823
       },
       "delivery": "file",
-      "file": "_rg/site-071d3561.js",
+      "file": "_rg/site-6141d4d6.js",
       "pages": [
         "/",
         "/actions/",

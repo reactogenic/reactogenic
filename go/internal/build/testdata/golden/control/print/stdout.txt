@@ -1,18 +1,18 @@
 /  pages/index.rtsx
                   raw     gzip
   HTML           1168      535
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
-  document       1280      594   index.html
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
+  document       1280      595   index.html
   components Each ×3, HomePage ×1, Item ×4, Items ×2, Layout ×1, Section ×1, SideMenu ×1
   behaviours @reactogenic/ui/behaviors/overlays
 
 /actions/  pages/actions/index.rtsx
                   raw     gzip
   HTML           1411      634
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
-  document       1523      695   actions/index.html
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
+  document       1523      694   actions/index.html
   components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true
@@ -21,46 +21,46 @@
 /dialog/  pages/dialog/index.rtsx
                   raw     gzip
   HTML           1169      534
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
-  document       1281      594   dialog/index.html
-  components Button ×2, Dialog ×1, DialogPage ×1, Each ×1, Layout ×1
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
+  document       1281      593   dialog/index.html
+  components Action ×1, Button ×2, Dialog ×1, DialogPage ×1, Each ×1, Layout ×1
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/invokers
 
 /guide/  pages/guide/index.rtsx
                   raw     gzip
   HTML            901      498
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
   document       1013      559   guide/index.html
   components GuidePage ×1, Intro ×1, Layout ×1
 
 /guide/more/  pages/guide/more/index.rtsx
                   raw     gzip
   HTML            718      433
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
-  document        830      494   guide/more/index.html
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
+  document        830      495   guide/more/index.html
   components Layout ×1, MorePage ×1
 
 /links/  pages/links/index.rtsx
                   raw     gzip
   HTML            819      447
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
-  document        931      506   links/index.html
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
+  document        931      507   links/index.html
   components Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, LinksPage ×1, MenuItem ×3
   behaviours @reactogenic/ui/behaviors/overlays
 
 /plain/  pages/plain/index.rtsx
                   raw     gzip
   HTML            558      332
-  CSS            7177     2010   /_rg/site-96dce8a3.css, the same on 7 pages
-  JS             1613      810   /_rg/site-d3a600b0.js, the same on 7 pages
-  document        670      391   plain/index.html
+  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 7 pages
+  JS             1644      820   /_rg/site-09607c6d.js, the same on 7 pages
+  document        670      392   plain/index.html
   components Button ×1, Layout ×1, PlainPage ×1
 
-css  96dce8a3     7177     2010   _rg/site-96dce8a3.css    / /actions/ /dialog/ /guide/ /guide/more/ /links/ /plain/
-js   d3a600b0     1613      810   _rg/site-d3a600b0.js     / /actions/ /dialog/ /guide/ /guide/more/ /links/ /plain/
+css  1622bb1d     7531     2093   _rg/site-1622bb1d.css    / /actions/ /dialog/ /guide/ /guide/more/ /links/ /plain/
+js   09607c6d     1644      820   _rg/site-09607c6d.js     / /actions/ /dialog/ /guide/ /guide/more/ /links/ /plain/
 7 pages written to <out>

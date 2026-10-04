@@ -9,27 +9,27 @@
       "output": "index.html",
       "document": {
         "raw": 1280,
-        "gzip": 594
+        "gzip": 595
       },
       "html": {
         "raw": 1168,
         "gzip": 535
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
         {
@@ -73,27 +73,27 @@
       "output": "actions/index.html",
       "document": {
         "raw": 1523,
-        "gzip": 695
+        "gzip": 694
       },
       "html": {
         "raw": 1411,
         "gzip": 634
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
         {
@@ -147,29 +147,33 @@
       "output": "dialog/index.html",
       "document": {
         "raw": 1281,
-        "gzip": 594
+        "gzip": 593
       },
       "html": {
         "raw": 1169,
         "gzip": 534
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
+        {
+          "name": "Action",
+          "count": 1
+        },
         {
           "name": "Button",
           "count": 2
@@ -213,20 +217,20 @@
         "gzip": 498
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
         {
@@ -250,27 +254,27 @@
       "output": "guide/more/index.html",
       "document": {
         "raw": 830,
-        "gzip": 494
+        "gzip": 495
       },
       "html": {
         "raw": 718,
         "gzip": 433
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
         {
@@ -290,27 +294,27 @@
       "output": "links/index.html",
       "document": {
         "raw": 931,
-        "gzip": 506
+        "gzip": 507
       },
       "html": {
         "raw": 819,
         "gzip": 447
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
         {
@@ -350,27 +354,27 @@
       "output": "plain/index.html",
       "document": {
         "raw": 670,
-        "gzip": 391
+        "gzip": 392
       },
       "html": {
         "raw": 558,
         "gzip": 332
       },
       "css": {
-        "raw": 7177,
-        "gzip": 2010,
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/_rg/site-96dce8a3.css",
+        "url": "/_rg/site-1622bb1d.css",
         "pages": 7,
-        "blob": "96dce8a3"
+        "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1613,
-        "gzip": 810,
+        "raw": 1644,
+        "gzip": 820,
         "delivery": "file",
-        "url": "/_rg/site-d3a600b0.js",
+        "url": "/_rg/site-09607c6d.js",
         "pages": 7,
-        "blob": "d3a600b0"
+        "blob": "09607c6d"
       },
       "components": [
         {
@@ -392,13 +396,13 @@
   "blobs": [
     {
       "kind": "css",
-      "hash": "96dce8a3",
+      "hash": "1622bb1d",
       "size": {
-        "raw": 7177,
-        "gzip": 2010
+        "raw": 7531,
+        "gzip": 2093
       },
       "delivery": "file",
-      "file": "_rg/site-96dce8a3.css",
+      "file": "_rg/site-1622bb1d.css",
       "pages": [
         "/",
         "/actions/",
@@ -411,13 +415,13 @@
     },
     {
       "kind": "js",
-      "hash": "d3a600b0",
+      "hash": "09607c6d",
       "size": {
-        "raw": 1613,
-        "gzip": 810
+        "raw": 1644,
+        "gzip": 820
       },
       "delivery": "file",
-      "file": "_rg/site-d3a600b0.js",
+      "file": "_rg/site-09607c6d.js",
       "pages": [
         "/",
         "/actions/",
