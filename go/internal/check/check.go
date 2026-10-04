@@ -27,8 +27,20 @@ type Report = report.Report
 
 // Run type-checks the project of the tsconfig at configPath (absolute).
 func Run(configPath string) []Report {
-	reports, _ := run(configPath)
+	reports, _, _ := run(configPath, nil)
 	return reports
+}
+
+// Program is Run for a caller that goes on with what was checked — `build`,
+// which renders the pages from it (specs/phase02/builder.md, *The
+// pipeline*). It also returns one program: that of the project the files
+// are of — the project that owns, as below, the first of them any project
+// lists; when none lists one, the project of configPath itself. So a
+// tsconfig that only references others (Vite's template) is built through
+// them, as it is checked. nil: the tsconfig cannot be read.
+func Program(configPath string, files []string) ([]Report, *rtsx.Program) {
+	reports, _, program := run(configPath, files)
+	return reports, program
 }
 
 // run checks the project and, first, the projects it references — a tsconfig
@@ -41,7 +53,10 @@ func Run(configPath string) []Report {
 // it, in `files` or through `include`, whichever project is checked first.
 // A file that no project lists — one reached through an import only — is
 // reported by the first that holds it.
-func run(configPath string) (reports []Report, configs []string) {
+//
+// kept is the program of the project that owns the first of files that a
+// project lists (Program); every other is let go once it is checked.
+func run(configPath string, files []string) (reports []Report, configs []string, kept *rtsx.Program) {
 	fs := rtsx.OSFS()
 	type loaded struct {
 		project     *rtsx.Project // nil: the tsconfig cannot be read
@@ -80,11 +95,21 @@ func run(configPath string) (reports []Report, configs []string) {
 			}
 		}
 	}
+	keep := len(projects) - 1 // configPath's own: a project comes after those it references
+	for _, file := range files {
+		if o, listed := owner[file]; listed {
+			keep = o
+			break
+		}
+	}
 	reported := map[string]bool{} // the files no project lists, and the reports that have no file
 	for i, p := range projects {
 		var program *rtsx.Program // one at a time: built, checked, let go
 		if p.project != nil {
 			program = p.project.Program()
+		}
+		if i == keep {
+			kept = program
 		}
 		held := map[string]bool{}
 		for _, r := range report.Program(program, p.diagnostics) {
@@ -110,7 +135,7 @@ func run(configPath string) (reports []Report, configs []string) {
 	slices.SortStableFunc(reports, func(a, b Report) int {
 		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Col, b.Col))
 	})
-	return reports, configs
+	return reports, configs, kept
 }
 
 // Errors counts the reports that are errors.

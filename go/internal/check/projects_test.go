@@ -310,3 +310,53 @@ func TestProjects(t *testing.T) {
 		}
 	})
 }
+
+// Program is Run with one program kept for the caller that builds from it
+// (specs/phase02/builder.md, *The pipeline*): that of the project that lists
+// the caller's files — the one a tsconfig with nothing but `references`
+// leads to.
+func TestProgram(t *testing.T) {
+	has := func(t *testing.T, dir string, files []string, want ...string) {
+		t.Helper()
+		reports, program := Program(dir+"/tsconfig.json", files)
+		if program == nil {
+			t.Fatal("no program")
+		}
+		if again := Run(dir + "/tsconfig.json"); len(reports) != len(again) {
+			t.Errorf("Program reports %d, Run %d", len(reports), len(again))
+		}
+		for _, file := range want {
+			name, absent := strings.CutPrefix(file, "!")
+			if held := program.GetSourceFile(dir+"/"+name) != nil; held == absent {
+				t.Errorf("the program for %v holds %s: %v", files, name, held)
+			}
+		}
+	}
+	t.Run("vite-template", func(t *testing.T) {
+		dir := project(t, "vite-template")
+		has(t, dir, []string{dir + "/src/page.rtsx"}, "src/page.rtsx", "src/main.tsx", "!vite.config.ts")
+		has(t, dir, []string{dir + "/vite.config.ts"}, "vite.config.ts", "!src/page.rtsx")
+		// The first of the files that a project lists decides.
+		has(t, dir, []string{dir + "/nowhere.rtsx", dir + "/vite.config.ts", dir + "/src/page.rtsx"}, "vite.config.ts", "!src/page.rtsx")
+		// No project lists one: the tsconfig's own, which holds no file here.
+		has(t, dir, []string{dir + "/nowhere.rtsx"}, "!src/page.rtsx", "!vite.config.ts")
+		has(t, dir, nil, "!src/page.rtsx", "!vite.config.ts")
+	})
+	// A file of two projects is the first's, as it is for the reports.
+	t.Run("references-shared-file", func(t *testing.T) {
+		dir := project(t, "references-shared-file")
+		has(t, dir, []string{dir + "/src/page.rtsx"}, "src/page.rtsx", "!test/page.test.tsx")
+		has(t, dir, []string{dir + "/test/page.test.tsx"}, "src/page.rtsx", "test/page.test.tsx")
+	})
+	// One project: its own.
+	t.Run("rtsx-only", func(t *testing.T) {
+		dir := project(t, "rtsx-only")
+		has(t, dir, []string{dir + "/src/a.rtsx"}, "src/a.rtsx")
+		has(t, dir, nil, "src/a.rtsx")
+	})
+	t.Run("no tsconfig", func(t *testing.T) {
+		if reports, program := Program(t.TempDir()+"/tsconfig.json", nil); program != nil || len(reports) == 0 {
+			t.Errorf("%v, %v", reports, program)
+		}
+	})
+}
