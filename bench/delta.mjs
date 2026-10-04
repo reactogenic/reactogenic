@@ -24,7 +24,8 @@
 //                 menu of `/syntax/`. The site's one flag
 //                 (`RG_MENU_TYPEAHEAD`): what it is worth. Reported.
 //
-// Exit status: 1 when T4 fails. No dependency (node >= 22).
+// Exit status: 1 when T4 fails, or when the build takes the cheat sheet
+// deleted alone. No dependency (node >= 22).
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -165,7 +166,7 @@ function compare(title, edit, expect) {
     while (p < y.length && x[p] === y[p]) p++;
     let s = 0;
     while (s < y.length - p && x[x.length - 1 - s] === y[y.length - 1 - s]) s++;
-    const was = a.html.slice(a.html.indexOf(x[p], 0) < 0 ? 0 : nth(a.html, x, p), nth(a.html, x, x.length - s));
+    const was = a.html.slice(nth(a.html, x, p), nth(a.html, x, x.length - s));
     const is = b.html.slice(nth(b.html, y, p), nth(b.html, y, y.length - s));
     md += `Between the first and the last tag that differ, ${n(Buffer.byteLength(was))} B became ${n(Buffer.byteLength(is))} B; every byte before and after is where it was.\n\nBefore:\n\n\`\`\`html\n${was}\n\`\`\`\n\nAfter:\n\n\`\`\`html\n${is}\n\`\`\`\n`;
     gone = vocabulary(was, b.html);
