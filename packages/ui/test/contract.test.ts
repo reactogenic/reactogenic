@@ -74,7 +74,7 @@ beforeAll(async () => {
 });
 
 test("the spec has the examples this suite knows", () => {
-  expect(cases.map((example) => example.name)).toEqual(["Button/1", "Dialog/1", "Dialog/2", "DropdownMenu/1", "DropdownMenu/2", "DropdownMenu/3", "SideMenu/1"]);
+  expect(cases.map((example) => example.name)).toEqual(["Button/1", "Dialog/1", "Dialog/2", "DropdownMenu/1", "DropdownMenu/2", "DropdownMenu/3", "SideMenu/1", "SideMenu/2"]);
 });
 
 describe("emitted HTML equals the spec's", () => {
@@ -144,5 +144,6 @@ describe("what an example mounts", () => {
 
   test("a side menu: overlays only", () => {
     expect(mounts("SideMenu/1")).toEqual([{ module: OVERLAYS }]);
+    expect(mounts("SideMenu/2")).toEqual([{ module: OVERLAYS }]);
   });
 });

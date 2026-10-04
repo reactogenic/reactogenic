@@ -179,20 +179,22 @@ interface DialogProps {
 Missing `$Title` → phase 1's `missing-slot`. Exit animation is an
 enhancement: only Chromium animates leaving the top layer.
 
-> OPEN: the close button's name is the English word `Close`, here and on the
-> drawer: a site with `<html lang="de">` announces it on every page.
+> OPEN (for the owner, decisions.md, G): the close button's name is the
+> English word `Close`, here and on the drawer: a site with `<html lang="de">`
+> announces it on every page.
 > Recommended: `closeLabel?: string` (content; default `"Close"`) on
 > `DialogProps` and `SideMenuProps`, printed as that button's `aria-label`.
 > A slot (`$Close`) is more than a name needs.
 
-> OPEN: a page check for the delivery row's exception, in builder.md —
-> `dialog-in-popover`: a `<dialog>` inside a `[popover]` other than a
-> `.rg-sidemenu`, named by a `commandfor` outside that popover. Recommended:
-> add it. It costs no byte, and the failure is silent: every other check
-> passes, and the page goes inert.
+> OPEN (for the owner, decisions.md, H): a page check for the delivery
+> row's exception, in builder.md — `dialog-in-popover`: a `<dialog>` inside a
+> `[popover]` other than a `.rg-sidemenu`, named by a `commandfor` outside
+> that popover. Recommended: add it. It costs no byte, and the failure is
+> silent: every other check passes, and the page goes inert.
 
-> OPEN: layout.md's `Dialog` has its body in `<$Contents>`, and states the
-> hole rule for slot bodies only; here the body is `children`. Recommended:
+> OPEN (for the owner, decisions.md, B): layout.md's `Dialog` has its body
+> in `<$Contents>`, and states the hole rule for slot bodies only; here the
+> body is `children`. Recommended:
 > `children` — the default slot, as on every other component — and layout.md
 > drops `$Contents` when islands are specified.
 
@@ -290,8 +292,8 @@ element. That is the whole action vocabulary of a React-less page.
 | opening a dialog from an item | `menu-keys` closes the menu first, with focus back on the trigger — so closing the dialog returns focus there. (Natively the menu closes too, but the dialog then returns focus to an item that is gone.) |
 | not in phase 2 | sections and separators, checkable items, submenus, icons |
 
-> OPEN: a disabled item is skipped — by focus, the arrow keys and typeahead
-> (the `disabled` row). APG's menu pattern keeps it focusable ("focusable but
+> OPEN (for the owner, decisions.md, I): a disabled item is skipped — by
+> focus, the arrow keys and typeahead (the `disabled` row). APG's menu pattern keeps it focusable ("focusable but
 > cannot be activated"), so that a screen-reader user learns it is there.
 > Recommended: APG's — `aria-disabled="true"` on a button item too, without
 > `disabled`, `command` or `commandfor`; the arrow keys stop at it,
@@ -397,25 +399,41 @@ interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "p
 
 ```tsx
 // layout.rtsx — a page and its sections
-<$Item key="guide">
-  Getting started
-  <$Item key="page" href="/guide/">Overview</$Item>
-  <$Item key="install" href="/guide/#install">Install</$Item>
-</$Item>
+<SideMenu label="Documentation">
+  <$Section key="learn">
+    <$Item key="guide">
+      Getting started
+      <$Item key="page" href="/guide/">Overview</$Item>
+      <$Item key="install" href="/guide/#install">Install</$Item>
+    </$Item>
+  </$Section>
+</SideMenu>
 ```
 
 ```html
-<!-- emitted for the page /guide/: the group is open because of its first item -->
-<details open>
-  <summary>Getting started</summary>
-  <ul>
-    <li><a href="/guide/" aria-current="page">Overview</a></li>
-    <li><a href="/guide/#install">Install</a></li>
-  </ul>
-</details>
+<!-- emitted for the page /guide/ — the group is open because of its first item -->
+<button type="button" class="rg-sidemenu-toggle" popovertarget="s2" aria-label="Documentation">☰</button>
+<nav id="s2" class="rg-sidemenu" popover aria-label="Documentation">
+  <button type="button" data-part="close" popovertarget="s2" popovertargetaction="hide" aria-label="Close">✕</button>
+  <section>
+    <ul>
+      <li>
+        <details open>
+          <summary>Getting started</summary>
+          <ul>
+            <li><a href="/guide/" aria-current="page">Overview</a></li>
+            <li><a href="/guide/#install">Install</a></li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </section>
+  <button type="button" data-part="scrim" popovertarget="s2" popovertargetaction="hide" tabindex="-1" aria-hidden="true"></button>
+</nav>
 ```
 
-> OPEN: links *into* the current page — a page's headings as nested items:
+> OPEN (for the owner, decisions.md, J): links *into* the current page — a
+> page's headings as nested items:
 > `/guide/slots/#keyed`, `#keyed`, `?tab=api`. Today such an item is not
 > marked and does not open the disclosures around it (so the docs site's
 > groups start with an "Overview" link to the page, as above). Recommended:
@@ -448,7 +466,7 @@ What makes per-page pruning exact (builder.md, *CSS*):
 | a rule reaches the component's own structure, never a slot's content | parts through child combinators from the root: `.rg-dialog > [data-part="panel"] > header > [data-part="close"]`, `.rg-sidemenu > [data-part="scrim"]`, `.rg-menu > li > a`. A descendant selector only below an element that holds nothing of the author's but a label: `.rg-sidemenu > :is(section, details) a`. **Never** `.rg-sidemenu a` or `.rg-sidemenu [data-part="close"]`: a `Dialog` in `$Header` has a `[data-part="close"]` of its own, and the rule that hides the drawer's hides the dialog's |
 | compile-time options | `data-<option>` on the root: `[data-align="end"]`, `[data-variant="ghost"]`; read by a behaviour too (`data-typeahead`) |
 | internal parts, slot attachments among them | `data-part`: `[data-part="footer"]` is `$Footer`'s attachment. An attachment the component's tag already names has none (`header > h2`) |
-| runtime state | pseudo-classes and the attributes builder.md's *CSS* table calls "maybe" (`open`, `hidden`, `aria-*`, …) — never a class. **A behaviour writes nothing else**: no class, no other attribute, no element — or a rule the pruner dropped for this page would start to match. The three here write nothing at all: they call the platform (`showModal()`, `close()`, `hidePopover()`, `focus()`) |
+| runtime state | pseudo-classes and the attributes builder.md's *CSS* table calls "maybe" (`open`, `hidden`, `aria-*`, …) — never a class. **A behaviour of the design system writes nothing else**: no class, no other attribute, no element. The builder asks less — a class or an attribute a behaviour writes *by its name in full* is read off the page's script and is "maybe" too (builder.md, *CSS*, *The page's script*) — and what it cannot see is what this rule keeps out: a name that is computed (a rule the pruner dropped for this page would start to match), an element added or moved (the page is not pruned at all). The three here write nothing at all: they call the platform (`showModal()`, `close()`, `hidePopover()`, `focus()`); `test/convention.test.ts` holds them to it |
 | motion | every `transition` is inside `@media (prefers-reduced-motion: no-preference)`: the dialog's fade and the drawer's slide are for a reader who has not asked for less (WCAG 2.3.3) |
 | forced colours | a background is the canvas there, and a shadow is gone: every surface of the top layer — the dialog's panel, the menu, the drawer — has a `1px solid` border, and the current item is marked by more than a background (its weight) |
 | order | `@layer rg.base, rg.components;` declared once, in the tokens file every component imports before its own (`import "./tokens.css"; import "./dialog.css"`); component rules in `rg.components`. Author CSS is unlayered, so it wins |
@@ -485,7 +503,8 @@ which covers a site's own `.css` imports too.
   (`key="2"`, `key="10"`: JavaScript enumerates them first, ascending).
   syntax.md notes it; here it decides rendering order: a menu written
   `b, 10, 9, a` is rendered `9, 10, b, a`, and `check` is silent.
-  > OPEN: the `KEYED` marker carries the keys in the written order
+  > OPEN (for the owner, decisions.md, D): the `KEYED` marker carries the
+  > keys in the written order
   > (recommended; a change to phase 1's emit and to `@reactogenic/core`, so a
   > task of its own in plan.md, before the docs site is written). The
   > alternative — the transpiler rejects integer-like keys where order
