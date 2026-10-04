@@ -449,6 +449,19 @@ page can check:
 | `<noscript>` | the same: to a browser that runs scripts — the ones a behaviour is for — its content is text. However the page was parsed |
 | repeated | one report per page for the same attribute on the same element name: a link of the layout is on every item of a list |
 
+> OPEN (for the owner, decisions.md, H): a fifth check, `dialog-in-popover`
+> — a `<dialog>` inside a `[popover]` that a `commandfor` outside that
+> popover names opens modal and unseen: the closed popover has no box
+> (components.md, *Dialog*, delivery). `SideMenu`'s own drawer is exempt: its
+> CSS gives the closed drawer a box while a dialog in it is modal.
+
+> OPEN: a link to another page is checked for the page, not for the place in
+> it: `/syntax/#slots` passes whether or not `/syntax/` has an element
+> `slots`. The builder has every page's ids; the docs site's side menu is
+> made of such links, and a renamed section breaks them silently (plan.md,
+> RGP2-040). Recommended: check the fragment against the target page's ids,
+> by the rule of `href="#x"`.
+
 They are reported at the page (file and pathname) with the offending
 attribute's text; mapping an attribute back to its `.rtsx` position needs
 provenance the renderer does not carry (*Not in phase 2*).
@@ -504,6 +517,12 @@ select them — and nothing more. The driver tells the pruner which they are:
 | `<script type="module">`, inline or `src` | a script of the page's own: its text is the page's built script, which the pruner reads (*The page's script*) | a script of the page's own: the page is not pruned |
 | `<link rel="stylesheet">` to the page's sheet | a stylesheet the builder did not bundle: it is the sheet that is pruned | one: every custom property, `@keyframes` and `@position-try` stays |
 | `<style>` with the page's sheet | read for the names it uses: a sheet is not pruned against itself | read: what it names stays |
+
+An element is the builder's when it is what packaging wrote: that name,
+those attributes — and, in the document the pruner is given, no text: an
+inlined blob's element is empty there. An element of the author's that is
+exactly that delivers the same blob under the same URL, or nothing (an empty
+`<script>` does not run), and is rightly taken for one.
 
 ```html
 <!-- /dialog/ as served: pruned — the one <script> is the builder's -->
@@ -861,25 +880,26 @@ pruned, why (*the page has a script of its own*).
 /actions/  pages/actions/index.rtsx
                   raw     gzip
   HTML           1411      634
-  CSS            3668     1237   inline
-  JS             1420      695   inline
-  document       6545     2455   actions/index.html
+  CSS            3845     1295   inline
+  JS             1451      705   inline
+  document       6753     2527   actions/index.html
   components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true
              @reactogenic/ui/behaviors/invokers
-  JS bytes      194 B  @reactogenic/ui/src/behaviors/overlays.ts
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
                 850 B  @reactogenic/ui/src/behaviors/menu-keys.ts
-                330 B  @reactogenic/ui/src/behaviors/invokers.ts
+                307 B  @reactogenic/ui/src/behaviors/invokers.ts
                  46 B  <entry>  the mount calls
   CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
                3 kept,   1 dropped  @reactogenic/ui/src/button.css
-              12 kept,   1 dropped  @reactogenic/ui/src/dialog.css
+              13 kept,   1 dropped  @reactogenic/ui/src/dialog.css
                6 kept,   1 dropped  @reactogenic/ui/src/dropdown-menu.css
-               0 kept,  22 dropped  @reactogenic/ui/src/side-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
                5 kept,  10 dropped  site.css
 
-css  3ed21ca5     3668     1237   inline                   /actions/
+css  f55a2378     3845     1295   inline                   /actions/
+js   2f3112a3      252      179   inline                   / /links/
 css  e28e8351     1074      502   _rg/page-e28e8351.css    /guide/ /guide/more/
 ```
 
@@ -890,7 +910,8 @@ css  e28e8351     1074      502   _rg/page-e28e8351.css    /guide/ /guide/more/
 | a behaviour | a module and the element it is mounted on, once, however many components mounted it, with the flags any of them turned on |
 | the last lines | the site's blobs: kind, hash, raw, gzip, `inline` or its file, the pages it serves |
 | CSS rules | of the sheet before it is minified; a file whose rules all went is a row: that is the saving. A file's bytes (`bytesIn`, `bytesOut` in the JSON) are its rules', before and after pruning |
-| a page that is not pruned | one line in place of the rows, with the reason: ``not pruned: the page has an element the user edits (`contenteditable`)`` (*CSS*) |
+| a page that is not pruned | one line in place of the rows, with the reason: ``not pruned: the page has an element the user edits (`contenteditable`)``, `not pruned: the page has a script of its own` (*CSS*). In the JSON: `styles.unpruned`, and the reason in `styles.why` |
+| a blob's delivery | `inline`, or its file. Under `auto` a blob that pages share is a file when its gzip column is over 250: the script of `/` and `/links/` above is under it, the sheet of the two guide pages over (*Packaging*) |
 | files | the project's own, from the project directory: `site.css`. A package's, by the package and the path in it: `@reactogenic/ui/src/dialog.css` — whether the install put it in `node_modules/`, in pnpm's store or behind a link out of the project. Nothing in the report is the machine's: two builds of one input write the same report, on any checkout |
 | a file of no package, outside the project | where it is, from the project directory: `../shared/tokens.css` |
 | gzip | DEFLATE at level 9, as Go's `compress/gzip` writes it: 0–5 B above what `gzip -9` gives on a page's files, under 1%. The measuring scripts have the reference numbers |

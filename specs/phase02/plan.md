@@ -67,16 +67,22 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 // passed, `false` included; nil when it passed none.
 
 // cssprune — RGP2-020
-type Options struct{ Script string }  // the page's built script (behaviors.Build): what it names is "maybe"
+type Options struct {
+	Script  string       // the page's built script (behaviors.Build): what it names is "maybe"
+	Builder []*html.Node // the elements of doc that packaging wrote: its <script>, its <style> or <link>
+}
 func PruneWith(css string, doc *html.Node, opts Options) (out string, stats Stats, err error)
-func Prune(css string, doc *html.Node) (out string, stats Stats, err error)   // PruneWith for a page without a script
-// doc: the page as rendered, with `<!doctype html>` — before packaging: a <script> in it is the page's own,
-// and such a page is not pruned (Stats.Unpruned, Stats.Why)
+func Prune(css string, doc *html.Node) (out string, stats Stats, err error)   // PruneWith for a page with nothing of the builder's
+func Whole(css string) (Stats, error)                                         // the stats of a sheet a caller keeps whole; it says Why
+// doc: the page as it is served, with `<!doctype html>` — the base in its links, the builder's elements in it.
+// A <script> that Builder does not name is the page's own, and such a page is not pruned (Stats.Unpruned,
+// Stats.Why); a <link rel=stylesheet> that it does not name is a sheet nobody bundled
 
 // pagecheck — RGP2-021
 func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report
 // files: the output's other files, by their path from its root ("/favicon.svg")
-// --base is not its business: the page is checked as rendered, before packaging prefixes its links
+// --base is not its business: the page is checked as rendered, before packaging prefixes its links —
+// another document than the one the pruner is given
 
 // behaviors — RGP2-022
 type Options struct {
@@ -99,6 +105,10 @@ func Main(args []string, cwd string, stdout, stderr io.Writer) int // `reactogen
 func CheckOut(opts Options) error                                  // may --out be emptied
 func Run(opts Options) (reports []report.Report, bytes *Report, err error)
 // bytes: the byte report, nil when an error among the reports stopped the build (nothing written)
+
+// check — phase 1's, extended for the builder
+func Program(config string, files []string) ([]report.Report, *rtsx.Program) // as `check`, through `references`:
+                                                                             // the program of the project that lists files
 
 // what the driver's CSS build and packaging share with the stages
 func render.Source(program, path) *rtsx.SourceFile          // the one resolver, for an esbuild plugin:
@@ -241,7 +251,7 @@ state does not cross pages (builder.md, *Shell code in phase 2*).
     transcendental functions give the same last digit on amd64 as on arm64
     (Go may fuse a multiply-add on arm64; the tests ran on arm64 only).
 
-### RGP2-012 — `@reactogenic/core`: `pathname`, `useShellId`, `mount` · S
+### RGP2-012 — `@reactogenic/core`: `pathname`, `useShellId`, `mount` · S · done
 In `packages/core`, with the protocol above and the React fallbacks; unit
 tests for both sides.
 
@@ -276,9 +286,10 @@ esbuild's public API produces.
   and — added with RGP2-030 — the design system itself: `packages/ui`'s CSS
   (the files, not a copy: `testdata/ui/all.css`) against six pages the
   builder built, one of each kind (the golden output of `internal/build`'s
-  fixture site). Of the bundle (7 178 B minified, 2 013 gzip) a page keeps
-  25–61% (gzip): 2 140 selectors dropped over the corpus, every one checked
-  by cascadia.
+  fixture site), each given as the driver gives it — with its built script,
+  and the elements of packaging named as the builder's. Of the bundle
+  (7 532 B minified, 2 096 gzip) a page keeps 24–61% (gzip): 2 180 selectors
+  dropped over the corpus, every one checked by cascadia.
   - Seen on the built pages, and fixed with the review of RGP2-030:
     `@position-try --rg-menu-edge` (of `dropdown-menu.css`) was on pages
     that have no menu, as any at-rule the pruner did not know. It goes when
@@ -289,6 +300,14 @@ esbuild's public API produces.
     corpus has such a page, and three pages as they are served — under a
     base, with the `<link>` and `<script>` of packaging, against a sheet
     that selects on them (`internal/build/testdata/served`).
+  - With the integration of the two (RGP2-040): the page is given as
+    served **and** the builder's own elements are named
+    (`Options.Builder`), so that the `<script>` packaging writes is not "a
+    script of the page's own" and its `<link>` not "a stylesheet the builder
+    did not bundle" (builder.md, *CSS*, *The builder's own elements*).
+    Unreconciled, every page that mounts a behaviour came back unpruned,
+    with no test failing. The `served` fixture has a fourth page, with an
+    author's script beside the builder's: not pruned.
 
 ### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
@@ -319,7 +338,7 @@ page with the page's `Define`s, the metafile's bytes per module.
 - **Done when:** a fixture with three behaviour modules gives, per page, a
   script that holds only what was mounted, and a flag off removes its code.
 
-### RGP2-025 — `@reactogenic/ui` · L
+### RGP2-025 — `@reactogenic/ui` · L · done
 `packages/ui`: `Button`, `Dialog`, `DropdownMenu`, `SideMenu` in `.rtsx`,
 their CSS, the three behaviours, the JSX augmentation (components.md).
 - It type-checks under `reactogenic check`.
@@ -337,6 +356,13 @@ their CSS, the three behaviours, the JSX augmentation (components.md).
   devDependency); the builder's own bundling is RGP2-022's.
 - Private for now: publishing it is a decision of its own.
 - Depends on: 012.
+- **Done:** `packages/ui`. On the integrated tree (RGP2-040): `reactogenic
+  check` on the package is silent; vitest: 4 files, 70 tests; the browser
+  suite (`pnpm --filter @reactogenic/ui test:browser`): 72 passed in
+  Chromium 153, and 65 passed with 7 known in WebKit 26.6. What the suite
+  calls *known* is components.md's *Known limits* — a button that is clicked
+  is not focused there — and that Playwright's WebKit has no page cache.
+  Not run: Firefox.
 
 ## M3 — The build
 
@@ -345,8 +371,8 @@ their CSS, the three behaviours, the JSX augmentation (components.md).
 report, the command in `go/cmd/reactogenic`.
 - The page's JS first (`behaviors.Build`), then its CSS: one esbuild build
   with every page as an entry (CSS in import order per entry; the JS
-  outputs are discarded), then `cssprune.PruneWith` — the page as rendered,
-  and its script.
+  outputs are discarded), then `cssprune.PruneWith` — the page as served,
+  its script, and which of its elements are the builder's.
 - `--out`: only a build's own output is emptied (builder.md, *The output
   directory*).
 - `--inline`, `--base`, `--no-specialize`, `--report`; `public/` copied.
@@ -370,12 +396,15 @@ report, the command in `go/cmd/reactogenic`.
 
     | Page | Uses | CSS | JS | Control: CSS / JS |
     | --- | --- | --- | --- | --- |
-    | `/plain/` | a `Button` that is a link | 1 033 | — | 7 177 / 1 613, on every page |
+    | `/plain/` | a `Button` that is a link | 1 033 | — | 7 531 / 1 644, on every page |
     | `/guide/`, `/guide/more/` | text | 1 074, one file for both | — | |
-    | `/links/` | a menu of links | 2 186 | 198 | |
-    | `/` | a `SideMenu` | 2 821 | 198, the same script | |
-    | `/dialog/` | a `Dialog` | 2 746 | 532 | |
-    | `/actions/` | an action menu with typeahead, a `Dialog` | 3 668 | 1 420 | |
+    | `/links/` | a menu of links | 2 306 | 252 | |
+    | `/` | a `SideMenu` | 2 934 | 252, the same script | |
+    | `/dialog/` | a `Dialog` | 2 803 | 563 | |
+    | `/actions/` | an action menu with typeahead, a `Dialog` | 3 845 | 1 451 | |
+
+    (As of the integration, RGP2-040: `overlays` also listens to `navigate`,
+    and the components' CSS has the rules of components.md's review.)
 
   - Exported for it, and nothing else: `render.Source`, `render.Resolve`,
     `render.Load` (the one resolver, for the CSS build's plugin),
@@ -422,8 +451,9 @@ report, the command in `go/cmd/reactogenic`.
       encodes nothing is a usage error.
     - Specified as it is: `index.rtsx` beside `index.tsx` is `check`'s
       ambiguous-module; gzip in the report is Go's DEFLATE, not `gzip -9`.
-    - Exported for it: `check.Program`; `cssprune.Whole`, and `Because` and
-      `PositionTries` in its `Stats`.
+    - Exported for it: `check.Program`; `cssprune.Whole`, and `Why` and
+      `PositionTries` in its `Stats` (`Why` was `Because` until the
+      integration: one name for the reason, `styles.why` in the report).
   - In a browser again, on the output of the fixed binary (Chrome 154,
     headless, by `packages/ui`'s Playwright; the script is still not in the
     repository — RGP2-050): the fixture in seven modes, 164 of 164 checks
@@ -435,7 +465,7 @@ report, the command in `go/cmd/reactogenic`.
     and after the user makes a word bold and adds a line (25 comparisons) —
     all equal. Not run: WebKit, Firefox.
 
-### RGP2-040 — The docs site · M
+### RGP2-040 — The docs site · M · done
 `site/`: a private workspace package. `layout.rtsx` and four pages under
 `pages/`, content from `docs/getting-started.md` and the phase 1 specs:
 
@@ -453,38 +483,105 @@ ship: `/guide/` and `/reference/cli/` need `overlays` alone, `/` adds
 - **The authoring rule:** no `<script>`, no hand-written JS, no per-page
   list of styles or behaviours in the site's source. A script in a page
   would also turn its CSS pruning off (builder.md, *CSS*).
-- CI builds it (`reactogenic build`) and fails on any diagnostic.
+- CI builds it (`reactogenic build`) and fails on any diagnostic: RGP2-060.
 - Depends on: 025, 030.
-- **State:** the site is written, before `reactogenic build` exists on its
-  branch: `site/` — `layout.rtsx`, `code.rtsx` (a sample: plain
+- **Done:** `site/` — `layout.rtsx`, `code.rtsx` (a sample: plain
   `<pre><code>`), `site.css`, `public/favicon.svg`, and the four pages, whose
   long bodies are segments (`pages/syntax/slots.rtsx` mounted by
-  `<section #slots />`, ten in all).
-  - `reactogenic check -p site/tsconfig.json`: exit 0, nothing printed.
-  - Rendered by `render.Render` (the program as `check` builds it) and
-    checked by `pagecheck.Check`, with `public/` as the output's files: no
-    report on any page. The mounts are the table's: `/guide/` and
-    `/reference/cli/` `overlays`; `/` adds `invokers`; `/syntax/` adds
-    `menu-keys` with `RG_MENU_TYPEAHEAD`.
-  - Looked at in Chromium 153 (light and dark) and WebKit 26.6 (light), by
-    Playwright, at 1200, 800, 640, 400 and 320 px, through the stand-in build of
-    `packages/ui/test/browser` pointed at `site/`: no page scrolls sideways;
-    both dialogs stay inside the viewport and their bodies scroll; the
-    drawer opens and closes on its scrim; arrow keys and typeahead move
-    through the action menu, and closing the cheat sheet returns focus to
-    its trigger; a fragment lands below the sticky header.
+  `<section #slots />`, ten in all) — built by `reactogenic build`, on the
+  tree that has the driver, the reconciled specs and the reviewed components
+  together. It was written before the driver existed and against
+  `@reactogenic/ui` before its types were narrowed: it type-checks and
+  builds on the merged tree as it was written.
+  - `reactogenic build --report` in `site/`: 4 pages, exit 0, nothing
+    reported — also with `--inline always`, `--inline never`,
+    `--no-specialize` and `--base /reactogenic/`. `go test` builds it in six
+    modes (`internal/build`, `TestDocsSite`): four pages, no diagnostic, the
+    mounts of the table above, one `<script>` per page — the builder's — and
+    every page pruned.
+  - What each page ships, raw / gzip bytes as the report prints them
+    (`--inline auto`; the HTML is without what packaging adds):
+
+    | Page | HTML | CSS | JS | Control: CSS / JS |
+    | --- | --- | --- | --- | --- |
+    | `/` | 9 689 / 3 454 | 9 041 / 2 423 | 563 / 328 | 9 352 / 2 477 and 1 645 / 824, on every page |
+    | `/guide/` | 10 548 / 3 681 | 7 224 / 2 093 | 252 / 179 | |
+    | `/reference/cli/` | 21 503 / 6 932 | 7 179 / 2 084 | 252 / 179, the same script | |
+    | `/syntax/` | 36 287 / 9 992 | 8 914 / 2 398 | 1 446 / 704 | |
+
+    Under `auto` nothing is a file: the one blob two pages share, the 252 B
+    script, is 179 B gzipped — under a request. So the default build is
+    `--inline always`'s, to the byte but for the report's `inline`. With
+    `--inline never` a page is its HTML plus 112 B of `<link>` and
+    `<script>`; under `--base /reactogenic/` the HTML grows by the base in
+    its links (240–348 B) and the CSS and JS are the same bytes.
+  - In a browser, on the built output: `site/test/browser.mjs` (`pnpm
+    --filter @reactogenic/site test:browser`) builds the site as it ships
+    and with `--no-specialize` — the same HTML, no pruning — serves both, and
+    runs Chromium 153 (the full browser) and WebKit 26.6 at 1200 and 400 px:
+    326 checks pass, 2 are known, none fails. Run in four modes — default,
+    `INLINE=always`, `INLINE=never`, `BASE=/reactogenic/` — with the same
+    result in each.
+    - Every page: no sideways scroll; one script and no React; no page
+      error, console error or failed request; the side menu marks the page
+      (`aria-current="page"` on its link, styled) and opens its group alone.
+    - The Install dialog opens modal with its panel in the viewport, and
+      closes by Esc, its close button, its scrim and its *Close* action,
+      focus back on *Install* each time; with the engine's `command` taken
+      away, the page's own script opens and closes it.
+    - The action menu of `/syntax/` opens anchored below its trigger with
+      focus on its first item; ArrowDown and ArrowUp move and wrap, Home,
+      End, typeahead (`s`, `g`, `c`); its item opens the cheat sheet and
+      closes the menu, and Esc returns focus to the menu's trigger.
+    - The links menu opens anchored below its trigger, end-aligned, in the
+      viewport, at both widths. The drawer at 400 px opens from its toggle,
+      closes on its scrim without activating what is behind, and on its
+      close button; at 1200 px the same `<nav>` is a sticky column beside
+      the content, with no toggle.
+    - **Pruning changes nothing that is seen**: the computed style of every
+      element of every page — and of its `::before`, `::after`, `::marker`
+      and `::backdrop` — is the same in the two builds: as loaded, with the
+      links menu open, the drawer open, a group of it toggled, keyboard
+      focus on an element, each dialog open, the action menu open: 80
+      comparisons per mode, 1 060 to 4 365 computed styles each, no difference, custom
+      properties included. The comparison finds a rule that is broken on
+      purpose (`[aria-current]` and `:popover-open` misspelt in one page's
+      sheet: 91 differences).
+    - *Known*, 2 of the checks: in WebKit a dialog opened **by a click**
+      leaves focus on `<body>` when it closes (components.md, *Known
+      limits*); opened from the keyboard, focus returns.
+  - Screenshots of those runs (`SHOTS=<dir>`), read: the top of every page
+    at 1200 and 400 px in both engines, and the Install dialog, the cheat
+    sheet, the action menu, the links menu and the open drawer in both; the
+    `build` section of `/reference/cli/` at both widths. Nothing wrong in
+    them. The full-page captures were not read through.
   - The side menu's groups each start with the page's own link: a link to a
     section (`/guide/#install`) is never the current page (components.md,
     *SideMenu*). The page check does not look at the fragment of a link to
-    another page: that `/syntax/#slots` names an element of `/syntax/` was
-    checked by hand, once.
-  - **Not done:** built by `reactogenic build` itself; CI. Not verified:
-    the pruned CSS (the stand-in ships the unpruned bundle), `--base`,
-    `public/` through the builder.
+    another page (builder.md, *Checks on the page*, OPEN): that every such
+    link names an element of its page was checked on the built output by a
+    throwaway script, once — 63 links with a fragment, none broken.
+  - Found on the way: the example added to components.md for those groups
+    was a fragment the HTML contract test cannot render (orphan-slot) — it
+    is a whole `SideMenu` now, and the eighth contract example.
+  - **Not done:** CI (RGP2-060). `pnpm -r typecheck` does not reach the
+    site — it has `check`, not `typecheck`: the js job would need the
+    binary.
+  - **Not verified:** Firefox (it does not start in the sandbox the suite
+    was run in); Safari proper; a touch device; the floor's own versions;
+    dark mode and the widths 800, 640 and 320 px on the *built* site — they
+    were looked at on the stand-in build only, before the driver existed
+    (Chromium 153 light and dark, WebKit 26.6 light: no page scrolls
+    sideways, both dialogs stay in the viewport); Windows.
+  - For RGP2-050, as measured here and not judged: against the control the
+    per-page CSS is 3%, 23%, 23% and 5% smaller raw (2%, 16%, 16%, 3%
+    gzipped) — the site's own sheet, which every page uses nearly whole, is
+    most of it — and the JS 66%, 85%, 85% and 12% (`/syntax/` mounts all
+    three behaviours: the control has nothing more than its table).
   - Playwright's headless shell paints the page beside the open drawer
     wrongly (scrolled, without the backdrop); the full Chromium
-    (`channel: "chromium"`, as `test/browser/run.mjs` launches it) and
-    WebKit paint it right. Screenshots of RGP2-050 need the full browser.
+    (`channel: "chromium"`, as both browser suites launch it) and WebKit
+    paint it right.
 
 ## M4 — The bet
 
