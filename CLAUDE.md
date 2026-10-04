@@ -159,7 +159,7 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | --- | --- |
 | `phase01/syntax.md`, `phase01/vite.md`, `phase01/diagnostics.md` | drafted; `> OPEN:` notes inside |
 | `phase01/plan.md`, `phase01/decisions.md` | RGP1-001–005 done |
-| `phase01/ide.md` | implemented (RGP1-100–112); 113 prepared — publishing on the owner's go-ahead; 114 (re-vendor) later |
+| `phase01/ide.md` | implemented and released (RGP1-100–113: npm 0.1.0-alpha.1, the extension 0.1.1); 114 (re-vendor) later |
 | `later/layout.md`, `later/persistent-state.md` | parked |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
