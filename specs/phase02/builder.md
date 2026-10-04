@@ -177,21 +177,65 @@ exact rather than heuristic.
 some element of *this page* may match it.
 
 ```
-page entry ─ esbuild ─▶ flat, minified CSS ─ prune against the page's HTML ─▶ esbuild minify ─▶ the page's CSS
+page entry ─ esbuild ─▶ flat CSS ─ prune against the page's HTML ─▶ esbuild minify ─▶ the page's CSS
 ```
+
+The first step lowers nesting and does not minify: esbuild then writes
+`/* path/to/file.css */` before each file's rules, which is where the
+report's numbers per source file come from (*The report*). The pruner reads
+either form.
 
 | | Rule |
 | --- | --- |
 | a selector | kept iff some element of the page **may** match. Type, class, id and static attributes are matched exactly; combinators against the real tree |
-| runtime state is "maybe" | every pseudo-class except `:root`, `:is()`, `:where()`, `:not()`, `:has()` (which are evaluated on their arguments), and every attribute selector on `open`, `hidden`, `inert`, `disabled`, `checked`, `selected`, `value`, `style`, `aria-*`, `data-state`. The negation of "maybe" is "maybe" |
+| runtime state is "maybe" | every pseudo-class except `:root`, `:is()`, `:where()`, `:not()`, `:has()` (which are evaluated on their arguments), a `&` that lowering left, and every attribute selector on `open`, `hidden`, `inert`, `disabled`, `checked`, `selected`, `value`, `style`, `aria-*`, `data-state`. The negation of "maybe" is "maybe" |
+| case | as HTML: tags and attribute names fold, classes and ids do not (the page is in standards mode); attribute values are case-sensitive except with the `i` flag and for the attributes HTML compares case-insensitively (`type`, `rel`, `lang`, `dir`, `method`, …) |
 | pseudo-elements | ignored for matching (`::backdrop`, `::before`, `::details-content`) |
-| a selector list | pruned per selector; the rule goes when none is left |
-| `@media`, `@supports`, `@container`, `@scope`, `@starting-style` | pruned inside; dropped when empty |
-| `@layer` | a block is pruned inside; an emptied block stays as `@layer name;` unless an earlier statement already orders it. **Dropping it would reorder the cascade** |
-| `@keyframes` | kept iff its name occurs as a word in a kept `animation` or `animation-name` value |
-| custom properties | a `--x` declaration is dropped iff `--x` occurs nowhere else: in no kept CSS (values and at-rule preludes) and in no `style` attribute of the page. Repeated to a fixed point |
-| `@font-face`, `@property`, `@import`, `@namespace`, anything unknown | kept |
-| a page that contains `<template>` | not pruned (phase 2 emits none; cloned content would need "maybe" relations) |
+| a selector list | pruned per selector; the rule goes when none is left. **Kept whole** if a selector that would go is one some browser of the floor may reject (*Lists*) |
+| a selector the pruner cannot parse | kept, and its list with it, untouched (a namespace, a column combinator, a comment inside): what does not parse may not be a selector at all |
+| `@media`, `@supports`, `@container`, `@scope`, `@starting-style` | pruned inside; dropped when empty. Inside `@scope` a selector is matched against the whole page (the scope's limits are not evaluated), and what esbuild leaves there is kept as it is: a rule that still nests, a declaration between the rules |
+| `@layer` | a block is pruned inside; an emptied block stays as `@layer name;` unless something before it already orders that layer. **Dropping it would reorder the cascade** (*Layers*) |
+| `@keyframes` | kept iff its name occurs as a word in a kept `animation` or `animation-name` value, in a kept custom property's value (`--a: spin` for `animation: var(--a)`), or in a `style` attribute or `<style>` element of the page |
+| custom properties | a `--x` declaration is dropped iff `--x` occurs nowhere else: in no kept CSS (values, at-rule preludes, `@property`, `@keyframes`) and in no attribute or `<style>` element of the page. Its own value does not count (`--x: var(--x)`). Repeated to a fixed point, with the at-rules it empties |
+| `@font-face`, `@property`, `@import`, `@namespace`, anything unknown | kept, byte for byte |
+| a page that contains `<template>` or `<noscript>` | not pruned (phase 2 emits none; cloned content would need "maybe" relations, and `<noscript>` is elements or text depending on the browser) |
+| CSS that does not read | an error, and nothing is pruned: an unbalanced bracket, an unterminated string or comment |
+
+What is kept is kept byte for byte, in order: nothing is rewritten, so the
+result can be minified again.
+
+**Lists.** One selector a browser cannot parse makes it drop the whole rule,
+so trimming a list around such a selector would bring a dead rule to life
+there:
+
+```css
+.a, .gone:open { … }      /* Safari 26.2 has no :open: the rule is dead there */
+.a { … }                  /* trimmed: now it applies — not what was written    */
+```
+
+A selector is safe to drop on its own only if every browser of the floor
+(decisions.md, 11) parses it: the pseudo-classes and pseudo-elements that
+have been everywhere for years, `:nth-*(An+B)`, `:is()`, `:not()`, `:has()`.
+Anything else — prefixed, newer, the `s` flag — goes with its whole list or
+not at all.
+
+**Layers.** A layer's place in the cascade is where its name first occurs.
+
+```css
+/* the bundle */                          /* a page without .gone */
+@layer reset { .gone { … } }              @layer reset;
+@layer components { .a { color: red } }   @layer components { .a { color: red } }
+@layer reset { .a { color: blue } }       @layer reset { .a { color: blue } }
+```
+
+Without the statement `components` would come first, and `.a` turn blue.
+
+| | |
+| --- | --- |
+| already ordered | by an earlier `@layer a, b;`, an earlier block that is kept, or the statement an earlier emptied block left |
+| nested | `@layer a { @layer b { … } }` is `a.b`; `a.b` orders `a` too |
+| inside `@media` and the other conditional at-rules | what is declared there is ordered only when the condition holds: it does not count outside, and the at-rule stays to carry the statement — `@media print { @layer p; }` |
+| anonymous (`@layer { … }`) | dropped once it holds no rule: nothing can name it again |
 
 Soundness is the requirement: a dropped rule must never have matched. The
 pruner is tested against an independent selector matcher, and the built docs
