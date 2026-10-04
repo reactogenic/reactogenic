@@ -284,10 +284,15 @@ behaviour module its bytes in the page's script (from esbuild's metafile) —
 
 ## The control
 
-`--no-specialize` builds the same pages with awareness off: the CSS of every
-page is the unpruned bundle of everything the site imports; every page's JS
-is every behaviour of the design system with every flag on. Same HTML. The
-difference between the two builds is what component awareness is worth
+`--no-specialize` builds the same pages as a build that does not know what a
+page rendered would: same HTML, and
+
+| | Default | `--no-specialize` |
+| --- | --- | --- |
+| CSS | per page, pruned against its HTML | one file for the site: the unpruned bundle of everything any page imports |
+| JS | per page: the modules it mounted, its flags | one file for the site: every behaviour mounted on any page, every flag on, and a table from pathname to that page's mounts |
+
+The difference between the two builds is what component awareness is worth
 (plan.md, RGP2-050).
 
 ## Not in phase 2

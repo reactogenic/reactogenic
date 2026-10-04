@@ -60,6 +60,7 @@ func Check(page render.Page, doc *html.Node, routes []render.Route, files map[st
 
 // behaviors — RGP2-022
 func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, reports []report.Report)
+func BuildControl(pages []render.Page, opts Options) (js string, reports []report.Report)   // --no-specialize
 ```
 
 **The build-time protocol** between the engine and `@reactogenic/core`: while
@@ -152,7 +153,7 @@ page with the page's `Define`s, the metafile's bytes per module.
 - Every `RG_…` identifier of a mounted module's source is defined; the union
   over mounts; mount-not-found, mount-no-element, mount-flag.
 - The metafile check that an unmounted module is absent.
-- `--no-specialize`: every behaviour of `@reactogenic/ui`, every flag on.
+- `--no-specialize` (builder.md, *The control*): one script for the site.
 - **Done when:** a fixture with three behaviour modules gives, per page, a
   script that holds only what was mounted, and a flag off removes its code.
 
