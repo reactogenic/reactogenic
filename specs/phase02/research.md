@@ -151,7 +151,8 @@ backdrop fallback: 897 → 1,584 B raw, 358 → 571 B brotli.
 The thresholds are in plan.md (RGP2-050). The control that keeps the bet
 falsifiable is an ablation of our own build: the same site with awareness off
 (one CSS bundle, one script with every behaviour the site mounts and every
-flag on).
+flag on). Measured on the docs site: [bet.md](bet.md) — undecided; a page's
+CSS is 77–97% of the bundle there, not the 39–76% above.
 
 ## Not answered
 
