@@ -1,11 +1,11 @@
 # Phase 2 decisions
 
 Taken on 2026-10-04 from the research ([research.md](research.md)), while the
-owner was away: each is the research's recommended choice — except 16 and
-17, which the specs took against it or without it — with what would reverse
-it. **For review** marks the ones that touch something CLAUDE.md fixes or
-that are a matter of taste. What was *not* decided is at the end: *For the
-owner*.
+owner was away: each is the research's recommended choice — except 16 to
+20, which the specs, their review and the integration took against it or
+without it — with what would reverse it. **For review** marks the ones that
+touch something CLAUDE.md fixes or that are a matter of taste. What was
+*not* decided is at the end: *For the owner*.
 
 | # | Decision | Why | Reverse if |
 | --- | --- | --- | --- |
