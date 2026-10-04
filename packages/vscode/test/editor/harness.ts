@@ -29,7 +29,9 @@ export function runner(define: () => void): () => Promise<void> {
     mocha.suite.emit("pre-require", globalThis, "", mocha);
     define();
     return new Promise((resolve, reject) => {
-      mocha.run((failures) => (failures ? reject(new Error(`${failures} editor test(s) failed`)) : resolve()));
+      // VS Code closes the window as soon as this settles: a failure waits a
+      // moment, so that the report of a suite that fails at once is not lost.
+      mocha.run((failures) => (failures ? setTimeout(() => reject(new Error(`${failures} editor test(s) failed`)), 1_000) : resolve()));
     });
   };
 }

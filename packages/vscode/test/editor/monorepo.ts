@@ -14,7 +14,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { Api } from "../../src/extension";
 import type { ServerState } from "../../src/server";
-import { activate, file, onlyServers, open, runner, serverState, sleep, suiteDir } from "./harness";
+import { activate, file, onlyServers, open, runner, serverState, sleep, suiteDir, until } from "./harness";
 
 /** The binary of the CLI installed in `root/node_modules`. */
 function cli(root: string): string {
@@ -72,6 +72,9 @@ export const run = runner(() => {
       const after = await state("a restart", (s) => s.starts > before.starts && s.running, 15_000);
       assert.notEqual(after.pid, before.pid);
       assert.deepEqual(after.binary, before.binary);
+      // The TS server plugin is told too: it looks for the workspace's CLI again.
+      await until("the plugin's word of the lockfile", () => (api.tsPlugin()?.installs ?? 0) > 0 && api.tsPlugin()?.languageServer === true);
+      assert.equal(api.tsPlugin()?.trusted, true);
       // And again: the watch is renewed with each start.
       fs.rmSync(lockfile);
       const again = await state("a second restart", (s) => s.starts > after.starts && s.running, 15_000);

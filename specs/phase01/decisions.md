@@ -421,3 +421,61 @@ settled while moving `check`:
 | `include` keeps TS's meaning | a pattern that names extensions (`src/**/*.tsx`) lists the files of those extensions; `.rtsx` is listed by a directory, a `*`, or its own pattern. The overlay listed every `.rtsx` under a `.tsx` pattern, because each was served as a `.tsx` file. **Rejected:** a `.tsx` wildcard that also covers mapped extensions, in the fork's tsconfig matching — `check` and the server would then list files that stock TypeScript 7.1 with the same tsconfig does not |
 | a construct left as written stops the file | `arg-without-slot` and `params-on-html` leave their attribute in the emitted text, which is then not TSX. The transpiler marks the output and the layer treats the file as stopped (rule 4). **Rejected:** deciding it in the layer from TS's syntax errors of the virtual text — in the editor a half-typed file has those too, and keeps its type errors |
 | `ambiguous-module` is the transpiler's | the overlay's own copy said "and the `.rtsx` is not checked"; it is now — both files are modules |
+
+## RGP1-111 — The TS server plugin
+
+`tsserver` (TS ≤ 6) learns `.rtsx` through a plugin the extension ships
+(ide.md, *The `.ts` side*). Its host API is synchronous; the transform is a
+Go binary.
+
+1. **`spawnSync` of `serve`, one process per batch.** Measured on macOS
+   (M2 Pro, the 28.5 MB release build): 11 ms for one 8 KB file, 65 ms for
+   50, 200 ms for 200 — a process that does nothing takes 6. A project is
+   loaded in a handful of batches (an importer's `.rtsx` files, plus those
+   beside them); a save costs one. **Rejected** for now: a long-lived child
+   behind `Atomics.wait` — a worker, a shared buffer and a lifetime to
+   manage, for 6 ms. It stays the answer if Windows is slow (unmeasured).
+2. **`tsserver` keeps the source; the program gets the virtual text.** The
+   plugin replaces what the project hands the language service (snapshot,
+   version, script kind) and wraps the service's answers. `tsserver`'s own
+   record of the file stays the saved source: it watches it, and turns the
+   mapped offsets into lines with it. **Rejected:** Svelte's way — the
+   virtual text returned from `readFile`, so that every line map `tsserver`
+   keeps is of the wrong text and has to be patched after it. **Rejected:**
+   a cache keyed by mtime and size — it is `tsserver` that reads the file;
+   the text it holds is the key.
+3. **Each answer has one server — the one that can give it.** Workspace
+   symbols declared in `.rtsx` files are `reactogenic lsp`'s (RGP1-105)
+   while it has a project; the extension tells the plugin, which lists them
+   itself until then. **Rejected:** always leaving them out — the server
+   runs only once an `.rtsx` document was opened, and never in an untrusted
+   window: until then nobody listed them (seen in VS Code 1.140). File
+   rename: no edit in an `.rtsx` file is `tsserver`'s (it has the saved
+   text). **Rejected:** also leaving out its edits of imports of `.rtsx`
+   modules in `.ts` files, as "applied twice". Measured in VS Code: it asks
+   the language server before the move and `tsserver` after it; the
+   server's edit is in the file by then, `tsserver` finds nothing left to
+   update, and without the server its edit is the only one.
+4. **Rename, and every other edit, never goes into an `.rtsx` file.**
+   Through the map alone a rename is wrong (decision 5 of *IDE support*);
+   the fix-ups live in the server. Refused before `tsserver` collects the
+   locations, for every loaded project the rename leads into; what is seen
+   only then fails the request. **Rejected:** answering a project's
+   locations with none — `tsserver` merges the projects', and the rename
+   was applied to the others' files alone.
+5. **Configured by the client only.** The plugin is loaded in every TS
+   project, in restricted mode too, and before the extension is activated:
+   it finds its binary itself, and runs anything of the workspace — its CLI,
+   or a relative path of the setting or of `$REACTOGENIC_BINARY` — only
+   after the extension has said the workspace is trusted. A tsconfig
+   `plugins` entry of its name is ignored — it would let a repository choose
+   the binary.
+6. **What it costs a project without `.rtsx` is counted.** Loaded
+   everywhere, it looks up each failed import once more — once per folder
+   and name: TypeScript shares one resolution among the files of a folder
+   (for a package, among folders). Per importer, a clone before its install
+   loaded 2.6–5.4 times slower (3,000 files, 13 unresolved imports each:
+   906 → 3648 ms; now 892 → 922). It does nothing in VS Code's second
+   `tsserver` (`partialSemantic`), which exists to answer while the first
+   one is busy. A binary gets 5 s per batch, not 20, and one that used them
+   up is not asked again for a minute.

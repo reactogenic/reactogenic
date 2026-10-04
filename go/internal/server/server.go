@@ -5,6 +5,10 @@
 // The transpiler is purely syntactic, so the server keeps no program and no
 // state between requests: `transform` reads one file and the segment files
 // next to it.
+//
+// `virtual` (virtual.go) is for a caller that is not a build: the TS server
+// plugin (specs/phase01/ide.md, *The `.ts` side*), which runs `serve`
+// synchronously, one process per batch of files.
 package server
 
 import (
@@ -81,6 +85,13 @@ func Serve(r io.Reader, w io.Writer) error {
 			} else {
 				resp.Result = result
 			}
+		case "virtual":
+			var p VirtualParams
+			if err := json.Unmarshal(req.Params, &p); err != nil {
+				resp.Error = "bad params: " + err.Error()
+				break
+			}
+			resp.Result = virtualAll(p)
 		case "close":
 			return out.Encode(resp)
 		default:

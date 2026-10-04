@@ -54,6 +54,16 @@ export class Server implements vscode.Disposable {
   /** Watches of the lockfiles above the workspace folders; renewed at each start. */
   private above: vscode.Disposable[] = [];
   private settle: ReturnType<typeof setTimeout> | undefined;
+  /** How often a lockfile of the workspace has changed, and settled. */
+  installs = 0;
+  private readonly changes = new vscode.EventEmitter<void>();
+  /**
+   * The server started or stopped, or a lockfile changed: what the TS server
+   * plugin is told (src/tsPlugin.ts) — it lists the workspace symbols of
+   * `.rtsx` files while the server does not, and looks for the workspace's
+   * CLI again.
+   */
+  readonly onDidChange = this.changes.event;
   private readonly status: vscode.LanguageStatusItem;
   /**
    * The problems of open documents, for the life of the window. The
@@ -104,6 +114,15 @@ export class Server implements vscode.Disposable {
     };
   }
 
+  /**
+   * True while the server answers workspace symbols for `.rtsx` files: it
+   * runs, and has a project loaded — an `.rtsx` file is open. Until then
+   * VS Code's TypeScript lists them, through the plugin.
+   */
+  listsSymbols(): boolean {
+    return this.client?.state === State.Running && vscode.workspace.textDocuments.some(isSource);
+  }
+
   /** The binary of the `check` task: the one the server runs. Undefined when there is none. */
   binary(): string | undefined {
     if (this.command) {
@@ -139,7 +158,11 @@ export class Server implements vscode.Disposable {
       return;
     }
     clearTimeout(this.settle);
-    this.settle = setTimeout(() => void this.restart(`${path.basename(uri.fsPath)} changed`), 1500);
+    this.settle = setTimeout(() => {
+      this.installs++;
+      this.changes.fire();
+      void this.restart(`${path.basename(uri.fsPath)} changed`);
+    }, 1500);
   }
 
   private folders(): string[] {
@@ -312,6 +335,7 @@ export class Server implements vscode.Disposable {
     this.features = registerAutoInsert(client);
     this.show();
     this.output.info(`running: ${this.status.text} (${this.status.detail})`);
+    this.changes.fire();
   }
 
   private async stop(): Promise<void> {
@@ -321,6 +345,7 @@ export class Server implements vscode.Disposable {
     this.process = undefined;
     this.features?.dispose();
     this.features = undefined;
+    this.changes.fire();
     if (client) {
       // Both refuse on a client that is not running; then there is nothing to ask.
       await client.stop().catch(() => {});
@@ -339,6 +364,7 @@ export class Server implements vscode.Disposable {
     const child = this.process;
     this.client = undefined;
     this.process = undefined;
+    this.changes.fire();
     // Refuses on a client that is not running, and marks it as not to be started again.
     void client?.dispose().catch(() => {});
     if (child && alive(child)) {
@@ -364,6 +390,7 @@ export class Server implements vscode.Disposable {
         ? undefined
         : "The server stopped and was not started again (see the Reactogenic output). Run Reactogenic: Restart Server.";
     this.show();
+    this.changes.fire();
   }
 
   /** What the client gets in place of disposing `problems`: its own entries go, the check task's stay. */
@@ -403,6 +430,7 @@ export class Server implements vscode.Disposable {
 
   dispose(): void {
     clearTimeout(this.settle);
+    this.changes.dispose();
     vscode.Disposable.from(...this.above).dispose();
     this.status.dispose();
     void this.shutdown();

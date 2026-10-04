@@ -267,6 +267,12 @@
         "language": "rtsx"
       }
     ],
+    "typescriptServerPlugins": [
+      {
+        "name": "reactogenic-typescript-plugin",
+        "enableForWorkspaceTypeScriptVersions": true
+      }
+    ],
     "configurationDefaults": {
       "emmet.includeLanguages": {
         "rtsx": "typescriptreact"
@@ -282,6 +288,8 @@
     "esbuild": "^0.28.2",
     "mocha": "^11.7.5",
     "typescript": "^5.9.3",
+    "typescript-5.9": "npm:typescript@~5.9.3",
+    "typescript-6.0": "npm:typescript@~6.0.3",
     "vitest": "^4.0.0",
     "vscode-languageclient": "^10.1.2",
     "vscode-oniguruma": "^2.0.1",

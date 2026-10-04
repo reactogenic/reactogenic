@@ -1,16 +1,20 @@
-// Bundles the extension into one CommonJS file, dist/extension.js; with
-// --test, the editor suites too (dist/test/*.js, run inside VS Code).
+// Bundles the extension into one CommonJS file, dist/extension.js, and the TS
+// server plugin into another, node_modules/reactogenic-typescript-plugin/index.js;
+// with --test, the editor suites too (dist/test/*.js, run inside VS Code).
 //
 //   node scripts/build.mjs [--production] [--test]
 //
 // Also writes dist/ThirdPartyNotices.txt: the grammar's notices plus the
-// licence of every npm package that is in the bundle.
+// licence of every npm package that is in the extension's bundle (the
+// plugin's holds none: the build fails if it does).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/** The plugin's name: `typescriptServerPlugins` in package.json names it, and tsserver loads it by it. */
+export const PLUGIN = "reactogenic-typescript-plugin";
 
 export async function build({ production = false, test = false } = {}) {
   const common = {
@@ -32,10 +36,39 @@ export async function build({ production = false, test = false } = {}) {
     metafile: true,
   });
   fs.writeFileSync(path.join(root, "dist/ThirdPartyNotices.txt"), notices(Object.keys(result.metafile.inputs)));
+
+  // The TS server plugin (ide.md, *The plugin*): a package of its own, which
+  // tsserver finds by name in the extension's node_modules — in this folder
+  // for a run from the checkout, and at the same path in the .vsix.
+  const plugin = await esbuild.build({
+    ...common,
+    entryPoints: ["src/plugin/index.ts"],
+    outfile: `node_modules/${PLUGIN}/index.js`,
+    target: "node18", // tsserver may run on the user's own Node
+    footer: { js: "module.exports = module.exports.default;" }, // tsserver calls the module itself
+    sourcemap: false,
+    minify: production,
+    metafile: true,
+  });
+  const foreign = Object.keys(plugin.metafile.inputs).filter((input) => input.includes("node_modules/"));
+  if (foreign.length > 0) {
+    throw new Error(`the plugin has no dependencies, and its bundle holds ${foreign.join(", ")}`);
+  }
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const pluginManifest = {
+    name: PLUGIN,
+    version: manifest.version,
+    private: true,
+    description: "TypeScript server plugin of the Reactogenic extension: .rtsx modules for tsserver.",
+    license: "MIT",
+    main: "index.js",
+  };
+  fs.writeFileSync(path.join(root, "node_modules", PLUGIN, "package.json"), `${JSON.stringify(pluginManifest, null, 2)}\n`);
+
   if (test) {
     await esbuild.build({
       ...common,
-      entryPoints: ["trusted", "untrusted", "monorepo", "transpiled"].map((suite) => `test/editor/${suite}.ts`),
+      entryPoints: ["trusted", "untrusted", "monorepo", "transpiled", "typescript"].map((suite) => `test/editor/${suite}.ts`),
       outdir: "dist/test",
       external: ["vscode", "mocha"],
       sourcemap: "inline",
