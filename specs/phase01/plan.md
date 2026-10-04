@@ -1231,8 +1231,9 @@ occurrences over before write-back and takes the edits or the refusal.
     trusted 23, untrusted 3, monorepo 6, transpiled 6 — the sixth is the
     file being typed that ide.md's Testing row claimed.
   - *Left*: a front-made slot item has the slot's type as its detail, not
-    its documentation (TS's items have both); a slot under an `Each` lists
-    `Each`'s props (loop-produced slots are phase 2); the refusals of
+    its documentation (TS's items have both); `<$` under an `Each` does
+    not list the slots of the component above it (loop-produced slots are
+    phase 2); the refusals of
     `host_rename.go` apply to `.ts` / `.tsx` documents of a client that
     attaches the server to them, where VS Code's TypeScript would rename in
     part; the middleware was run on macOS only.
