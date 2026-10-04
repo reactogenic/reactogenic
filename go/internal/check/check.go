@@ -126,7 +126,9 @@ func Errors(reports []Report) int {
 
 // Print writes reports in tsc's format, paths relative to cwd. pretty adds a
 // code frame of the source line: `file:line:col - error CODE: message`;
-// otherwise `file(line,col): error CODE: message`.
+// otherwise `file(line,col): error CODE: message`. A report about a file as a
+// whole (line 0: report.Page, the builder's) names the file alone:
+// `file - error CODE: message`, `file: error CODE: message`.
 func Print(w io.Writer, reports []Report, cwd string, pretty bool, readFile func(string) (string, bool)) {
 	for _, r := range reports {
 		kind := r.Severity.String()
@@ -134,6 +136,10 @@ func Print(w io.Writer, reports []Report, cwd string, pretty bool, readFile func
 		switch {
 		case r.File == "":
 			fmt.Fprintf(w, "%s %s: %s\n", kind, r.Code, r.Message)
+		case r.Line == 0 && pretty:
+			fmt.Fprintf(w, "%s - %s %s: %s\n", name, kind, r.Code, r.Message)
+		case r.Line == 0:
+			fmt.Fprintf(w, "%s: %s %s: %s\n", name, kind, r.Code, r.Message)
 		case pretty:
 			fmt.Fprintf(w, "%s:%d:%d - %s %s: %s\n", name, r.Line, r.Col, kind, r.Code, r.Message)
 			frame(w, readFile, r.File, r.Line, r.Col)
