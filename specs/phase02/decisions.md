@@ -46,3 +46,5 @@ HTML parser and the builder's own packages — `scripts/build-binaries.sh
   and the behaviours add ≈ 0.6 MB.
 - No `text/template`, no `html/template`: the binary has no symbol of
   either (decision 6).
+- Measured again after the review of RGP2-030 (plan.md): the six sizes are
+  the same to 0.1 MB, and there is still no symbol of either package.
