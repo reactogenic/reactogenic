@@ -7,7 +7,9 @@ task (`RGP1-xxx`). Specs come first: settle a task's spec, then implement.
 Repo layout (see `specs/phase01/decisions.md`, RGP1-003): `go/` — our Go
 module (`go/internal/`, `go/cmd/reactogenic/`), vendored tsgo in
 `go/third_party/tsgo` (never edit without adding a patch to `go/patches/`);
-`packages/` — pnpm workspace, every package scoped `@reactogenic/*`; `go.work` and `package.json` at the root tie
+`packages/` — pnpm workspace, every package scoped `@reactogenic/*` except
+`packages/vscode` (named `rtsx`, private: `vsce` rejects scoped names — the
+extension `reactogenic.rtsx`); `go.work` and `package.json` at the root tie
 them together. Run Go commands on `github.com/reactogenic/reactogenic/go/...`,
 not `./go/...`. tsgo is reached only through its `rtsx` bridge package.
 Conformance: `go/internal/conformance` runs the syntax.md examples plus

@@ -1,14 +1,16 @@
 // The generated files are what the generator writes; the generator refuses an
 // upstream grammar whose patched rules changed shape; the manifest carries
 // what VS Code's own TSX entry carries.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { generate, packageRoot, patchGrammar, patchTagsConfiguration, SCOPE_NAME, stale } from '../grammar/generate.mjs';
+import { generate, markdownGrammar, packageRoot, patchGrammar, patchTagsConfiguration, SCOPE_NAME, stale } from '../grammar/generate.mjs';
 
 const read = (file) => fs.readFileSync(path.join(packageRoot, file), 'utf8');
 const readJson = (file) => JSON.parse(read(file));
 const upstreamGrammar = () => readJson('grammar/upstream/TypeScriptReact.tmLanguage.json');
+const upstreamMarkdown = () => readJson('grammar/upstream/markdown/markdown.tmLanguage.json');
 
 describe('generated files', () => {
   const files = generate();
@@ -33,7 +35,7 @@ describe('generated files', () => {
     expect(JSON.stringify(patchGrammar(input))).toBe(once);
   });
 
-  test('the grammar adds rules and changes three upstream ones, nothing else', () => {
+  test('the grammar adds rules and changes four upstream ones, nothing else', () => {
     const up = upstreamGrammar();
     const ours = readJson('syntaxes/rtsx.tmLanguage.json');
     expect(ours.scopeName).toBe(SCOPE_NAME);
@@ -45,13 +47,46 @@ describe('generated files', () => {
     );
     expect(Object.keys(up.repository).filter((n) => !(n in ours.repository))).toEqual([]);
     const changed = Object.keys(up.repository).filter((n) => JSON.stringify(up.repository[n]) !== JSON.stringify(ours.repository[n]));
-    expect(changed.sort()).toEqual(['jsx-tag', 'jsx-tag-attributes', 'jsx-tag-without-attributes']);
+    expect(changed.sort()).toEqual(['jsx-tag', 'jsx-tag-attribute-name', 'jsx-tag-attributes', 'jsx-tag-without-attributes']);
+    // The attribute name changes in one place: a name also ends before `{`, `&` and `#`.
+    const name = (g) => g.repository['jsx-tag-attribute-name'];
+    expect({ ...name(ours), match: name(ours).match.replace('|//|[{&#])', '|//)') }).toEqual(name(up));
+  });
+
+  test('the Markdown fence rule is VS Code\'s rule for tsx, with our language', () => {
+    const tsxFence = upstreamMarkdown().repository.fenced_code_block_tsx;
+    const ours = readJson('syntaxes/rtsx.markdown.tmLanguage.json');
+    expect(Object.keys(ours.repository)).toEqual(['rtsx-code-block']);
+    const back = JSON.stringify(ours.repository['rtsx-code-block'])
+      .replace('(?i:(rtsx)(', '(?i:(tsx)(')
+      .replace('meta.embedded.block.rtsx', 'meta.embedded.block.typescriptreact')
+      .replace(JSON.stringify(SCOPE_NAME), '"source.tsx"');
+    expect(JSON.parse(back)).toEqual(tsxFence);
+    expect(ours.version).toBe(upstreamMarkdown().version);
   });
 
   test('the notices carry every upstream licence', () => {
     const notices = read('ThirdPartyNotices.txt');
-    for (const file of ['LICENSE.txt', 'ThirdPartyNotices.txt', 'vscode/LICENSE.txt']) {
+    for (const file of ['LICENSE.txt', 'ThirdPartyNotices.txt', 'vscode/LICENSE.txt', 'markdown/LICENSE.txt']) {
       expect(notices).toContain(read(`grammar/upstream/${file}`).trim());
+    }
+  });
+
+  // UPSTREAM is the record of where each copy came from: every file is listed,
+  // and the two grammars are the bytes it names.
+  test('grammar/upstream/UPSTREAM lists every vendored file', () => {
+    const note = read('grammar/upstream/UPSTREAM');
+    const dir = path.join(packageRoot, 'grammar/upstream');
+    const vendored = fs
+      .readdirSync(dir, { recursive: true })
+      .filter((file) => file !== 'UPSTREAM' && fs.statSync(path.join(dir, file)).isFile())
+      .map((file) => file.split(path.sep).join('/'));
+    expect(vendored.length).toBe(10);
+    for (const file of vendored) expect(note, file).toContain(file);
+    for (const file of ['TypeScriptReact.tmLanguage.json', 'markdown/markdown.tmLanguage.json']) {
+      const sha256 = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest('hex');
+      expect(note, file).toContain(`sha256: ${sha256}`);
+      expect(note, file).toContain(`commit: ${readJson(`grammar/upstream/${file}`).version.split('/').at(-1)}`);
     }
   });
 });
@@ -66,6 +101,10 @@ describe('an upstream change fails the generator', () => {
     'the {…} rule changes its braces': (g) => (g.repository['jsx-evaluated-code'].begin = '\\{\\{'),
     'a string rule changes its quote': (g) => (g.repository['jsx-string-single-quoted'].end = '`'),
     'the line comment consumes its newline': (g) => (g.repository.comment.patterns.at(-1).end = '$'),
+    'the line comment leads with other whitespace': (g) => {
+      const c = g.repository.comment.patterns.at(-1);
+      c.begin = c.begin.replace('(^[ \\t]+)?', '(^\\s+)?');
+    },
     'the tag name pattern changes in an opening tag': (g) => {
       const open = g.repository['jsx-tag'].patterns[0];
       open.begin = open.begin.replace('[a-z][a-z0-9]*', '[a-z][a-z0-9_]*');
@@ -100,6 +139,32 @@ describe('an upstream change fails the generator', () => {
     const g = upstreamGrammar();
     mutate(g);
     expect(() => patchGrammar(g)).toThrow();
+  });
+
+  const fence = (g) => g.repository.fenced_code_block_tsx;
+  const markdownMutations = {
+    'the tsx fence rule is renamed': (g) => delete g.repository.fenced_code_block_tsx,
+    'the tsx fence takes another identifier': (g) => (fence(g).begin = fence(g).begin.replace('(tsx)', '(tsx|typescriptreact)')),
+    'the tsx fence gets a second body': (g) => fence(g).patterns.push({ include: '#inline' }),
+    'the tsx fence content gets another scope': (g) => (fence(g).patterns[0].contentName += ' source.embedded'),
+    'the tsx fence includes another grammar': (g) => (fence(g).patterns[0].patterns = [{ include: 'source.ts' }]),
+    'the tsx fence names its language somewhere new': (g) => (fence(g).beginCaptures[4].name += '.tsx'),
+    'the fence block gets another scope': (g) => (fence(g).name = 'markup.fenced.block.markdown'),
+    'it is another grammar': (g) => (g.scopeName = 'text.html.basic'),
+    'the version is gone': (g) => delete g.version,
+  };
+
+  test('the unmodified Markdown grammar passes, unmodified', () => {
+    const input = upstreamMarkdown();
+    const before = JSON.stringify(input);
+    expect(() => markdownGrammar(input)).not.toThrow();
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  test.each(Object.entries(markdownMutations))('Markdown: %s', (_name, mutate) => {
+    const g = upstreamMarkdown();
+    mutate(g);
+    expect(() => markdownGrammar(g)).toThrow();
   });
 
   test('so does a change to the jsx-tags configuration', () => {

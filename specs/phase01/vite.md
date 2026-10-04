@@ -89,7 +89,8 @@ emit type-directed; they are gone.)
 
 ## Runtime
 
-All packages are scoped to the `@reactogenic` npm org. Phase 1 ships:
+All npm packages are scoped to the `@reactogenic` npm org (the VS Code
+extension, `packages/vscode`, is not one: ide.md). Phase 1 ships:
 
 | Package | Contents |
 | --- | --- |

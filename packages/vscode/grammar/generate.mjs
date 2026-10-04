@@ -2,7 +2,7 @@
 // grammar/upstream (specs/phase01/ide.md, "Syntax highlighting"):
 //
 //   syntaxes/rtsx.tmLanguage.json           VS Code's TSX grammar + the .rtsx forms
-//   syntaxes/rtsx.markdown.tmLanguage.json  ```rtsx fences in Markdown
+//   syntaxes/rtsx.markdown.tmLanguage.json  ```rtsx fences: VS Code's ```tsx fence rule
 //   language-configuration.json             TSX's, unchanged
 //   tags-language-configuration.json        jsx-tags', with `$` in tag names and words
 //   snippets/typescript.code-snippets       TSX's snippets, unchanged
@@ -40,9 +40,20 @@ export const SCOPES = {
 // follow an attribute name there. An arg or a segment root ends the same way,
 // which is what lets `&size>` and `#about-us/>` leave the tag end alone.
 const IDENT = '[_$[:alpha:]][-_$[:alnum:]]*';
-const NAME_END = '(?=\\s|=|/?>|/\\*|//)';
+const UPSTREAM_NAME_END = '(?=\\s|=|/?>|/\\*|//)';
+// Here a name also ends before `{`, `&` and `#`: no whitespace is needed
+// before params, a spread, an arg or a segment root (`items{ item }`,
+// `x{...p}`, `value&size`), and a name typed in front of one of them has none
+// until the space is typed. The attribute name gets this end too. A sigil
+// without a name ends before `{` only: `&&&x` and `&#x` stay illegal.
+const NAME_END = '(?=\\s|=|/?>|/\\*|//|[{&#])';
+const SIGIL_END = '(?=\\s|=|/?>|/\\*|//|\\{)';
 // Block comments between `{` and what follows it, on one line.
 const COMMENTS = '(?:/\\*.*?\\*/\\s*)*';
+// A block comment that its line leaves open.
+const OPEN_COMMENT = '/\\*(?:(?!\\*/).)*';
+// The whitespace that leads a comment line, as upstream's line comment has it.
+const LINE_INDENT = '^[ \\t]+';
 
 const EMBEDDED_BEGIN = { 0: { name: 'punctuation.section.embedded.begin.tsx' } };
 const EMBEDDED_END = { 0: { name: 'punctuation.section.embedded.end.tsx' } };
@@ -56,7 +67,7 @@ function rtsxRules() {
     // would otherwise fall to upstream's catch-all `\S+`, which swallows the
     // `>` and repaints the rest of the file as attributes.
     'rtsx-slot-arg': {
-      match: `(&&?)(${IDENT})?${NAME_END}`,
+      match: `(&&?)(?:(${IDENT})${NAME_END}|${SIGIL_END})`,
       captures: {
         1: { name: SCOPES.argSigil },
         2: { name: SCOPES.argName },
@@ -65,7 +76,7 @@ function rtsxRules() {
     // `#about-us` — syntax.md, Segment roots. The name is optional, as above.
     'rtsx-segment-root': {
       name: SCOPES.segmentRoot,
-      match: `(#)(?:${IDENT})?${NAME_END}`,
+      match: `(#)(?:${IDENT}${NAME_END}|${SIGIL_END})`,
       captures: {
         0: { name: SCOPES.segment },
         1: { name: SCOPES.segmentSigil },
@@ -73,11 +84,12 @@ function rtsxRules() {
     },
     // Anything else that starts with one of our sigils (`&a:b`, `#404`) is
     // illegal as upstream's catch-all would have it, but stops before the tag
+    // end and before a `{`, whose `}` the catch-all would take with the tag
     // end. `&` and `#` never start an attribute in TSX, so no TSX file sees
     // this rule.
     'rtsx-sigil-illegal': {
       name: 'invalid.illegal.attribute.tsx',
-      match: '[&#](?:(?!/?>)\\S)*',
+      match: '[&#](?:(?!/?>|\\{)\\S)*',
     },
     // `{ size }`, `{ label: text, value = 0, ...rest }`, `{}` — an object
     // binding pattern in attribute position. `{` followed by `...` (after any
@@ -90,14 +102,15 @@ function rtsxRules() {
       endCaptures: BINDING_BRACE,
       patterns: [{ include: '#parameter-object-binding-element' }],
     },
-    // `{` with nothing but comments after it on its line. A regex cannot look
-    // at the next line, so the first thing inside that is not a comment
-    // decides: `...` makes it a spread, anything else params. Until then the
-    // rule is upstream's `{…}` (jsx-evaluated-code), scopes included, so a
-    // multi-line spread tokenizes exactly as in TSX; multi-line params carry
-    // that rule's content scope under their own.
+    // `{` with nothing but comments after it on its line — the last of them
+    // may be a block comment the line leaves open. A regex cannot look at the
+    // next line, so the first thing inside that is not a comment decides:
+    // `...` makes it a spread, anything else params. Until then the rule is
+    // upstream's `{…}` (jsx-evaluated-code), scopes included, so a multi-line
+    // spread tokenizes exactly as in TSX; multi-line params keep that rule's
+    // brace scopes and carry its content scope under their own.
     'rtsx-slot-params-or-spread': {
-      begin: `\\{(?=\\s*${COMMENTS}(?://.*)?$)`,
+      begin: `\\{(?=\\s*${COMMENTS}(?://.*|${OPEN_COMMENT})?$)`,
       beginCaptures: EMBEDDED_BEGIN,
       end: '\\}',
       endCaptures: EMBEDDED_END,
@@ -158,11 +171,12 @@ function patchAttributes(g) {
     { name: 'keyword.operator.assignment.tsx', match: '=(?=\\s*(?:\'|"|{|/\\*|//|\\n))' },
     'upstream jsx-tag-attribute-assignment changed',
   );
-  // Our rules end a name the way upstream's attribute name does.
-  assert.ok(
-    rule(g, 'jsx-tag-attribute-name').match.endsWith(`(${IDENT})\n  ${NAME_END}`),
-    'upstream jsx-tag-attribute-name changed',
-  );
+  // Our rules end a name the way upstream's attribute name does, plus `{`, `&`
+  // and `#` — which the attribute name gets as well: the fourth upstream rule
+  // we change. In TSX only `{` can follow a name directly (`x{...p}`).
+  const attributeName = rule(g, 'jsx-tag-attribute-name');
+  assert.ok(attributeName.match.endsWith(`(${IDENT})\n  ${UPSTREAM_NAME_END}`), 'upstream jsx-tag-attribute-name changed');
+  attributeName.match = attributeName.match.slice(0, -UPSTREAM_NAME_END.length) + NAME_END;
   assert.deepEqual(
     rule(g, 'jsx-tag-attributes-illegal'),
     { name: 'invalid.illegal.attribute.tsx', match: '\\S+' },
@@ -180,10 +194,11 @@ function patchAttributes(g) {
     const q = quote === 'double' ? '"' : "'";
     assert.deepEqual([s.begin, s.end], [q, q], `upstream jsx-string-${quote}-quoted changed`);
   }
-  // A line comment ends before the newline: see the wrapper below.
+  // A line comment ends before the newline, and begins with the whitespace
+  // that leads its line: see the wrapper below.
   const lineComment = rule(g, 'comment').patterns.at(-1);
   assert.equal(lineComment.end, '(?=$)', 'upstream line comment changed');
-  assert.ok(lineComment.begin.includes('(//)'), 'upstream line comment changed');
+  assert.ok(lineComment.begin.startsWith(`(${LINE_INDENT})?((//)`), 'upstream line comment changed');
 
   g.repository['rtsx-attribute-value'] = {
     // + `<`: an element as the value (`footer=<Match …>…</Match>`), valid JSX
@@ -195,7 +210,9 @@ function patchAttributes(g) {
     patterns: [
       // `a= // it's "q"` + newline + `{y}`: the comment's last character must
       // not read as the end of a value, so the comment takes its newline along.
-      { begin: '(?=//)', end: '\\n', patterns: [{ include: '#comment' }] },
+      // On a line of its own the comment starts at its indentation, where
+      // upstream's rule starts: this one has to start there too to come first.
+      { begin: `(?=(?:${LINE_INDENT})?//)`, end: '\\n', patterns: [{ include: '#comment' }] },
       { include: '#comment' },
       { include: '#jsx-string-double-quoted' },
       { include: '#jsx-string-single-quoted' },
@@ -309,34 +326,42 @@ export function patchGrammar(upstreamGrammar) {
   };
 }
 
-/** ```rtsx fences in Markdown: the shape VS Code's own fence rules have. */
-function markdownGrammar() {
+/**
+ * ```rtsx fences in Markdown: the rule VS Code's Markdown grammar has for
+ * ```tsx fences, with our language in the three places that name TSX. It is
+ * injected, since that grammar's list of fence languages is closed.
+ */
+export function markdownGrammar(upstreamMarkdown) {
+  assert.equal(upstreamMarkdown.scopeName, 'text.html.markdown', 'not the Markdown grammar');
+  assert.match(upstreamMarkdown.version ?? '', /vscode-markdown-tm-grammar\/commit\/[0-9a-f]{40}$/, 'upstream Markdown grammar has no version');
+  const fence = structuredClone(upstreamMarkdown.repository?.fenced_code_block_tsx);
+  assert.ok(fence, 'upstream rule fenced_code_block_tsx is gone');
+  // The identifiers after the fence: only `tsx`, so ours is only `rtsx`.
+  const IDENTIFIERS = '(?i:(tsx)(';
+  assert.equal(fence.begin?.split(IDENTIFIERS).length, 2, 'upstream fenced_code_block_tsx: the identifiers changed');
+  fence.begin = fence.begin.replace(IDENTIFIERS, '(?i:(rtsx)(');
+  // One body, which is TSX and nothing more.
+  assert.equal(fence.patterns?.length, 1, 'upstream fenced_code_block_tsx: the body changed');
+  const [body] = fence.patterns;
+  assert.equal(body.contentName, 'meta.embedded.block.typescriptreact', 'upstream fenced_code_block_tsx: the content scope changed');
+  assert.deepEqual(body.patterns, [{ include: 'source.tsx' }], 'upstream fenced_code_block_tsx: the body changed');
+  body.contentName = 'meta.embedded.block.rtsx'; // package.json maps this scope to the language
+  body.patterns = [{ include: SCOPE_NAME }];
+  // Nothing else in the rule names a language.
+  const rest = JSON.stringify(fence).replaceAll(SCOPE_NAME, '').replaceAll('rtsx', '');
+  assert.ok(!/tsx|typescript/i.test(rest), 'upstream fenced_code_block_tsx names TSX somewhere new');
+  // The scope the manifest injects into, and the rule's own.
+  assert.equal(fence.name, 'markup.fenced_code.block.markdown', 'upstream fenced_code_block_tsx: the scope changed');
   return {
-    information_for_contributors: ['GENERATED by packages/vscode/grammar/generate.mjs. Do not edit.'],
+    information_for_contributors: [
+      'GENERATED by packages/vscode/grammar/generate.mjs. Do not edit.',
+      'Derived from the rule fenced_code_block_tsx of https://github.com/microsoft/vscode-markdown-tm-grammar (MIT), as shipped by VS Code: see grammar/upstream/UPSTREAM.',
+    ],
+    version: upstreamMarkdown.version,
     scopeName: 'markdown.rtsx.codeblock',
     injectionSelector: 'L:text.html.markdown',
     patterns: [{ include: '#rtsx-code-block' }],
-    repository: {
-      'rtsx-code-block': {
-        name: 'markup.fenced_code.block.markdown',
-        begin: '(^|\\G)(\\s*)(`{3,}|~{3,})\\s*(?i:(rtsx)((\\s+|:|,|\\{|\\?)[^`]*)?$)',
-        end: '(^|\\G)(\\2|\\s{0,3})(\\3)\\s*$',
-        beginCaptures: {
-          3: { name: 'punctuation.definition.markdown' },
-          4: { name: 'fenced_code.block.language.markdown' },
-          5: { name: 'fenced_code.block.language.attributes.markdown' },
-        },
-        endCaptures: { 3: { name: 'punctuation.definition.markdown' } },
-        patterns: [
-          {
-            begin: '(^|\\G)(\\s*)(.*)',
-            while: '(^|\\G)(?!\\s*([`~]{3,})\\s*$)',
-            contentName: 'meta.embedded.block.rtsx',
-            patterns: [{ include: SCOPE_NAME }],
-          },
-        ],
-      },
-    },
+    repository: { 'rtsx-code-block': fence },
   };
 }
 
@@ -385,6 +410,9 @@ function notices() {
     '   language-configuration.json, tags-language-configuration.json,',
     '   snippets/typescript.code-snippets and the grammar entries of package.json',
     '   are derived from its typescript-basics and javascript extensions.',
+    '3. vscode-markdown-tm-grammar (https://github.com/microsoft/vscode-markdown-tm-grammar)',
+    '   syntaxes/rtsx.markdown.tmLanguage.json is derived from the rule its',
+    '   Markdown grammar has for tsx code fences.',
     '',
     rule,
     '1. TypeScript-TmLanguage',
@@ -400,6 +428,12 @@ function notices() {
     '',
     upstream('vscode/LICENSE.txt').trim(),
     '',
+    rule,
+    '3. vscode-markdown-tm-grammar',
+    rule,
+    '',
+    upstream('markdown/LICENSE.txt').trim(),
+    '',
   ].join('\n');
 }
 
@@ -412,7 +446,7 @@ export function generate() {
   assert.ok(!configuration.wordPattern.pattern.includes('$'), 'language-configuration: wordPattern excludes $');
   return {
     'syntaxes/rtsx.tmLanguage.json': json(patchGrammar(JSON.parse(upstream('TypeScriptReact.tmLanguage.json')))),
-    'syntaxes/rtsx.markdown.tmLanguage.json': json(markdownGrammar()),
+    'syntaxes/rtsx.markdown.tmLanguage.json': json(markdownGrammar(JSON.parse(upstream('markdown/markdown.tmLanguage.json')))),
     'language-configuration.json': json(configuration),
     'tags-language-configuration.json': json(patchTagsConfiguration(JSON.parse(upstream('vscode/tags-language-configuration.json')))),
     'snippets/typescript.code-snippets': upstream('vscode/typescript.code-snippets'),

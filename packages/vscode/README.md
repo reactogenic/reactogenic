@@ -36,6 +36,10 @@ apply unchanged:
 | params `{ size }` | `meta.slot-params.rtsx`, TSX's parameter scopes inside |
 | segment root `#about-us` | `support.class.component.segment.rtsx` |
 
+Params whose `{` ends its line keep TSX's brace scopes
+(`punctuation.section.embedded.begin/end.tsx`); only what is inside carries
+`meta.slot-params.rtsx` (*Known limits*).
+
 ## The client
 
 `src/`, bundled by esbuild into one CommonJS file, `dist/extension.js`.
@@ -103,10 +107,11 @@ downloaded into `.vscode-test/`. On Linux without a display:
 **Packaging** (`scripts/package.mjs [--pre-release] [target ...]`): one
 `.vsix` per platform of `@reactogenic/cli`, each with the binary from
 `dist/npm/cli-<target>/bin` (`scripts/build-binaries.sh`) and the licences of
-what is in it — ours, tsgo's `LICENSE` and `NOTICE`, the grammar's and the
+what is in it — ours, tsgo's `LICENSE` and `NOTICE`, the grammars' and the
 bundled npm packages' (`ThirdPartyNotices.txt`) — plus `universal`, without a
 binary. Each is staged in `dist/stage/<target>`: what is there is what ships.
-Nothing is published.
+Nothing is published. The package has no `LICENSE` of its own: the script
+copies the repository's, so package with it and not with `vsce package` here.
 
 ## Generated files
 
@@ -129,13 +134,17 @@ pnpm test             # scopes, equality with source.tsx, the repo's .rtsx files
 ```
 
 The grammar is VS Code's TSX grammar with three patches: the attribute list
-(args, segment roots, params), the tag-name pattern (`$name`), the root scope.
-The generator asserts the shape of every upstream rule it patches.
+(args, segment roots, params; what ends an attribute name), the tag-name
+pattern (`$name`), the root scope. Four upstream rules change, six are added.
+The Markdown injection is the rule VS Code's Markdown grammar has for
+```` ```tsx ```` fences, with `rtsx` in the three places that name TSX. The
+generator asserts the shape of every upstream rule it patches.
 
 ## Updating upstream
 
 1. Copy the files listed in `grammar/upstream/UPSTREAM` from a newer VS Code
-   and update that note (version, commits, dates, checksum).
+   and update that note (version, commits, dates, checksums) — a test
+   compares the note with the files.
 2. `pnpm generate`. An assertion that fails names the upstream rule that
    changed: re-read it and adjust the patch.
 3. `pnpm test`. The `manifest` tests compare `package.json` with VS Code's own
@@ -144,12 +153,24 @@ The generator asserts the shape of every upstream rule it patches.
 
 ## Known limits
 
-- A regex cannot look at the next line: for a `{` that ends its line, the
-  first thing inside that is not a comment decides between params and a
-  spread.
+- A regex cannot look at the next line: for a `{` that ends its line (after
+  comments, the last of which may still be open), the first thing inside that
+  is not a comment decides between params and a spread. Until then the `{` is
+  TSX's `{…}`, so multi-line params keep that rule's brace scopes
+  (`punctuation.section.embedded.begin/end.tsx`), not the
+  `punctuation.definition.binding-pattern.object.tsx` inside
+  `meta.slot-params.rtsx` that one-line params have.
 - `<$Icon{ size }>` — params directly after the tag name, no space — is not
   read as a tag with attributes (TSX has the same limit for `<B{...p}>`).
+  After an attribute, an arg or a segment root no space is needed:
+  `items{ item }`, `value&size`.
 - Half-typed forms that TSX's grammar does not recover from either: `x=`
   directly before `>`, an unclosed `{`.
-- One intended difference from `source.tsx` on valid TSX: an element as an
-  attribute value (`footer=<b>…</b>`) is tokenized, not marked illegal.
+- Three intended differences from `source.tsx` on valid TSX:
+  - a tag that starts with `$` (`<$Modal>`) is a slot tag, by the rule of
+    syntax.md: its name is `entity.name.function.slot.rtsx`, not
+    `support.class.component.tsx` (`<$ns.Comp>` stays a component);
+  - an element as an attribute value (`footer=<b>…</b>`) is tokenized, not
+    marked illegal;
+  - an attribute name directly before a spread (`<A x{...p}>`) is a name and
+    a spread; the TSX grammar derails on it.

@@ -1295,6 +1295,37 @@ editor (its window had no focus; the research ran both on the same two
 configurations) — 110's editor suite has the comment toggle, not yet the
 Enter. `.vscodeignore` and the manifest's commands, task and matcher are
 110's. `x=` typed directly before `>`, and an unclosed `{`, derail as in TSX.
+*Review minors* (six; after 110, so the counts above are the first build's):
+(1) a name ends before `{`, `&` and `#`, in the arg and segment-root rules
+and in upstream's attribute name — the fourth upstream rule changed — and
+an illegal sigil form stops before `{`: `items{ item }`, `&size{ x }`,
+`#seg{ x }`, `&{ item }`, `value&size`, `x{...p}` no longer repaint the rest
+of the file, nor does any keystroke of typing a name in front of params, a
+spread, an arg or a segment root (`&` and `#` were not in the finding: the
+same rule, and the transpiler reads `value&size` as two attributes). (2) a
+comment-only line between `=` and a `{…}` value, and (3) a spread whose `{`
+is followed by a block comment its line leaves open, tokenize as in TSX.
+(4) ide.md, the README, decisions.md and CLAUDE.md say what is: three
+differences from `source.tsx` on valid TSX (`$` tags by design, an element
+as a value, `x{...p}`), TSX's brace scopes on multi-line params, the
+unscoped package. (5) VS Code's Markdown grammar is vendored
+(vscode-markdown-tm-grammar `0812fc4`, MIT, in the notices) and the fence
+rule is derived from its `fenced_code_block_tsx`; nine upstream changes are
+tested to fail it, and a test holds `UPSTREAM` to the vendored files. (6) no
+`LICENSE` added: 110's `scripts/package.mjs` copies the repository's into
+every `.vsix` (checked in the universal one: `LICENSE.txt`, byte-identical,
+no `vsce` warning).
+*Tests* (grammar files: 402, +76): each fix has scope or equality cases that
+failed before it (41 in all). *Measured once*: the upstream grammar's 466
+test inputs — 0 differ; 15,554 `.tsx` files of five public repositories
+(11.08M tokens) — 2 differ, both an element as an attribute value; 326
+TypeScript `.tsx` tests — 3 differ; all as before the fixes. 20,000
+generated attribute lists: 0 problems.
+*Left*: the editor suite was not re-run (nothing in it reads tokens).
+Found, not fixed, in the transform: a segment root directly after another
+attribute is emitted without a space (`<section hidden#seg />` →
+`<section hiddenid="seg" >`), and `&#seg` emits `{ "#seg": #seg }` with no
+diagnostic.
 - Vendored TSX grammar with its notices, the generator, the generated
   `rtsx.tmLanguage.json`, the two language configurations. A `grammar` step
   in CI's `js` job.
