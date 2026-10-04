@@ -30,8 +30,11 @@ type front struct {
 
 	// names renames the documents that are rtsx by language id only.
 	names aliases
+	// server takes a request of the front's own: a frame, written whole.
+	server io.Writer
 
 	mu              sync.Mutex
+	asked           int                    // the front's own requests, counted
 	docs            map[string]string      // open .rtsx documents, by URI
 	sources         map[string]*sourceTree // what was read off their texts, as far as asked for
 	pending         map[string]request     // forwarded requests whose answers we rewrite, by id
@@ -191,6 +194,9 @@ func (f *front) fromClient(in io.Reader, toServer io.WriteCloser) {
 }
 
 func (f *front) readClient(in io.Reader, toServer io.Writer) error {
+	f.mu.Lock()
+	f.server = toServer
+	f.mu.Unlock()
 	r := bufio.NewReader(in)
 	for {
 		body, err := readFrame(r)
@@ -418,7 +424,15 @@ func (f *front) fromServer(out io.Reader) error {
 			req, ok := f.pending[string(*msg.ID)]
 			delete(f.pending, string(*msg.ID))
 			f.mu.Unlock()
-			if ok && msg.Error == nil {
+			if ok && req.Method == methodSlots {
+				// The front's own question: its answer is the client's
+				// completion, whatever the server said.
+				if answer := f.slotsAnswered(req, msg); answer != nil {
+					body = answer
+				}
+			} else if ok && msg.Error == nil && req.src != nil && req.slotTag >= 0 && req.ownerAt >= 0 && f.askSlots(*msg.ID, req, msg.Result) {
+				continue // answered when the owner's slots are known
+			} else if ok && msg.Error == nil {
 				result := json.RawMessage("null")
 				if msg.Result != nil {
 					result = *msg.Result

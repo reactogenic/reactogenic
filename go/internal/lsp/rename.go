@@ -30,12 +30,18 @@ import (
 //   - a tag name: the same edit in the element's other tag, and for a slot
 //     in every tag of its group — TypeScript has one prop for them all;
 //   - a reference that is in no virtual text (the children a segment root
-//     overwrites): renamed with its declaration, which the source's own
-//     scopes find;
+//     overwrites, a slot element that a later one replaces): renamed with
+//     its declaration, which the source's own scopes find — in every mapped
+//     file that holds the name, with an occurrence or without. A name there
+//     that the scopes cannot decide refuses the rename (leftOut);
 //   - anything that has no place in the source refuses the rename, and the
 //     error names it.
 //
 // Then the edits are tried: applied to each file and transpiled again.
+//
+// (What TypeScript itself would rename in part — a string, the prop that a
+// body is the value of, a tag across the two kinds of tag — is refused before
+// this is asked: ls.ProvideHostRename.)
 func renameEdits(_ context.Context, request server.RenameRequest) ([]server.RenameEdit, error) {
 	byFile := map[string][]server.RenameOccurrence{}
 	var order []string
@@ -46,7 +52,6 @@ func renameEdits(_ context.Context, request server.RenameRequest) ([]server.Rena
 		}
 		byFile[name] = append(byFile[name], occurrence)
 	}
-	sort.Strings(order)
 
 	// A file whose virtual text is not its lowered source may hold
 	// occurrences that nothing found: code left out, a statement lowered
@@ -64,23 +69,38 @@ func renameEdits(_ context.Context, request server.RenameRequest) ([]server.Rena
 		}
 	}
 
+	// A file that holds the name and has no occurrence may hold it in code
+	// that no virtual text has: it is read as the others are.
+	files := map[string]*rtsx.SourceFile{}
+	for _, name := range order {
+		files[name] = byFile[name][0].File
+	}
+	for _, file := range request.Files {
+		name := file.OriginalFileName()
+		if _, mapped := mapper.Of(file); mapped && files[name] == nil && word != nil && word.MatchString(file.OriginalText()) {
+			files[name] = file
+			order = append(order, name)
+		}
+	}
+	sort.Strings(order)
+
 	var out []server.RenameEdit
 	for _, name := range order {
 		occurrences := byFile[name]
-		mapped, ok := mapper.Of(occurrences[0].File)
+		mapped, ok := mapper.Of(files[name])
 		if !ok {
 			return nil, fmt.Errorf("Rename refused: %s has no transform", path.Base(name))
 		}
 		if why := unusable(mapped); why != "" {
 			return nil, fmt.Errorf("Rename refused: %s %s, so `%s` in it cannot be found for certain. Fix the file first.", path.Base(name), why, request.Name)
 		}
-		r := &renaming{request: request, fileName: name, src: analyse(occurrences[0].File.OriginalText(), mapped.Output), texts: map[emit.Span]string{}, sites: map[emit.Span]*site{}}
+		r := &renaming{request: request, fileName: name, src: analyse(files[name].OriginalText(), mapped.Output), texts: map[emit.Span]string{}, sites: map[emit.Span]*site{}}
 		for _, occurrence := range occurrences {
 			if err := r.occurrence(occurrence); err != nil {
 				return nil, err
 			}
 		}
-		if err := r.lowered(); err != nil {
+		if err := r.leftOut(); err != nil {
 			return nil, err
 		}
 		edits, err := r.edits()
@@ -114,12 +134,13 @@ func unusable(file *mapper.File) string {
 	return ""
 }
 
-// wordOf matches name as a whole word; nil for a name that is not one.
+// wordOf matches name as a whole word — a hyphen is a letter of a JSX name
+// (`$sub-item`, `aria-label`); nil for a name that is not one.
 func wordOf(name string) *regexp.Regexp {
-	if name == "" || !regexp.MustCompile(`^[\w$]+$`).MatchString(name) {
+	if name == "" || !regexp.MustCompile(`^[\w$-]+$`).MatchString(name) {
 		return nil
 	}
-	return regexp.MustCompile(`(^|[^\w$])` + regexp.QuoteMeta(name) + `($|[^\w$])`)
+	return regexp.MustCompile(`(^|[^\w$-])` + regexp.QuoteMeta(name) + `($|[^\w$-])`)
 }
 
 // renaming is the rename of one .rtsx file.
@@ -128,7 +149,7 @@ type renaming struct {
 	fileName string
 	src      *sourceTree
 	// texts are the new texts by source span; found, the spans TypeScript
-	// reported — the declarations among them are what lowered() looks for.
+	// reported — the declarations among them are what leftOut() looks for.
 	texts map[emit.Span]string
 	found []emit.Span
 	// sites are the bare names renamed, by name span.
@@ -265,17 +286,23 @@ func (s *sourceTree) slotRefs() []emit.Span {
 	return refs
 }
 
-// lowered renames the references that TypeScript cannot see: a name that
-// is in no virtual text — an expression in the children that a segment root
-// overwrites, the subject of a `Switch` without a case — and that the
-// source's own scopes resolve to a declaration this rename renames.
+// leftOut renames the references that TypeScript cannot see: a name in code
+// that no virtual text holds (sourceTree.leftOut) — the children that a
+// segment root overwrites, an element of a repeated slot that a later one
+// replaces — and that the source's own scopes resolve to a declaration this
+// rename renames: a binding read in an expression, the tag of a component
+// (its closing tag with it).
 //
-// What the scopes cannot decide refuses the rename: a member, a type or a
-// key of that name in such code may or may not be the renamed one. (The
-// names the passes read are not in question: a tag — renamed with its twin —
-// and the name of an attribute.)
-func (r *renaming) lowered() error {
-	if r.request.Name == "" || len(r.found) == 0 {
+// What the scopes cannot decide refuses the rename, here and in
+// prepareRename: the name of an attribute — a bare one included: it may be
+// the prop, the binding, or both — a member, a type or a key, the tag of a
+// slot or of an intrinsic element, a name that nothing in the file declares.
+// Each may or may not be the renamed one.
+//
+// (The names the passes read in code they lower — `on`, `slot`, the tags of
+// a slot group after its first — have no copy either, and are not left out.)
+func (r *renaming) leftOut() error {
+	if r.request.Name == "" || r.src.out.Map == nil {
 		return nil
 	}
 	declared := map[emit.Span]bool{}
@@ -283,32 +310,51 @@ func (r *renaming) lowered() error {
 		declared[at] = true
 	}
 	span := func(n *rtsx.Node) emit.Span { return emit.Span{Pos: rtsx.TokenStart(r.src.file, n), End: n.End()} }
+	refuse := func(at emit.Span) error {
+		return r.refuse(at.Pos, "`%s` here is in code that the transform leaves out, where it cannot be told from the name being renamed. Remove that code first.", r.request.Name)
+	}
+	attrs := map[*rtsx.Node]attribute{}
+	for _, a := range r.src.attrs {
+		attrs[a.node] = a
+	}
 	var refused error
 	var visit func(n *rtsx.Node) bool
 	visit = func(n *rtsx.Node) bool {
+		if n.Kind == rtsx.KindJsxAttribute {
+			// The name of an attribute: `size`, and the `size` of `&size`.
+			if a, ok := attrs[n]; ok && r.src.slice(a.name) == r.request.Name {
+				if _, done := r.texts[a.name]; !done && r.sites[a.name] == nil && r.src.leftOut(n.Name()) {
+					refused = refuse(a.name)
+					return true
+				}
+			}
+			return n.Initializer() != nil && visit(n.Initializer())
+		}
 		if n.Kind != rtsx.KindIdentifier || rtsx.NodeText(n) != r.request.Name {
 			return n.ForEachChild(visit)
 		}
 		at := span(n)
-		if _, done := r.texts[at]; done || r.src.copied(at) || r.src.tagAt(at) >= 0 && !rtsx.IsValueReference(n) {
+		if _, done := r.texts[at]; done || r.sites[at] != nil || !r.src.leftOut(n) {
 			return false
 		}
-		if n.Parent != nil && (n.Parent.Kind == rtsx.KindJsxAttribute || n.Parent.Kind == rtsx.KindImportSpecifier) && n.Parent.Name() == n {
-			return false // an attribute the passes read; the import of a name they lower away
-		}
-		if !rtsx.IsValueReference(n) {
-			refused = r.refuse(at.Pos, "`%s` here is in code that the transform leaves out, where it cannot be told from the name being renamed. Remove that code first.", r.request.Name)
+		// The tag of a component is a reference; so is the `UI` of `<UI.Box>`.
+		tag := isTagName(n)
+		if tag && (rtsx.IsIntrinsicTag(n) || strings.HasPrefix(r.request.Name, "$")) || !tag && !rtsx.IsValueReference(n) {
+			refused = refuse(at)
 			return true
 		}
-		if symbol := rtsx.ResolveValue(n, r.request.Name); symbol != nil {
-			for _, declaration := range symbol.Declarations {
-				if name := declaration.Name(); name != nil && declared[span(name)] {
-					r.texts[at] = r.request.NewName
-					for _, twin := range r.src.twins(at) {
-						r.texts[twin] = r.request.NewName
-					}
-					break
+		symbol := rtsx.ResolveValue(n, r.request.Name)
+		if symbol == nil {
+			refused = refuse(at) // declared elsewhere, if at all: a global
+			return true
+		}
+		for _, declaration := range symbol.Declarations {
+			if name := declaration.Name(); name != nil && declared[span(name)] {
+				r.texts[at] = r.request.NewName
+				for _, twin := range r.src.twins(at) {
+					r.texts[twin] = r.request.NewName
 				}
+				break
 			}
 		}
 		return false

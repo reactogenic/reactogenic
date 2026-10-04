@@ -7,9 +7,12 @@ package ls
 import (
 	"context"
 	"errors"
+	"fmt"
 	"iter"
+	"strings"
 
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
+	"github.com/microsoft/TypeScript/tsc/internal/checker"
 	"github.com/microsoft/TypeScript/tsc/internal/compiler"
 	"github.com/microsoft/TypeScript/tsc/internal/core"
 	"github.com/microsoft/TypeScript/tsc/internal/diagnostics"
@@ -17,6 +20,8 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/ls/lsconv"
 	"github.com/microsoft/TypeScript/tsc/internal/ls/lsutil"
 	"github.com/microsoft/TypeScript/tsc/internal/lsp/lsproto"
+	"github.com/microsoft/TypeScript/tsc/internal/scanner"
+	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
 // HostRenameOccurrence is one place a rename changes, as the language
@@ -41,6 +46,7 @@ type HostRenameOccurrence struct {
 	NewText string
 
 	location lsproto.Location // of an occurrence in a file that is not content mapped
+	library  bool             // in a file of the default library
 }
 
 // HostRenameEdit is one edit of a rename, in the original text of a
@@ -76,6 +82,12 @@ type hostRenameOccurrences struct {
 	renamed     bool // the symbol can be renamed
 	name        string
 	occurrences []HostRenameOccurrence
+	// notOffered: what is renamed is no name that anything declares — a
+	// rename of it would be of that one place.
+	notOffered bool
+	// refused: the occurrences are not all of them, or would not mean what
+	// they mean now. The rename is refused whatever the host makes of them.
+	refused error
 }
 
 // ProvideHostRename is ProvideRename with the occurrences in content-mapped
@@ -99,6 +111,10 @@ func (l *LanguageService) ProvideHostRename(ctx context.Context, params *lsproto
 					all.name = result.name
 				}
 				all.occurrences = append(all.occurrences, result.occurrences...)
+				all.notOffered = all.notOffered || result.notOffered
+				if all.refused == nil {
+					all.refused = result.refused
+				}
 			}
 			return all
 		},
@@ -107,10 +123,13 @@ func (l *LanguageService) ProvideHostRename(ctx context.Context, params *lsproto
 		symbolEntryTransformOptions{},
 		nil, /*defaultProjectData*/
 	)
-	if err != nil || !found.renamed {
+	if err != nil || !found.renamed && !found.notOffered {
 		return lsproto.WorkspaceEditOrNull{}, err
 	}
-	if len(found.occurrences) == 0 {
+	if found.refused != nil {
+		return lsproto.WorkspaceEditOrNull{}, found.refused
+	}
+	if len(found.occurrences) == 0 || found.notOffered {
 		// The tag of an intrinsic element that an index signature declares:
 		// a symbol, and nothing to edit. A rename of nothing is not offered.
 		if prepare {
@@ -133,9 +152,14 @@ func (l *LanguageService) ProvideHostRename(ctx context.Context, params *lsproto
 	var mappedEdits []mappedRenameEdit
 	for _, occurrence := range found.occurrences {
 		if occurrence.File.SpanMap() == nil {
-			// Upstream refuses a symbol declared in node_modules by its
-			// declarations; the prop of a generic component has passed that
-			// check instantiated, and its declaration is edited all the same.
+			// Upstream refuses a symbol declared in the library or in
+			// node_modules by its declarations. A string has none — it is
+			// found wherever a string of its type is written — and the prop
+			// of a generic component has passed that check instantiated: the
+			// library's file, or the declaration, is edited all the same.
+			if occurrence.library {
+				return lsproto.WorkspaceEditOrNull{}, errors.New(diagnostics.You_cannot_rename_elements_that_are_defined_in_the_standard_TypeScript_library.Localize(locale.FromContext(ctx)))
+			}
 			if isInsideNodeModules(occurrence.File.FileName()) {
 				return lsproto.WorkspaceEditOrNull{}, errors.New(diagnostics.You_cannot_rename_elements_that_are_defined_in_a_node_modules_folder.Localize(locale.FromContext(ctx)))
 			}
@@ -180,7 +204,20 @@ func (l *LanguageService) ProvideHostRename(ctx context.Context, params *lsproto
 
 // symbolAndEntriesToOccurrences is symbolAndEntriesToRename up to the point
 // where that writes each occurrence back: the same checks, the same text
-// for each occurrence.
+// for each occurrence. And it is where a rename that the occurrences do not
+// make is stopped — what upstream renames in part, in a .tsx file as well:
+//
+//   - a string: found wherever a string of its type is written — another
+//     function's, the library's — and not always in the type that declares
+//     it. Refused;
+//   - a key written as a string in a binding pattern, `{ "sub-item": sub }`,
+//     is no reference to upstream's search: added here;
+//   - the prop that an element's body is the value of: the body has no name.
+//     Refused when an element of that prop's type has a body;
+//   - a tag that would change between a component's and an intrinsic
+//     element's (`Box` to `box`): it would no longer be a reference. Refused;
+//   - the name of an attribute that nothing declares (`data-tone`): renamed,
+//     it is another attribute. Not offered.
 func (l *LanguageService) symbolAndEntriesToOccurrences(ctx context.Context, params *lsproto.RenameParams, data SymbolAndEntriesData, prepare bool) hostRenameOccurrences {
 	if !nodeIsEligibleForRename(data.OriginalNode) {
 		return hostRenameOccurrences{}
@@ -199,8 +236,12 @@ func (l *LanguageService) symbolAndEntriesToOccurrences(ctx context.Context, par
 	quotePreference := lsutil.GetQuotePreference(sourceFile, l.UserPreferences())
 	useAliasesForRename := l.UserPreferences().UseAliasesForRename.IsTrueOrUnknown()
 
-	result := hostRenameOccurrences{renamed: true, name: data.OriginalNode.Text()}
-	for _, entry := range core.FlatMap(data.SymbolsAndEntries, func(s *SymbolAndEntries) []*ReferenceEntry { return s.references }) {
+	name := data.OriginalNode.Text()
+	result := hostRenameOccurrences{renamed: true, name: name}
+	entries := core.FlatMap(data.SymbolsAndEntries, func(s *SymbolAndEntries) []*ReferenceEntry { return s.references })
+	entries = append(entries, quotedBindingKeys(program, ch, name, entries)...)
+	undeclared := len(entries) > 0
+	for _, entry := range entries {
 		if l.UserPreferences().AllowRenameOfImportPath != core.TSTrue && entry.node != nil && ast.IsStringLiteralLike(entry.node) && ast.TryGetImportFromModuleSpecifier(entry.node) != nil {
 			continue
 		}
@@ -211,7 +252,9 @@ func (l *LanguageService) symbolAndEntriesToOccurrences(ctx context.Context, par
 			End:     entry.textRange.End(),
 			Node:    entry.node,
 			NewText: l.getTextForRename(data.OriginalNode, entry, newName, ch, quotePreference, useAliasesForRename),
+			library: program.IsSourceFileDefaultLibrary(entry.sourceFile.Path()) && tspath.IsDeclarationFileName(entry.sourceFile.FileName()),
 		}
+		undeclared = undeclared && entry.node != nil && ast.IsJsxAttribute(entry.node.Parent) && entry.node.Parent.Name() == entry.node && strings.Contains(entry.node.Text(), "-")
 		if spans := entry.sourceFile.SpanMap(); spans != nil {
 			original, fidelity := spans.VirtualToOriginalSpan(*entry.textRange)
 			occurrence.OriginalPos, occurrence.OriginalEnd, occurrence.Exact = original.Pos(), original.End(), fidelity.IsExact()
@@ -222,9 +265,133 @@ func (l *LanguageService) symbolAndEntriesToOccurrences(ctx context.Context, par
 			}
 			occurrence.location = lsproto.Location{Uri: l.getFileNameOfEntry(entry), Range: lspRange}
 		}
+		// A tag is a component or an intrinsic element by its first letter.
+		if node := entry.node; result.refused == nil && !prepare && node != nil && ast.IsIdentifier(node) && ast.IsJsxTagName(node) &&
+			scanner.IsIntrinsicJsxName(node.Text()) != scanner.IsIntrinsicJsxName(newName) {
+			what := "an intrinsic element: a tag that starts with a lower-case letter is one"
+			if scanner.IsIntrinsicJsxName(node.Text()) {
+				what = "a component: a tag that starts with a capital letter is one"
+			}
+			result.refused = hostRefusal(entry.sourceFile, entry.textRange.Pos(), "`<%s>` would become %s.", node.Text(), what)
+		}
 		result.occurrences = append(result.occurrences, occurrence)
 	}
+	switch {
+	case undeclared:
+		return hostRenameOccurrences{notOffered: true, name: name}
+	case core.Some(data.SymbolsAndEntries, func(s *SymbolAndEntries) bool {
+		return s.definition != nil && s.definition.Kind == definitionKindString
+	}):
+		result.refused = fmt.Errorf("Rename refused: \"%s\" is a string, not a name. TypeScript finds the strings of its type wherever they are written, and not always the type that declares them: the rename would be partial.", name)
+	case result.refused == nil:
+		result.refused = bodyIsRenamedProp(program, ch, name, data.OriginalNode, entries)
+	}
 	return result
+}
+
+// hostRefusal is a refusal that names a place: the position pos of file's
+// text — for a content-mapped file, where that is in what its author wrote.
+func hostRefusal(file *ast.SourceFile, pos int, format string, args ...any) error {
+	text := file.Text()
+	if spans := file.SpanMap(); spans != nil {
+		original, _ := spans.VirtualToOriginalSpan(core.NewTextRange(pos, pos))
+		text, pos = file.OriginalText(), original.Pos()
+	}
+	line, column := 1, 1
+	for i, r := range text {
+		if i >= pos {
+			break
+		}
+		if r == '\n' {
+			line, column = line+1, 1
+		} else {
+			column++
+		}
+	}
+	return fmt.Errorf("Rename refused at %s:%d:%d: %s", tspath.GetBaseFileName(file.OriginalFileName()), line, column, fmt.Sprintf(format, args...))
+}
+
+// renamedDeclarations are the declarations that the entries rename: those
+// whose name is an entry.
+func renamedDeclarations(entries []*ReferenceEntry) map[*ast.Node]bool {
+	declarations := map[*ast.Node]bool{}
+	for _, entry := range entries {
+		if node := entry.node; node != nil && node.Parent != nil && ast.IsDeclaration(node.Parent) && node.Parent.Name() == node {
+			declarations[node.Parent] = true
+		}
+	}
+	return declarations
+}
+
+// declares reports whether symbol is declared by one of declarations.
+func declares(symbol *ast.Symbol, declarations map[*ast.Node]bool) bool {
+	return symbol != nil && core.Some(symbol.Declarations, func(d *ast.Node) bool { return declarations[d] })
+}
+
+// quotedBindingKeys are the keys of binding patterns that name a renamed
+// property as a string — `{ "sub-item": sub }`, the only way to destructure
+// a property whose name is no identifier. Upstream's reference search takes
+// a string for a property's name where it declares or indexes one, and not
+// here: the rename would leave the pattern reading a property that is gone.
+func quotedBindingKeys(program *compiler.Program, ch *checker.Checker, name string, entries []*ReferenceEntry) []*ReferenceEntry {
+	declarations := renamedDeclarations(entries)
+	if len(declarations) == 0 {
+		return nil
+	}
+	found := map[*ast.Node]bool{}
+	for _, entry := range entries {
+		found[entry.node] = true
+	}
+	var keys []*ReferenceEntry
+	for _, file := range program.SourceFiles() {
+		if !strings.Contains(file.Text(), name) {
+			continue
+		}
+		for _, node := range getPossibleSymbolReferenceNodes(file, name, nil /*container*/) {
+			if found[node] || !ast.IsStringLiteralLike(node) || node.Text() != name || !ast.IsBindingElement(node.Parent) || node.Parent.PropertyName() != node || !ast.IsObjectBindingPattern(node.Parent.Parent) {
+				continue
+			}
+			found[node] = true
+			if t := ch.GetTypeAtLocation(node.Parent.Parent); t != nil && declares(ch.GetPropertyOfType(t, name), declarations) {
+				keys = append(keys, newNodeEntry(node))
+			}
+		}
+	}
+	return keys
+}
+
+// bodyIsRenamedProp refuses the rename of the prop that an element's body
+// is the value of (`children`), when an element with a body has that prop:
+// the body is an occurrence with no name, and renamed without it the
+// element passes a prop that is gone.
+func bodyIsRenamedProp(program *compiler.Program, ch *checker.Checker, name string, location *ast.Node, entries []*ReferenceEntry) error {
+	if name == "" || ch.JsxChildrenPropertyName(location) != name {
+		return nil
+	}
+	declarations := renamedDeclarations(entries)
+	if len(declarations) == 0 {
+		return nil
+	}
+	var refused error
+	var visit func(node *ast.Node) bool
+	visit = func(node *ast.Node) bool {
+		if ast.IsJsxElement(node) && len(ast.GetSemanticJsxChildren(node.Children().Nodes)) > 0 {
+			opening := node.AsJsxElement().OpeningElement
+			if t := ch.GetContextualType(opening.Attributes(), checker.ContextFlagsNone); t != nil && declares(ch.GetPropertyOfType(t, name), declarations) {
+				tag := opening.TagName()
+				file := ast.GetSourceFileOfNode(node)
+				refused = hostRefusal(file, scanner.GetTokenPosOfNode(tag, file, false /*includeJsDoc*/), "`<%s>` has a body, which is its `%s`: a body has no name to rename. Write it as an attribute first.", scanner.GetTextOfNode(tag), name)
+				return true
+			}
+		}
+		return node.ForEachChild(visit)
+	}
+	for _, file := range program.SourceFiles() {
+		if !file.IsDeclarationFile && file.AsNode().ForEachChild(visit) {
+			break
+		}
+	}
+	return refused
 }
 
 // HostFile is the program and the file of a document; the file is nil when

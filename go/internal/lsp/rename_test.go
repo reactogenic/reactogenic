@@ -496,32 +496,6 @@ func TestRenameRefusedByOverwrittenChildren(t *testing.T) {
 	}
 }
 
-// Two renames that are TypeScript's own, the same in a .tsx file: a string
-// literal is renamed where TypeScript matches it — not in the type that
-// declares it — and the prop `children` without the element bodies that are
-// its value. Both leave type errors, there as here. (Neither is refused:
-// the occurrences TypeScript has are written back, all of them.)
-func TestRenameIsTypeScripts(t *testing.T) {
-	source := `export function Card(props: { kind: "a" | "b"; children?: unknown }) {
-  return props.kind === "a" ? <b>a</b> : <i>b</i>;
-}
-export const card = <Card kind="a">x</Card>;
-`
-	want := []string{`<nil> file 2:26-2:27 "fresh"; file 4:33-4:34 "fresh"`, `<nil> file 1:48-1:56 "fresh"`}
-	for _, rel := range []string{"src/plain.tsx", "src/mapped.rtsx"} {
-		c := start(t, map[string]string{"src/jsx.d.ts": renameApp["src/jsx.d.ts"], rel: source})
-		c.Open(rel)
-		var got []string
-		for _, needle := range []string{`=== "a"`, "children?"} {
-			edit, err := c.Rename(rel, c.At(rel, needle, 1, strings.IndexAny(needle, "ac")), "fresh")
-			got = append(got, fmt.Sprint(err, " ", strings.ReplaceAll(strings.Join(c.Edits(edit), "; "), rel, "file")))
-		}
-		if strings.Join(got, "\n") != strings.Join(want, "\n") {
-			t.Errorf("%s:\n  %s\nwant:\n  %s", rel, strings.Join(got, "\n  "), strings.Join(want, "\n  "))
-		}
-	}
-}
-
 // A rename that reaches a file whose virtual text is not its lowered source
 // is refused: code that was left out may hold the name.
 func TestRenameRefusedByBrokenFile(t *testing.T) {
@@ -547,54 +521,83 @@ func TestRenameRefusedByBrokenFile(t *testing.T) {
 	}
 }
 
+// typedJSX gives a fixture the JSX types of a real project: every element
+// and attribute is declared, in a package — so a name that TypeScript checks
+// is checked (under `[name: string]: any` a renamed attribute is no error).
+var typedJSX = map[string]string{
+	"src/jsx.d.ts": "/// <reference path=\"../node_modules/jsx-types/index.d.ts\" />\n",
+	"node_modules/jsx-types/index.d.ts": `declare namespace JSX {
+  interface Element { readonly $$typeof: symbol }
+  type ElementType = string | ((props: any) => unknown);
+  interface ElementChildrenAttribute { children: {} }
+  interface IntrinsicAttributes { key?: unknown }
+  interface Attributes { key?: unknown; id?: string; className?: string; title?: string | number; hidden?: boolean; disabled?: boolean; selected?: boolean; slot?: string; children?: unknown }
+  interface IntrinsicElements {
+    main: Attributes; section: Attributes; article: Attributes; header: Attributes; div: Attributes; p: Attributes;
+    table: Attributes; caption: Attributes; th: Attributes; tr: Attributes; input: Attributes; button: Attributes;
+    span: Attributes; b: Attributes; i: Attributes;
+  }
+}
+`,
+}
+
 // ide.md, *Rename*: "no rename in the fixture project leaves it with a new
-// diagnostic". Every identifier of a fixture — each word of its .ts, .tsx
-// and .rtsx files outside a string, declarations and uses, keywords too
-// (on `function` TypeScript renames the function) — is renamed to a fresh
+// diagnostic". Every word of a fixture's .ts, .tsx and .rtsx files —
+// declarations and uses, keywords (on `function` TypeScript renames the
+// function), the words inside strings and texts — is renamed to a fresh
 // name, the edit applied, the diagnostics of every file pulled, the texts
 // put back. A rename is correct or refused, and prepareRename refuses
 // where the rename does: the fresh name keeps the `$` and the case of the
 // old one, so no refusal here depends on it.
 //
-// One name is left out, and is TypeScript's own in a .tsx file as well
-// (TestRenameIsTypeScripts): the prop `children` of a component — an
-// element's body has no token that names it.
+// Two oracles. TypeScript's diagnostics, with every element and attribute
+// declared (typedJSX). And, for the code that no virtual text holds — which
+// TypeScript does not see — the fixture's reveal: what hides that code is
+// taken away after the rename, and there must be no diagnostic then either.
 //
-// Two projects: the rename fixture, and the one of the feature scenarios
-// (TestFeatures).
+// Three projects: the rename fixture, the one of the feature scenarios
+// (TestFeatures), and the one with left-out code.
 func TestRenameEveryName(t *testing.T) {
 	// Why a name is not renamed: it is not a name (TypeScript's answer for
-	// a keyword of a statement, a JSX text, an attribute of an element, a
-	// name the transform lowers away); it is declared in a library; or one
-	// of the table's refusals.
+	// a keyword of a statement, a JSX text, a string that is no member of a
+	// type, a name the transform lowers away); it is declared in a library;
+	// or one of the table's refusals.
 	known := []string{
 		"You cannot rename this element.",
 		"You cannot rename elements that are defined in the standard TypeScript library.",
 		"You cannot rename elements that are defined in a 'node_modules' folder.",
-		"File rename is not supported by the editor", // `from`: the module, for a client that renames files
+		"File rename is not supported by the editor", // `from`, a specifier: the module, for a client that renames files
 		"names an arg and a prop at once",
 		"is also written by the transform",
 		"A segment root cannot be renamed",
+		"is a string, not a name",
+		"has a body, which is its `children`",
+		"here is in code that the transform leaves out",
 	}
 	for _, fixture := range []struct {
 		name    string
 		files   map[string]string
 		renames int      // at least
 		refused []string // the table's refusals that the fixture has
+		reveal  func(rel, text string) string
 	}{
-		// `&&selected` from its arg, `children` of a slot from its body, `#intro`.
-		{"the rename fixture", renameApp, 130, known[4:]},
-		{"the feature fixture", app, 80, []string{"is also written by the transform", "A segment root cannot be renamed"}},
+		// `&&selected` from its arg, `children` of a slot from its body,
+		// `#intro`, the cases of the `Switch`, `children` of `<Box>x</Box>`.
+		{"the rename fixture", renameApp, 130, known[4:9], nil},
+		{"the feature fixture", app, 80, []string{"is also written by the transform", "A segment root cannot be renamed", "is a string, not a name"}, nil},
+		// `label` and `tone` are attributes in the left-out code.
+		{"the fixture with left-out code", leftOutApp, 20, []string{"A segment root cannot be renamed", "here is in code that the transform leaves out"}, revealLeftOut},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
+			files := lsptest.With(fixture.files, typedJSX)
 			var docs []string
-			for rel := range fixture.files {
+			for rel := range files {
 				if strings.HasPrefix(rel, "src/") && !strings.HasSuffix(rel, ".d.ts") {
 					docs = append(docs, rel)
 				}
 			}
 			sort.Strings(docs)
-			renamed, refused := renameEveryName(t, fixture.files, docs)
+			renamed, refused := renameEveryName(t, files, docs, fixture.reveal)
 			for why := range refused {
 				expected := false
 				for _, k := range known {
@@ -623,24 +626,58 @@ func TestRenameEveryName(t *testing.T) {
 	}
 }
 
-// renameEveryName renames each name of docs, the files of a project that
+// revealLeftOut takes away what hides the left-out code of leftOutApp's
+// page: the `#intro` whose children are overwritten, and the last element
+// of the slot that is filled twice.
+func revealLeftOut(rel, text string) string {
+	if rel != "src/page.rtsx" {
+		return text
+	}
+	text = strings.Replace(text, " #intro", "", 1)
+	return regexp.MustCompile(`(?m)^ *<[$]\w+>two</[$]\w+>\n`).ReplaceAllString(text, "")
+}
+
+// renameEveryName renames each word of docs, the files of a project that
 // has no diagnostic; it returns how many it renamed, and the names that
 // prepareRename refused, by reason.
-func renameEveryName(t *testing.T, files map[string]string, docs []string) (renamed int, refused map[string][]string) {
+func renameEveryName(t *testing.T, files map[string]string, docs []string, reveal func(rel, text string) string) (renamed int, refused map[string][]string) {
 	c := start(t, files)
 	problems := func() []string {
 		out := []string{}
 		for _, rel := range docs {
 			for _, d := range c.Diagnostics(rel) {
-				out = append(out, rel+" "+d.String()+" "+d.Message)
+				if string(d.Code) != `"segment-children"` { // the warning that left-out code has
+					out = append(out, rel+" "+d.String()+" "+d.Message)
+				}
 			}
 		}
 		return out
 	}
+	// revealed are the diagnostics with the left-out code in the open; the
+	// texts are put back.
+	revealed := func() []string {
+		if reveal == nil {
+			return nil
+		}
+		before := map[string]string{}
+		for _, rel := range docs {
+			before[rel] = c.Text(rel)
+			if open := reveal(rel, before[rel]); open != before[rel] {
+				c.Change(rel, open)
+			}
+		}
+		got := problems()
+		for _, rel := range docs {
+			if c.Text(rel) != before[rel] {
+				c.Change(rel, before[rel])
+			}
+		}
+		return got
+	}
 	for _, rel := range docs {
 		c.Open(rel)
 	}
-	if got := problems(); len(got) != 0 {
+	if got := append(problems(), revealed()...); len(got) != 0 {
 		t.Fatalf("the fixture has diagnostics: %q", got)
 	}
 	word := regexp.MustCompile(`[$A-Za-z_][$\w]*`)
@@ -663,8 +700,7 @@ func renameEveryName(t *testing.T, files map[string]string, docs []string) (rena
 		text := files[rel]
 		for i, at := range word.FindAllStringIndex(text, -1) {
 			old := text[at[0]:at[1]]
-			line := text[strings.LastIndex(text[:at[0]], "\n")+1 : at[0]]
-			if i%step != 0 || strings.Count(line, `"`)%2 == 1 || old == "children" && !strings.HasSuffix(rel, ".rtsx") {
+			if i%step != 0 {
 				continue
 			}
 			// Inside the name: its end is also the end of what follows it.
@@ -699,7 +735,7 @@ func renameEveryName(t *testing.T, files map[string]string, docs []string) (rena
 			renamed++
 			edits += len(c.Edits(edit))
 			c.Apply(edit)
-			if got := problems(); len(got) != 0 {
+			if got := append(problems(), revealed()...); len(got) != 0 {
 				t.Errorf("%s → %s leaves %q\n  edits: %q", where, fresh(old, tried), got, c.Edits(edit))
 			}
 			for _, rel := range docs {

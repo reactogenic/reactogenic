@@ -168,6 +168,52 @@ func SlotDeclaration(c *Checker, tag *Node, slot string) (decl *Node, declared, 
 	return decl, false, false
 }
 
+// Prop is a prop that a JSX element, or the value of a slot, takes.
+type Prop struct {
+	Name     string
+	Optional bool
+	Type     string // as the checker prints it
+}
+
+// PropsAt are the props of what the name at pos of file names: the tag of a
+// JSX element — the props of its component — or the name of a JSX attribute
+// or of an object's property — the properties of the value expected there
+// (of every member of a union: a slot is its value or NOT_ASSIGNED). nil for
+// any other name, and for one whose type is unknown.
+func PropsAt(c *Checker, file *SourceFile, pos int) []Prop {
+	node := astnav.GetTouchingPropertyName(file, pos)
+	if node == nil || node.Parent == nil {
+		return nil
+	}
+	var expected *checker.Type
+	tag := node
+	for ast.IsPropertyAccessExpression(tag.Parent) { // the `Kit` of `<Kit.Panel>`
+		tag = tag.Parent
+	}
+	switch parent := node.Parent; {
+	case ast.IsJsxOpeningLikeElement(tag.Parent) && tag.Parent.TagName() == tag:
+		expected = c.GetContextualType(tag.Parent.Attributes(), checker.ContextFlagsNone)
+	case ast.IsJsxAttribute(parent) && parent.Name() == node:
+		if init := parent.Initializer(); init != nil && ast.IsJsxExpression(init) && init.Expression() != nil {
+			expected = c.GetContextualType(init.Expression(), checker.ContextFlagsNone)
+		}
+	case ast.IsPropertyAssignment(parent) && parent.Name() == node:
+		expected = c.GetContextualType(parent.Initializer(), checker.ContextFlagsNone)
+	}
+	if expected == nil {
+		return nil
+	}
+	types := []*checker.Type{expected}
+	if expected.IsUnion() {
+		types = expected.Types()
+	}
+	var props []Prop
+	for _, symbol := range c.GetAllPossiblePropertiesOfTypes(types) {
+		props = append(props, Prop{Name: symbol.Name, Optional: symbol.Flags&ast.SymbolFlagsOptional != 0, Type: c.TypeToString(c.GetTypeOfSymbol(symbol))})
+	}
+	return props
+}
+
 // IsError reports whether a diagnostic is an error, not a warning or a
 // suggestion.
 func IsError(d *Diagnostic) bool {

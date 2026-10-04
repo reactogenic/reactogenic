@@ -20,9 +20,9 @@ func labelsAt(c *lsptest.Client, rel, typed string) []string {
 }
 
 // ide.md, *Slots*: after `<$` inside a component's children, exactly its
-// declared slots — TypeScript's property completion at the copied name, of
-// which the `$` names are kept — and the `$` names already written under
-// the same owner, last. The inserted text is the bare name.
+// declared slots — TypeScript's items for those that are not written yet,
+// then the written ones. The inserted text is the bare name. (Under a
+// `Match`, in a `$Case`, next to nested slots: TestSlotCompletionOfTheOwner.)
 func TestSlotCompletion(t *testing.T) {
 	c := startRename(t, lsptest.Options{})
 	const page = "src/page.rtsx"
@@ -74,7 +74,7 @@ func TestSlotCompletion(t *testing.T) {
 	}
 	// Everything filled: what is written, once each.
 	typing(slots + "        <$\n")
-	if got := labelsAt(c, page, "</$Row>\n        <$"); strings.Join(got, " ") != "$Title $Column $Row" {
+	if got := labelsAt(c, page, "</$Row>\n        <$"); strings.Join(got, " ") != "$Title? $Column $Row?" {
 		t.Errorf("with every slot written: %q", got)
 	}
 	// Under a `Switch` — lowered away, so TypeScript is never asked.

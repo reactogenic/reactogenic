@@ -198,7 +198,7 @@ func TestFeatures(t *testing.T) {
 		// nothing else: the one not written yet, then the one that is
 		// (TestSlotCompletion).
 		c.Change(page, strings.Replace(app[page], "<$Label>\n          Save\n        </$Label>", "<$La", 1))
-		if got := labels(at("<$La", 1, 4)); strings.Join(got, " ") != "$Label? $Icon" {
+		if got := labels(at("<$La", 1, 4)); strings.Join(got, " ") != "$Label? $Icon?" {
 			t.Errorf("slot names: %q", got)
 		}
 		c.Change(page, app[page])

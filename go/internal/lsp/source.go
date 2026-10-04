@@ -178,6 +178,75 @@ func (s *sourceTree) copied(at emit.Span) bool {
 	return false
 }
 
+// isTagName: the identifier is the whole name of a JSX tag — `Chip`,
+// `section`, `$Icon`; not the `UI` or the `Box` of `<UI.Box>`.
+func isTagName(n *rtsx.Node) bool {
+	p := n.Parent
+	return p != nil && (p.Kind == rtsx.KindJsxOpeningElement || p.Kind == rtsx.KindJsxSelfClosingElement || p.Kind == rtsx.KindJsxClosingElement) && p.TagName() == n
+}
+
+// leftOut reports whether the name n is in code that no virtual text holds
+// (ide.md, *Rename*): the children that a segment root overwrites, an
+// element of a repeated slot that a later one replaces, an attribute that a
+// slot element replaces. It is read off the map: n has no copy, and some JSX
+// child around it — an element, an expression in braces — has no copy of
+// anything it holds.
+//
+// The tag names of that child itself do not count: the first tag of a slot
+// group is copied into the prop's name whatever becomes of its element. And
+// a tag of a slot group is judged by what is around its element: the tags
+// after the first are never copied, in code that is lowered as it stands.
+func (s *sourceTree) leftOut(n *rtsx.Node) bool {
+	at := emit.Span{Pos: rtsx.TokenStart(s.file, n), End: n.End()}
+	if s.out.Map == nil || s.copied(at) {
+		return false
+	}
+	from := n.Parent
+	if i := s.tagAt(at); i >= 0 && s.tags[i].span == at {
+		if group, _ := s.group(at); group != nil {
+			from = s.tags[i].element.Parent
+		}
+	}
+	for a := from; a != nil; a = a.Parent {
+		switch a.Kind {
+		case rtsx.KindJsxElement, rtsx.KindJsxSelfClosingElement, rtsx.KindJsxFragment, rtsx.KindJsxExpression:
+			if !s.holdsCopy(a) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// holdsCopy reports whether anything of the JSX child a is in the virtual
+// text, its own tag names aside.
+func (s *sourceTree) holdsCopy(a *rtsx.Node) bool {
+	whole := emit.Span{Pos: rtsx.TokenStart(s.file, a), End: a.End()}
+	var own []emit.Span
+	for _, t := range s.tags {
+		if t.element == a {
+			own = append(own, t.span)
+		}
+	}
+	for _, segment := range s.out.Map.Segments {
+		if !segment.Copied {
+			continue
+		}
+		part := emit.Span{Pos: max(segment.In.Pos, whole.Pos), End: min(segment.In.End, whole.End)}
+		if part.Len() <= 0 {
+			continue
+		}
+		name := false
+		for _, t := range own {
+			name = name || within(part, t)
+		}
+		if !name {
+			return true
+		}
+	}
+	return false
+}
+
 // retarget is where a request at the source offset pos is answered instead
 // (ide.md, *Span map*, slot groups): at the copied tag of its slot group,
 // or — the closing tag of an element that is emitted without one — at the

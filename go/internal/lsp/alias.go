@@ -96,6 +96,16 @@ func (a *aliases) clientName(uri string) string {
 	return uri
 }
 
+// serverName is the server's name of a document the client names uri.
+func (a *aliases) serverName(uri string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if name, ok := a.toServer[uri]; ok {
+		return name
+	}
+	return uri
+}
+
 // fromServer renames the documents of body back for the client.
 func (a *aliases) fromServer(body []byte) []byte {
 	a.mu.Lock()
