@@ -308,6 +308,22 @@ esbuild's public API produces.
     Unreconciled, every page that mounts a behaviour came back unpruned,
     with no test failing. The `served` fixture has a fourth page, with an
     author's script beside the builder's: not pruned.
+  - With the review of the integrated tree: **the script is asked before
+    the page** (builder.md, *The page's script*). A class or an id the page
+    had was "yes" without the script being asked, so `:not(.collapsed)` was
+    "no" and the rule gone when `classList.toggle("collapsed")` made it
+    match; a text set over an element (`textContent`) removed what
+    `:not(:has(b))` waited for; a document of the site in an `<iframe>`
+    wrote to a page that had been pruned; and `classList.remove("x")` left
+    its page unpruned, as "changes the tree". All four reproduced in
+    Chromium 153 and WebKit 26.6 against `--no-specialize` (204, 51 and 51
+    computed-style differences in Chromium after a click, or as loaded), and
+    equal after the fix, in four packagings. The `served` fixture has two
+    more pages for it (`/toggle/`, `/frame/`), and the corpus test looks at
+    every page with a script a second time — with what the script names
+    taken away.
+    **Not seen**, and said so in builder.md: a name the script computes; a
+    document that reaches the page by opening it or by framing it.
 
 ### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found

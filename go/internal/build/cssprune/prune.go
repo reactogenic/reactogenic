@@ -32,13 +32,22 @@
 //     pruned against itself.
 //   - The page's built script is given with it (PruneWith): what it names
 //     — a class, an id, an attribute, a custom property, an animation — is
-//     "maybe" too, and a script that changes the tree leaves the page
-//     unpruned. A name the script computes (`"is-" + state`) is not seen:
+//     "maybe" too, and a script that may change the tree leaves the page
+//     unpruned. The script is asked before the page: a class the page has
+//     is "maybe" as well once the script names it, or may write `class`
+//     whole — it takes away as it adds, and `:not(.collapsed)` must not be
+//     "no" for what `classList.toggle` will make of it. A script that sets
+//     an element's text removes what the element held: `:has()` is never
+//     "yes" then. A name the script computes (`"is-" + state`) is not seen:
 //     a behaviour names what it writes (builder.md, *Behaviours*). Without
 //     the script, nothing may write but the attributes that are "maybe".
 //   - A script of the page's own — a <script> the builder did not put there,
 //     an event handler attribute, a `javascript:` URL — is not read: the page
-//     is not pruned. Nor is it where the browser's tree is not the one
+//     is not pruned. Nor is a document of the site in a frame of the page
+//     (<iframe>, <object>, <embed>), whose script reaches the page as the
+//     page's own would. A document that reaches it another way — one that
+//     opened the page, or frames it — is not seen.
+//   - Nor is the page pruned where the browser's tree is not the one
 //     written — <template>, <noscript>, <selectedcontent>, markup inside a
 //     <select>, an element the user edits (`contenteditable`).
 //   - A stylesheet the builder did not bundle — a <link> of the page's own,
@@ -56,6 +65,12 @@
 // rejected; 465 pairs of page and sheet, computed styles equal before and
 // after pruning but for the custom properties dropped. Not in Firefox, and
 // not at the floor's own versions: plan.md, RGP2-050 has both.
+//
+// What a script takes away was run there too, built by the driver in four
+// packagings: a class toggled and removed, an id written over, a text set
+// over an element, a document of the site in a frame — the computed style of
+// every element equal to the unpruned build's, as loaded and after the
+// click that makes `.card:not(.collapsed)` match (plan.md, RGP2-020).
 //
 // # What it saves
 //
@@ -113,8 +128,8 @@ type Stats struct {
 	PositionTries     int // @position-try dropped
 	// Unpruned: the sheet came back as it was. The page holds a <template>,
 	// a <noscript>, a <selectedcontent>, a <select> with more than options
-	// in it or an element the user edits; or a script of its own; or its
-	// script changes the tree.
+	// in it or an element the user edits; or a script of its own, or a
+	// document of the site in a frame; or its script may change the tree.
 	Unpruned bool
 	// Why says which, as the report words it: "the page has a <template>".
 	// "" for a page that was pruned.
@@ -147,9 +162,9 @@ type Options struct {
 	// Script is the page's built script (behaviors.Build); "" for a page
 	// that mounts nothing. A behaviour changes the page after it has loaded,
 	// so what the script names is runtime state (builder.md, CSS): a class,
-	// an id or an attribute it names is "maybe", a custom property or an
-	// animation it names is read; and when it names an API that changes the
-	// tree, the page is not pruned.
+	// an id or an attribute it names is "maybe" — on an element that has it
+	// too — a custom property or an animation it names is read; and when it
+	// names an API that changes the tree, the page is not pruned.
 	Script string
 	// Builder is the elements of doc that packaging put there: the
 	// `<script>` that delivers Script, the `<style>` or `<link>` that
@@ -307,6 +322,13 @@ func (p *pruner) page(doc *html.Node) (why string) {
 					not(ownScript)
 				}
 				plain = false
+			case "iframe", "frame", "object", "embed":
+				// A document of the site's own in a frame is of the page's
+				// origin: its script writes to the page as the page's own
+				// would, and is read as little.
+				if framed(n, tag) {
+					not("the page has a document of the site in a frame (`<" + tag + ">`)")
+				}
 			case "option":
 				if plain = false; in == 1 {
 					in = 2
@@ -360,8 +382,10 @@ func (p *pruner) page(doc *html.Node) (why string) {
 	p.m.memo = map[memoKey]tri{}
 	if why == "" && p.script != "" {
 		p.m.script = scriptNames(p.script)
-		if p.m.script.changesTree() {
-			not("the page's script changes the tree")
+		if writer := p.m.script.tree; writer != "" {
+			// By the name found: `append` may be a URLSearchParams's, and
+			// the report then says what to look for.
+			not("the page's script may change the tree: it names `" + writer + "`")
 		}
 		for name := range p.m.script.words {
 			p.named.words[name] = true
@@ -400,6 +424,65 @@ func runs(script *html.Node) bool {
 		}
 	}
 	return false
+}
+
+// framed reports whether an `<iframe>`, `<frame>`, `<object>` or `<embed>`
+// holds a document whose script can reach the page (`parent.document`): one
+// of the page's own origin.
+//
+//   - `srcdoc` is: it has the origin of the page that wrote it.
+//   - A URL is when it is the site's — written without a scheme and without
+//     a host, as the page's links are (`/frame.html`, `demo/`). The builder
+//     does not know where the site is served: a URL in full is taken for
+//     another site's, as the link check takes it (builder.md, *Checks on
+//     the page*). `data:` and `about:blank` are nobody's; `javascript:` is
+//     a script of the page's own (page).
+//   - `sandbox` on an `<iframe>` takes the document's scripts away, or its
+//     origin, unless it allows both.
+func framed(el *html.Node, tag string) bool {
+	if sandbox, ok := attribute(el, "sandbox"); ok && tag == "iframe" {
+		scripts, origin := false, false
+		for _, token := range strings.Fields(sandbox) {
+			scripts = scripts || strings.EqualFold(token, "allow-scripts")
+			origin = origin || strings.EqualFold(token, "allow-same-origin")
+		}
+		if !scripts || !origin {
+			return false
+		}
+	}
+	if _, ok := attribute(el, "srcdoc"); ok && tag == "iframe" {
+		return true
+	}
+	name := "src"
+	if tag == "object" {
+		name = "data"
+	}
+	url, _ := attribute(el, name)
+	// As a URL parser reads it: no spaces or controls around it, no tabs or
+	// line breaks in it, `\` a `/`.
+	url = strings.Map(func(r rune) rune {
+		switch r {
+		case '\t', '\n', '\r':
+			return -1
+		case '\\':
+			return '/'
+		}
+		return r
+	}, strings.TrimFunc(url, func(r rune) bool { return r <= ' ' }))
+	if url == "" || strings.HasPrefix(url, "//") {
+		return false // no document; another host
+	}
+	// A scheme: a letter, then letters, digits, `+`, `-`, `.`, up to a `:`.
+	for i := 0; i < len(url); i++ {
+		c := url[i]
+		switch {
+		case c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z':
+		case i > 0 && (c >= '0' && c <= '9' || c == '+' || c == '-' || c == '.'):
+		default:
+			return !(c == ':' && i > 0)
+		}
+	}
+	return true
 }
 
 // handler reports whether an attribute may be an event handler: `on` and a

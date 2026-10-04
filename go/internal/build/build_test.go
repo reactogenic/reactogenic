@@ -37,8 +37,10 @@ func TestMain(m *testing.M) {
 //	        (/plain/, /guide/, /guide/more/), a drawer (/), a menu of links
 //	        (/links/), a dialog (/dialog/), an action menu with typeahead
 //	        that opens a dialog (/actions/); a segment; `public/`
-//	served  three pages for what packaging changes of a page: the base in its
-//	        links, the elements it adds — and a page the user edits
+//	served  pages for what packaging changes of a page: the base in its
+//	        links, the elements it adds — and a page the user edits, one
+//	        with a script of its own, one with a frame, and one whose
+//	        behaviour takes away what the page has as it loads (/toggle/)
 //	bad     one project, a `--pages` root per mistake
 //	types   a project that does not check
 //	both    `index.rtsx` and `index.tsx` in one directory

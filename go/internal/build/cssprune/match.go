@@ -259,15 +259,31 @@ func (m *matcher) compound(el *html.Node, c *compound) tri {
 func (m *matcher) simple(el *html.Node, s *simple) tri {
 	switch s.kind {
 	case sClass:
-		if hasClass(el, s.name, m.quirks) {
-			return yes
+		// The script is asked first: a name that is in it never decides
+		// anything (builder.md, CSS, *The page's script*). A class it names
+		// may be added — and taken away, from an element that has it: "yes"
+		// there would make `:not(.collapsed)` "no", and the rule would be
+		// gone when `classList.toggle("collapsed")` makes it match.
+		switch {
+		case m.script.value(s.name):
+			return maybe
+		case !hasClass(el, s.name, m.quirks):
+			return no
+		case m.script.writesClass():
+			return maybe // `className = ""`: every class the page has may go
 		}
-		return may(m.script.value(s.name)) // a class the script may add
+		return yes
 	case sID:
-		if v, ok := attribute(el, "id"); ok && (v == s.name || m.quirks && strings.EqualFold(v, s.name)) {
-			return yes
+		v, ok := attribute(el, "id")
+		switch {
+		case m.script.value(s.name):
+			return maybe
+		case !ok || v != s.name && !(m.quirks && strings.EqualFold(v, s.name)):
+			return no
+		case m.script.writesID():
+			return maybe // `e.id = "second"`: the id it had is not named
 		}
-		return may(m.script.value(s.name))
+		return yes
 	case sAttr:
 		if dynamic(s.name) || m.script.attribute(s.name) {
 			return maybe
@@ -303,6 +319,12 @@ func (m *matcher) simple(el *html.Node, s *simple) tri {
 				break
 			}
 		}
+		// A script that writes an element's text takes away what the
+		// element held: what it has is not sure to stay, and what it has
+		// not, it does not get — "no" is still "no".
+		if r == yes && m.script.writesText() {
+			return maybe
+		}
 		return r
 	}
 	return maybe
@@ -333,6 +355,9 @@ type names struct {
 	text   string          // the script, for a name that is not a word (`sm:flex`)
 	words  map[string]bool // as written: for a custom property, an animation
 	folded map[string]bool // lower-cased, hyphens dropped: `tabIndex`, `data-foo-bar`, `fooBar`
+	// tree: the first name of the script that is one of treeWriters — but a
+	// `remove` that is `classList.remove`; "" when it names none.
+	tree string
 }
 
 func nameChar(c byte) bool {
@@ -354,11 +379,52 @@ func scriptNames(script string) *names {
 		for j < len(script) && nameChar(script[j]) {
 			j++
 		}
-		n.words[script[i:j]] = true
-		n.folded[fold(script[i:j])] = true
+		word := script[i:j]
+		n.words[word] = true
+		n.folded[fold(word)] = true
+		if n.tree == "" && treeWriters[word] && !(word == "remove" && ofClassList(script[:i])) {
+			n.tree = word
+		}
 		i = j
 	}
 	return n
+}
+
+// ofClassList reports whether the name that follows before is a member of
+// `classList`, written so: `e.classList.remove`, `e.classList?.remove`. A
+// token list's `remove` takes a class away, not an element — and it is the
+// commonest write a behaviour makes. A list reached another way (`const l =
+// e.classList; l.remove("x")`, `classList["remove"]`) is not seen to be
+// one: that `remove` is the DOM's, which is the safe side.
+func ofClassList(before string) bool {
+	before = strings.TrimRight(before, " \t\r\n")
+	before, dot := strings.CutSuffix(before, ".")
+	before = strings.TrimRight(strings.TrimSuffix(before, "?"), " \t\r\n")
+	const list = "classList"
+	return dot && strings.HasSuffix(before, list) && (len(before) == len(list) || !nameChar(before[len(before)-len(list)-1]))
+}
+
+// writesClass reports whether the script may write `class` whole, so that a
+// class the page has may go without being named: `className = ""`,
+// `setAttribute("class", …)`, `removeAttribute("class")` — the word `class`,
+// whatever it is there — and `classList.value = ""`. `classList` alone names
+// what it adds and removes.
+func (n *names) writesClass() bool {
+	return n != nil && (n.words["className"] || n.folded["class"] || n.words["classList"] && n.words["value"])
+}
+
+// writesID: so for `id` — `e.id = "second"`, `removeAttribute("id")`.
+func (n *names) writesID() bool {
+	return n != nil && n.folded["id"]
+}
+
+// writesText reports whether the script names a property that sets an
+// element's text, and so removes the elements it held: `textContent`,
+// `innerText`, and `text` — of a link, an option, a title. Read or written:
+// `Object.assign(e, { textContent })` is no assignment to look for.
+// (`outerText` replaces the element itself: treeWriters.)
+func (n *names) writesText() bool {
+	return n != nil && (n.words["textContent"] || n.words["innerText"] || n.words["text"])
 }
 
 // value reports whether the script names a class or an id — whatever its
@@ -390,6 +456,8 @@ func (n *names) attribute(name string) bool {
 		return n.words["className"] || n.words["classList"]
 	case name == "for":
 		return n.words["htmlFor"]
+	case name == "rel":
+		return n.words["relList"]
 	}
 	rest, data := strings.CutPrefix(name, "data-")
 	return data && n.folded[fold(rest)]
@@ -398,21 +466,22 @@ func (n *names) attribute(name string) bool {
 // treeWriters are the DOM's ways to add, move or remove an element. A script
 // that names one changes what stands next to what: no selector with a
 // combinator is decided by the page as it was written.
-var treeWriters = []string{
+//
+// Setting an element's text (`textContent`, `innerText`) is not among them:
+// it removes what the element held and leaves every other element where it
+// stood, so only `:has()` is touched (writesText). `outerText` removes the
+// element itself, from between its siblings.
+var treeWriters = set(
 	"createElement", "createElementNS", "innerHTML", "outerHTML", "insertAdjacentHTML", "insertAdjacentElement",
 	"setHTMLUnsafe", "setHTML", "createContextualFragment", "DOMParser", "parseHTMLUnsafe", "cloneNode", "importNode",
 	"adoptNode", "appendChild", "insertBefore", "replaceChild", "removeChild", "replaceChildren", "replaceWith",
 	"append", "prepend", "before", "after", "remove", "moveBefore", "attachShadow", "write", "writeln",
-}
-
-func (n *names) changesTree() bool {
-	for _, name := range treeWriters {
-		if n.words[name] {
-			return true
-		}
-	}
-	return false
-}
+	"outerText",
+	// A table's own, a range's, a selection's, and the editor's.
+	"insertRow", "deleteRow", "insertCell", "deleteCell", "createTHead", "deleteTHead", "createTFoot", "deleteTFoot",
+	"createTBody", "createCaption", "deleteCaption", "insertNode", "surroundContents", "extractContents",
+	"deleteContents", "deleteFromDocument", "execCommand", "contentEditable", "designMode",
+)
 
 // attribute finds an attribute by name. HTML's parser lower-cased the names
 // of HTML elements and camel-cased SVG's (viewBox), so the comparison folds.

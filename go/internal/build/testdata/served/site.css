@@ -55,3 +55,23 @@ head > script {
 .never {
   order: 15;
 }
+
+/* What a behaviour takes away (builder.md, *The page's script*): "/toggle/"
+   has each of these classes and ids as it loads, and matches none of the
+   rules; its script names them, and after a click it matches the first
+   four. */
+.card:not(.collapsed) > .body {
+  order: 16; /* `classList.toggle("collapsed")` */
+}
+.list:not(:has(.active)) {
+  order: 17; /* `classList.remove("active")`, on every item */
+}
+.label:not(#first) {
+  order: 18; /* `.id = "second"` */
+}
+.status:not(:has(b)) {
+  order: 19; /* `.textContent = "Copied"` */
+}
+.card:not(.list) {
+  order: 20; /* never: nothing names `list`, or writes `class` whole */
+}

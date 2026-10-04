@@ -61,19 +61,19 @@
         }
       ],
       "styles": {
-        "rules": 15,
-        "rulesDropped": 7,
-        "selectors": 17,
-        "selectorsDropped": 9,
+        "rules": 20,
+        "rulesDropped": 12,
+        "selectors": 22,
+        "selectorsDropped": 14,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 15,
-            "rulesDropped": 7,
-            "bytesIn": 466,
+            "rules": 20,
+            "rulesDropped": 12,
+            "bytesIn": 658,
             "bytesOut": 174
           }
         ]
@@ -84,19 +84,19 @@
       "file": "pages/edit/index.rtsx",
       "output": "edit/index.html",
       "document": {
-        "raw": 536,
-        "gzip": 295
+        "raw": 691,
+        "gzip": 368
       },
       "html": {
         "raw": 172,
         "gzip": 146
       },
       "css": {
-        "raw": 349,
-        "gzip": 184,
+        "raw": 504,
+        "gzip": 255,
         "delivery": "inline",
-        "pages": 2,
-        "blob": "03fa1053"
+        "pages": 3,
+        "blob": "c08c523b"
       },
       "components": [
         {
@@ -112,9 +112,52 @@
       "styles": {
         "unpruned": true,
         "why": "the page has an element the user edits (`contenteditable`)",
-        "rules": 15,
+        "rules": 20,
         "rulesDropped": 0,
-        "selectors": 17,
+        "selectors": 22,
+        "selectorsDropped": 0,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": []
+      }
+    },
+    {
+      "pathname": "/frame/",
+      "file": "pages/frame/index.rtsx",
+      "output": "frame/index.html",
+      "document": {
+        "raw": 673,
+        "gzip": 358
+      },
+      "html": {
+        "raw": 154,
+        "gzip": 134
+      },
+      "css": {
+        "raw": 504,
+        "gzip": 255,
+        "delivery": "inline",
+        "pages": 3,
+        "blob": "c08c523b"
+      },
+      "components": [
+        {
+          "name": "FramePage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "unpruned": true,
+        "why": "the page has a document of the site in a frame (`<iframe>`)",
+        "rules": 20,
+        "rulesDropped": 0,
+        "selectors": 22,
         "selectorsDropped": 0,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
@@ -153,19 +196,19 @@
       ],
       "mounts": [],
       "styles": {
-        "rules": 15,
-        "rulesDropped": 11,
-        "selectors": 17,
-        "selectorsDropped": 13,
+        "rules": 20,
+        "rulesDropped": 16,
+        "selectors": 22,
+        "selectorsDropped": 18,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 15,
-            "rulesDropped": 11,
-            "bytesIn": 466,
+            "rules": 20,
+            "rulesDropped": 16,
+            "bytesIn": 658,
             "bytesOut": 76
           }
         ]
@@ -176,19 +219,19 @@
       "file": "pages/own/index.rtsx",
       "output": "own/index.html",
       "document": {
-        "raw": 677,
-        "gzip": 378
+        "raw": 832,
+        "gzip": 449
       },
       "html": {
         "raw": 195,
         "gzip": 162
       },
       "css": {
-        "raw": 349,
-        "gzip": 184,
+        "raw": 504,
+        "gzip": 255,
         "delivery": "inline",
-        "pages": 2,
-        "blob": "03fa1053"
+        "pages": 3,
+        "blob": "c08c523b"
       },
       "js": {
         "raw": 87,
@@ -231,14 +274,90 @@
       "styles": {
         "unpruned": true,
         "why": "the page has a script of its own",
-        "rules": 15,
+        "rules": 20,
         "rulesDropped": 0,
-        "selectors": 17,
+        "selectors": 22,
         "selectorsDropped": 0,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": []
+      }
+    },
+    {
+      "pathname": "/toggle/",
+      "file": "pages/toggle/index.rtsx",
+      "output": "toggle/index.html",
+      "document": {
+        "raw": 796,
+        "gzip": 474
+      },
+      "html": {
+        "raw": 289,
+        "gzip": 200
+      },
+      "css": {
+        "raw": 179,
+        "gzip": 136,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "65c28104"
+      },
+      "js": {
+        "raw": 282,
+        "gzip": 215,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "63652cb2"
+      },
+      "components": [
+        {
+          "name": "Card",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "TogglePage",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "./behaviors/toggle",
+          "id": "c9"
+        }
+      ],
+      "modules": [
+        {
+          "module": "./behaviors/toggle",
+          "path": "behaviors/toggle.ts",
+          "bytes": 249
+        },
+        {
+          "path": "<entry>",
+          "bytes": 33
+        }
+      ],
+      "styles": {
+        "rules": 20,
+        "rulesDropped": 13,
+        "selectors": 22,
+        "selectorsDropped": 15,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 20,
+            "rulesDropped": 13,
+            "bytesIn": 658,
+            "bytesOut": 190
+          }
+        ]
       }
     }
   ],
@@ -270,14 +389,15 @@
     },
     {
       "kind": "css",
-      "hash": "03fa1053",
+      "hash": "c08c523b",
       "size": {
-        "raw": 349,
-        "gzip": 184
+        "raw": 504,
+        "gzip": 255
       },
       "delivery": "inline",
       "pages": [
         "/edit/",
+        "/frame/",
         "/own/"
       ]
     },
@@ -292,7 +412,33 @@
       "pages": [
         "/guide/"
       ]
+    },
+    {
+      "kind": "css",
+      "hash": "65c28104",
+      "size": {
+        "raw": 179,
+        "gzip": 136
+      },
+      "delivery": "inline",
+      "pages": [
+        "/toggle/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "63652cb2",
+      "size": {
+        "raw": 282,
+        "gzip": 215
+      },
+      "delivery": "inline",
+      "pages": [
+        "/toggle/"
+      ]
     }
   ],
-  "public": []
+  "public": [
+    "frame.html"
+  ]
 }

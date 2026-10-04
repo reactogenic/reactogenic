@@ -183,17 +183,174 @@ func TestPruneWithScript(t *testing.T) {
 			t.Errorf("%s: %v\n got: %s\nwant: %s\n%+v", tt.name, err, out, tt.want, stats)
 		}
 	}
+	// The reason names the API: the first one of the script's text.
 	const css = `.a{x:y}.a>b{x:y}.gone{x:y}`
 	for name, script := range map[string]string{
-		"createElement": `function m(e){e.append(document.createElement("b"))}`,
-		"innerHTML":     `function m(e){e.innerHTML="<b></b>"}`,
-		"cloneNode":     `function m(e){e.after(e.cloneNode(!0))}`,
-		"remove":        `function m(e){e.firstElementChild.remove()}`,
+		"append":     `function m(e){e.append(document.createElement("b"))}`,
+		"innerHTML":  `function m(e){e.innerHTML="<b></b>"}`,
+		"after":      `function m(e){e.after(e.cloneNode(!0))}`,
+		"remove":     `function m(e){e.firstElementChild.remove()}`,
+		"outerText":  `function m(e){e.firstElementChild.outerText="gone"}`,
+		"insertRow":  `function m(e){e.insertRow()}`,
+		"insertNode": `function m(e){getSelection().getRangeAt(0).insertNode(e)}`,
 	} {
 		out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
-		if err != nil || out != css || !stats.Unpruned || stats.Why != "the page's script changes the tree" {
+		if want := "the page's script may change the tree: it names `" + name + "`"; err != nil || out != css || !stats.Unpruned || stats.Why != want {
 			t.Errorf("%s: %v: pruned: %q %+v", name, err, out, stats)
 		}
+	}
+}
+
+// TestPruneScriptRemoves: a behaviour takes away as well as it adds. A class
+// or an id the page has is "maybe" once the page's script names it — or may
+// write the attribute whole — so its negation is "maybe" too: `:not(.x)` is
+// not dropped for an element that has `x` when the page loads (builder.md,
+// CSS, *The page's script*: "a name that is in it never decides anything").
+func TestPruneScriptRemoves(t *testing.T) {
+	const page = `<div id="c9" class="card collapsed list"><p class="body">body</p><span class="item active">item</span><i id="first" class="label">x</i></div>`
+	const css = `.card:not(.collapsed)>.body{a:b}.card.collapsed>.body{a:b}.list:not(:has(.active)){a:b}.label:not(#first){a:b}.card:not(.list){a:b}.card:not(#c9){a:b}.gone{a:b}`
+	const (
+		collapsed = `.card:not(.collapsed)>.body{a:b}`
+		always    = `.card.collapsed>.body{a:b}`
+		active    = `.list:not(:has(.active)){a:b}`
+		first     = `.label:not(#first){a:b}`
+		list      = `.card:not(.list){a:b}`
+		c9        = `.card:not(#c9){a:b}`
+	)
+	for _, tt := range []struct{ name, script, want string }{
+		{"no script: the page is what it is", ``, always},
+		{"a script that names none of it", `function m(e){e.addEventListener("click",()=>e.focus())}`, always},
+		// The review's page: the class toggled, the class taken from every
+		// item, the id written over.
+		{"toggle, and an id written over",
+			`function m(e){e.addEventListener("click",()=>{e.classList.toggle("collapsed");for(const t of e.querySelectorAll(".item"))t.classList.toggle("active",!1);e.querySelector("i").id="second"})}m(document.getElementById("c9"));`,
+			collapsed + always + active + first + c9},
+		{"classList.remove", `function m(e){e.addEventListener("click",()=>e.classList.remove("collapsed"))}`, collapsed + always},
+		// `list` may go from the card — and come to any other element: the
+		// `<p>`, which has nothing `active`, may be `.list:not(:has(.active))`.
+		{"classList.replace", `function m(e){e.classList.replace("list","grid")}`, always + active + list},
+		{"an id the script names", `function m(){document.getElementById("first").hidden=!0}`, always + first},
+		{"removeAttribute of id", `function m(e){e.removeAttribute("id")}`, always + first + c9},
+		// The attribute written whole: every class the page has may go.
+		{"className", `function m(e){e.className=""}`, collapsed + always + active + list},
+		{"setAttribute of class", `function m(e){e.setAttribute("class","plain")}`, collapsed + always + active + list},
+		{"removeAttribute of class", `function m(e){e.removeAttribute("class")}`, collapsed + always + active + list},
+		{"classList.value", `function m(e){e.classList.value="plain"}`, collapsed + always + active + list},
+	} {
+		out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: tt.script})
+		if err != nil || out != tt.want || stats.Unpruned {
+			t.Errorf("%s: %v\n got: %s\nwant: %s\n%+v", tt.name, err, out, tt.want, stats)
+		}
+	}
+}
+
+// TestPruneClassListRemove: `classList.remove("x")` removes a class, not an
+// element — the commonest write a behaviour makes does not cost its page
+// the pruning. `remove` of anything else is the DOM's (builder.md, CSS,
+// *The page's script*, the tree).
+func TestPruneClassListRemove(t *testing.T) {
+	const page = `<div class="card collapsed"><p class="body">body</p></div>`
+	const css = `.card:not(.collapsed)>.body{a:b}.card>.body{a:b}.gone{a:b}`
+	const kept = `.card:not(.collapsed)>.body{a:b}.card>.body{a:b}`
+	for name, script := range map[string]string{
+		"minified":          `function m(e){e.addEventListener("click",()=>e.classList.remove("collapsed"))}`,
+		"as written":        "function m(e) {\n  e.classList . remove(\"collapsed\");\n}",
+		"optional chaining": `function m(e){e?.classList?.remove("collapsed")}`,
+		"twice":             `function m(e){e.classList.remove("collapsed");e.parentElement.classList.remove("collapsed")}`,
+	} {
+		out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
+		if err != nil || out != kept || stats.Unpruned {
+			t.Errorf("%s: %v\n got: %s\nwant: %s\n%+v", name, err, out, kept, stats)
+		}
+	}
+	for name, script := range map[string]string{
+		"an element's":              `function m(e){e.classList.remove("collapsed");e.firstElementChild.remove()}`,
+		"a list held in a variable": `function m(e){const l=e.classList;l.remove("collapsed")}`,
+		"another list's":            `function m(e){e.myclassList.remove("collapsed")}`,
+		"by its name":               `function m(e){e.classList["remove"]("collapsed")}`,
+	} {
+		out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
+		if err != nil || out != css || !stats.Unpruned || stats.Why != "the page's script may change the tree: it names `remove`" {
+			t.Errorf("%s: %v: pruned: %q %+v", name, err, out, stats)
+		}
+	}
+}
+
+// TestPruneScriptText: a script that writes an element's text — `textContent`,
+// `innerText`, `text` — removes the elements it held, and adds none: what an
+// element *has* is "maybe" where it was "yes", so `:not(:has(b))` stays; the
+// page is still pruned, and so is a page whose script only reads the text,
+// as `menu-keys` does (builder.md, CSS, *The page's script*, the text).
+func TestPruneScriptText(t *testing.T) {
+	const page = `<div id="s9" class="status"><b>Ready</b></div>`
+	const css = `.status:not(:has(b)){a:b}.status:has(b){a:b}.status:has(i){a:b}.status>b{a:b}.status:not(:has(i)){a:b}.gone{a:b}`
+	const kept = `.status:not(:has(b)){a:b}.status:has(b){a:b}.status>b{a:b}.status:not(:has(i)){a:b}`
+	for name, script := range map[string]string{
+		"textContent":          `function m(e){e.addEventListener("click",()=>{e.textContent="Copied"})}`,
+		"innerText":            `function m(e){e.innerText="Copied"}`,
+		"text, of a link":      `function m(e){e.text="Copied"}`,
+		"through an object":    `function m(e){Object.assign(e,{textContent:"Copied"})}`,
+		"read, as menu-keys":   `function m(e){return e.textContent.trim().toLowerCase()}`,
+		"appended to":          `function m(e){e.textContent+="!"}`,
+		"by its name":          `function m(e){e["textContent"]=""}`,
+		"a nullish assignment": `function m(e){e.textContent??="x"}`,
+	} {
+		out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
+		if err != nil || out != kept || stats.Unpruned {
+			t.Errorf("%s: %v\n got: %s\nwant: %s\n%+v", name, err, out, kept, stats)
+		}
+	}
+	// Without such a script what the page has, it has.
+	out, _, err := PruneWith(css, parsePage(t, page), Options{Script: `function m(e){e.focus()}`})
+	if want := `.status:has(b){a:b}.status>b{a:b}.status:not(:has(i)){a:b}`; err != nil || out != want {
+		t.Errorf("no text written: %v\n got: %s\nwant: %s", err, out, want)
+	}
+}
+
+// TestPruneFrames: a document of the site in a frame of the page is of the
+// page's origin, and its script reaches the page — `parent.document` — as
+// one of the page's own does (builder.md, CSS, *a page with a script of its
+// own*): the page is not pruned. A document of another site cannot, nor one
+// whose `sandbox` denies it scripts or the origin.
+func TestPruneFrames(t *testing.T) {
+	const css = `.a{x:y}.lit .a{x:y}.gone{x:y}`
+	for name, page := range map[string]string{
+		"a file of the site":           `<p class="a"></p><iframe src="/frame.html"></iframe>`,
+		"a relative URL":               `<p class="a"></p><iframe src="frame.html?x=1"></iframe>`,
+		"another page":                 `<p class="a"></p><iframe src="../guide/"></iframe>`,
+		"srcdoc":                       `<p class="a"></p><iframe srcdoc="<script>parent.document.body.classList.add('lit')</script>"></iframe>`,
+		"srcdoc beside another site":   `<p class="a"></p><iframe src="https://example.com/" srcdoc="<script>go()</script>"></iframe>`,
+		"an object":                    `<p class="a"></p><object data="/drawing.svg" type="image/svg+xml"></object>`,
+		"an embed":                     `<p class="a"></p><embed src="/drawing.svg">`,
+		"a sandbox that allows both":   `<p class="a"></p><iframe sandbox="allow-scripts ALLOW-SAME-ORIGIN" src="/frame.html"></iframe>`,
+		"a URL with spaces around it":  `<p class="a"></p><iframe src="  /frame.html "></iframe>`,
+		"a scheme that is not a URL's": `<p class="a"></p><iframe src="1:/frame.html"></iframe>`,
+	} {
+		out, stats := mustPrune(t, css, parsePage(t, page))
+		if out != css || !stats.Unpruned || !strings.HasPrefix(stats.Why, "the page has a document of the site in a frame (`<") {
+			t.Errorf("%s: pruned: %q %+v", name, out, stats)
+		}
+	}
+	for name, page := range map[string]string{
+		"another site":                `<p class="a"></p><iframe src="https://www.youtube-nocookie.com/embed/x"></iframe>`,
+		"another host":                `<p class="a"></p><iframe src="//example.com/frame.html"></iframe>`,
+		"another host, backslashes":   `<p class="a"></p><iframe src="/\example.com/frame.html"></iframe>`,
+		"a data: URL":                 `<p class="a"></p><iframe src="data:text/html,<p>x</p>"></iframe>`,
+		"about:blank":                 `<p class="a"></p><iframe src="about:blank"></iframe>`,
+		"no document":                 `<p class="a"></p><iframe></iframe><iframe src=""></iframe><object></object>`,
+		"sandboxed":                   `<p class="a"></p><iframe sandbox src="/frame.html"></iframe>`,
+		"sandboxed, scripts alone":    `<p class="a"></p><iframe sandbox="allow-scripts allow-forms" srcdoc="<script>go()</script>"></iframe>`,
+		"sandboxed, the origin alone": `<p class="a"></p><iframe sandbox="allow-same-origin" src="/frame.html"></iframe>`,
+		"an image":                    `<p class="a"></p><img src="/drawing.svg">`,
+	} {
+		out, stats := mustPrune(t, css, parsePage(t, page))
+		if want := `.a{x:y}`; out != want || stats.Unpruned || stats.Why != "" {
+			t.Errorf("%s:\n got: %s\nwant: %s\n%+v", name, out, want, stats)
+		}
+	}
+	// A frame's `javascript:` URL is a script of the page's own, as ever.
+	if _, stats := mustPrune(t, css, parsePage(t, `<p class="a"></p><iframe src="javascript:go()"></iframe>`)); stats.Why != "the page has a script of its own" {
+		t.Errorf("a javascript: frame: %+v", stats)
 	}
 }
 
@@ -225,10 +382,12 @@ func TestDesignSystemScripts(t *testing.T) {
 			t.Fatalf("%s: %v", file, r.Errors)
 		}
 		names := scriptNames(string(r.OutputFiles[0].Contents))
-		for _, writer := range treeWriters {
-			if names.words[writer] {
-				t.Errorf("%s names `%s`: a page that mounts it is not pruned", filepath.Base(file), writer)
-			}
+		if names.tree != "" {
+			t.Errorf("%s names `%s`: a page that mounts it is not pruned", filepath.Base(file), names.tree)
+		}
+		// Nor one that would make every class or id of its pages "maybe".
+		if names.writesClass() || names.writesID() {
+			t.Errorf("%s may write `class` or `id` whole: classes %v, ids %v", filepath.Base(file), names.writesClass(), names.writesID())
 		}
 		// What it names is state a selector may be about: none of it a
 		// class the CSS convention forbids a script to toggle.

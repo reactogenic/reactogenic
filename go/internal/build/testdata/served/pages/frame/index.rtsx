@@ -1,0 +1,13 @@
+// "/frame/": a document of the site in a frame. It is of the page's origin,
+// so its script writes to the page (`parent.document`) as a script of the
+// page's own would — and the builder reads it as little: the page is not
+// pruned.
+import { Layout } from "../../layout.tsx";
+
+export default function FramePage() {
+  return (
+    <Layout title="Frame">
+      <iframe src="/frame.html" title="Lit" />
+    </Layout>
+  );
+}

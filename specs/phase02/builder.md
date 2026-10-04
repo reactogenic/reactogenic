@@ -568,7 +568,7 @@ order (the JS it makes of them is thrown away).
 | --- | --- |
 | a selector | kept iff some element of the page **may** match. Type, class, id and static attributes are matched exactly; combinators against the real tree |
 | runtime state is "maybe" | every pseudo-class except `:root`, `:is()`, `:where()`, `:not()`, `:has()` (which are evaluated on their arguments), a `&` that lowering left, and every attribute selector on `open`, `hidden`, `inert`, `disabled`, `checked`, `selected`, `value`, `style`, `aria-*`, `data-state` — the one list of what the browser and a behaviour write without saying. The negation of "maybe" is "maybe" |
-| what the page's script names | "maybe" too (*The page's script*): a class, an id, an attribute; a custom property or an animation it names is read. A script that changes the tree: the page is not pruned |
+| what the page's script names | "maybe" too (*The page's script*): a class, an id, an attribute — on an element that has it as on one that has not: the script takes away as well as it adds, and `:not(.collapsed)` is "maybe" then; a custom property or an animation it names is read. A script that sets an element's text: what an element *has* (`:has()`) is "maybe". A script that may change the tree: the page is not pruned |
 | case | as HTML: tags and attribute names fold, classes and ids do not — the page starts with `<!doctype html>`, as the builder writes it. Given a page without exactly that doctype, which may be in quirks mode, classes and ids fold too; attribute values are case-sensitive except with the `i` flag and for the attributes HTML compares case-insensitively (`type`, `rel`, `lang`, `dir`, `method`, …) |
 | pseudo-elements | ignored for matching (`::backdrop`, `::before`, `::details-content`). Whatever follows one — `::before:hover`, `::before::marker` — is "maybe", and never safe to drop on its own (*Lists*) |
 | a selector list | pruned per selector; the rule goes when none is left. **Kept whole** if a selector that would go is one some browser of the floor may reject (*Lists*). Only the rule's own list: the arguments of `:is()`, `:where()`, `:not()`, `:has()` are never trimmed — `:is(.btn, #never)` has the specificity of `#never`, matched or not |
@@ -582,6 +582,7 @@ order (the JS it makes of them is thrown away).
 | `@font-face`, `@property`, `@import`, `@namespace`, anything unknown | kept, byte for byte |
 | an `@import` or `@namespace` after a rule | everything before it is kept, byte for byte (*Out of place*) |
 | a page with a script of its own | not pruned: a `<script>` that runs — not a data block (`application/ld+json`, an import map), not an empty one — an `on…` attribute, a `javascript:` URL. What it writes is not known: `/theme.js` adding `dark` to the root would find `.dark .a` gone. The report says so (*The report*). The `<script>` packaging writes for the page's behaviours is not one: it is the script the pruner reads (*The builder's own elements*) |
+| a page with a document of the site in a frame | not pruned, for the same reason: the document is of the page's origin, and its script writes to the page (`parent.document.body.classList.add("lit")`) as one of the page's own would. An `<iframe>` with `srcdoc`; an `<iframe>`, `<frame>` or `<embed>` whose `src`, an `<object>` whose `data`, is written without a scheme and a host (`/demo.html`, `demo/`) — the site's own, as for a link (*Checks on the page*). Not one: a URL in full (`https://…`, `//host/…`: another site's — the builder does not know where this one is served, so a frame of the site's own is written from the root); `data:`, `about:blank`, no URL at all; an `<iframe sandbox>` that does not allow both `allow-scripts` and `allow-same-origin`. **Not seen:** a document that reaches the page another way — one that opened it (`window.open`), or frames it |
 | a page that contains `<template>`, `<noscript>`, `<selectedcontent>`, a `<select>` holding more than `<option>`, `<optgroup>`, `<hr>` and text, or an element with `contenteditable` (any value but `false`) | not pruned: the tree a browser matches against is not the one written (the design system emits none). Cloned content would need "maybe" relations — a template's wherever a script puts it, the selected `<option>`'s inside `<selectedcontent>` at load; `<noscript>` is elements or text depending on the browser; markup inside a `<select>` is kept by a parser that knows the customizable select and dropped by one that does not, where `<select><div><option>` makes `select > option` match; and what the user edits gets elements no script wrote — Bold a `<b>`, Enter a `<div>`, a paste whatever was copied — which `.editor b` then matches. The report says which (*The report*) |
 | CSS that does not read | an error, and nothing is pruned: an unbalanced bracket, an unterminated string or comment |
 
@@ -622,30 +623,56 @@ page's built script, and a name that is in it never decides anything.
 ```js
 function mount(root) {                       // the page's script, minified or not
   root.classList.add("is-open");             //   .is-open            "maybe"
+  root.classList.toggle("collapsed");        //   .collapsed          "maybe", on the element that has it too
   root.tabIndex = 0;                         //   [tabindex="0"]      "maybe": the property reflects the attribute
   root.dataset.placement = "top";            //   [data-placement]    "maybe"
   root.setAttribute("data-side", "left");    //   [data-side=left]    "maybe"
+  root.lastElementChild.textContent = "ok";  //   :has(…)             "maybe" where it was "yes"
   getComputedStyle(root).getPropertyValue("--rg-breakpoint");   // the property is read
 }
+```
+
+A script **takes away** as well as it adds, so the script is asked before
+the page is: what the page has when it loads decides nothing once the script
+names it.
+
+```html
+<div id="c9" class="card collapsed"><p class="body">…</p></div>
+```
+
+```css
+.card:not(.collapsed) > .body { … }   /* matches nothing as written — and the body, after a click */
 ```
 
 | | |
 | --- | --- |
 | a name | a word of the script's text — an identifier, a property, a word of a string — whatever it is there: `dark` of `classList.add("dark")` and a variable `dark`. More is "maybe" than is written; never less |
-| a class, an id | "maybe" when it is a word of the script, whatever its case; a name that is no word (`sm:flex`), when the text holds it |
-| an attribute | "maybe" when the script names it as it is written (`data-side`), as the property that reflects it (`tabIndex`, `htmlFor`; `className` and `classList` for `class`), or as `dataset`'s key (`fooBar` for `data-foo-bar`) |
-| the tree | a script that names an API that adds, moves or removes an element — `createElement`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `cloneNode`, `appendChild`, `insertBefore`, `replaceChildren`, `replaceWith`, `append`, `prepend`, `before`, `after`, `remove`, … — changes what stands next to what: the page is not pruned |
+| a class, an id | "maybe" when it is a word of the script, whatever its case; a name that is no word (`sm:flex`), when the text holds it. On every element — one that has it (`classList.toggle("collapsed")`, `classList.remove("active")`: `:not(.collapsed)` is "maybe") and one that has not |
+| … the page has, and the script does not name | "maybe" when the script may write the attribute whole: for a class, it names `className`, the word `class` (`setAttribute("class", …)`, `removeAttribute("class")`) or `classList` beside `value`; for an id, the word `id` (`label.id = "second"` — `:not(#first)` is "maybe"). `classList` alone names what it adds and removes |
+| an attribute | "maybe" when the script names it as it is written (`data-side`), as the property that reflects it (`tabIndex`, `htmlFor`; `className` and `classList` for `class`; `relList` for `rel`), or as `dataset`'s key (`fooBar` for `data-foo-bar`) |
+| the text | a script that names `textContent`, `innerText` or `text` — read or written: `Object.assign(el, { textContent })` is no assignment to look for — may put text where an element held elements. They go; none comes, none moves. So `:has()` is "maybe" where it was "yes" (`.status:not(:has(b))` stays), "no" is still "no", and the page is pruned |
+| the tree | a script that names an API that adds, moves or removes an element — `createElement`, `innerHTML`, `outerHTML`, `outerText`, `insertAdjacentHTML`, `cloneNode`, `appendChild`, `insertBefore`, `replaceChildren`, `replaceWith`, `append`, `prepend`, `before`, `after`, `remove`, a table's `insertRow`, a range's `insertNode`, `execCommand`, `contentEditable`, … — may change what stands next to what: the page is not pruned, and the report names the word (*the page's script may change the tree: it names `append`*). The word is enough, whatever it is there (a `URLSearchParams`'s `append`) — but for a `remove` written `classList.remove` (`classList?.remove`): that takes a class away, and is the commonest write a behaviour makes. A list held in a variable (`const l = e.classList; l.remove("x")`) is not seen to be one |
 | not seen | a name the script computes (`"is-" + state`): a behaviour names what it writes, in full (*Behaviours*, what a behaviour writes) |
 
-The three behaviours of `@reactogenic/ui` write nothing to the page and
-name no such API (a test of the pruner builds them and says so).
+The three behaviours of `@reactogenic/ui` write nothing to the page, name
+no such API and neither `class` nor `id` (a test of the pruner builds them
+and says so). `menu-keys` reads `textContent`, for typeahead: on a page that
+mounts it `:has()` is never "yes" — which keeps no rule of the design
+system or of the docs site that would have gone.
 
 **Rejected:** a rule alone — "a behaviour writes only the attributes that
 are *maybe*" — with nothing that reads the script (the first draft:
 `mount()` takes any module, and `item.tabIndex = 0` in one silently lost
 `.menu [tabindex="0"]`); a check of each module's writes (`classList`,
 `setAttribute` with a literal, …: what is written is known only with types,
-and a property that reflects an attribute looks like any other).
+and a property that reflects an attribute looks like any other); the page
+asked before the script — "yes" for a class the element has, the script
+consulted only for one it has not (as first built: `:not(.collapsed)` was
+"no", and three rules of a card that collapses were gone when it opened);
+`remove` as a word like the others (`classList.remove("x")` left its page
+unpruned, with "changes the tree" for a reason); an assignment to
+`textContent` taken for a change of the tree (the page loses its pruning for
+"Copied", and a write that is not an assignment is missed).
 
 **Layers.** A layer's place in the cascade is where its name first occurs.
 
@@ -745,7 +772,7 @@ m1();
 | every flag is defined | the builder defines each flag of the module and of every module it imports — `false` unless a mount set it. A flag the builder did not see would be a `ReferenceError` at run time, so the built script is asked the same question: a free `RG_…` left in it (one written `RG_\u0041` in the source) is mount-flag, and no script |
 | no top-level side effects | the builder **reads** each module once per site: it bundles `import "<module>"` alone — nothing of it used — ignoring `sideEffects` and `@__PURE__` annotations. Whatever is left in that output ran at the top level: mount-side-effect. State and constants are not code that runs (`let typed = ""`, `new WeakMap()`, a class, an enum); a call is (`["a", "b"].join(",")`, `matchMedia(…)`, `"command" in HTMLButtonElement.prototype`) — it belongs in the function. The same read resolves the module and lists the files whose flags are its own |
 | … of a module with flags | read as a page builds it — every flag defined: once all on, once all off, and what is left of either counts. `const DELAY = RG_SLOW ? 500 : 100` is a constant; `if (RG_X) document.title = "x"` runs. What runs only under a mix (`RG_A && !RG_B`) is not seen |
-| what a behaviour writes | state, and it **names** it: the attributes that are "maybe" (*CSS*), and any class, id or attribute written by its name in full — a literal, not `"is-" + state`. The pruner reads the page's script for those names (*CSS*, *The page's script*); a name it cannot read is a rule it may drop. No element is added, moved or removed: a script that does leaves its page unpruned. The same for a custom property or an animation it uses: named in full |
+| what a behaviour writes | state, and it **names** it: the attributes that are "maybe" (*CSS*), and any class, id or attribute written by its name in full — a literal, not `"is-" + state`. The pruner reads the page's script for those names (*CSS*, *The page's script*); a name it cannot read is a rule it may drop. What it takes away it names too — `classList.remove("active")`, not `classList.remove(state)`. No element is added, moved or removed: a script that may leaves its page unpruned — but for an element's text, which may be set (`status.textContent = "Copied"`). The same for a custom property or an animation it uses: named in full |
 | build | one `api.Build` per page: generated entry, `Bundle`, minify, ES modules, `Define` = the page's flags, `Metafile`. No splitting. Every input of its metafile is a file some mounted module reaches |
 
 The `(root)` signature is layout.md's `mountX(root, …)` for clones opened
@@ -817,8 +844,14 @@ knows the site's pages, not a visitor's.
 
 ```
 a script that is `overlays` alone (252 B raw, under 250 B gzipped), on all four pages     inlined in each: the request costs more than the copy
-the layout's CSS (over 250 B gzipped), on all four pages                                  /_rg/page-<hash>.css, once
+a sheet that is the same bytes on two pages (over 250 B gzipped)                          /_rg/page-<hash>.css, once
+a sheet that differs from every other by one selector                                     inlined: it is one page's
 ```
+
+The second line is the fixture's two guide pages (above), **not the docs
+site**: a layout's CSS is one file only on pages whose pruned sheets are
+equal to the byte, and the docs site's four are not — each is inlined, and
+nothing of them is cached from page to page (the OPEN below).
 
 - `S` is the blob alone, gzipped by the builder (`compress/gzip`, level 9):
   the size a build can measure, and the one the report prints. The
@@ -917,7 +950,7 @@ css  e28e8351     1074      502   _rg/page-e28e8351.css    /guide/ /guide/more/
 | a behaviour | a module and the element it is mounted on, once, however many components mounted it, with the flags any of them turned on |
 | the last lines | the site's blobs: kind, hash, raw, gzip, `inline` or its file, the pages it serves |
 | CSS rules | of the sheet before it is minified; a file whose rules all went is a row: that is the saving. A file's bytes (`bytesIn`, `bytesOut` in the JSON) are its rules', before and after pruning |
-| a page that is not pruned | one line in place of the rows, with the reason: ``not pruned: the page has an element the user edits (`contenteditable`)``, `not pruned: the page has a script of its own` (*CSS*). In the JSON: `styles.unpruned`, and the reason in `styles.why` |
+| a page that is not pruned | one line in place of the rows, with the reason: ``not pruned: the page has an element the user edits (`contenteditable`)``, `not pruned: the page has a script of its own`, ``not pruned: the page has a document of the site in a frame (`<iframe>`)``, ``not pruned: the page's script may change the tree: it names `append` `` — the word to look for in the behaviour (*CSS*). In the JSON: `styles.unpruned`, and the reason in `styles.why` |
 | a blob's delivery | `inline`, or its file. Under `auto` a blob that pages share is a file when its gzip column is over 250: the script of `/` and `/links/` above is under it, the sheet of the two guide pages over (*Packaging*) |
 | files | the project's own, from the project directory: `site.css`. A package's, by the package and the path in it: `@reactogenic/ui/src/dialog.css` — whether the install put it in `node_modules/`, in pnpm's store or behind a link out of the project. Nothing in the report is the machine's: two builds of one input write the same report, on any checkout |
 | a file of no package, outside the project | where it is, from the project directory: `../shared/tokens.css` |

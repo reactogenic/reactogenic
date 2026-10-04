@@ -33,32 +33,51 @@ func orders(css string) []int {
 // the file that is written is in its sheet; one that only matched the page
 // as it was rendered is not.
 func TestServed(t *testing.T) {
-	everything := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	everything := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	tests := []struct {
-		name  string
-		args  []string
-		home  []int // "/": `<a href="/guide/">`, a `<p>`, a script
-		guide []int // "/guide/": `<a href="/">`, no script
+		name   string
+		args   []string
+		home   []int // "/": `<a href="/guide/">`, a `<p>`, a script
+		guide  []int // "/guide/": `<a href="/">`, no script
+		toggle []int // "/toggle/": no link; a script, after a `<div>`
 	}{
 		// 2: `a[href="/guide/"]`; 5: `[href$="/guide/"]`; 6: `style`; 9:
 		// `title + style`; 10: `script`; 12: `p + script`.
-		{"no base, inlined", []string{"--inline", "always"}, []int{1, 2, 5, 6, 9, 10, 12}, []int{1, 6, 9}},
+		{"no base, inlined", []string{"--inline", "always"}, []int{1, 2, 5, 6, 9, 10, 12}, []int{1, 6, 9}, []int{6, 9, 10}},
 		// 7: `link[rel=stylesheet]`; 9: `title + link`; 11: `script[src]`.
-		{"no base, files", []string{"--inline", "never"}, []int{1, 2, 5, 7, 9, 10, 11, 12}, []int{1, 7, 9}},
+		{"no base, files", []string{"--inline", "never"}, []int{1, 2, 5, 7, 9, 10, 11, 12}, []int{1, 7, 9}, []int{7, 9, 10, 11}},
 		// 3: `a[href="/docs/guide/"]`; 4: `a[href^="/docs/"]` — and not 2.
-		{"a base, inlined", []string{"--base", "/docs/", "--inline", "always"}, []int{1, 3, 4, 5, 6, 9, 10, 12}, []int{1, 4, 6, 9}},
+		{"a base, inlined", []string{"--base", "/docs/", "--inline", "always"}, []int{1, 3, 4, 5, 6, 9, 10, 12}, []int{1, 4, 6, 9}, []int{6, 9, 10}},
 		// 8: `link[href^="/docs/_rg/"]`: the sheet's own URL.
-		{"a base, files", []string{"--base", "/docs/", "--inline", "never"}, []int{1, 3, 4, 5, 7, 8, 9, 10, 11, 12}, []int{1, 4, 7, 8, 9}},
+		{"a base, files", []string{"--base", "/docs/", "--inline", "never"}, []int{1, 3, 4, 5, 7, 8, 9, 10, 11, 12}, []int{1, 4, 7, 8, 9}, []int{7, 8, 9, 10, 11}},
 		// One page each: nothing is shared, so nothing is a file.
-		{"a base, auto", []string{"--base", "/docs/"}, []int{1, 3, 4, 5, 6, 9, 10, 12}, []int{1, 4, 6, 9}},
+		{"a base, auto", []string{"--base", "/docs/"}, []int{1, 3, 4, 5, 6, 9, 10, 12}, []int{1, 4, 6, 9}, []int{6, 9, 10}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := load(t, append([]string{"-p", "served"}, tt.args...)...)
-			for pathname, want := range map[string][]int{"/": tt.home, "/guide/": tt.guide, "/edit/": everything, "/own/": everything} {
+			// What "/toggle/"'s script takes away is "maybe" (builder.md,
+			// *The page's script*) — 16: `.card:not(.collapsed) > .body`,
+			// the class toggled; 17: `.list:not(:has(.active))`, the class
+			// removed; 18: `.label:not(#first)`, the id written over; 19:
+			// `.status:not(:has(b))`, the text set. None matches the page as
+			// it is written, and each does after a click. Not 20,
+			// `.card:not(.list)`: nothing names `list`.
+			toggle := append(slices.Clone(tt.toggle), 16, 17, 18, 19)
+			for pathname, want := range map[string][]int{"/": tt.home, "/guide/": tt.guide, "/toggle/": toggle, "/edit/": everything, "/own/": everything, "/frame/": everything} {
 				if got := orders(s.css(t, pathname)); !slices.Equal(got, want) {
 					t.Errorf("%s ships the rules %v, want %v\n%s", pathname, got, want, s.files[s.page(t, pathname).Output])
 				}
+			}
+			// "/toggle/" is pruned: `classList.remove` removes no element,
+			// and a text that is set leaves the others where they stand.
+			if styles := s.page(t, "/toggle/").Styles; styles == nil || styles.Unpruned || styles.Why != "" || styles.RulesDropped != len(everything)-len(toggle) {
+				t.Errorf("/toggle/: %+v", styles)
+			}
+			// A document of the site in a frame writes to the page as a
+			// script of its own would.
+			if styles := s.page(t, "/frame/").Styles; styles == nil || !styles.Unpruned || styles.Why != "the page has a document of the site in a frame (`<iframe>`)" || styles.RulesDropped != 0 {
+				t.Errorf("/frame/: %+v", styles)
 			}
 			// The page the user edits has its whole sheet, and the report
 			// says why.
@@ -68,7 +87,7 @@ func TestServed(t *testing.T) {
 			// The builder's own `<script>` — "/" mounts a behaviour — is
 			// not a script of the page's own: the page is pruned, however
 			// the script is delivered. An author's, beside it, is one.
-			if styles := s.page(t, "/").Styles; styles == nil || styles.Unpruned || styles.Why != "" || styles.Rules != 15 || styles.RulesDropped != 15-len(tt.home) {
+			if styles := s.page(t, "/").Styles; styles == nil || styles.Unpruned || styles.Why != "" || styles.Rules != len(everything) || styles.RulesDropped != len(everything)-len(tt.home) {
 				t.Errorf("/: %+v", styles)
 			}
 			if js := s.js(t, "/"); js == "" || js != s.js(t, "/own/") {
@@ -98,19 +117,23 @@ func TestServedGivesUp(t *testing.T) {
 	rounds = 1
 	s := load(t, "-p", "served", "--inline", "never")
 	for _, p := range s.report.Pages {
-		if got := orders(s.css(t, p.Pathname)); len(got) != 15 {
+		if got := orders(s.css(t, p.Pathname)); len(got) != 20 {
 			t.Errorf("%s ships the rules %v", p.Pathname, got)
 		}
-		if p.Styles == nil || !p.Styles.Unpruned || p.Styles.RulesDropped != 0 || p.Styles.Rules != 15 {
+		if p.Styles == nil || !p.Styles.Unpruned || p.Styles.RulesDropped != 0 || p.Styles.Rules != 20 {
 			t.Errorf("%s: %+v", p.Pathname, p.Styles)
 		}
 	}
 	if because := s.page(t, "/").Styles.Why; because != "its rules select on the URL of the stylesheet they are in" {
 		t.Errorf("/: because %q", because)
 	}
-	// The four sheets are one now: a file for the site. And the one script,
-	// of the two pages that mount.
-	if len(s.report.Blobs) != 2 || len(s.report.Blobs[0].Pages)+len(s.report.Blobs[1].Pages) != 6 {
+	// The six sheets are one now: a file for the site. And the two scripts:
+	// of the two pages that mount `mark`, and of "/toggle/".
+	pages := 0
+	for _, blob := range s.report.Blobs {
+		pages += len(blob.Pages)
+	}
+	if len(s.report.Pages) != 6 || len(s.report.Blobs) != 3 || pages != 6+2+1 {
 		t.Errorf("blobs: %+v", s.report.Blobs)
 	}
 }

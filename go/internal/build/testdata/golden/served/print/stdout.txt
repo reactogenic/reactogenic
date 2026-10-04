@@ -8,16 +8,25 @@
   behaviours ./behaviors/mark #marked
   JS bytes       50 B  behaviors/mark.ts
                  37 B  <entry>  the mount calls
-  CSS rules    7 kept,   8 dropped  site.css
+  CSS rules    7 kept,  13 dropped  site.css
 
 /edit/  pages/edit/index.rtsx
                   raw     gzip
   HTML            172      146
-  CSS             349      184   inline, the same on 2 pages
+  CSS             504      255   inline, the same on 3 pages
   JS                -        -   none
-  document        536      295   edit/index.html
+  document        691      368   edit/index.html
   components EditPage ×1, Layout ×1
   CSS rules  not pruned: the page has an element the user edits (`contenteditable`)
+
+/frame/  pages/frame/index.rtsx
+                  raw     gzip
+  HTML            154      134
+  CSS             504      255   inline, the same on 3 pages
+  JS                -        -   none
+  document        673      358   frame/index.html
+  components FramePage ×1, Layout ×1
+  CSS rules  not pruned: the page has a document of the site in a frame (`<iframe>`)
 
 /guide/  pages/guide/index.rtsx
                   raw     gzip
@@ -26,22 +35,36 @@
   JS                -        -   none
   document        186      153   guide/index.html
   components GuidePage ×1, Layout ×1
-  CSS rules    3 kept,  12 dropped  site.css
+  CSS rules    3 kept,  17 dropped  site.css
 
 /own/  pages/own/index.rtsx
                   raw     gzip
   HTML            195      162
-  CSS             349      184   inline, the same on 2 pages
+  CSS             504      255   inline, the same on 3 pages
   JS               87      105   inline, the same on 2 pages
-  document        677      378   own/index.html
+  document        832      449   own/index.html
   components Layout ×1, Marked ×1, OwnPage ×1
   behaviours ./behaviors/mark #marked
   JS bytes       50 B  behaviors/mark.ts
                  37 B  <entry>  the mount calls
   CSS rules  not pruned: the page has a script of its own
 
+/toggle/  pages/toggle/index.rtsx
+                  raw     gzip
+  HTML            289      200
+  CSS             179      136   inline
+  JS              282      215   inline
+  document        796      474   toggle/index.html
+  components Card ×1, Layout ×1, TogglePage ×1
+  behaviours ./behaviors/toggle #c9
+  JS bytes      249 B  behaviors/toggle.ts
+                 33 B  <entry>  the mount calls
+  CSS rules    7 kept,  13 dropped  site.css
+
 css  47835ec0      131       93   inline                   /
 js   f561d7b7       87      105   inline                   / /own/
-css  03fa1053      349      184   inline                   /edit/ /own/
+css  c08c523b      504      255   inline                   /edit/ /frame/ /own/
 css  face0336       44       50   inline                   /guide/
-4 pages written to <out>
+css  65c28104      179      136   inline                   /toggle/
+js   63652cb2      282      215   inline                   /toggle/
+6 pages written to <out>

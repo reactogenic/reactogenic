@@ -1,0 +1,1 @@
+function t(e){e.addEventListener("click",()=>{e.classList.toggle("collapsed");for(let c of e.querySelectorAll(".item"))c.classList.remove("active");let l=e.querySelector("i");l&&(l.id="second");let i=e.lastElementChild;i&&(i.textContent="Copied")})}t(document.getElementById("c9"));

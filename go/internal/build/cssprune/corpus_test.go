@@ -171,6 +171,81 @@ func loadPages(t testing.TB, s sheet) []page {
 	return out
 }
 
+// taken is a page after its script took away what it names, two ways: every
+// class and id that is a word of the script — all of them, where the script
+// names the attribute (`className`, `id`) — and, where it names
+// `textContent`, whatever the elements of the body held. Nothing for a page
+// without a script.
+//
+// A selector the pruner dropped must match nothing there either:
+// `.card:not(.collapsed)` once `classList.toggle("collapsed")` ran,
+// `.status:not(:has(b))` once the status is text. The page as written cannot
+// show that, and the design system's behaviours write nothing; the `served`
+// fixture's `/toggle/` does. The words are found by `word`, not by the
+// pruner's scriptNames.
+func taken(t testing.TB, pg page) (after []*html.Node) {
+	t.Helper()
+	script := pg.opts.Script
+	if script == "" {
+		return nil
+	}
+	walk := func(doc *html.Node, each func(el *html.Node)) *html.Node {
+		var visit func(n *html.Node)
+		visit = func(n *html.Node) {
+			if n.Type == html.ElementNode {
+				each(n)
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				visit(c)
+			}
+		}
+		visit(doc)
+		return doc
+	}
+	classes, ids := word(script, "className"), word(script, "id")
+	after = append(after, walk(parsePage(t, pg.src), func(el *html.Node) {
+		var attrs []html.Attribute
+		for _, a := range el.Attr {
+			switch a.Key {
+			case "class":
+				var kept []string
+				for _, class := range strings.Fields(a.Val) {
+					if !classes && !word(script, class) {
+						kept = append(kept, class)
+					}
+				}
+				a.Val = strings.Join(kept, " ")
+			case "id":
+				if ids || word(script, a.Val) {
+					continue
+				}
+			}
+			attrs = append(attrs, a)
+		}
+		el.Attr = attrs
+	}))
+	// The text set on every element of one depth below the body, depth by
+	// depth: the document's own elements are nobody's text.
+	for depth, emptied := 1, true; emptied && word(script, "textContent"); depth++ {
+		emptied = false
+		after = append(after, walk(parsePage(t, pg.src), func(el *html.Node) {
+			at, p := 0, el
+			for ; p != nil && p.Data != "body"; p = p.Parent {
+				at++
+			}
+			for c := el.FirstChild; c != nil && p != nil && at == depth; {
+				next := c.NextSibling
+				if c.Type == html.ElementNode {
+					el.RemoveChild(c)
+					emptied = true
+				}
+				c = next
+			}
+		}))
+	}
+	return after
+}
+
 // word reports whether name occurs in s as a whole word.
 func word(s, name string) bool {
 	for i := 0; ; {
@@ -211,6 +286,7 @@ func TestCorpusSound(t *testing.T) {
 			for _, pg := range loadPages(t, s) {
 				name := fmt.Sprintf("%s/%s/minify=%v", s.name, pg.name, minify)
 				var n total
+				after := taken(t, pg)
 				matches := func(sel string, scoped bool) (matched, ok bool) {
 					parsed, err := parseSelector(sel, scoped)
 					if err != nil {
@@ -231,6 +307,11 @@ func TestCorpusSound(t *testing.T) {
 						}
 						if el := cascadia.Query(pg.doc, group); el != nil {
 							return true, true
+						}
+						for _, doc := range after {
+							if cascadia.Query(doc, group) != nil {
+								t.Errorf("%s: dropped %q, which matches an element once the page's script took away what it names", name, sel)
+							}
 						}
 					}
 					return false, ok
@@ -260,13 +341,14 @@ func TestCorpusSound(t *testing.T) {
 				}
 				// React writes the attribute as `contentEditable="true"`. A
 				// script of the author's is a plain `<script>`; the builder's
-				// is a module, and named (built).
-				if (strings.Contains(pg.src, "<template") || strings.Contains(strings.ToLower(pg.src), "contenteditable") || strings.Contains(pg.src, "<script>")) != stats.Unpruned {
+				// is a module, and named (built). A frame of the corpus holds
+				// a document of the site.
+				if (strings.Contains(pg.src, "<template") || strings.Contains(strings.ToLower(pg.src), "contenteditable") || strings.Contains(pg.src, "<script>") || strings.Contains(pg.src, "<iframe")) != stats.Unpruned {
 					t.Errorf("%s: Unpruned = %v (%s)", name, stats.Unpruned, stats.Why)
 				}
 				if stats.Unpruned {
 					if out != css {
-						t.Errorf("%s: a page with a <template>, one the user edits or one with a script of its own was pruned", name)
+						t.Errorf("%s: a page with a <template>, one the user edits, one with a script of its own or one with a frame was pruned", name)
 					}
 					continue
 				}
