@@ -1,0 +1,56 @@
+// The segment `#content-mapper` of "/reference/cli/" (specs/phase01/ide.md,
+// *Stock TypeScript 7.1*).
+import { Each } from "@reactogenic/core";
+import { Code } from "../../../code.rtsx";
+
+const TSCONFIG = `"contentMappers": [{ "package": "@reactogenic/cli", "extensions": [".rtsx"] }]`;
+
+const VIRTUAL = `// page.rtsx                        // the TSX that TypeScript reads
+import { Button } from "./button";  import { Button } from "./button.rtsx";
+import { Card } from "@/card";      import { Card } from "@/card.rtsx";
+<section #intro />                  import _Section_intro from "./intro";   // intro.tsx`;
+
+const LIMITS = [
+  "TypeScript's own messages: nothing is rewritten into slot terms, and a message that names an import names it with the extension the mapper wrote.",
+  "The transpiler's errors arrive as reactogenic<number>, with the rule's name leading the message. While one stands, tsc prints no type error of the program. Its warnings are not shown.",
+  "No slot-conditional: it needs the checker, which a mapper runs before. A project can pass tsc and fail reactogenic check.",
+  "An import of an .rtsx module written in a .ts file names the extension.",
+  "Rename is not fixed up.",
+  "A created or deleted segment file is seen when the file that names it next changes.",
+];
+
+export default function ContentMapper() {
+  return (
+    <>
+      <h2>content-mapper</h2>
+      <p>
+        <strong>Experimental.</strong> The same transform as a TypeScript <em>content mapper</em>, for editors
+        without our language server: with it, plain <code>tsc --runExternalCode</code> and the TypeScript 7.1
+        language server read <code>.rtsx</code>.
+      </p>
+      <Code label="tsconfig.json">{TSCONFIG}</Code>
+      <p>
+        You do not run the command: <code>@reactogenic/cli</code> declares it in its <code>package.json</code>, and
+        TypeScript starts it for a tsconfig that lists the package. It speaks the content-mapper protocol on stdin
+        and stdout. <code>reactogenic check</code> and <code>reactogenic lsp</code> ignore the entry: their
+        transform is built in.
+      </p>
+      <p>
+        The stock host does not resolve <code>./button</code> to <code>button.rtsx</code>, so the mapper writes the
+        extension into what TypeScript reads:
+      </p>
+      <Code>{VIRTUAL}</Code>
+      <p>The limits of the contract:</p>
+      <ul>
+        <Each items={LIMITS} { item: limit, index }>
+          <li key={index}>{limit}</li>
+        </Each>
+      </ul>
+      <p>
+        Do not combine it with the VS Code extension: the TypeScript 7.1 server would also answer inside{" "}
+        <code>.rtsx</code> documents — every hover and every TypeScript error twice.{" "}
+        <code>{'"js/ts.contentMappers.enabled": false'}</code> in the workspace restores one server.
+      </p>
+    </>
+  );
+}

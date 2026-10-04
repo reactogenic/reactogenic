@@ -1,0 +1,92 @@
+// The segment `#editor` of "/guide/": mounted by `<section #editor />` in
+// index.rtsx, which gives the section its id (specs/phase01/syntax.md,
+// *Segment roots*). A segment is the module's default export, without props.
+import { Code } from "../../code.rtsx";
+
+const CONTENT_MAPPERS = `"contentMappers": [{ "package": "@reactogenic/cli", "extensions": [".rtsx"] }]`;
+
+export default function Editor() {
+  return (
+    <>
+      <h2>Editor</h2>
+      <h3>VS Code</h3>
+      <p>
+        Install <em>Reactogenic (.rtsx)</em> — <code>reactogenic.rtsx</code> on the Marketplace and on Open VSX. It
+        works in editors built on VS Code too. It brings:
+      </p>
+      <ul>
+        <li>
+          highlighting for <code>.rtsx</code>: your theme's TSX colours, with the slot, arg, param and segment forms
+          on top;
+        </li>
+        <li>
+          the language server: errors as you type — the same ones as <code>reactogenic check</code>, in slot terms —
+          hover, completion, go to definition, references, rename, auto-import, quick fixes, closing tags;
+        </li>
+        <li>
+          <code>.rtsx</code> modules in your <code>.ts</code> and <code>.tsx</code> files: imports resolve, and
+          definitions and references reach into <code>.rtsx</code>.
+        </li>
+      </ul>
+      <p>
+        The server is the <code>reactogenic</code> binary of your project's <code>@reactogenic/cli</code>, so the
+        editor and <code>reactogenic check</code> always agree; without one, the extension runs the binary it ships.
+        The <code>{"{}"}</code> item in the status bar says which one runs.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>What</th>
+            <th>Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>a slot, from its tag</td>
+            <td>
+              go to definition on <code>{"<$Icon>"}</code> finds the <code>$Icon</code> declaration; rename renames
+              every tag and the declaration
+            </td>
+          </tr>
+          <tr>
+            <td>a segment, from its root</td>
+            <td>
+              go to definition on <code>#about-us</code> opens <code>about-us.rtsx</code>
+            </td>
+          </tr>
+          <tr>
+            <td>the TSX a file becomes</td>
+            <td>
+              the command <em>Reactogenic: Show Transpiled TSX</em>
+            </td>
+          </tr>
+          <tr>
+            <td>every error of the project</td>
+            <td>
+              the task <em>reactogenic: check</em> (Terminal → Run Task)
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Rename is whole or refused: where it cannot be carried through — a name inside a string, a{" "}
+        <code>.ts</code> file with unsaved changes — the server says why and changes nothing. There is no formatter
+        yet.
+      </p>
+
+      <h3>Other editors</h3>
+      <p>
+        <a href="/reference/cli/#lsp"><code>reactogenic lsp --stdio</code></a> is a standard language server: point
+        Neovim, Zed, Helix or a JetBrains IDE at it for <code>*.rtsx</code> files.
+      </p>
+
+      <h3>Without our server</h3>
+      <p>
+        From TypeScript 7.1, <code>@reactogenic/cli</code> is also a TypeScript <em>content mapper</em>: plain{" "}
+        <code>tsc</code> and the TypeScript 7.1 language server can read <code>.rtsx</code>. Experimental, and with
+        TypeScript's own messages — the <a href="/reference/cli/#content-mapper">limits</a> are in the reference.
+      </p>
+      <Code label="tsconfig.json">{CONTENT_MAPPERS}</Code>
+    </>
+  );
+}

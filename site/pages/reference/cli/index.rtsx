@@ -1,0 +1,65 @@
+// "/reference/cli/": the `reactogenic` command. One segment per subcommand;
+// the page opens nothing of its own.
+import { Each } from "@reactogenic/core";
+import { Code } from "../../../code.rtsx";
+import { Layout } from "../../../layout.rtsx";
+
+const USAGE = `reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]
+reactogenic lsp --stdio [--clientProcessId pid]
+reactogenic build [-p tsconfig.json] [--pages <dir>] [--out <dir>] [--base <path>]
+                  [--inline auto|always|never] [--no-specialize] [--report]
+reactogenic content-mapper
+reactogenic serve
+reactogenic --version`;
+
+const COMMANDS = [
+  { name: "check", href: "#check", does: "type-checks the project with TypeScript 7, .rtsx included; errors are reported on the .rtsx files" },
+  { name: "lsp", href: "#lsp", does: "the language server for editors, over stdio" },
+  { name: "build", href: "#build", does: "compiles the pages of a site into plain HTML, CSS and minimal JS" },
+  { name: "content-mapper", href: "#content-mapper", does: "experimental: .rtsx for stock TypeScript 7.1" },
+];
+
+export default function Page() {
+  return (
+    <Layout title="CLI" description="Reference of the reactogenic command: check, lsp, build and content-mapper — flags, output and exit status.">
+      <h1>CLI</h1>
+      <p className="lead">
+        The <code>reactogenic</code> command comes with <code>@reactogenic/cli</code>: a small Node shim that runs
+        the native binary for your platform — macOS, Linux or Windows, arm64 or x64.
+      </p>
+      <Code>{USAGE}</Code>
+      <table>
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>Does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={COMMANDS} { item: command }>
+            <tr key={command.name}>
+              <td><a href={command.href}><code>{command.name}</code></a></td>
+              <td>{command.does}</td>
+            </tr>
+          </Each>
+          <tr>
+            <td><code>serve</code></td>
+            <td>
+              transforms <code>.rtsx</code> for the Vite plugin and for the editor's TypeScript plugin: JSON requests
+              on stdin, one response per line on stdout. Started by them, not by hand
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        One transpiler is behind all of them: what <code>check</code> type-checks is what Vite runs, what the editor
+        shows and what <code>build</code> renders.
+      </p>
+
+      <section #check />
+      <section #lsp />
+      <section #build />
+      <section #content-mapper />
+    </Layout>
+  );
+}

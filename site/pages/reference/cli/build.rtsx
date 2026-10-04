@@ -1,0 +1,190 @@
+// The segment `#build` of "/reference/cli/" (specs/phase02/builder.md).
+import { Each, Match } from "@reactogenic/core";
+import { Code } from "../../../code.rtsx";
+
+const USAGE = `reactogenic build [-p tsconfig.json] [--pages <dir>] [--out <dir>] [--base <path>]
+                  [--inline auto|always|never] [--no-specialize] [--report]`;
+
+const ROUTES = `pages/index.rtsx                 /
+pages/guide/index.rtsx           /guide/
+pages/guide/editor.rtsx          not a page: a segment or a module of /guide/
+pages/reference/cli/index.rtsx   /reference/cli/`;
+
+const PAGE = `import { Layout } from "../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <Layout title="Getting started">
+      <h1>Getting started</h1>
+      <section #editor />
+    </Layout>
+  );
+}`;
+
+const SHELL_ERROR = `pages/pricing/index.rtsx(8,15): error shell-error: no price for enterprise
+  pages/pricing/index.rtsx:17:24 - in Price
+  pages/pricing/index.rtsx:16:7 - in Each
+  pages/pricing/index.rtsx:26:7 - in Plans
+  pages/pricing/index.rtsx:23:1 - in PricingPage`;
+
+const PAGE_ERRORS = `pages/guide/index.rtsx: error idref-not-found: Page /guide/: \`commandfor="install"\` on \`<button>\` names no element of the page
+pages/guide/index.rtsx: error link-not-found: Page /guide/: \`href="/guide/slot/"\` on \`<a>\` is neither a page nor a file of the output`;
+
+const FLAGS = [
+  { flag: "-p", meaning: "the project, as for check: tsconfig.json in the working directory" },
+  { flag: "--pages", meaning: "the root of the routes", fallback: "pages, next to the tsconfig" },
+  { flag: "--out", meaning: "where the site is written. Emptied first; refused if it holds the tsconfig or the pages", fallback: "dist, next to the tsconfig" },
+  { flag: "--base", meaning: "the path the site is served under: prefixes the URLs of the build's own files and the pages' root-relative links", fallback: "/" },
+  { flag: "--inline", meaning: "auto: CSS or JS is a file when it serves several pages and that pays for a request, otherwise it is inlined. always: inlined. never: a file", fallback: "auto" },
+  { flag: "--no-specialize", meaning: "the control: one unpruned CSS bundle and every behaviour for the whole site, to measure what awareness of components is worth" },
+  { flag: "--report", meaning: "print the byte report; it is always written to <out>/_rg/report.json" },
+];
+
+const SHELL_RULES = [
+  { code: "shell-handler", when: "a function-valued prop on an HTML element: onClick on <button>" },
+  { code: "shell-react", when: "a page calls useState, useEffect, useRef or another hook of state and effects" },
+  { code: "shell-nondeterministic", when: "Date.now(), new Date() without arguments, Math.random(), a date string that is not ISO 8601" },
+  { code: "shell-error", when: "anything else thrown while a page renders, and what needs Intl: toLocaleString, localeCompare" },
+  { code: "shell-console (warning)", when: "what a page printed with console" },
+];
+
+const PAGE_CHECKS = [
+  { code: "id-duplicate", when: "two elements of the page share an id" },
+  { code: "idref-not-found", when: 'commandfor, popovertarget, for, aria-labelledby, aria-describedby, aria-controls or href="#x" names no element of the page' },
+  { code: "command-target", when: "a dialog command whose target is not a <dialog>; a popover command whose target has no popover" },
+  { code: "link-not-found", when: "a root-relative href that is neither a page nor a file of the output" },
+];
+
+export default function Build() {
+  return (
+    <>
+      <h2>build</h2>
+      <p>
+        Compiles pages written in <code>.rtsx</code> with the framework's layout components into plain HTML, CSS
+        and the minimal JS each page needs. <strong>No React in the output.</strong> React is a dependency of the
+        project at build time: the pages are React components, rendered once per pathname.
+      </p>
+      <p>
+        <strong>In development</strong>: the command builds this site, and is not in the published alpha yet. Every
+        page is static — there are no islands, no dev server and no watch mode.
+      </p>
+      <Code>{USAGE}</Code>
+      <table>
+        <thead>
+          <tr>
+            <th>Flag</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={FLAGS} { item: row }>
+            <tr key={row.flag}>
+              <td><code>{row.flag}</code></td>
+              <td>
+                {row.meaning}
+                <Match on={row.fallback}>
+                  . Default: {row.fallback}
+                </Match>
+              </td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <p>
+        Exit status as <code>check</code>: <code>0</code>, <code>1</code> with diagnostics, <code>2</code> on a
+        usage error. The project is type-checked first, and any error stops the build: what is built is what was
+        checked.
+      </p>
+
+      <h3 id="build-routes">Routes</h3>
+      <p>
+        <code>index.rtsx</code> (or <code>index.tsx</code>) of a directory under <code>pages</code> is a page; its
+        pathname is the directory, with a trailing slash. The output is{" "}
+        <code>{"<out>/<pathname>index.html"}</code>. A <code>public</code> directory next to <code>pages</code> is
+        copied as it is.
+      </p>
+      <Code>{ROUTES}</Code>
+      <p>
+        The page is the module's default export: a component without props that renders the whole document, from{" "}
+        <code>{"<html>"}</code>. A shared layout is an ordinary component.
+      </p>
+      <Code label="pages/guide/index.rtsx">{PAGE}</Code>
+
+      <h3 id="build-output">What a page ships</h3>
+      <ul>
+        <li>
+          <strong>HTML</strong>: what React's own static renderer writes for the page.
+        </li>
+        <li>
+          <strong>CSS</strong>: plain <code>.css</code> files, imported by the modules that need them, then pruned
+          against the page's HTML — a rule stays only if some element of this page may match it.
+        </li>
+        <li>
+          <strong>JS</strong>: the behaviours the page's components mounted, and nothing else. A menu of links
+          needs none; a dialog adds a fallback for <code>commandfor</code>; a menu with actions adds arrow keys. A
+          page with nothing that opens ships no script.
+        </li>
+        <li>
+          Identical CSS or JS on several pages is one blob, named by its content hash under{" "}
+          <code>{"<out>/_rg/"}</code>.
+        </li>
+      </ul>
+      <p>
+        No page lists its styles or scripts: the build knows what each page rendered.
+      </p>
+
+      <h3 id="build-shell">What a page may do</h3>
+      <p>
+        A page is executed once, at build time, in an engine embedded in the binary — no Node. Anything computed
+        while it runs is a compile-time value: loops over constants, conditionals on props and on the pathname.
+        Nothing conditional is left in the output. The time zone is UTC on every machine, and there is no{" "}
+        <code>Intl</code>.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={SHELL_RULES} { item: row }>
+            <tr key={row.code}>
+              <td><code>{row.code}</code></td>
+              <td>{row.when}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <p>
+        Each is found by executing the page and reported at its <code>.rtsx</code> position, with the component
+        stack. The first one ends the page.
+      </p>
+      <Code>{SHELL_ERROR}</Code>
+
+      <h3 id="build-checks">Checks on the page</h3>
+      <p>What only something that sees the whole page can check, on its HTML:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={PAGE_CHECKS} { item: row }>
+            <tr key={row.code}>
+              <td><code>{row.code}</code></td>
+              <td>{row.when}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <Code>{PAGE_ERRORS}</Code>
+      <p>
+        Links are written from the site's root, whatever the base — <code>/guide/</code> — and are checked as
+        written; <code>--base /docs/</code> then makes them <code>/docs/guide/</code>.
+      </p>
+    </>
+  );
+}

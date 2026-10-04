@@ -1,0 +1,198 @@
+// "/": what Reactogenic is. The Install dialog is opened by its own
+// `$Trigger`: the builder names the dialog, and the page's script gains the
+// `commandfor` fallback (specs/phase02/components.md, *Dialog*).
+import { Each } from "@reactogenic/core";
+import { Button, Dialog } from "@reactogenic/ui";
+import { Code } from "../code.rtsx";
+import { Layout } from "../layout.rtsx";
+
+const INSTALL = `pnpm add @reactogenic/core@alpha
+pnpm add -D @reactogenic/vite@alpha @reactogenic/cli@alpha`;
+
+const COMPONENT = `import type { ComponentProps, ReactNode } from "react";
+import type { Slot } from "@reactogenic/core";
+
+interface ButtonProps {
+  $Label?: Slot<{ className?: string; children?: ReactNode }>;
+  $Icon?: Slot<ComponentProps<"span">, { size: Size }>;
+  size: Size;
+}
+
+export function Button({ $Label, $Icon, size }: ButtonProps) {
+  return (
+    <button>
+      <span slot={$Icon} &size />
+      <b slot={$Label} className="label">Button</b>
+    </button>
+  );
+}`;
+
+const CALLER = `<Button size="lg">
+  <$Icon { size }><Plus size /></$Icon>
+  <$Label>Save</$Label>
+</Button>`;
+
+const EMITTED = `<Button size="lg"
+  $Icon={{ children: ({ size }) => <Plus size={size} /> }}
+  $Label={{ children: "Save" }} />`;
+
+// Copied from a run of `reactogenic check`, not written by hand.
+const ERRORS = `src/page.rtsx:6:26 - error slot-type: \`$Field\` does not match its declaration in \`Card\`: Type 'number' is not assignable to type 'boolean | undefined'.
+
+6     <$Field name="email" required={1} />
+                           ^
+
+src/page.rtsx:10:23 - error missing-slot: \`Card\` requires \`$Title\`
+
+10 export const empty = <Card>Nothing yet</Card>;
+                         ^
+
+  src/card.rtsx:5:3 - '$Title' is declared here.
+
+Found 2 error(s).`;
+
+const PAGES = [
+  { href: "/guide/", title: "Getting started", text: "Install, configure Vite, type-check, set up the editor." },
+  { href: "/syntax/", title: "Syntax", text: "Everything .rtsx adds to TSX, each form with what it becomes." },
+  { href: "/reference/cli/", title: "CLI", text: "The reactogenic command: check, lsp, build, content-mapper." },
+];
+
+export default function Page() {
+  return (
+    <Layout description="Reactogenic is a compiled React framework: .rtsx — TSX with slots, flow control, shorthand props and page segments — and a builder that turns pages into plain HTML, CSS and minimal JS.">
+      <h1>Reactogenic</h1>
+      <p className="lead">
+        A compiled React framework. Apps are built from framework-owned components with typed slots: your code lives
+        in the slots, and the compiler owns everything around them.
+      </p>
+      <div className="actions">
+        <Dialog>
+          <$Trigger>Install</$Trigger>
+          <$Title>Install</$Title>
+          <p>In a Vite + React project (React 19, Vite 8, Node 22 or later):</p>
+          <Code>{INSTALL}</Code>
+          <p>
+            The packages are published under the <code>alpha</code> tag. <code>@reactogenic/cli</code> brings the{" "}
+            <code>reactogenic</code> binary for macOS, Linux and Windows, arm64 and x64.
+          </p>
+          <$Action key="close" variant="ghost">Close</$Action>
+          <$Action key="guide" href="/guide/">Getting started</$Action>
+        </Dialog>
+        <Button href="/guide/" variant="ghost">Getting started</Button>
+      </div>
+
+      <h2 id="rtsx">.rtsx in one example</h2>
+      <p>
+        <code>.rtsx</code> is a superset of TSX. A component declares its named places as <code>$</code>-props and
+        attaches each one to the element it stands for:
+      </p>
+      <Code label="button.rtsx">{COMPONENT}</Code>
+      <p>The caller fills them with markup, and takes values out of the component through params:</p>
+      <Code label="page.rtsx">{CALLER}</Code>
+      <p>
+        The transpiler turns that into the TSX you would otherwise write by hand. It is purely syntactic: types never
+        change the emitted code.
+      </p>
+      <Code label="page.tsx (emitted, never written to disk)">{EMITTED}</Code>
+      <p>
+        TypeScript 7 checks the emitted TSX, and every error is reported on the <code>.rtsx</code> line you wrote —
+        where the mistake is about a slot, in slot terms:
+      </p>
+      <Code label="reactogenic check">{ERRORS}</Code>
+
+      <h2 id="today">What exists today</h2>
+      <h3>Published, as an alpha</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Part</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="/syntax/">.rtsx</a></td>
+            <td>TSX with shorthand props, slots, flow control, segment roots and <code>Each</code></td>
+          </tr>
+          <tr>
+            <td><code>@reactogenic/vite</code></td>
+            <td>runs <code>.rtsx</code> in an ordinary Vite + React app, next to <code>.tsx</code></td>
+          </tr>
+          <tr>
+            <td><a href="/reference/cli/#check"><code>reactogenic check</code></a></td>
+            <td>type-checks <code>.ts</code>, <code>.tsx</code> and <code>.rtsx</code> with TypeScript 7</td>
+          </tr>
+          <tr>
+            <td><a href="/guide/#editor">Editor support</a></td>
+            <td>a language server, and a VS Code extension with highlighting</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>In development</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Part</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="/reference/cli/#build"><code>reactogenic build</code></a></td>
+            <td>
+              pages in <code>.rtsx</code> → per-page HTML, CSS and minimal JS, with no React in the output. It builds
+              this site
+            </td>
+          </tr>
+          <tr>
+            <td><code>@reactogenic/ui</code></td>
+            <td>
+              <code>Button</code>, <code>Dialog</code>, <code>DropdownMenu</code>, <code>SideMenu</code>: the
+              components this site is made of. Not published
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Not built yet: islands (React components that stay interactive inside a built page), a server, a dev server.
+      </p>
+
+      <h2 id="rules">The rules it keeps</h2>
+      <ul>
+        <li>
+          <strong>New meaning only for forms that are syntax errors in today's TSX.</strong> No program that builds
+          today contains them, so nothing changes meaning. The three exceptions: a bare attribute with a same-named
+          binding in scope, a tag that starts with <code>$</code>, and <code>{"slot={$X}"}</code>.
+        </li>
+        <li>
+          <strong>A slot is a prop value, never a component</strong>: props for one element the container renders,
+          plus an optional body. Bare name = pass my value in; braces = give me your value out.
+        </li>
+        <li>
+          <strong>Types drive diagnostics, not output.</strong> The same transpiler runs in Vite, in{" "}
+          <code>check</code> and in the editor, so what is type-checked is what runs.
+        </li>
+        <li>
+          <strong>A built page is the platform's.</strong> A dialog is a <code>{"<dialog>"}</code>, a menu is a
+          popover, a group is a <code>{"<details>"}</code>: opening, closing, focus and placement are the browser's.
+          JS is added per feature, by the page that uses it.
+        </li>
+      </ul>
+
+      <h2 id="site">This site</h2>
+      <p>
+        Four pages in <code>.rtsx</code>, one layout component, one plain CSS file. View source: the{" "}
+        <em>Install</em> button above is a <code>{'<button command="show-modal">'}</code> next to its{" "}
+        <code>{"<dialog>"}</code>, the menu in the header is a list of links in a popover, and the page's script
+        holds only the behaviours its components asked for.
+      </p>
+      <ul>
+        <Each items={PAGES} { item: page }>
+          <li key={page.href}>
+            <a href={page.href}>{page.title}</a> — {page.text}
+          </li>
+        </Each>
+      </ul>
+    </Layout>
+  );
+}

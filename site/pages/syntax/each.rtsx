@@ -1,0 +1,80 @@
+// The segment `#each` of "/syntax/" (specs/phase01/syntax.md, *Iteration:
+// Each*).
+import { Code } from "../../code.rtsx";
+
+const SOURCE = `const items = getItems();
+<Each items { item, index }>
+  <p key={item.id}>{item.name} is {index + 1}</p>
+</Each>`;
+
+const EMITTED = `const items = getItems();
+<Each items={items}>
+  {({ item, index }) => (
+    <p key={item.id}>{item.name} is {index + 1}</p>
+  )}
+</Each>`;
+
+const COMPONENT = `interface EachProps<T> {
+  items: readonly T[];
+  children: SlotFn<{ item: T; index: number }>;
+}
+
+function Each<T>({ items, children }: EachProps<T>) {
+  return items.map((item, index) => children({ item, index }));
+}`;
+
+const EMPTY = `<Match on={items.length === 0}>
+  <p>No items.</p>
+</Match>
+<Each items { item }>
+  <Row key={item.id} item />
+</Each>`;
+
+export default function EachSegment() {
+  return (
+    <>
+      <h2>Each</h2>
+      <p>
+        <code>{"{items.map((item, index) => …)}"}</code> is the third brace expression that markup keeps falling
+        into, after <code>{"&&"}</code> and <code>?:</code>. <code>Each</code> needs no syntax of its own: it is an
+        ordinary runtime component whose <code>children</code> is a function, and params on a component element do
+        the rest.
+      </p>
+      <Code label=".rtsx">{SOURCE}</Code>
+      <Code label=".tsx">{EMITTED}</Code>
+      <p>
+        Both steps are general rules: <code>items</code> is a <a href="#shorthand-props">shorthand prop</a>, and
+        the params make the body the <code>children</code> callback, as they do on a{" "}
+        <a href="#slots">slot element</a>.
+      </p>
+      <Code label="@reactogenic/core">{COMPONENT}</Code>
+      <ul>
+        <li>
+          <strong>The key</strong> is written where React wants it: on the root element of the body. It may use the
+          params. <code>Each</code> does not check it, as a <code>for</code> loop would not: a missing key is
+          React's warning.
+        </li>
+        <li>
+          <strong>Types</strong> come from <code>{"EachProps<T>"}</code>: <code>item</code> is the element type of{" "}
+          <code>items</code>, <code>index</code> is a <code>number</code>. The params are an ordinary destructuring:
+          renaming and nesting work, and an unknown name is a TypeScript error.
+        </li>
+        <li>
+          <strong>Arrays only</strong>, so that <code>index</code> has one meaning. Convert an iterable where it is
+          used: <code>{"items={[...set]}"}</code>.
+        </li>
+        <li>
+          A body without params is <code>params-required</code>; write <code>{"{}"}</code> to ignore the values.
+        </li>
+        <li>
+          <code>.map()</code> keeps working: it parses today, so it keeps its meaning.
+        </li>
+      </ul>
+      <p>
+        There is no empty-list branch. "Empty" is opinionated — <code>[]</code>, but also <code>""</code> or "only
+        archived" — so the syntax does not define it. Write a <code>Match</code> next to the <code>Each</code>:
+      </p>
+      <Code label=".rtsx">{EMPTY}</Code>
+    </>
+  );
+}

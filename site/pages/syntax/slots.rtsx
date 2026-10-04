@@ -1,0 +1,352 @@
+// The segment `#slots` of "/syntax/" (specs/phase01/syntax.md, *Slots*).
+// The samples are the specification's own, so each `.tsx` is what the
+// transpiler emits.
+import { Each } from "@reactogenic/core";
+import { Code } from "../../code.rtsx";
+
+const DECLARATION = `import type { ComponentProps, ReactNode } from "react";
+import type { Slot } from "@reactogenic/core";
+
+interface ButtonProps {
+  $IconStart: Slot<ComponentProps<"span">>;   // required
+  $IconEnd?: Slot<ComponentProps<"span">>;    // optional
+  $Badge?: Slot<ComponentProps<"span">, { size: ButtonSize }>;
+  size?: ButtonSize;
+  children: ReactNode;
+}`;
+
+const TYPES = [
+  { type: "Slot<P>", value: "one set of props P" },
+  { type: "Slot<P, A>", value: "one set of props P, whose body is a function of the attachment's args A" },
+  { type: "KeyedSlot<P>", value: "entries by key, each a Slot<P> value" },
+  { type: "KeyedSlot<P, A>", value: "entries by key, each a Slot<P, A> value" },
+];
+
+const USAGE_SOURCE = `<Button size="lg">
+  <$IconStart className="icon" { size }>
+    <Icon name="plus" size />
+  </$IconStart>
+  Add
+</Button>`;
+
+const USAGE_EMITTED = `<Button size="lg"
+  $IconStart={{
+    className: "icon",
+    children: ({ size }) => <Icon name="plus" size={size} />,
+  }}>
+  Add
+</Button>`;
+
+const ATTACHMENT_SOURCE = `function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
+  return (
+    <button>
+      <span slot={$IconStart} className="icon" />
+      {children}
+      <span slot={$Badge} &size>new</span>
+    </button>
+  );
+}`;
+
+const ATTACHMENT_EMITTED = `import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotArgs as _slotArgs, slotKey as _slotKey, slotProps as _slotProps } from "@reactogenic/core";
+
+function Button({ $IconStart, $Badge, size, children }: ButtonProps) {
+  return (
+    <button>
+      {_isAssigned($IconStart) ? <span className="icon" {..._slotProps($IconStart)}>{_renderSlot($IconStart, {})}</span> : null}
+      {children}
+      {((_args) => _isAssigned($Badge) ? <span key={_slotKey($Badge, _args)} {..._slotProps($Badge)}>{_renderSlot($Badge, _args, "new")}</span> : <span>new</span>)(_slotArgs($Badge, { size: size }))}
+    </button>
+  );
+}`;
+
+const KEYED_SOURCE = `<Table data>
+  <$Column key="email" {...emailColumn} />
+  <$Column key="name" width={2}>Name</$Column>
+</Table>`;
+
+const KEYED_EMITTED = `import { KEYED as _KEYED } from "@reactogenic/core";
+
+<Table data $Column={{ [_KEYED]: true, "email": { ...emailColumn }, "name": { width: 2, children: "Name" } }} />`;
+
+const KEYED_ATTACHMENT = `function Table({ columns, $Column }: TableProps) {
+  return (
+    <tr>
+      <Each items={columns} { item: col }>
+        <th key={col.name} slot={$Column}>{col.label}</th>
+      </Each>
+    </tr>
+  );
+}`;
+
+const KEY_FUNCTION_SOURCE = `<Select options>
+  <$Option key={({ value }) => value} { label }>{label}</$Option>
+</Select>`;
+
+const KEY_FUNCTION_EMITTED = `import { SLOT_KEY as _SLOT_KEY } from "@reactogenic/core";
+
+<Select options $Option={{ [_SLOT_KEY]: ({ value }) => value, children: ({ label }) => label }} />`;
+
+const CONDITIONAL_SOURCE = `<Input value={value} onChange={onChange}>
+  <Match on={invalid}>
+    <$Hint>{renderErrors(errors)}</$Hint>
+  </Match>
+</Input>`;
+
+const CONDITIONAL_EMITTED = `import { NOT_ASSIGNED as _NOT_ASSIGNED } from "@reactogenic/core";
+
+<Input value={value} onChange={onChange}
+  $Hint={invalid ? { children: renderErrors(errors) } : _NOT_ASSIGNED} />`;
+
+const RECURSIVE_SOURCE = `<Dialog>
+  <$Action variant="solid">
+    <$IconStart>
+      <Icon name="close" />
+    </$IconStart>
+    Close
+  </$Action>
+</Dialog>`;
+
+const RECURSIVE_EMITTED = `<Dialog
+  $Action={{
+    variant: "solid",
+    $IconStart: { children: <Icon name="close" /> },
+    children: "Close",
+  }}
+/>`;
+
+const TERMS = [
+  { term: "slot props", where: "caller", part: 'className="icon" in <$IconStart className="icon">', direction: "caller → element" },
+  { term: "slot body", where: "caller", part: "the children of <$IconStart>", direction: "caller → element" },
+  { term: "slot params", where: "caller", part: "{ size } in <$IconStart { size }>", direction: "component → caller" },
+  { term: "attachment", where: "component", part: "<span slot={$IconStart} />", direction: "where the slot renders" },
+  { term: "args", where: "component", part: "&size on the attachment", direction: "what the params receive" },
+];
+
+const ERRORS = [
+  { code: "undeclared-slot", when: "the parent component declares no such slot", found: "types" },
+  { code: "missing-slot", when: "a required slot is not filled", found: "types" },
+  { code: "no-values", when: "params on a slot whose body is not a function", found: "types" },
+  { code: "content-not-allowed", when: "a body on a slot whose contract has no children", found: "types" },
+  { code: "slot-args-missing", when: "a function slot attached without one of its args", found: "types" },
+  { code: "slot-conditional", when: "a required slot filled only conditionally, and attached without a fallback", found: "types" },
+  { code: "orphan-slot", when: "a slot element that is not placed as above", found: "syntax" },
+  { code: "keyed-slot-mixed", when: "slot elements of one slot, some with a key and some without", found: "syntax" },
+  { code: "arg-without-slot", when: "an arg on an element that is not an attachment", found: "syntax" },
+  { code: "params-on-html", when: "params on an HTML element", found: "syntax" },
+  { code: "component-name", when: "a $ tag while a binding of that name is in scope: rename the component where it is imported", found: "syntax" },
+];
+
+export default function Slots() {
+  return (
+    <>
+      <h2>Slots</h2>
+      <p>
+        A container has named places: an icon, a title, an option. In plain React each place is a prop, and once a
+        place needs props <em>and</em> values from the container, the call site turns inside-out. A slot element
+        writes the same thing top-down, as markup.
+      </p>
+      <p>
+        A slot is <strong>a prop value</strong> — props for one element the container renders, plus its body — and
+        the container decides where that element goes. <code>$</code> is reserved for slots.{" "}
+        <strong>Bare name = pass my value in; braces = give me your value out.</strong>
+      </p>
+      <Code label=".rtsx">{USAGE_SOURCE}</Code>
+      <Code label=".tsx">{USAGE_EMITTED}</Code>
+      <p>
+        The params put <code>size</code> in scope, so <code>{"<Icon size />"}</code> is a shorthand prop. Without
+        params the body is passed as plain content: <code>{"children: <Icon name=\"plus\" />"}</code>.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Term</th>
+            <th>Written by</th>
+            <th>Part</th>
+            <th>Direction</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={TERMS} { item: row }>
+            <tr key={row.term}>
+              <td>{row.term}</td>
+              <td>{row.where}</td>
+              <td><code>{row.part}</code></td>
+              <td>{row.direction}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+
+      <h3 id="slot-declaration">Declaration</h3>
+      <p>
+        A slot is a <code>$</code>-named prop. Its type is the complete prop contract of the element it stands for;
+        required or optional is ordinary TypeScript optionality.
+      </p>
+      <Code label=".rtsx">{DECLARATION}</Code>
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={TYPES} { item: row }>
+            <tr key={row.type}>
+              <td><code>{row.type}</code></td>
+              <td>{row.value}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          <strong>The contract is complete.</strong> <code>{"$Box: Slot<{ color: string }>"}</code> takes no body
+          unless <code>children</code> is in the contract.
+        </li>
+        <li>
+          <strong>A slot is one value, never a list.</strong> Writing <code>{"<$Label>"}</code> twice keeps the
+          last one, as a repeated key in an object literal does. Many values of one kind are a{" "}
+          <code>KeyedSlot</code>.
+        </li>
+        <li>
+          A <code>$</code> tag is never resolved as an identifier: nothing is imported, and two containers can both
+          have a <code>$Title</code>.
+        </li>
+      </ul>
+
+      <h3 id="slot-attachment">Attachment</h3>
+      <p>
+        The container attaches a slot to the element it stands for with <code>{"slot={$X}"}</code>. A container is
+        an <code>.rtsx</code> file.
+      </p>
+      <Code label="button.rtsx">{ATTACHMENT_SOURCE}</Code>
+      <Code label="button.tsx">{ATTACHMENT_EMITTED}</Code>
+      <ul>
+        <li>
+          <strong>Slot props replace the attachment's props, per prop.</strong> The attachment's props are
+          defaults: with <code>{'<$IconStart id="x" />'}</code> the element keeps <code>className="icon"</code>{" "}
+          and gains <code>id="x"</code>.
+        </li>
+        <li>
+          <strong>A missing slot renders nothing</strong> — no empty element — unless the attachment has children:
+          they are the <strong>fallback</strong>, rendered whenever the slot has no body (<code>new</code> above).
+        </li>
+        <li>
+          <strong>Args</strong> are what a function slot's body receives. They follow function-call rules: a
+          function slot attached without one of its args is an error, and so is an arg to a slot whose body is not
+          a function.
+        </li>
+      </ul>
+      <table>
+        <thead>
+          <tr>
+            <th>On the attachment</th>
+            <th>Element prop</th>
+            <th>Arg</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>{"value={x}"}</code></td>
+            <td>yes</td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td><code>{"&value={x}"}</code></td>
+            <td>no</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>{"&&value={x}"}</code></td>
+            <td>yes</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>{"&value"}</code>, <code>{"&&value"}</code></td>
+            <td colSpan={2}>
+              short for <code>{"={value}"}</code>: always the binding, never <code>true</code>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="keyed-slots">Keyed slots</h3>
+      <p>
+        A <code>KeyedSlot</code> holds many entries, one per key — the columns of a table, the fields of a form.
+        The caller writes each entry with React's <code>key</code>; the container attaches the slot with a{" "}
+        <code>key</code>, and each attachment renders the entry of its key, or its fallback when there is none.
+      </p>
+      <Code label=".rtsx">{KEYED_SOURCE}</Code>
+      <Code label=".tsx">{KEYED_EMITTED}</Code>
+      <Code label="table.rtsx">{KEYED_ATTACHMENT}</Code>
+      <p>
+        The slot elements of one slot carry a <code>key</code> on every element, or on none. Keys are strings or
+        numbers.
+      </p>
+      <p>
+        A singular function slot that the container attaches once per item is keyed by the caller, with an inline
+        function of the args — the container iterates, but only the caller knows what identifies an item:
+      </p>
+      <Code label=".rtsx">{KEY_FUNCTION_SOURCE}</Code>
+      <Code label=".tsx">{KEY_FUNCTION_EMITTED}</Code>
+
+      <h3 id="conditional-slots">Conditional and nested slots</h3>
+      <p>
+        A slot may be filled conditionally. It falls out of compiling in passes: <code>Match</code> becomes a
+        ternary, and a ternary of slot elements becomes a ternary prop.
+      </p>
+      <Code label=".rtsx">{CONDITIONAL_SOURCE}</Code>
+      <Code label=".tsx">{CONDITIONAL_EMITTED}</Code>
+      <p>
+        <code>NOT_ASSIGNED</code> is an assignment that did not happen — never <code>undefined</code>, which would
+        replace an attachment's default. A required slot may be filled conditionally only when the component gives
+        it a fallback.
+      </p>
+      <p>
+        A slot's contract can contain slots, and slot elements inside a slot element fill them. A slot element
+        belongs to its nearest parent element.
+      </p>
+      <Code label=".rtsx">{RECURSIVE_SOURCE}</Code>
+      <Code label=".tsx">{RECURSIVE_EMITTED}</Code>
+
+      <h3 id="slot-placement">Placement</h3>
+      <p>
+        A slot element is a direct child of a component element or of a slot element, or sits there inside a{" "}
+        <code>Match</code> or a <code>Switch</code> without params. Anywhere else — inside an HTML element, a fragment,{" "}
+        <code>{"{c && <$X />}"}</code>, <code>.map()</code> — it is <code>orphan-slot</code>. So is a slot element
+        in the body of an <code>Each</code>, for now: a container that renders many items attaches the slot inside
+        its own <code>Each</code>.
+      </p>
+      <p>
+        Params on a <em>component</em> element make its <code>children</code> a callback: that is all{" "}
+        <a href="#each"><code>Each</code></a> needs.
+      </p>
+
+      <h3 id="slot-errors">Errors</h3>
+      <p>
+        Those found by types are TypeScript's errors on the emitted code, moved to the slot and reworded;{" "}
+        <code>reactogenic check</code> and the editor report them. Those found in the syntax are the transpiler's:
+        Vite reports them too.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>When</th>
+            <th>Found by</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={ERRORS} { item: error }>
+            <tr key={error.code}>
+              <td><code>{error.code}</code></td>
+              <td>{error.when}</td>
+              <td>{error.found}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+    </>
+  );
+}

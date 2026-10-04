@@ -1,0 +1,146 @@
+// The segment `#check` of "/reference/cli/" (specs/phase01/diagnostics.md).
+import { Each } from "@reactogenic/core";
+import { Code } from "../../../code.rtsx";
+
+const USAGE = `reactogenic check [-p tsconfig.json|dir] [--pretty=false] [--watch]`;
+
+// What the command prints for a page that gives `$Field` a number and leaves
+// out a required `$Title`: copied from a run, not written by hand.
+const PRETTY = `src/page.rtsx:6:26 - error slot-type: \`$Field\` does not match its declaration in \`Card\`: Type 'number' is not assignable to type 'boolean | undefined'.
+
+6     <$Field name="email" required={1} />
+                           ^
+
+src/page.rtsx:10:23 - error missing-slot: \`Card\` requires \`$Title\`
+
+10 export const empty = <Card>Nothing yet</Card>;
+                         ^
+
+  src/card.rtsx:5:3 - '$Title' is declared here.
+
+Found 2 error(s).`;
+
+const PLAIN = `src/page.rtsx(6,26): error slot-type: \`$Field\` does not match its declaration in \`Card\`: Type 'number' is not assignable to type 'boolean | undefined'.
+src/page.rtsx(10,23): error missing-slot: \`Card\` requires \`$Title\`
+  src/card.rtsx:5:3 - '$Title' is declared here.`;
+
+const INCLUDE = `"include": ["src"]                                            // every .ts, .tsx and .rtsx under src
+"include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.rtsx"]   // the same, spelled out
+"include": ["src/**/*.ts", "src/**/*.tsx"]                    // no .rtsx file is listed`;
+
+const FLAGS = [
+  { flag: "-p <path>", meaning: "the project: a tsconfig, or a directory that holds tsconfig.json. Without it: tsconfig.json in the working directory" },
+  { flag: "--pretty=false", meaning: "one line per error, file(line,col), and no code frames: for CI and for editors' problem matchers" },
+  { flag: "--watch", meaning: "check again whenever a source file changes, is created or is deleted" },
+];
+
+const STATUS = [
+  { status: "0", when: "no errors" },
+  { status: "1", when: "there are errors" },
+  { status: "2", when: "a usage error: an unknown flag, no tsconfig at the path" },
+];
+
+const SOURCES = [
+  { source: "the transpiler", examples: "orphan-slot, arg-without-slot, segment-not-found", code: "the rule's name" },
+  { source: "TypeScript, rewritten into slot terms", examples: "undeclared-slot, missing-slot, switch-missing-case", code: "the rule's name" },
+  { source: "TypeScript, as it is", examples: "everything else", code: "TSxxxx" },
+];
+
+export default function Check() {
+  return (
+    <>
+      <h2>check</h2>
+      <p>
+        The counterpart of <code>tsc --noEmit</code>: it type-checks <code>.ts</code>, <code>.tsx</code> and{" "}
+        <code>.rtsx</code> with TypeScript 7, for the terminal and for CI. Nothing is emitted.
+      </p>
+      <Code>{USAGE}</Code>
+      <table>
+        <thead>
+          <tr>
+            <th>Flag</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={FLAGS} { item: row }>
+            <tr key={row.flag}>
+              <td><code>{row.flag}</code></td>
+              <td>{row.meaning}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th>Exit status</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={STATUS} { item: row }>
+            <tr key={row.status}>
+              <td><code>{row.status}</code></td>
+              <td>{row.when}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+
+      <h3 id="check-output">Output</h3>
+      <p>
+        <code>tsc</code>'s format, with the <code>.rtsx</code> path and a code frame of the <code>.rtsx</code>{" "}
+        source. An error is never at a position in emitted code, and never names a generated identifier.
+      </p>
+      <Code label="reactogenic check">{PRETTY}</Code>
+      <Code label="reactogenic check --pretty=false">{PLAIN}</Code>
+      <table>
+        <thead>
+          <tr>
+            <th>Found by</th>
+            <th>Examples</th>
+            <th>Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={SOURCES} { item: row }>
+            <tr key={row.source}>
+              <td>{row.source}</td>
+              <td>{row.examples}</td>
+              <td>{row.code}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <p>
+        An error inside code you wrote — an expression, a body, an attribute value — is TypeScript's, at the exact{" "}
+        <code>.rtsx</code> span. An error on code the transpiler generated is reported at the construct it was
+        generated for: the slot tag, the params, the <code>Switch</code>, the <code>#name</code>.
+      </p>
+
+      <h3 id="check-project">The project</h3>
+      <ul>
+        <li>
+          <code>include</code> and <code>exclude</code> match <code>.rtsx</code> files as they match{" "}
+          <code>.tsx</code>: a directory or a <code>*</code> covers both; a pattern that names an extension covers
+          that extension. An <code>.rtsx</code> file that is not listed is still checked when an import reaches it.
+        </li>
+        <li>
+          Imports resolve with or without the extension: <code>./button</code> finds <code>button.rtsx</code> after
+          the built-in extensions. <code>name.rtsx</code> next to <code>name.tsx</code> is{" "}
+          <code>ambiguous-module</code>.
+        </li>
+        <li>
+          A file with a syntax error reports its syntax errors and nothing else; the rest of the program is still
+          checked.
+        </li>
+        <li>
+          <strong>Project references</strong>: the referenced projects are checked first, each with its own
+          options, then the tsconfig's own files. Each file is reported once, by the project that lists it.
+        </li>
+      </ul>
+      <Code label="tsconfig.json">{INCLUDE}</Code>
+    </>
+  );
+}
