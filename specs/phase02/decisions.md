@@ -1,30 +1,54 @@
 # Phase 2 decisions
 
 Taken on 2026-10-04 from the research ([research.md](research.md)), while the
-owner was away: each is the recommended choice, with what would reverse it.
-**For review** marks the ones that touch something CLAUDE.md fixes or that
-are a matter of taste.
+owner was away: each is the research's recommended choice — except 16 and
+17, which the specs took against it or without it — with what would reverse
+it. **For review** marks the ones that touch something CLAUDE.md fixes or
+that are a matter of taste. What was *not* decided is at the end: *For the
+owner*.
 
 | # | Decision | Why | Reverse if |
 | --- | --- | --- | --- |
 | 1 | **esbuild is the linker, through its public Go API, in-process. No fork, no new linker.** `Splitting` off | the only seam it has is enough; nothing in phase 2 needs AST access or a chunk hook; a fork carries ~87k lines | an optimisation must see linked code, or sharing below module granularity is needed |
-| 2 | **Pages are executed in an embedded engine (`modernc.org/quickjs`), serialised by React's own static renderer** | shell HTML equals what React renders, by construction; a Go evaluator was silently wrong on 19 of 36 ordinary cases; pure Go, six targets, +2.6 MB | the engine's limits bite (no `Intl`, no timers), or build time matters at thousands of pages |
+| 2 | **Pages are executed in an embedded engine (`modernc.org/quickjs`), serialised by React's own static renderer** — **for review**: the research's verification left it to the owner whether shell HTML must equal React's, and whether docs content is `.rtsx` or Markdown | shell HTML equals what React renders, by construction of the serializer (the engine's own JavaScript differs from V8's where ICU is involved — no `Intl`, `localeCompare` — and the builder refuses those); a Go evaluator was silently wrong on 19 of 36 ordinary cases; pure Go, six targets, +2.6 MiB | the engine's limits bite (no `Intl`, no timers), or build time matters at thousands of pages (a runtime per page: 2.9 ms each) |
 | 3 | **React is a build-time dependency of a project**, never of its output | the components are React components; islands will render the same code | — |
-| 4 | **Shell rule S2 reads "no *runtime* variance"** (builder.md, *Shell code in phase 2*) — **for review** | execution makes compile-time loops and conditionals free and deterministic; the design system's own components need them; forbidding `NAV.map(…)` over a constant is a fake constraint | the owner wants S2 absolute in page code — then the design system becomes an exempt third kind of code |
+| 4 | **Shell rule S2 reads "no *runtime* variance"** (builder.md, *Shell code in phase 2*), and **S1 admits context**: `createContext` / `useContext` are resolved while the page executes. `Suspense`, `lazy`, `use` of a promise and `async` components stay out, as layout.md has them — **for review** | execution makes compile-time loops and conditionals free and deterministic; the design system's own components need them; forbidding `NAV.map(…)` over a constant is a fake constraint. Context at build time is a value like any other | the owner wants S2 absolute in page code — then the design system becomes an exempt third kind of code. S1's context: a provider in shell code does not reach an island (layout.md, I1) |
 | 5 | **The design system is authored in `.rtsx`** — **for review** | CLAUDE.md says "plain `.tsx`"; that predates the attachment syntax (`slot={$X}`), which exists for containers. `.rtsx` *is* plain `.tsx` after phase 1's transpiler, and the builder reads it from the program | the catalog must be consumable without our toolchain — then it is published transpiled |
-| 6 | **No `text/template` in the binary**: HTML is written as strings — **for review** | one `template.Execute` costs 18.6 MB: reflection stops the linker pruning tsgo. CLAUDE.md's "Go templates for shells" needs another carrier | a server in a separate binary |
-| 7 | **Component awareness comes from the record of execution**, not the import graph | the graph over-reports (a layout that can attach a dialog imports it on every page) | — |
-| 8 | **CSS: plain files, pruned per page against the emitted HTML, with runtime state as "maybe"** | sound by construction, and the largest untapped saving; no vendored CSS parser — the public API's flat output is regular | pruning proves unsound in the browser comparison |
-| 9 | **JS: `mount(module, id, flags)`; flags are `Define`d per page; one build per page** | −45% from flags alone, with no AST work; `mountX(root)` is layout.md's own design | — |
-| 10 | **Packaging by content hash; inline unless shared enough to pay for a request** | a small blob used once is cheaper inline; one shared by many pages is cheaper as a file | hosting cannot cache `/_rg/*` forever |
-| 11 | **Browser floor: Chrome/Edge 135, Firefox 147, Safari 26.2**; the `commandfor` fallback ships with every dialog — **for review** | zero JS for open / close / focus / placement at the floor; below it a dialog button would be dead for ≈15% of usage | a lower floor is wanted: +601 B of tested shims reaches Baseline 2024 |
+| 6 | **No `text/template` in the binary**: HTML is written as strings — **for review** | one `template.Execute` costs 18.6 MiB: reflection stops the linker pruning tsgo. CLAUDE.md's "Go templates for shells" needs another carrier | a server in a separate binary |
+| 7 | **Component awareness comes from the record of execution**, not the import graph | the graph over-reports (a layout that can attach a dialog imports it on every page) | islands: what an island renders is known only from its imports (layout.md, *Delivery*) — the record covers shell code |
+| 8 | **CSS: plain files, pruned per page against the emitted HTML and the page's script, with runtime state as "maybe"** | sound by construction, and the largest untapped saving; no vendored CSS parser — the public API's flat output is regular | pruning proves unsound in the browser comparison; islands: the HTML is no longer the whole DOM |
+| 9 | **JS: `mount(module, id, flags)`; flags are `Define`d per page; one build per page** | −45% from flags alone, with no AST work; the `(root)` signature is layout.md's own | islands: a clone has no id at load, and its mount returns a handle |
+| 10 | **Packaging by content hash; inline unless shared and larger than a request (250 B gzipped)** | a blob of one page is cheaper inline; one that several pages share is cheaper as a file from a visitor's second page | hosting cannot cache `/_rg/*` forever |
+| 11 | **Browser floor: Chrome/Edge 135, Firefox 147, Safari 26.2**; the `commandfor` fallback ships with every dialog — **for review** | no JS to open / close / focus / place at the floor (176 B per page with an overlay, for Back, all the same); below it a dialog button would be dead for ≈15% of usage | a lower floor is wanted: +411 B (anchored placement) on top of the fallback already shipped reaches Baseline 2024 — on iOS, 18.3. The shims were measured by their author only |
 | 12 | **Routes are files: `index.rtsx` of a directory under `pages/`**; the layout is an ordinary component; the page renders from `<html>` | the minimum; segments stay next to the page that mounts them | a route table arrives with the server (`route-table.md`) |
 | 13 | **The current page is the builder's**: `SideMenu` compares `href` with `pathname()` | no `current` prop to get wrong | — |
 | 14 | **Theme follows the OS; no search; code samples are plain `<pre>`** | each of the others needs JS that no layout component owns, and phase 2 has no author JS | page-author raw JS is decided (layout.md, OPEN) |
 | 15 | **`@reactogenic/ui` and the site are private workspace packages** | publishing a design system is its own decision | — |
+| 16 | **`pathname()` is public**: usable in any component — **for review** | `SideMenu` needs it; an author's own nav or breadcrumb will. The research recommended hiding it in phase 2 (research/components.md, D11) | the owner wants the pathname the framework's own |
+| 17 | **A dialog written in shell code is a live `<dialog>`, opened by `command` / `commandfor`** — **for review** | no JS, no holes: it answers layout.md's OPEN "a shell component used directly in shell code — who opens it", with the alternative layout.md lists as considered and not chosen (one live, hidden `<dialog>`). `<template>` + clone stays for dialogs with holes | islands need one delivery for both |
+| 18 | **Every page is rendered in a runtime of its own; `Suspense`, `lazy`, `use` of a promise, `async` components are shell-react** | a page's bytes must not depend on the pages built before it; a boundary renders its fallback for any error of its content, silently | — |
+| 19 | **A page with a script of its own is built, and not pruned** — until the owner decides (below) | sound either way; forbidding it is a rule about page-author JS, which CLAUDE.md defers | — |
+
+## For the owner
+
+Not decided here: each would relitigate something CLAUDE.md or a phase 1
+spec fixes, or is a choice between two specs. The recommended option is
+first; the place in the spec carries an `> OPEN:`.
+
+| | Question | Options | Where |
+| --- | --- | --- | --- |
+| A | **Loop-produced slot items.** CLAUDE.md (*Deferred / roadmap*) and phase01/syntax.md say "phase 2"; plan.md has no task, and `<Each><$Item/></Each>` is still orphan-slot. A side menu from a constant `NAV` cannot be written | **1. later**: the site writes its menu out as slot elements; CLAUDE.md and syntax.md say "later" (the bet does not need it). 2. a task in this phase, before RGP2-040: syntax, types and the transpiler for `Each` / `.map()` around slot elements | plan.md, top; builder.md, *Shell code in phase 2* |
+| B | **Dialog's body: `children`, or layout.md's `<$Contents>`.** components.md takes `children`; layout.md defines holes for slot bodies only | **1. `children` in phase 2** (nothing has holes yet), and layout.md is amended when islands arrive: a shell component's `children` is a body with holes too. 2. `<$Contents>` now, so that the island form is the phase 2 form | components.md, `Dialog` (the other track's file: the OPEN belongs there) |
+| C | **What islands need from the builder.** Not carried over (builder.md, *Not in phase 2*): pruning against the page's HTML (an island's DOM is not in it; a `<template>` turns pruning off), the generated entry (mounts by id at load), the record (an island is not executed at build time), shell-handler at element creation (`<Dynamic><button onClick>`), `pathname()` under `--base` in React | **1. islands fall back to their imports** for CSS and JS, as layout.md's *Delivery* has it — every rule of a component an island imports stays, template content matches as "maybe" — and the record stays shell-only. 2. islands are executed once at build time for a first record | builder.md, *Packaging* (OPEN), *Not in phase 2* |
+| D | **Keyed slots and integer-like keys.** A menu written `10, 9, 2` renders `2, 9, 10`; `check` is silent; all three components iterate keyed slots. The fix changes what phase 1 emits | **1. the `KEYED` marker carries the keys in written order** (research/components.md, recommendation 5: before the site is written), syntax.md updated. 2. a diagnostic for an integer-like `key`. 3. a documented limit, as now | plan.md, *Later*; components.md, *Known limits* |
+| E | **A page's own `<script>`.** Today: built, and its CSS is not pruned (decision 19). It also breaks "the JS of a page is the behaviours its components mounted, and nothing else" and T1, silently | **1. an error in phase 2** (`page-script`; data blocks stay legal) until page-author raw JS is specified (CLAUDE.md, *Deferred*). 2. as now, with the report saying why the page was not pruned | builder.md, *CSS* |
+| F | **T2's budget** (≤ 1.5 KB raw on the heaviest page) was set against the first hand-written floor; the verified floor at behaviour parity is 1,584 B raw *mean* — of a site with theme, copy and search, which this one lacks | **1. keep it as an absolute budget for this site's three behaviours**, and say so (plan.md does now). 2. restate it as a multiple of a parity floor rebuilt for the phase 2 site | plan.md, RGP2-050 |
 
 ## Binary size
 
 > To fill in with RGP2-030: the six stripped sizes with esbuild and the
-> engine linked (measured in research: darwin-arm64 27.4 → ≈ 34.7 MB, +27%).
-> Over the 10% line of `scripts/build-binaries.sh`; accepted for the builder.
+> engine linked. Measured in the research, together: darwin-arm64 27.36 →
+> 34.46 MiB, +7.10 MiB (+26%); with the package linked (plan.md, RGP2-011):
+> 27.3 → 34.5. MiB throughout — `build-binaries.sh` prints bytes / 2²⁰ as
+> "MB". Over the 10% line of `scripts/build-binaries.sh`; accepted for the
+> builder.
