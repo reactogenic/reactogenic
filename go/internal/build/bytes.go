@@ -32,10 +32,12 @@ type Report struct {
 
 // Size is a number of bytes as written, and after gzip: the gzip stream Go's
 // compress/gzip writes at its level 9. That is DEFLATE by another encoder
-// than zlib's, so not to the byte what `gzip -9` gives — a few bytes more on
-// what a page ships, under 1%; the measuring scripts have the reference
-// numbers. Brotli is not here: Go has no encoder for it, and the builder
-// takes no dependency to count with — they have that too (plan.md,
+// than zlib's, so not to the byte what `gzip -9` gives — within 1%, and on
+// either side: on the docs site from 76 B fewer, on its largest page's
+// HTML, to 3 B more, on a 252 B script (builder.md, *The report*, gzip;
+// `bench/site.mjs` prints the range). The measuring scripts have the
+// reference numbers. Brotli is not here: Go has no encoder for it, and the
+// builder takes no dependency to count with — they have that too (plan.md,
 // RGP2-050).
 type Size struct {
 	Raw  int `json:"raw"`
