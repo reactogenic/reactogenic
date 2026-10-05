@@ -1,0 +1,83 @@
+@layer rg.components {
+  .bc-card {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-width: 0;
+    border: 1px solid var(--rg-line);
+    border-radius: 12px;
+    background: var(--rg-bg);
+    color: var(--rg-fg);
+    overflow: hidden;
+
+    &[data-variant="elevated"] {
+      border-color: transparent;
+      box-shadow: var(--bc-shadow);
+
+      /* A shadow is gone in forced colours. */
+      @media (forced-colors: active) {
+        border-color: CanvasText;
+      }
+    }
+    &[data-variant="filled"] {
+      border-color: transparent;
+      background: var(--bc-surface);
+    }
+    /* The card that is a link. */
+    &:is(a) {
+      text-decoration: none;
+
+      @media (prefers-reduced-motion: no-preference) {
+        transition:
+          border-color 0.15s,
+          translate 0.15s;
+      }
+      &:hover {
+        border-color: var(--rg-accent);
+        translate: 0 -2px;
+      }
+      &:focus-visible {
+        outline: var(--bc-ring);
+        outline-offset: 2px;
+      }
+    }
+
+    > [data-part="media"] {
+      aspect-ratio: 16 / 9;
+      background: var(--bc-surface);
+
+      > :is(img, svg) {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+    }
+    > [data-part="body"] {
+      flex: 1;
+      padding: 1.25rem;
+
+      > [data-part="eyebrow"] {
+        margin: 0 0 0.25rem;
+        color: var(--rg-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      > h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1.125rem;
+        line-height: 1.3;
+      }
+    }
+    > [data-part="footer"] {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--rg-line);
+    }
+  }
+}

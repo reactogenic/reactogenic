@@ -1,0 +1,35 @@
+import { Match } from "@reactogenic/core";
+// An entry's property name is its key encoded (syntax.md, *Keyed slots*):
+// never integer-like, so the entries enumerate in the order written.
+export const a = (
+  <Menu>
+    <$Item key="10">Ten</$Item>
+    <$Item key="9">Nine</$Item>
+    <$Item key='2' />
+    <$Item key="b" />
+    <$Item key="0.5" />
+    <$Item key="01" />
+    <$Item key="#top" />
+    <$Item key="&#49;1" />
+    <$Item key="__proto__" />
+    <Match on={more}><$Item key="3" /></Match>
+  </Menu>
+);
+// An expression is encoded where it runs — a string too, unless its value
+// is its text.
+export const b = (
+  <Menu>
+    <$Item key={n} />
+    <$Item key={0.5} />
+    <$Item key={7} />
+    <$Item key={"7"} />
+    <$Item key={'#x'} />
+    <$Item key={"name"} />
+    <$Item key={"\x31"} />
+    <$Item key={`8`} />
+    <$Item key={a ? 1 : "one"} />
+    <Match on={more}><$Item key={m} /></Match>
+  </Menu>
+);
+// An explicit attribute comes first, spread: its entries keep their place.
+export const c = <Menu $Item={given}><$Item key="5" /></Menu>;

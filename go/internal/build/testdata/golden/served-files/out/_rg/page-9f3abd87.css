@@ -1,0 +1,1 @@
+link[rel=stylesheet]{order:7}link[href^="/docs/_rg/"]{order:8}title+link{order:9}script{order:10}script[src]{order:11}.card:not(.collapsed)>.body{order:16}.list:not(:has(.active)){order:17}.label:not(#first){order:18}.status:not(:has(b)){order:19}.card[aria-expanded=true]>.item{order:21;flex-grow:21}.card[data-state=open]>.item{order:22}

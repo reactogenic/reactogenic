@@ -1,0 +1,93 @@
+// The segment `#shorthand-props` of "/syntax/" (specs/phase01/syntax.md,
+// *Shorthand props*).
+import { Code } from "../../code.rtsx";
+
+const SOURCE = `function Field({ value, onChange }: FieldProps) {
+  return <Input value onChange required />;
+}`;
+
+const EMITTED = `function Field({ value, onChange }: FieldProps) {
+  return <Input value={value} onChange={onChange} required />;
+}`;
+
+const WRONG_TYPE = `const disabled = 42;
+<Button disabled />   // TS: Type 'number' is not assignable to type 'boolean'`;
+
+export default function ShorthandProps() {
+  return (
+    <>
+      <h2>Shorthand props</h2>
+      <p>
+        <code>{"value={value}"}</code> is the most common repetition in JSX. JavaScript solved it for objects (
+        <code>{"{ value }"}</code>); <code>.rtsx</code> does the same for attributes.{" "}
+        <strong>Bare name = pass my value in.</strong>
+      </p>
+      <Code label=".rtsx">{SOURCE}</Code>
+      <Code label=".tsx">{EMITTED}</Code>
+      <p>
+        The rule is directed by scope, not by types. A bare attribute passes the binding of the same name when there
+        is one in the module's scope chain — the module scope plus the function and block scopes around the element.
+        Otherwise it is unchanged and means <code>true</code>, as in React: <code>required</code> above.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Counts as in scope</th>
+            <th>Does not count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>const</code>, <code>let</code>, <code>var</code></td>
+            <td>
+              the global object: <code>name</code>, <code>status</code>, <code>top</code>, <code>event</code>
+            </td>
+          </tr>
+          <tr>
+            <td>parameters and destructured names</td>
+            <td>
+              ambient declarations: <code>lib.d.ts</code>, <code>declare global</code>, <code>declare const</code>
+            </td>
+          </tr>
+          <tr>
+            <td>function and class declarations, value imports</td>
+            <td>
+              type-only bindings: <code>interface</code>, <code>type</code>, <code>import type</code>
+            </td>
+          </tr>
+          <tr>
+            <td>slot params</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          <strong>Forcing <code>true</code></strong> when a binding of that name exists: write{" "}
+          <code>{"disabled={true}"}</code>. An explicit value is never rewritten.
+        </li>
+        <li>
+          <strong>Not an identifier</strong> — <code>aria-label</code>, <code>data-id</code> — and reserved words —{" "}
+          <code>default</code>, <code>class</code>, <code>for</code> — are never rewritten.
+        </li>
+        <li>
+          <strong>HTML elements and slot elements</strong> follow the same rule: with <code>disabled</code> in scope,{" "}
+          <code>{"<button disabled />"}</code> is <code>{"<button disabled={disabled} />"}</code>.
+        </li>
+        <li>
+          <strong>The silent flip.</strong> Adding or removing a binding named like a bare boolean attribute changes
+          the attribute's meaning, with no error when the types happen to agree. It is the price of spending no
+          punctuation on the shorthand.
+        </li>
+      </ul>
+      <p>
+        There are no errors of its own: TypeScript checks what was emitted and reports on the bare attribute. With
+        nothing of that name in scope, a prop that is not boolean gets{" "}
+        <code>Type 'true' is not assignable to type 'string'</code>, with <em>no `value` in scope</em> as related
+        information — the likely cause is a typo or a deleted variable. A binding of another type is an ordinary
+        type error:
+      </p>
+      <Code label=".rtsx">{WRONG_TYPE}</Code>
+    </>
+  );
+}

@@ -1,0 +1,21 @@
+// "/account/" for a visitor who is not signed in: a second variant of the
+// route, `account/guest.html`. `pathname()` is the route's here too. Its
+// link to "/gate/" is to a route that has no `index`.
+import { pathname } from "@reactogenic/core";
+import { Dialog } from "@reactogenic/ui";
+import { Layout } from "../../layout.rtsx";
+import { greeting } from "./copy.ts";
+
+export default function GuestPage() {
+  return (
+    <Layout title="Account">
+      <h1>{greeting()}</h1>
+      <p data-route={pathname()}>Not signed in. <a href="/gate/">The gate</a></p>
+      <Dialog id="signin">
+        <$Trigger>Sign in</$Trigger>
+        <$Title>Sign in</$Title>
+        Nobody answers: the fixture has no server.
+      </Dialog>
+    </Layout>
+  );
+}

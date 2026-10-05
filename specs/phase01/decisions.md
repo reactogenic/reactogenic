@@ -283,6 +283,10 @@ answers #4: the key of a slot call is the React key of what it renders. The
 value carries the `KEYED` brand in its object literal — entries stay
 type-checked as slot values — and `slotEntry` returns the entry of a keyed
 slot, or a singular slot as it is. `FnSlot<P, A>` is folded into `Slot<P, A>`.
+Since the owner's ruling of 2026-10-05 (phase02/decisions.md, D) an entry's
+property name is its key encoded — never integer-like, so the entries keep
+the order written — and a container iterates `slotKeys`: syntax.md, *Keyed
+slots*. 0.1.0-alpha.1 names an entry by its key as written.
 
 **Required slots and `NOT_ASSIGNED`.** `Slot<P>` keeps one type for required
 and optional slots; no separate type keeps the sentinel out of required ones.

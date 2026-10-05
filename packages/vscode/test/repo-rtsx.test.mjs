@@ -1,6 +1,8 @@
 // No .rtsx source of the repo has an `invalid.*` token, and none ends inside a
-// tag: the fixtures, the packages' test apps, and the `// .rtsx` examples of
-// specs/phase01/syntax.md (the blocks the conformance suite runs).
+// tag: the fixtures, the packages and their test apps (`@reactogenic/ui`'s
+// components among them), the docs site, the builder's fixture sites under
+// go/internal, and the `// .rtsx` examples of specs/phase01/syntax.md (the
+// blocks the conformance suite runs).
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'vitest';
@@ -8,7 +10,7 @@ import { isInvalid, repoRoot, rtsx, tokenize, tsx, walk } from './textmate.mjs';
 
 const rel = (file) => path.relative(repoRoot, file).split(path.sep).join('/');
 
-const sources = ['fixtures', 'packages']
+const sources = ['fixtures', 'packages', 'site', 'go/internal']
   .flatMap((dir) => walk(path.join(repoRoot, dir), (name) => name.endsWith('.rtsx')))
   .map((file) => [rel(file), fs.readFileSync(file, 'utf8')]);
 const fileCount = sources.length;

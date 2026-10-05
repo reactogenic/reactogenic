@@ -1,0 +1,10 @@
+// "/guide/": a link home, and no script.
+import { Layout } from "../../layout.tsx";
+
+export default function GuidePage() {
+  return (
+    <Layout title="Guide">
+      <a href="/">Home</a>
+    </Layout>
+  );
+}

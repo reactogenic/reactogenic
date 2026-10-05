@@ -1,0 +1,87 @@
+/* Dialog. Props: size = "sm" | "md" | "lg" | "fullscreen"; variant = "modal" | "sheet" | "command"; tone = "neutral" | "danger".
+   Slots: $Title $Description $Contents $Actions. States: [open], ::backdrop, @starting-style. */
+.Dialog {
+  padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-bg-raised); color: var(--color-fg);
+  box-shadow: var(--shadow-lg);
+  width: min(32rem, calc(100vw - var(--space-6)));
+  max-height: min(85dvh, 44rem);
+  opacity: 0; scale: 0.96;
+  transition: opacity var(--duration-normal) var(--ease-out), scale var(--duration-normal) var(--ease-out),
+    display var(--duration-normal) allow-discrete, overlay var(--duration-normal) allow-discrete;
+
+  &[open] { opacity: 1; scale: 1; display: flex; flex-direction: column; }
+  @starting-style { &[open] { opacity: 0; scale: 0.96; } }
+  &::backdrop {
+    background: var(--color-backdrop); opacity: 0;
+    transition: opacity var(--duration-normal) var(--ease-out), display var(--duration-normal) allow-discrete, overlay var(--duration-normal) allow-discrete;
+  }
+  &[open]::backdrop { opacity: 1; }
+  @starting-style { &[open]::backdrop { opacity: 0; } }
+
+  [data-part="header"] {
+    display: flex; align-items: start; gap: var(--space-3);
+    padding: var(--space-5) var(--space-5) var(--space-3);
+  }
+  [data-slot="title"] { font-size: var(--text-lg); font-weight: 650; line-height: var(--leading-tight); }
+  [data-slot="description"] { margin-top: var(--space-1); color: var(--color-fg-muted); font-size: var(--text-sm); }
+  [data-part="close"] {
+    margin-inline-start: auto; flex: none; width: 2rem; height: 2rem; border-radius: var(--radius-sm);
+    display: grid; place-items: center; color: var(--color-fg-muted);
+    &:hover { background: var(--color-bg-subtle); color: var(--color-fg); }
+  }
+  [data-slot="contents"] { padding: var(--space-3) var(--space-5) var(--space-5); overflow-y: auto; overscroll-behavior: contain; }
+  [data-slot="actions"] {
+    display: flex; justify-content: flex-end; gap: var(--space-2);
+    padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border); background: var(--color-bg-subtle);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
+  &:not(:has([data-slot="actions"])) [data-slot="contents"] { padding-bottom: var(--space-6); }
+
+  &[data-size="sm"] { width: min(24rem, calc(100vw - var(--space-6))); }
+  &[data-size="lg"] { width: min(48rem, calc(100vw - var(--space-6))); max-height: min(90dvh, 56rem); }
+  &[data-size="fullscreen"] {
+    width: 100vw; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0;
+    [data-slot="actions"] { border-radius: 0; }
+  }
+
+  &[data-tone="danger"] {
+    border-color: var(--color-danger);
+    [data-slot="title"] { color: var(--color-danger); }
+    [data-slot="actions"] { background: var(--color-danger-subtle); }
+  }
+
+  &[data-variant="sheet"] {
+    margin: 0 0 0 auto; height: 100dvh; max-height: none; border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    border-width: 0 0 0 1px; opacity: 1; scale: 1; translate: 100% 0;
+    transition: translate var(--duration-normal) var(--ease-out), display var(--duration-normal) allow-discrete, overlay var(--duration-normal) allow-discrete;
+    &[open] { translate: 0 0; }
+    @starting-style { &[open] { translate: 100% 0; } }
+    [data-slot="actions"] { margin-top: auto; border-radius: 0 0 0 var(--radius-lg); }
+  }
+
+  &[data-variant="command"] {
+    margin-top: 12dvh; width: min(40rem, calc(100vw - var(--space-5))); max-height: 70dvh;
+    [data-part="header"] { padding: 0; border-bottom: 1px solid var(--color-border); }
+    [data-part="search"] {
+      flex: 1; border: 0; outline: 0; background: transparent; padding: var(--space-4) var(--space-5); font-size: var(--text-lg);
+      &::placeholder { color: var(--color-fg-subtle); }
+    }
+    [data-slot="contents"] { padding: var(--space-2); }
+    [data-part="result"] {
+      display: block; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+      &:hover, &[aria-selected="true"] { background: var(--color-accent-subtle); color: var(--color-accent); }
+      small { display: block; color: var(--color-fg-muted); font-size: var(--text-xs); }
+    }
+    [data-part="empty"] { padding: var(--space-6); text-align: center; color: var(--color-fg-muted); }
+    [data-part="hint"] {
+      display: flex; gap: var(--space-4); padding: var(--space-2) var(--space-4); border-top: 1px solid var(--color-border);
+      font-size: var(--text-xs); color: var(--color-fg-subtle);
+    }
+  }
+
+  @media (max-width: 40rem) {
+    &:not([data-variant="sheet"]) { width: 100vw; max-width: none; margin: auto 0 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-width: 1px 0 0; }
+  }
+}
+html:has(.Dialog[open]) { overflow: hidden; }

@@ -1,0 +1,10 @@
+// A segment of "/guide/": mounted by `<section #intro />`.
+export default function Intro() {
+  return (
+    <>
+      <h2>Introduction</h2>
+      <p>Apps built from framework-owned components with typed slots.</p>
+      <p><a href="#intro">This section</a></p>
+    </>
+  );
+}

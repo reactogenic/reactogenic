@@ -1,0 +1,10 @@
+// What `check` prints, `build` prints, and stops: nothing is rendered.
+const count: number = "three";
+
+export default function Page() {
+  return (
+    <html>
+      <body>{count}</body>
+    </html>
+  );
+}

@@ -71,7 +71,9 @@ export declare function slotProps<S extends object>(slot: S): S;
 export type NoArgs = { readonly [arg: string]: never };
 export type ArgsOf<S> = S extends { children?: infer Body } ? NonNullable<Body> extends (args: infer Args) => ReactNode ? Args : NoArgs : NoArgs;
 export declare function renderSlot<S extends object>(slot: S, args: S extends readonly unknown[] ? never : ArgsOf<S>, fallback?: ReactNode): ReactNode;
-export declare function Match(props: { on: unknown; children?: unknown }): never;`,
+export declare function Match(props: { on: unknown; children?: unknown }): never;
+export declare function slotEntryName(key: string | number): string;
+export declare function slotKeys(slot: unknown): string[];`,
 }
 
 // With adds the core stand-in and, unless the project has its own, the JSX
@@ -213,6 +215,38 @@ export const typo = (
     <$Column key="email" widht={2} />
   </Table>
 );
+`}),
+
+	// syntax.md, *Keyed slots*: an entry is named by its key encoded —
+	// `"#10"`, `[slotEntryName(n)]` — and type-checks as before: its props
+	// on their own line, a key that is no key at its value, and an error
+	// inside the key's expression as TypeScript's own.
+	simple("keyed-keys", map[string]string{"src/menu.rtsx": `import type { KeyedSlot } from "@reactogenic/core";
+type Item = { href?: string; children?: string };
+export function Menu({ $Item }: { $Item: KeyedSlot<Item> }) {
+  return <ul>{["10", "9"].map((key) => <li key={key} slot={$Item} />)}</ul>;
+}
+declare const n: number;
+declare const id: string;
+declare const maybe: string | undefined;
+declare const given: KeyedSlot<Item>;
+declare function label(n: number): string;
+export const ok = (
+  <Menu>
+    <$Item key="10">Ten</$Item>
+    <$Item key="9" href="/nine" />
+    <$Item key={n} />
+    <$Item key={id}>Id</$Item>
+    <$Item key={label(n)} />
+    <$Item key="#top" />
+    <$Item key="__proto__" />
+  </Menu>
+);
+export const spread = <Menu $Item={given}><$Item key="5" /></Menu>;
+export const typo = <Menu><$Item key="10" hfer="/" /></Menu>;
+export const typoToo = <Menu><$Item key={n} hfer="/" /></Menu>;
+export const noKey = <Menu><$Item key={maybe} /></Menu>;
+export const inside = <Menu><$Item key={label(id)} /></Menu>;
 `}),
 
 	// syntax.md, *Conditional slots*.

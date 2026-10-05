@@ -1,0 +1,69 @@
+@layer rg.components {
+  .bc-tooltip {
+    position: relative;
+    display: inline-block;
+
+    > [data-part="trigger"] {
+      border-bottom: 1px dotted var(--rg-muted);
+      cursor: help;
+
+      &:focus-visible {
+        outline: var(--bc-ring);
+        outline-offset: 2px;
+      }
+    }
+    > [role="tooltip"] {
+      position: absolute;
+      bottom: calc(100% + 0.4rem);
+      left: 50%;
+      z-index: 2;
+      box-sizing: border-box;
+      width: max-content;
+      max-width: min(16rem, 80vw);
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--rg-line);
+      border-radius: 6px;
+      background: var(--rg-fg);
+      color: var(--rg-bg);
+      font-size: 0.8125rem;
+      font-weight: 400;
+      line-height: 1.4;
+      text-align: start;
+      white-space: normal;
+      translate: -50% 0;
+      /* Not `display: none`: what `aria-describedby` names stays readable. */
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+
+      @media (prefers-reduced-motion: no-preference) {
+        transition:
+          opacity 0.1s,
+          visibility 0.1s;
+      }
+    }
+    &[data-side="bottom"] > [role="tooltip"] {
+      top: calc(100% + 0.4rem);
+      bottom: auto;
+    }
+    /* On a phone a bubble centred on its word leaves the screen: there it is
+       a line under the text, from margin to margin of what holds the word. */
+    @media (width < 30rem) {
+      position: static;
+
+      > [role="tooltip"],
+      &[data-side="bottom"] > [role="tooltip"] {
+        inset: auto 1rem;
+        width: auto;
+        max-width: none;
+        margin-top: 1.75em;
+        translate: none;
+      }
+    }
+    /* Shown while the pointer is over either, or focus is on the trigger. */
+    &:is(:hover, :focus-within) > [role="tooltip"] {
+      visibility: visible;
+      opacity: 1;
+    }
+  }
+}

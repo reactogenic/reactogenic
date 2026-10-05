@@ -1,0 +1,98 @@
+// "/docs/api/": the reference — tables of options with their stability, and
+// signatures to copy (README.md: a fixture).
+import { Badge, Breadcrumbs, CodeBlock, Table } from "@reactogenic/bench-catalog";
+import { Layout } from "../../../layout.rtsx";
+
+const stable = <Badge tone="success">stable</Badge>;
+const beta = <Badge tone="warning">beta</Badge>;
+const deprecated = <Badge tone="danger" variant="outline">deprecated</Badge>;
+
+const CONFIG = [
+  { key: <code>name</code>, type: "string", default: "the directory's name", status: stable, text: "The project. Lower-case letters, digits and hyphens; unique in the organisation." },
+  { key: <code>regions</code>, type: "string[]", default: <code>["fra"]</code>, status: stable, text: "Where the service runs. The first one is primary: it takes writes and scheduled jobs." },
+  { key: <code>build.command</code>, type: "string", default: "detected", status: stable, text: "Run in the repository's root. Its exit status decides the build." },
+  { key: <code>build.output</code>, type: "string", default: <code>"dist"</code>, status: stable, text: "The directory that is served or copied into the image." },
+  { key: <code>health.path</code>, type: "string", default: <code>"/"</code>, status: stable, text: "Requested until it answers 200. A deploy that never does is not released." },
+  { key: <code>health.timeout</code>, type: "duration", default: <code>"10s"</code>, status: stable, text: "How long one health request may take." },
+  { key: <code>schedule</code>, type: "cron[]", default: "none", status: beta, text: "Deploys at fixed times, from the branch named in each entry." },
+  { key: <code>instances</code>, type: "number", default: "auto", status: deprecated, text: "Replaced by scale.min and scale.max; read until 3.0." },
+];
+
+const REGIONS = [
+  { code: <code>fra</code>, place: "Frankfurt", latency: "9 ms", since: "2023" },
+  { code: <code>ams</code>, place: "Amsterdam", latency: "11 ms", since: "2024" },
+  { code: <code>lhr</code>, place: "London", latency: "12 ms", since: "2023" },
+  { code: <code>iad</code>, place: "Northern Virginia", latency: "14 ms", since: "2023" },
+  { code: <code>sfo</code>, place: "San Francisco", latency: "16 ms", since: "2024" },
+  { code: <code>gru</code>, place: "São Paulo", latency: "24 ms", since: "2025" },
+  { code: <code>sin</code>, place: "Singapore", latency: "19 ms", since: "2024" },
+  { code: <code>syd</code>, place: "Sydney", latency: "22 ms", since: "2025" },
+];
+
+const CREATE = `POST /v2/projects/{project}/deploys
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "ref": "main",
+  "regions": ["fra", "iad"],
+  "message": "Ship the new checkout"
+}`;
+
+const RESPONSE = `HTTP/1.1 202 Accepted
+Location: /v2/projects/storefront/deploys/dpl_8Hq2
+
+{
+  "id": "dpl_8Hq2",
+  "state": "building",
+  "ref": "main",
+  "commit": "4f2a91c",
+  "createdAt": "2026-10-05T09:41:07Z"
+}`;
+
+export default function Page() {
+  return (
+    <Layout title="API reference" description="Every option of exemplar.toml, the region codes, and the HTTP API for deploys — with the stability of each.">
+      <article>
+        <Breadcrumbs>
+          <$Crumb key="home" href="/">Exemplar</$Crumb>
+          <$Crumb key="docs" href="/docs/">Documentation</$Crumb>
+          <$Crumb key="page">API reference</$Crumb>
+        </Breadcrumbs>
+        <h1>API reference</h1>
+        <p className="lead">The config file, the region codes and the HTTP API. What is marked {beta} may change in a minor release.</p>
+
+        <h2 id="config">exemplar.toml</h2>
+        <p>Keys are read from the file at the repository's root. An unknown key is an error, not a warning.</p>
+        <Table caption="Configuration keys" rowHeader="key" sticky rows={CONFIG}>
+          <$Column key="key">Key</$Column>
+          <$Column key="type">Type</$Column>
+          <$Column key="default">Default</$Column>
+          <$Column key="status">Stability</$Column>
+          <$Column key="text">Meaning</$Column>
+        </Table>
+
+        <h2 id="regions">Regions</h2>
+        <p>Latency is the median from the region's edge to its nearest internet exchange, measured hourly.</p>
+        <Table caption="Region codes" rowHeader="code" density="compact" striped rows={REGIONS}>
+          <$Column key="code">Code</$Column>
+          <$Column key="place">Location</$Column>
+          <$Column key="latency" align="end">Median latency</$Column>
+          <$Column key="since" align="end">Since</$Column>
+        </Table>
+
+        <h2 id="deploys">Create a deploy</h2>
+        <p>
+          Starts a build of <code>ref</code> and releases it to the regions given, or to the config's. The call returns
+          when the build is queued; poll the <code>Location</code>, or subscribe to the project's events.
+        </p>
+        <CodeBlock title="Request" copy>{CREATE}</CodeBlock>
+        <CodeBlock title="Response">{RESPONSE}</CodeBlock>
+        <p>
+          A token is created in <a href="/settings/">Settings</a>. The first steps with the CLI are in the{" "}
+          <a href="/docs/">quickstart</a>.
+        </p>
+      </article>
+    </Layout>
+  );
+}

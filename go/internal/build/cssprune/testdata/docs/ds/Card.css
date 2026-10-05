@@ -1,0 +1,13 @@
+/* Card. Props: variant = "outline" | "raised"; interactive?: boolean. Slots: $Icon $Title $Body $Footer. */
+.Card {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-5); border-radius: var(--radius-lg); background: var(--color-bg-raised);
+  [data-slot="icon"] { width: 2rem; height: 2rem; color: var(--color-accent); margin-bottom: var(--space-2); }
+  [data-slot="title"] { font-size: var(--text-lg); font-weight: 650; }
+  [data-slot="body"] { color: var(--color-fg-muted); font-size: var(--text-sm); }
+  [data-slot="footer"] { margin-top: auto; padding-top: var(--space-3); font-size: var(--text-sm); color: var(--color-accent); }
+  &[data-variant="outline"] { border: 1px solid var(--color-border); }
+  &[data-variant="raised"] { box-shadow: var(--shadow-md); }
+  &[data-interactive] { transition: border-color var(--duration-fast), box-shadow var(--duration-fast), translate var(--duration-fast);
+    &:hover { border-color: var(--color-accent); box-shadow: var(--shadow-md); translate: 0 -2px; } }
+}

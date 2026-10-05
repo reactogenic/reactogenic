@@ -57,7 +57,10 @@ func rewrite(d *rtsx.Diagnostic, out transpiler.Output, src string, at emit.Span
 		return "slot-list", fmt.Sprintf("`%s` is a list; a slot is one value", note.Name), nil, true
 	case note.Kind == "slot-key" && d.Code() == 2353:
 		return "slot-key-no-args", fmt.Sprintf("`%s` has no args to key by: its body is not a function", note.Name), nil, true
-	case note.Kind == "slot-entry-key" && d.Code() == 2464:
+	case note.Kind == "slot-entry-key" && (d.Code() == 2464 || d.Code() == 2345 && at == note.Span):
+		// `[undefined]` for a bare `key` is no property name (TS2464); an
+		// expression is the argument of slotEntryName, and the error on the
+		// whole of it — the note is the value's — says it is no key (TS2345).
 		return "slot-key-inline", fmt.Sprintf("A key of `%s` is a string or a number; a key function is written inline: `key={(args) => …}`", note.Name), nil, true
 	case note.Kind == "slot-arg" && d.Code() == 2322 && arg(1) == "never":
 		// Args of a slot whose body is not a function are `never`

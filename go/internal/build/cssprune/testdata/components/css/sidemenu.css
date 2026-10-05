@@ -1,0 +1,24 @@
+.rg-sm { box-sizing: border-box; padding: 1rem; background: var(--rg-bg); color: var(--rg-fg); overflow: auto; }
+.rg-sm ul { margin: 0; padding: 0; list-style: none; }
+.rg-sm ul ul { padding-inline-start: .75rem; }
+.rg-sm :is(h2, summary) { margin: 1rem 0 .25rem; padding: 0 .75rem; font-size: .8125rem; font-weight: 600; color: var(--rg-muted); }
+.rg-sm li summary { margin: 0; padding: .3em .75em; font-size: inherit; font-weight: inherit; color: inherit; }
+.rg-sm summary { cursor: pointer; }
+.rg-sm a { display: block; padding: .3em .75em; border-radius: 6px; color: inherit; text-decoration: none; }
+.rg-sm a:hover { background: var(--rg-hover); }
+.rg-sm [aria-current] { background: var(--rg-hover); color: var(--rg-accent); font-weight: 600; }
+.rg-sm-footer { margin-top: 1rem; padding: 0 .75rem; font-size: .8125rem; color: var(--rg-muted); }
+.rg-sm-toggle { display: none; }
+/* Wide: the menu is a column of the page, whether or not the popover is open. */
+@media (width >= 50rem) {
+  .rg-sm { display: block; position: sticky; inset: 0 auto auto; width: auto; height: 100dvh; margin: 0; border: 0; border-inline-end: 1px solid var(--rg-line); }
+}
+/* Narrow: the same element is a drawer in the top layer, opened by the toggle. */
+@media (width < 50rem) {
+  .rg-sm-toggle { display: inline-flex; position: fixed; inset: .5rem auto auto .5rem; z-index: 1; padding: .4em .6em; border: 1px solid var(--rg-line); border-radius: var(--rg-radius); background: var(--rg-bg); color: var(--rg-fg); font: inherit; cursor: pointer; }
+  .rg-sm { inset: 0 auto 0 0; width: min(18rem, 85vw); height: 100dvh; max-height: none; margin: 0; border: 0; translate: -100% 0; transition: translate .2s, overlay .2s allow-discrete, display .2s allow-discrete; }
+  .rg-sm:popover-open { translate: 0 0; }
+  @starting-style { .rg-sm:popover-open { translate: -100% 0; } }
+  .rg-sm::backdrop { background: #0006; }
+  :root:has(.rg-sm:popover-open) { overflow: hidden; }
+}

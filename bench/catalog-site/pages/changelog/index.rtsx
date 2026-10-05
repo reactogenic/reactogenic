@@ -1,0 +1,85 @@
+// "/changelog/": releases, each change with its kind; a note on the breaking
+// one; older releases behind page numbers (README.md: a fixture).
+import type { ReactNode } from "react";
+import { Badge, Callout, Pagination } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+type Kind = "added" | "changed" | "fixed" | "breaking";
+
+const KINDS: Record<Kind, ReactNode> = {
+  added: <Badge tone="success">Added</Badge>,
+  changed: <Badge tone="info">Changed</Badge>,
+  fixed: <Badge>Fixed</Badge>,
+  breaking: <Badge tone="danger" variant="solid">Breaking</Badge>,
+};
+
+const RELEASES: { version: string; date: string; shown: string; changes: [Kind, string][] }[] = [
+  {
+    version: "2.4.0", date: "2026-09-29", shown: "29 September 2026",
+    changes: [
+      ["added", "Scheduled deploys: a cron entry per branch in exemplar.toml (beta)."],
+      ["added", "exemplar logs --since takes a deploy id as well as a time."],
+      ["changed", "The build cache is keyed by the lockfile's hash, not its modification time."],
+      ["fixed", "A rollback during a regional failover no longer waits for the failed region."],
+    ],
+  },
+  {
+    version: "2.3.2", date: "2026-09-11", shown: "11 September 2026",
+    changes: [
+      ["fixed", "Preview URLs of branches with a slash in their name resolve again."],
+      ["fixed", "The CLI no longer prints a token when --verbose is set."],
+    ],
+  },
+  {
+    version: "2.3.0", date: "2026-08-20", shown: "20 August 2026",
+    changes: [
+      ["added", "Two regions: São Paulo (gru) and Sydney (syd)."],
+      ["added", "Per-project budgets with a hard stop."],
+      ["changed", "Health checks follow one redirect on the same host."],
+      ["breaking", "instances is deprecated in favour of scale.min and scale.max. It is read until 3.0."],
+      ["fixed", "Secrets with a trailing newline are passed as written."],
+    ],
+  },
+  {
+    version: "2.2.0", date: "2026-07-02", shown: "2 July 2026",
+    changes: [
+      ["added", "Audit log export, as newline-delimited JSON."],
+      ["changed", "Deploy tokens are shown once, at creation."],
+      ["fixed", "exemplar deploy exits non-zero when the health check times out."],
+    ],
+  },
+];
+
+export default function Page() {
+  return (
+    <Layout title="Changelog" description="What changed in each release of Exemplar: additions, fixes and the occasional breaking change, newest first.">
+      <article className="prose">
+        <h1>Changelog</h1>
+        <p className="lead">Newest first. Releases follow semantic versioning: a breaking change waits for a major, and is announced a minor ahead.</p>
+        <Callout tone="warning">
+          <$Title>Heads-up for 3.0</$Title>
+          <p>
+            <code>instances</code> goes away in 3.0. Configs that still use it deploy today, with a warning; the{" "}
+            <a href="/docs/api/#config">reference</a> has the replacement.
+          </p>
+        </Callout>
+        {RELEASES.map((release) => (
+          <section key={release.version} className="release" aria-labelledby={`v${release.version.replaceAll(".", "-")}`}>
+            <h2 id={`v${release.version.replaceAll(".", "-")}`}>
+              {release.version} <time dateTime={release.date}>{release.shown}</time>
+            </h2>
+            <ul>
+              {release.changes.map(([kind, text]) => (
+                <li key={text}>
+                  <span>{KINDS[kind]}</span>
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        <Pagination label="Older releases" current={1} total={9} href="/changelog/?page=" />
+      </article>
+    </Layout>
+  );
+}

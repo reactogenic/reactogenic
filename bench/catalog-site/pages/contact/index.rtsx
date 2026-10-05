@@ -1,0 +1,42 @@
+// "/contact/": three plain fields, a topic, a consent box. No counter, no
+// password: no `field` behaviour (README.md: a fixture; the form posts
+// nowhere).
+import { Button, Checkbox, Field, Select } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <Layout title="Contact sales" description="Talk to an Exemplar engineer about your architecture, a migration, or the Scale plan.">
+      <h1>Talk to an engineer</h1>
+      <p className="lead">
+        Thirty minutes with someone who runs this platform. Bring your architecture; we will say honestly whether we
+        fit, and what a migration would take.
+      </p>
+      <form className="form" action="/contact/" method="get">
+        <div className="form-row">
+          <Field label="Name" name="name" autoComplete="name" required />
+          <Field label="Work email" name="email" type="email" autoComplete="email" required placeholder="you@company.example" />
+        </div>
+        <Field label="Company" name="company" autoComplete="organization" />
+        <Select label="What is this about?" name="topic" value="scale" required>
+          <$Option key="scale">The Scale plan</$Option>
+          <$Option key="migration">Migrating from another platform</$Option>
+          <$Option key="security">A security review</$Option>
+          <$Option key="oss">Open-source sponsorship</$Option>
+          <$Option key="other">Something else</$Option>
+        </Select>
+        <Field label="What should we know?" name="message" multiline placeholder="Services, regions, traffic, and what hurts today." hint="A few lines are enough. We read every one." />
+        <Checkbox name="consent" label="You may email me about this request" hint="Nothing else, and never a newsletter." required />
+        <div className="actions">
+          <Button>Send</Button>
+          <Button href="/pricing/" variant="ghost">See pricing first</Button>
+        </div>
+      </form>
+      <h2>Rather not wait?</h2>
+      <p>
+        Most questions are answered in the <a href="/docs/">quickstart</a> and the <a href="/docs/api/">API reference</a>.
+        The free plan needs no card: <a href="/dashboard/">start a project</a> and write to us from there.
+      </p>
+    </Layout>
+  );
+}

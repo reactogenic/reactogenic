@@ -1,0 +1,1 @@
+body{margin:0;background:Canvas;color:CanvasText;font:1rem/1.6 system-ui,sans-serif}.site-header{display:flex;gap:1rem;padding:.5rem 1rem;border-bottom:1px solid color-mix(in srgb,CanvasText 20%,transparent)}.site-header a{color:inherit;text-decoration:none}.site-header a:hover{text-decoration:underline}main{max-width:46rem;padding:1rem 2rem 4rem}

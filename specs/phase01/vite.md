@@ -107,6 +107,8 @@ extension, `packages/vscode`, is not one: ide.md). Phase 1 ships:
 | --- | --- | --- |
 | `Slot`, `FnSlot`, `SlotFn`, `ArgsOf`, `NoArgs` | types | slot declarations |
 | `renderSlot` | function | imported by emitted attachments, under a generated name |
+| `KeyedSlot`, `KEYED`, `slotEntry`, `slotEntryName` | type, symbol, functions | keyed slots (syntax.md, *Keyed slots*): the marker and `slotEntryName` are imported by an emitted keyed slot, `slotEntry` by an attachment with `key` |
+| `slotKeys` | function | written by a container: the keys of a keyed slot, in the order written |
 | `Each` | component | an ordinary runtime component |
 | `Switch`, `Match` | declarations only | lowered away; the emitted `.tsx` drops their import |
 | `noMatch` | function | imported by emitted code for `exhaustive`, under a generated name |

@@ -1,0 +1,13 @@
+// "/plain/": nothing that opens — a Button that is a link — so the page
+// records no behaviour and ships no script.
+import { Button } from "@reactogenic/ui";
+import { Layout } from "../../layout.rtsx";
+
+export default function PlainPage() {
+  return (
+    <Layout title="Plain">
+      <h1>Plain</h1>
+      <Button href="/guide/more/?from=plain#top">More</Button>
+    </Layout>
+  );
+}

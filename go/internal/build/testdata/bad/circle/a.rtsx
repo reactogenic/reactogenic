@@ -1,0 +1,7 @@
+// pages-not-found: two `.rtsx` files that import each other — each is a
+// module of the other, and neither a variant.
+import { B } from "./b.rtsx";
+
+export function A({ depth }: { depth: number }) {
+  return depth > 0 ? <B depth={depth - 1} /> : <i>a</i>;
+}

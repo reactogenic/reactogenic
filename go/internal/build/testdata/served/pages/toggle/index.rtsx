@@ -1,0 +1,31 @@
+// "/toggle/": a behaviour that takes away what the page has as it loads — a
+// class, an id, the elements a `<span>` holds. A rule that does not match
+// the page as written matches it after a click (`.card:not(.collapsed)`):
+// what the page's script names decides nothing, and the page is pruned all
+// the same — `classList.remove` is not the DOM's `remove`.
+import { mount } from "@reactogenic/core";
+import { Layout } from "../../layout.tsx";
+
+function Card() {
+  mount("./behaviors/toggle", "c9");
+  return (
+    <div id="c9" className="card collapsed list">
+      <p className="body">body</p>
+      <span className="item active">item</span>
+      <i id="first" className="label">
+        x
+      </i>
+      <span className="status">
+        <b>Ready</b>
+      </span>
+    </div>
+  );
+}
+
+export default function TogglePage() {
+  return (
+    <Layout title="Toggle">
+      <Card />
+    </Layout>
+  );
+}

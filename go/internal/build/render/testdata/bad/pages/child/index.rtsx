@@ -1,0 +1,18 @@
+import type { ReactNode } from "react";
+import { Page } from "../../ui/page";
+
+const point = { x: 1, y: 2 } as unknown as ReactNode;
+
+// React itself throws — an object is not a child — after `Coordinates` has
+// returned: no frame of the project is on the stack.
+function Coordinates() {
+  return <span>{point}</span>;
+}
+
+export default function ChildPage() {
+  return (
+    <Page title="Child">
+      <Coordinates />
+    </Page>
+  );
+}

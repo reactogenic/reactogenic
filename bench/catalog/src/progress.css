@@ -1,0 +1,86 @@
+@layer rg.components {
+  .bc-progress {
+    --bc-progress-fg: var(--rg-accent);
+    display: grid;
+    gap: 0.375rem;
+    margin: 0 0 1rem;
+
+    &[data-tone="success"] {
+      --bc-progress-fg: var(--bc-success);
+    }
+    &[data-tone="warning"] {
+      --bc-progress-fg: var(--bc-warning);
+    }
+    &[data-tone="danger"] {
+      --bc-progress-fg: var(--bc-danger);
+    }
+
+    > [data-part="header"] {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.875rem;
+
+      > label {
+        font-weight: 600;
+      }
+      > [data-part="value"] {
+        color: var(--rg-muted);
+        font-variant-numeric: tabular-nums;
+      }
+    }
+    > progress {
+      display: block;
+      width: 100%;
+      height: 0.5rem;
+      border: 0;
+      border-radius: 999px;
+      background: var(--rg-hover);
+      /* Firefox takes the bar's colour from here; the others from below. */
+      color: var(--bc-progress-fg);
+      overflow: hidden;
+      appearance: none;
+
+      /* One rule per engine: a list with a pseudo-element an engine does not
+         know is dropped whole by it. */
+      &::-webkit-progress-bar {
+        background: var(--rg-hover);
+      }
+      &::-webkit-progress-value {
+        border-radius: 999px;
+        background: var(--bc-progress-fg);
+      }
+      &::-moz-progress-bar {
+        border-radius: 999px;
+        background: var(--bc-progress-fg);
+      }
+      /* Without a value: a band that travels, for a reader who has not asked
+         for less motion; a still, striped bar otherwise. */
+      &:indeterminate {
+        background: repeating-linear-gradient(-45deg, var(--rg-hover) 0 0.5rem, var(--bc-progress-fg) 0.5rem 1rem);
+
+        @media (prefers-reduced-motion: no-preference) {
+          background: linear-gradient(90deg, var(--rg-hover) 30%, var(--bc-progress-fg) 50%, var(--rg-hover) 70%) 0 0 / 200% 100%;
+          animation: bc-progress-travel 1.5s linear infinite;
+        }
+      }
+    }
+    &[data-size="sm"] > progress {
+      height: 0.25rem;
+    }
+    @media (forced-colors: active) {
+      > progress {
+        border: 1px solid CanvasText;
+      }
+    }
+  }
+
+  @keyframes bc-progress-travel {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+}

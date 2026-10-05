@@ -1,0 +1,76 @@
+// "/menus/": two action menus on one page, one with typeahead and one
+// without; a menu at the right edge of the viewport; the author's own id on a
+// trigger; disabled items, a link among them; a menu taller than a short
+// viewport; a menu whose keys are integer-like.
+import { Button, DropdownMenu } from "@reactogenic/ui";
+import { DocsLayout } from "../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <DocsLayout title="Menus">
+      <h1>Menus</h1>
+      <DropdownMenu id="one" typeahead>
+        <$Trigger>One</$Trigger>
+        <$Item key="alpha" command="show-modal" commandfor="shortcuts">Alpha</$Item>
+        <$Item key="beta" href="/">Beta</$Item>
+      </DropdownMenu>{" "}
+      <DropdownMenu id="two">
+        <$Trigger>Two</$Trigger>
+        <$Item key="alpha" command="show-modal" commandfor="shortcuts">Alpha</$Item>
+        <$Item key="beta" href="/">Beta</$Item>
+      </DropdownMenu>{" "}
+      {/* The author's id on the trigger: it is the one the menu is named by. */}
+      <DropdownMenu id="three">
+        <$Trigger id="mine">Three</$Trigger>
+        <$Item key="link" href="/guide/slots/" disabled>Disabled link</$Item>
+        <$Item key="print" disabled>Print</$Item>
+        <$Item key="open" command="show-modal" commandfor="shortcuts">Open</$Item>
+        <$Item key="home" href="/">Home</$Item>
+      </DropdownMenu>{" "}
+      <DropdownMenu id="links">
+        <$Trigger>Links</$Trigger>
+        <$Item key="off" href="/guide/slots/" disabled>Not yet</$Item>
+        <$Item key="home" href="/">Home</$Item>
+      </DropdownMenu>{" "}
+      <Button id="off" href="/guide/slots/" disabled>A disabled link button</Button>{" "}
+      {/* Taller than a short viewport (a phone on its side, a page zoomed to 400%). */}
+      <DropdownMenu id="tall">
+        <$Trigger>Tall</$Trigger>
+        <$Item key="a" href="/">First</$Item>
+        <$Item key="b" href="/">Second</$Item>
+        <$Item key="c" href="/">Third</$Item>
+        <$Item key="d" href="/">Fourth</$Item>
+        <$Item key="e" href="/">Fifth</$Item>
+        <$Item key="f" href="/">Sixth</$Item>
+        <$Item key="g" href="/">Seventh</$Item>
+        <$Item key="h" href="/">Eighth</$Item>
+        <$Item key="i" href="/">Ninth</$Item>
+        <$Item key="j" href="/">Tenth</$Item>
+        <$Item key="k" href="/">Eleventh</$Item>
+        <$Item key="l" href="/">Last</$Item>
+      </DropdownMenu>{" "}
+      {/* Integer-like keys: rendered as written — b, 10, 9, a (phase01/syntax.md, *Keyed slots*). */}
+      <DropdownMenu id="order">
+        <$Trigger>Order</$Trigger>
+        <$Item key="b" href="/">b</$Item>
+        <$Item key="10" href="/">10</$Item>
+        <$Item key="9" href="/">9</$Item>
+        <$Item key="a" href="/">a</$Item>
+      </DropdownMenu>
+      {/* In the middle of a phone: the menu is wider than what is left on either side. */}
+      <div className="middle">
+        <DropdownMenu id="middle">
+          <$Trigger>Middle</$Trigger>
+          <$Item key="long" href="/">A rather long label for a menu item that is wide</$Item>
+        </DropdownMenu>
+      </div>
+      {/* At the right edge: the menu is wider than what is left of the viewport. */}
+      <div className="right">
+        <DropdownMenu id="edge">
+          <$Trigger>Edge</$Trigger>
+          <$Item key="long" href="/">A rather long label for a menu item that is wide</$Item>
+        </DropdownMenu>
+      </div>
+    </DocsLayout>
+  );
+}

@@ -237,7 +237,7 @@ element it stands for:
 | --- | --- |
 | `Slot<P>` | one set of props `P` |
 | `Slot<P, A>` | one set of props `P`, whose body is a function of the attachment's args `A` |
-| `KeyedSlot<P>` | entries by key, each a `Slot<P>` value (*Keyed slots*) |
+| `KeyedSlot<P>` | entries by key, in the order written, each a `Slot<P>` value (*Keyed slots*) |
 | `KeyedSlot<P, A>` | entries by key, each a `Slot<P, A>` value |
 
 ```tsx
@@ -579,21 +579,107 @@ function Table({ columns, $Column }: TableProps) {
 - **`key` makes a slot keyed**, at the call site: the slot elements of one
   slot carry a `key` on every element, or on none (keyed-slot-mixed). `key` is
   the entry's key, never one of its props.
-- `key="email"` → `"email": {…}`; `key={expr}` → `[expr]: {…}`. A repeated
-  key is last-wins, as in any object literal.
+- **Keys are strings or numbers**; a number and its string are one key
+  (`key={2}` and `key="2"`), as for React.
+- **The entries keep the order written.** A container that renders every
+  entry gets them as the caller wrote them — whatever the keys look like:
+  written `10`, `9`, `2`, they are `10`, `9`, `2`. A repeated key is
+  last-wins, at the place it was first written. (*The entry's name*, below,
+  is how.)
 - The value carries `KEYED`, so an attachment tells a keyed slot from a
   singular one attached many times (`$Option`): `slotEntry(slot, key)` returns
   the entry of a keyed slot, the slot itself otherwise.
-- A conditional entry is spread in: `<Match on={c}><$Column key="age" /></Match>`
-  → `...(c ? { "age": {} } : {})`. An explicit `$Column={…}` attribute comes
-  first, spread.
-- **Keys are strings or numbers.** Symbols are excluded — `Object.keys` and
-  `Object.values` skip them. Integer-like keys (`2`, `"10"`) enumerate first,
-  in ascending order; the container decides the rendering order (here: its own
-  `columns`), so this matters only to a container that iterates the slot's
-  entries itself.
+- A conditional entry is spread in, at its place:
+  `<Match on={c}><$Column key="age" /></Match>` →
+  `...(c ? { "age": {} } : {})`. An explicit `$Column={…}` attribute comes
+  first, spread, and its entries with it: `{ ...given, [_KEYED]: true, … }`.
 - Types check each entry as a slot value: `<$Column key="email" widht={2} />`
   is an excess-property error, as for any slot.
+
+**The entry's name.** A keyed slot's value is an object, and JavaScript has
+an order of its own for an object's property names: the integer-like ones
+(`"2"`, `"10"`) first, ascending, then the others as written. That rule is
+not `.rtsx`'s, so an entry's property name is its key **encoded** to a name
+that is never integer-like — and then the object's own order is the order
+written, through spreads and conditionals too:
+
+| Key | Property name |
+| --- | --- |
+| integer-like — digits, no leading zero: `"0"`, `"10"`, `2` | `#` + the key: `"#10"` |
+| starts with `#`: `"#top"`, `"#10"` | `#` + the key: `"##top"`, `"##10"` |
+| any other: `"email"`, `"0.5"`, `"01"`, `"-1"`, `""` | the key itself |
+
+No two keys share a name; decoding takes one leading `#` away.
+`slotEntryName(key)` of `@reactogenic/core` is the encoding: the transpiler
+applies it to a key it can read, and emits a call for one it cannot.
+
+```tsx
+// .rtsx
+<Menu>
+  <$Item key="10">Ten</$Item>
+  <$Item key="9">Nine</$Item>
+  <$Item key="docs">Docs</$Item>
+  <$Item key={version.id}>{version.label}</$Item>
+</Menu>
+```
+
+```tsx
+// .tsx
+import { KEYED as _KEYED, slotEntryName as _slotEntryName } from "@reactogenic/core";
+
+<Menu $Item={{ [_KEYED]: true, "#10": { children: "Ten" }, "#9": { children: "Nine" }, "docs": { children: "Docs" }, [_slotEntryName(version.id)]: { children: version.label } }} />
+```
+
+- `key="email"` → `"email": {…}`, as written; `key="10"` → `"#10": {…}`;
+  `key="#top"` → `"##top": {…}`. A string in braces is the same when its
+  value is its text (`key={"10"}`).
+- `key={expr}` → `[_slotEntryName(expr)]: {…}`: any other value — a number,
+  a template, a string with an escape — is encoded where it runs, once.
+- `key="__proto__"` → `["__proto__"]: {…}`: written plain, an object literal
+  reads that name as the object's prototype.
+- A keyed slot written by hand in plain `.tsx` names its entries the same
+  way: `{ [KEYED]: true, [slotEntryName(id)]: {…} }`. An entry under a raw
+  integer-like name (`{ [KEYED]: true, 10: {…} }`) is still found by
+  `slotEntry`, and enumerates where JavaScript puts it.
+
+**A container iterates `slotKeys($X)`** — the keys as the caller wrote them
+(decoded), in order; `[]` for a slot that is not there — and attaches each
+with `key`, which goes through `slotEntry`. **Never `Object.keys($X)`**: those
+are the encoded names. Symbols are no keys: `slotKeys` skips them.
+
+```tsx
+// .rtsx
+function Menu({ $Item }: MenuProps) {
+  return (
+    <ul>
+      <Each items={slotKeys($Item)} { item: key }>
+        <li key={key} slot={$Item} />
+      </Each>
+    </ul>
+  );
+}
+```
+
+```tsx
+// .tsx
+import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotEntry as _slotEntry, slotProps as _slotProps } from "@reactogenic/core";
+
+function Menu({ $Item }: MenuProps) {
+  return (
+    <ul>
+      <Each items={slotKeys($Item)}>
+        {({ item: key }) => ((_entry) => _isAssigned(_entry)
+          ? <li key={key} {..._slotProps(_entry)}>{_renderSlot(_entry, {})}</li>
+          : null)(_slotEntry($Item, key))}
+      </Each>
+    </ul>
+  );
+}
+```
+
+> Until 0.1.0-alpha.1 an entry's name was its key as written, and a
+> container that iterated its entries got integer-like keys first — a bug:
+> an object's indexing rules are not `.rtsx`'s.
 
 This also answers where keys come from when an attachment runs per item: from
 the attachment's `key`, the one React needs there anyway — or, when only the

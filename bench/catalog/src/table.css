@@ -1,0 +1,79 @@
+@layer rg.components {
+  .bc-table {
+    max-width: 100%;
+    margin: 1rem 0;
+    border: 1px solid var(--rg-line);
+    border-radius: var(--rg-radius);
+    overflow-x: auto;
+
+    &:focus-visible {
+      outline: var(--bc-ring);
+      outline-offset: 2px;
+    }
+
+    > table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      font-variant-numeric: tabular-nums;
+
+      > caption {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--rg-line);
+        color: var(--rg-muted);
+        font-weight: 600;
+        text-align: start;
+      }
+      > :is(thead, tbody) > tr > :is(th, td) {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--rg-line);
+        text-align: start;
+        vertical-align: top;
+
+        &[data-align="end"] {
+          text-align: end;
+        }
+      }
+      > thead > tr > th {
+        background: var(--bc-surface);
+        color: var(--rg-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      > tbody > tr {
+        &:last-child > :is(th, td) {
+          border-bottom: 0;
+        }
+        &:hover {
+          background: var(--rg-hover);
+        }
+        > th {
+          font-weight: 600;
+        }
+      }
+    }
+    &[data-density="compact"] > table > :is(thead, tbody) > tr > :is(th, td) {
+      padding: 0.4rem 0.75rem;
+    }
+    &[data-striped] > table > tbody > tr:nth-child(even) {
+      background: var(--bc-surface);
+    }
+    /* The header stays while the page scrolls, under the page's own sticky
+       header — where the table fits: a sticky cell sticks to its nearest
+       scroller, so the box must not be one, and on a narrow screen it is. */
+    @media (width >= 64rem) {
+      &[data-sticky] {
+        overflow: visible;
+
+        > table > thead > tr > th {
+          position: sticky;
+          top: var(--bc-sticky-top, 0);
+          z-index: 1;
+        }
+      }
+    }
+  }
+}

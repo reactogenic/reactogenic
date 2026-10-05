@@ -1,0 +1,11 @@
+import * as React from "react";
+import { useId, useState as useCount } from "react";
+import type { ReactNode } from "react";
+
+// State and an effect: React's, and none of it is left in a shell.
+export function Counter({ children }: { children?: ReactNode }) {
+  const id = useId();
+  const [count] = useCount(0);
+  React.useEffect(() => {}, []);
+  return <output id={id}>{count}{children}</output>;
+}

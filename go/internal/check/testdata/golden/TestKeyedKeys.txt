@@ -1,0 +1,8 @@
+src/menu.rtsx(23,43): error TS2353: Object literal may only specify known properties, and 'hfer' does not exist in type 'Item'.
+  node_modules/@reactogenic/core/index.d.ts:12:77 - The expected type comes from this index signature.
+src/menu.rtsx(24,45): error slot-type: `$Item` does not match its declaration in `Menu`: Type '{ [x: string]: { hfer: string; }; [KEYED]: true; }' is not assignable to type 'KeyedSlot<Item>'.
+  'string' index signatures are incompatible.
+    Object literal may only specify known properties, and 'hfer' does not exist in type 'Item'.
+  src/menu.rtsx:3:35 - The expected type comes from property '$Item' which is declared here on type '{ $Item: KeyedSlot<Item>; }'
+src/menu.rtsx(25,40): error slot-key-inline: A key of `$Item` is a string or a number; a key function is written inline: `key={(args) => …}`
+src/menu.rtsx(26,47): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.

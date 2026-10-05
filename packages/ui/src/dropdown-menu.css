@@ -1,0 +1,103 @@
+@layer rg.components {
+  /* For a menu wider than the room on either side of its trigger: under
+     it, half a rem from the viewport's left edge — the menu is at most a rem
+     narrower than the viewport. */
+  @position-try --rg-menu-edge {
+    left: 0.5rem;
+    right: auto;
+  }
+  /* The last resort, which always fits: the viewport's corner, over the
+     trigger — the menu is at most a rem smaller than the viewport, both
+     ways, and scrolls. For a menu taller than the room above and below its
+     trigger, or one that is at the viewport's edge and has no room below. */
+  @position-try --rg-menu-corner {
+    top: 0.5rem;
+    bottom: auto;
+    left: 0.5rem;
+    right: auto;
+    margin: 0;
+  }
+
+  .rg-menu {
+    box-sizing: border-box;
+    /* As wide as its longest item, whatever room is left beside the trigger:
+       a menu that does not fit there moves (the fallbacks below) — it is not
+       squeezed into what is left. */
+    width: max-content;
+    max-width: calc(100vw - 1rem);
+    /* Never taller than the viewport either: a popover is fixed, so what of
+       it is outside the viewport cannot be scrolled to. What does not fit
+       scrolls inside the menu (`overflow` is the user agent's `auto` for a
+       popover; said here, because the menu depends on it). */
+    max-height: calc(100dvh - 1rem);
+    overflow: auto;
+    padding: 0.25rem;
+    border: 1px solid var(--rg-line);
+    border-radius: var(--rg-radius);
+    background: var(--rg-bg);
+    color: var(--rg-fg);
+    box-shadow: 0 8px 30px #0003;
+    list-style: none;
+
+    /* The popover's implicit anchor is its invoker, so there is no rule per
+       use site. `position-anchor: auto` says so: its initial value differs
+       between engines, and without `position-area` the newer one gives
+       `anchor()` nothing to resolve against. `anchor()` insets, not
+       `position-area`: that one does not flip in WebKit on a page taller
+       than the viewport. The fallbacks, in order: above the trigger; at its
+       other edge; both; for a menu wider than the room on either side (a
+       phone), against the viewport's edge; and where none of these fits, in
+       the viewport's corner. Five, and no more: Chromium tries five
+       fallbacks and never a sixth (measured in 153). Without anchor
+       positioning the UA's centred popover remains. */
+    @supports (top: anchor(bottom)) {
+      position-anchor: auto;
+      inset: auto;
+      top: anchor(bottom);
+      left: anchor(left);
+      min-width: anchor-size(width);
+      margin: 0.25rem 0;
+      position-try-fallbacks:
+        flip-block,
+        flip-inline,
+        flip-block flip-inline,
+        --rg-menu-edge,
+        --rg-menu-corner;
+
+      &[data-align="end"] {
+        left: auto;
+        right: anchor(right);
+      }
+    }
+
+    /* The items — the menu's own children, not what a label holds. */
+    > :is(a, button),
+    > li > a {
+      display: flex;
+      box-sizing: border-box;
+      width: 100%;
+      padding: 0.4em 0.75em;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: start;
+      text-decoration: none;
+      cursor: pointer;
+
+      &:is(:hover, :focus-visible) {
+        background: var(--rg-hover);
+      }
+      &[aria-current] {
+        font-weight: 600;
+      }
+      /* A disabled link has no `href`: it says so with `aria-disabled`. */
+      &:is(:disabled, [aria-disabled="true"]) {
+        background: none;
+        color: var(--rg-muted);
+        cursor: default;
+      }
+    }
+  }
+}

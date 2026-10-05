@@ -1,0 +1,10 @@
+import { Page } from "../../ui/page";
+
+export default function RandomPage() {
+  const id = "x" + Math.random().toString(36).slice(2);
+  return (
+    <Page title="Math.random">
+      <p id>random</p>
+    </Page>
+  );
+}

@@ -1,0 +1,6 @@
+// page-not-document: a segment that nothing mounts. An `.rtsx` file of a
+// route directory that nothing mounts or imports is a variant of the route,
+// and this one renders no document.
+export default function Intro() {
+  return <p>No page mounts this.</p>;
+}

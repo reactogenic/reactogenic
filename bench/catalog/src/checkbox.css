@@ -1,0 +1,91 @@
+@layer rg.components {
+  .bc-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    margin: 0 0 0.875rem;
+    cursor: pointer;
+
+    > input {
+      flex: none;
+      box-sizing: border-box;
+      width: 1.125rem;
+      height: 1.125rem;
+      margin: 0.2rem 0 0;
+      border: 1px solid var(--rg-muted);
+      border-radius: 4px;
+      background: var(--rg-bg);
+      appearance: none;
+      cursor: inherit;
+
+      &:checked {
+        border-color: var(--rg-accent);
+        background: var(--rg-accent);
+        /* The tick: two borders of a turned box. */
+        background-image: linear-gradient(var(--rg-bg), var(--rg-bg));
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 0.5rem 0.5rem;
+      }
+      &:focus-visible {
+        outline: var(--bc-ring);
+        outline-offset: 2px;
+      }
+      &:disabled {
+        border-color: var(--rg-line);
+        background-color: var(--bc-surface);
+        cursor: not-allowed;
+      }
+      /* The system's own box in forced colours: it shows its state itself. */
+      @media (forced-colors: active) {
+        appearance: auto;
+      }
+    }
+    &:has(> :disabled) {
+      color: var(--rg-muted);
+      cursor: not-allowed;
+    }
+    > [data-part="text"] {
+      min-width: 0;
+
+      > [data-part="hint"] {
+        display: block;
+        color: var(--rg-muted);
+        font-size: 0.8125rem;
+      }
+    }
+
+    /* The switch: a track, and a thumb that slides. */
+    &[data-variant="switch"] > input {
+      position: relative;
+      width: 2.25rem;
+      height: 1.25rem;
+      margin-top: 0.15rem;
+      border-radius: 999px;
+      background: var(--rg-line);
+
+      &::before {
+        content: "";
+        position: absolute;
+        top: 1px;
+        left: 1px;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        background: var(--rg-bg);
+        box-shadow: 0 1px 2px #0004;
+
+        @media (prefers-reduced-motion: no-preference) {
+          transition: translate 0.15s;
+        }
+      }
+      &:checked {
+        background-image: none;
+
+        &::before {
+          translate: 1rem 0;
+        }
+      }
+    }
+  }
+}

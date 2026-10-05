@@ -17,6 +17,8 @@ export type SlotEntry<S> = S extends { readonly [KEYED]: true } & { readonly [ke
   ? Entry | undefined
   : S;
 export declare function slotEntry<S>(slot: S, key: string | number): SlotEntry<S>;
+export declare function slotEntryName(key: string | number): string;
+export declare function slotKeys(slot: unknown): string[];
 export declare function isAssigned<S>(slot: S): slot is Exclude<S, NotAssigned | undefined | null>;
 export declare function slotProps<S extends object>(slot: S): S;
 export type NoArgs = { readonly [arg: string]: never };

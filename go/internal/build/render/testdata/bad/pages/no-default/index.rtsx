@@ -1,0 +1,5 @@
+import { Page } from "../../ui/page";
+
+export function NoDefaultPage() {
+  return <Page title="No default" />;
+}

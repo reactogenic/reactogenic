@@ -1,0 +1,93 @@
+// The site's layout: the document from <html>, the header, the side menu,
+// <main>, the footer. An ordinary component that every page renders
+// (specs/phase02/builder.md, *Routes*). Nothing here names a style or a
+// script, and no element has a handler: what a page ships is what its
+// components asked the builder for (plan.md, T6).
+import type { ReactNode } from "react";
+import { DropdownMenu, SideMenu } from "@reactogenic/ui";
+import "./site.css";
+
+const SITE = "Reactogenic";
+const REPOSITORY = "https://github.com/reactogenic/reactogenic";
+
+export interface LayoutProps {
+  /** The page's name in `<title>`; the home page has none. */
+  title?: string;
+  /** `<meta name="description">`. */
+  description: string;
+  children: ReactNode;
+}
+
+export function Layout({ title, description, children }: LayoutProps) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title === undefined ? SITE : `${title} · ${SITE}`}</title>
+        <meta name="description" content={description} />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      </head>
+      <body>
+        <header className="site-header">
+          <a className="site-name" href="/">{SITE}</a>
+          {/* Every item is a link: a disclosure of links, no JS of its own. */}
+          <DropdownMenu align="end">
+            <$Trigger variant="ghost">Links</$Trigger>
+            <$Item key="github" href={REPOSITORY}>GitHub</$Item>
+            <$Item key="npm" href="https://www.npmjs.com/package/@reactogenic/cli">npm</$Item>
+            <$Item key="vscode" href="https://marketplace.visualstudio.com/items?itemName=reactogenic.rtsx">VS Code extension</$Item>
+          </DropdownMenu>
+        </header>
+        {/* The current page is the component's business: it compares each
+            `href` with the page being built, and opens the group around it.
+            A link to a section of a page is no page, so every group starts
+            with the page itself. */}
+        <SideMenu label="Documentation">
+          <$Section key="start">
+            <$Item key="home" href="/">Introduction</$Item>
+          </$Section>
+          <$Section key="learn" title="Learn">
+            <$Item key="guide">
+              Getting started
+              <$Item key="page" href="/guide/">Overview</$Item>
+              <$Item key="install" href="/guide/#install">Install</$Item>
+              <$Item key="vite" href="/guide/#vite">Configure Vite</$Item>
+              <$Item key="check" href="/guide/#check">Type-check</$Item>
+              <$Item key="editor" href="/guide/#editor">Editor</$Item>
+              <$Item key="migrating" href="/guide/#migrating">From .tsx to .rtsx</$Item>
+            </$Item>
+            <$Item key="syntax">
+              Syntax
+              <$Item key="page" href="/syntax/">Overview</$Item>
+              <$Item key="shorthand-props" href="/syntax/#shorthand-props">Shorthand props</$Item>
+              <$Item key="slots" href="/syntax/#slots">Slots</$Item>
+              <$Item key="flow-control" href="/syntax/#flow-control">Flow control</$Item>
+              <$Item key="segment-roots" href="/syntax/#segment-roots">Segment roots</$Item>
+              <$Item key="each" href="/syntax/#each">Each</$Item>
+            </$Item>
+          </$Section>
+          <$Section key="reference" title="Reference">
+            <$Item key="cli">
+              CLI
+              <$Item key="page" href="/reference/cli/">Overview</$Item>
+              <$Item key="check" href="/reference/cli/#check">check</$Item>
+              <$Item key="lsp" href="/reference/cli/#lsp">lsp</$Item>
+              <$Item key="build" href="/reference/cli/#build">build</$Item>
+              <$Item key="content-mapper" href="/reference/cli/#content-mapper">content-mapper</$Item>
+            </$Item>
+          </$Section>
+        </SideMenu>
+        <div className="site-content">
+          <main>{children}</main>
+          <footer className="site-footer">
+            <p>
+              MIT licensed. Built by <code>reactogenic build</code>: there is no React in this page.{" "}
+              <a href={`${REPOSITORY}/tree/main/site`}>Source of this site</a>
+            </p>
+          </footer>
+        </div>
+      </body>
+    </html>
+  );
+}

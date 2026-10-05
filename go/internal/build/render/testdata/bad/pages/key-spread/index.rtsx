@@ -1,0 +1,18 @@
+import { Page } from "../../ui/page";
+
+// A key after a spread is compiled to `createElement`: no position comes
+// with the element — the engine's stack has it.
+function Row(props: { title: string }) {
+  if (props.title === "boom") throw new Error("row " + props.title);
+  return <p>{props.title}</p>;
+}
+
+const rest = { title: "boom" };
+
+export default function KeySpreadPage() {
+  return (
+    <Page title="Key after a spread">
+      <Row {...rest} key="r" />
+    </Page>
+  );
+}

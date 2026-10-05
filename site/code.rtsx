@@ -1,0 +1,16 @@
+// A code sample: plain `<pre><code>` (specs/phase02/builder.md, *Not in
+// phase 2*: no highlighting). The text is a template-literal constant of the
+// module that shows it; the label says what it is — a file name, `.rtsx`,
+// `.tsx`.
+import { Match } from "@reactogenic/core";
+
+export function Code({ label, children }: { label?: string; children: string }) {
+  return (
+    <figure className="code">
+      <Match on={label}>
+        <figcaption>{label}</figcaption>
+      </Match>
+      <pre><code>{children}</code></pre>
+    </figure>
+  );
+}

@@ -1,0 +1,34 @@
+// Checkbox: the platform's own, restyled — or, with `variant="switch"`, a
+// switch (`role="switch"`). No JS. A fixture (bench/catalog/README.md).
+import type { ReactNode } from "react";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./checkbox.css";
+
+export interface CheckboxProps {
+  name: string;
+  /** Beside the box: what it turns on. */
+  label: ReactNode;
+  /** Under the label. */
+  hint?: ReactNode;
+  value?: string;
+  /** Checked as the page loads. */
+  checked?: boolean;
+  required?: boolean;
+  disabled?: boolean;
+  /** Option: `data-variant`. Default "checkbox". */
+  variant?: "checkbox" | "switch";
+}
+
+export function Checkbox({ name, label, hint, value, checked, required, disabled, variant }: CheckboxProps) {
+  const isSwitch = variant === "switch";
+  return (
+    <label className="bc-check" data-variant={isSwitch ? "switch" : undefined}>
+      <input type="checkbox" role={isSwitch ? "switch" : undefined} name value defaultChecked={checked} required disabled />
+      <span data-part="text">
+        {label}
+        {hint !== undefined ? <span data-part="hint">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}

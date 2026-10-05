@@ -1,0 +1,38 @@
+import { Each, Switch } from "@reactogenic/core";
+import { Dialog } from "../../../ui/dialog";
+import { DocsLayout } from "../../../ui/layout";
+import { useShellId } from "~/shell.ts";
+
+type Command = { name: string; kind: "stable" | "experimental" | "hidden" };
+
+const COMMANDS: readonly Command[] = [
+  { name: "check", kind: "stable" },
+  { name: "build", kind: "experimental" },
+  { name: "serve", kind: "hidden" },
+];
+
+function Badge({ kind }: { kind: Command["kind"] }) {
+  return (
+    <Switch on={kind}>
+      <$Case is="stable"><b>stable</b></$Case>
+      <$Case is="experimental"><i>experimental</i></$Case>
+    </Switch>
+  );
+}
+
+export default function CliPage() {
+  const list = useShellId();
+  return (
+    <DocsLayout title="CLI">
+      <ul id={list}>
+        <Each items={COMMANDS} { item, index }>
+          <li key={item.name} data-index={index}>
+            <code>{item.name}</code> <Badge kind={item.kind} />
+          </li>
+        </Each>
+      </ul>
+      <Dialog title="check">Type-checks the project.</Dialog>
+      <Dialog title="build" modal>Builds the site.</Dialog>
+    </DocsLayout>
+  );
+}

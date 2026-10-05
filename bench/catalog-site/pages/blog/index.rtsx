@@ -1,0 +1,71 @@
+// "/blog/": one post — its author, its tags, a pull-out, a sample that is
+// shown and not copied (README.md: a fixture).
+import { Avatar, Badge, Callout, CodeBlock } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+const BEFORE = `# before: the cache key was the lockfile's mtime
+cache-key = stat("pnpm-lock.yaml").mtime   # changes on every fresh clone
+
+# after: the key is the file's content
+cache-key = sha256("pnpm-lock.yaml")       # the same on every machine`;
+
+export default function Page() {
+  return (
+    <Layout title="Why your first build was always the slow one" description="A cache keyed by a file's modification time misses on every fresh clone. How we found it, what it cost, and the one-line fix.">
+      <article className="prose">
+        <h1>Why your first build was always the slow one</h1>
+        <div className="byline">
+          <Avatar name="Priya Raman" size="sm" />
+          <span>Priya Raman · <time dateTime="2026-09-30">30 September 2026</time> · 6 min read</span>
+          <span className="tags">
+            <Badge variant="outline">Engineering</Badge>
+            <Badge variant="outline">Build cache</Badge>
+          </span>
+        </div>
+        <p className="lead">
+          For two years the first build of every CI run reinstalled its dependencies from nothing. We blamed cold
+          runners. The runners were fine.
+        </p>
+        <p>
+          A build cache is a bet that the inputs have not changed. Ours asked the cheapest question it could: has the
+          lockfile been touched since last time? On a laptop that question has a useful answer. On a CI runner, every
+          job starts from a fresh clone — and a fresh clone gives every file the time of the clone.
+        </p>
+        <p>
+          So the cache was written faithfully at the end of each run, under a key that no later run would ever compute
+          again. The hit rate on first builds was not low. It was zero, and had been since the feature shipped.
+        </p>
+        <h2>How it stayed hidden</h2>
+        <p>
+          Second builds in the same job hit the cache every time, and those are the builds people watch. Our dashboards
+          averaged the two. A hit rate of 61% looks like a cache that mostly works; it was one that always worked in
+          one place and never in the other.
+        </p>
+        <Callout>
+          <$Title>The tell</$Title>
+          <p>
+            Split a rate by the thing you suspect before you trust it. Ours, split by "first build of the job", was
+            two flat lines: 100% and 0%.
+          </p>
+        </Callout>
+        <h2>The fix</h2>
+        <p>The key is now the content of the lockfile, not its time. The whole change:</p>
+        <CodeBlock title="cache.conf" wrap>{BEFORE}</CodeBlock>
+        <p>
+          Hashing a lockfile costs about four milliseconds. The median first build went from 3 min 12 s to 48 s, and
+          the 2.4.0 <a href="/changelog/">release</a> has it for everyone. Nothing in your config changes.
+        </p>
+        <h2>What we changed besides the key</h2>
+        <ul>
+          <li>Every cache now reports its hit rate per position in the job, not per job.</li>
+          <li>A cache whose hit rate is 0% for a week pages its owner. It should have paged us in 2024.</li>
+          <li>The build log says why a cache missed: the key it looked for, and the nearest key it found.</li>
+        </ul>
+        <p>
+          If your builds were slow on the first step and you had stopped noticing: so had we. Try the{" "}
+          <a href="/docs/">quickstart</a> on a clean branch and look at the first line of the log.
+        </p>
+      </article>
+    </Layout>
+  );
+}

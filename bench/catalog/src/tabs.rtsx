@@ -1,0 +1,62 @@
+// Tabs: panels of which one is shown. The platform has no tab element, so
+// this one needs a behaviour: `tabs` — a click, the arrow keys, Home, End.
+// Without the script the first panel is shown and the others are not
+// reachable: said in bench/catalog/README.md. A fixture.
+import type { ReactNode } from "react";
+import { mount, slotEntry, slotKeys, useShellId, type KeyedSlot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./tabs.css";
+
+export interface TabProps {
+  /** The tab's own text. */
+  label: ReactNode;
+  /** The panel. */
+  children?: ReactNode;
+}
+
+export interface TabsProps {
+  /** Names the tabs: a tab is `<id>-<key>`, which a link may name (`hash`). Generated when absent. */
+  id?: string;
+  /** The tab list's name. */
+  label: string;
+  /** Option: `data-variant`. Default "line". */
+  variant?: "line" | "pills";
+  /** Option: the tab the URL's hash names is the one shown (`#<id>-<key>`), and follows it. */
+  hash?: boolean;
+  /** In order; the first is shown. A key is part of an `id`: a word. */
+  $Tab: KeyedSlot<TabProps>;
+}
+
+export function Tabs({ id, label, variant, hash, $Tab }: TabsProps) {
+  const generated = useShellId("t");
+  const tabs = id ?? generated;
+  const keys = slotKeys($Tab);
+  // The flag is the page's: whether the hash code is in its script. That
+  // these tabs follow the hash is this mount's data (builder.md, *Behaviours*).
+  mount("@reactogenic/bench-catalog/behaviors/tabs", tabs, { RG_TABS_HASH: hash === true }, hash ? { hash: true } : undefined);
+  return (
+    <div id={tabs} className="bc-tabs" data-variant={variant === "pills" ? variant : undefined}>
+      <div role="tablist" aria-label={label}>
+        {keys.map((key, index) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            id={`${tabs}-${key}`}
+            aria-selected={index === 0 ? "true" : "false"}
+            aria-controls={`${tabs}-${key}-p`}
+            tabIndex={index === 0 ? undefined : -1}
+          >
+            {slotEntry($Tab, key)!.label}
+          </button>
+        ))}
+      </div>
+      {keys.map((key, index) => (
+        <div key={key} role="tabpanel" id={`${tabs}-${key}-p`} aria-labelledby={`${tabs}-${key}`} tabIndex={0} hidden={index !== 0}>
+          {slotEntry($Tab, key)!.children}
+        </div>
+      ))}
+    </div>
+  );
+}

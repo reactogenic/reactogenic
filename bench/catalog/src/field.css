@@ -1,0 +1,111 @@
+@layer rg.components {
+  .bc-field {
+    display: grid;
+    align-content: start;
+    gap: 0.375rem;
+    margin: 0 0 1.25rem;
+
+    > label {
+      font-size: 0.875rem;
+      font-weight: 600;
+
+      > [data-part="required"] {
+        margin-inline-start: 0.25em;
+        color: var(--bc-danger);
+      }
+    }
+    /* The box is the control's: a prefix and a button stand inside it. */
+    > [data-part="control"] {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--rg-line);
+      border-radius: var(--rg-radius);
+      background: var(--rg-bg);
+
+      &:focus-within {
+        border-color: var(--rg-accent);
+        outline: var(--bc-ring);
+        outline-offset: -1px;
+      }
+      &:has(> :disabled) {
+        background: var(--bc-surface);
+        color: var(--rg-muted);
+      }
+      > :is(input, textarea) {
+        flex: 1;
+        box-sizing: border-box;
+        min-width: 0;
+        padding: 0.5rem 0.75rem;
+        border: 0;
+        border-radius: inherit;
+        background: none;
+        color: inherit;
+        font: inherit;
+        outline: 0;
+
+        &::placeholder {
+          color: var(--rg-muted);
+          opacity: 1;
+        }
+        &:disabled {
+          cursor: not-allowed;
+        }
+      }
+      > textarea {
+        min-height: 6rem;
+        resize: vertical;
+      }
+      > [data-part="prefix"] {
+        display: flex;
+        align-items: center;
+        padding: 0 0.75rem;
+        border-inline-end: 1px solid var(--rg-line);
+        background: var(--bc-surface);
+        color: var(--rg-muted);
+      }
+      > [data-part="reveal"] {
+        padding: 0 0.75rem;
+        border: 0;
+        border-inline-start: 1px solid var(--rg-line);
+        background: none;
+        color: var(--rg-muted);
+        font: inherit;
+        font-size: 0.8125rem;
+        cursor: pointer;
+
+        &:hover {
+          color: var(--rg-fg);
+        }
+        /* The password is shown: the button says "Hide", and is marked. */
+        &[aria-pressed="true"] {
+          color: var(--rg-accent);
+          font-weight: 600;
+        }
+      }
+    }
+    > :is([data-part="hint"], [data-part="error"], [data-part="count"]) {
+      margin: 0;
+      color: var(--rg-muted);
+      font-size: 0.8125rem;
+    }
+    > [data-part="count"] {
+      justify-self: end;
+      font-variant-numeric: tabular-nums;
+
+      /* Written by the `field` behaviour, by this name: the limit is reached. */
+      &[data-full] {
+        color: var(--bc-danger);
+        font-weight: 600;
+      }
+    }
+    /* Invalid: the border and the message, and the message is text. */
+    &[data-invalid] {
+      > [data-part="control"] {
+        border-color: var(--bc-danger);
+      }
+      > [data-part="error"] {
+        color: var(--bc-danger);
+      }
+    }
+  }
+}

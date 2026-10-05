@@ -1,7 +1,7 @@
 // Type-level tests: `tsc --noEmit` (pnpm typecheck) fails if an expectation
 // breaks. syntax.md, *Slots*.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, SLOT_KEY, slotEntry, type KeyedSlot, type Slot } from "./index.ts";
+import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, SLOT_KEY, slotEntry, slotEntryName, slotKeys, type KeyedSlot, type Slot } from "./index.ts";
 
 // Slot<P> is the complete contract: a body only if `children` is in it.
 type Box = Slot<{ color: string }>;
@@ -54,6 +54,17 @@ export const m1: Column = { [KEYED]: true, email: { width: 2 }, name: { children
 export const m2: Column = { [KEYED]: true, email: { widht: 2 } };
 type Cell = KeyedSlot<{ className?: string }, { row: number }>;
 export const m3: Cell = { [KEYED]: true, total: { children: ({ row }) => row } };
+// What `key="10"` and `key={expr}` compile to: an encoded name, the entry's
+// props checked all the same.
+declare const id: string | number;
+export const m4: Column = { [KEYED]: true, "#10": { width: 2 }, [slotEntryName(id)]: { children: "Name" } };
+// @ts-expect-error `widht` is not a prop of an entry
+export const m5: Column = { [KEYED]: true, [slotEntryName(id)]: { widht: 2 } };
+// @ts-expect-error a key is a string or a number
+export const m6: string = slotEntryName(() => "a");
+// A container iterates the keys as written, whatever the slot is.
+declare const maybe: Column | undefined;
+export const m7: string[] = slotKeys(maybe);
 // An attachment with `key` gets the entry of a keyed slot, the slot itself otherwise.
 declare const columns: Column;
 export const e1: { width?: number; children?: ReactNode } | undefined = slotEntry(columns, "email");

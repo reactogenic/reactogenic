@@ -1,0 +1,73 @@
+// Dialog (specs/phase02/components.md): a live modal `<dialog>` where it is
+// written. Opening, closing, focus and the inert page are the browser's.
+import type { ComponentProps, ReactNode } from "react";
+import { Each, isAssigned, mount, slotKeys, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import { Button, type ButtonLinkProps, type TriggerProps } from "./button.rtsx";
+import "./tokens.css";
+import "./dialog.css";
+
+/** A footer button: a link — or a button, which closes the dialog. */
+export type DialogActionProps = ButtonLinkProps | TriggerProps;
+
+export interface DialogProps {
+  /** Names the dialog for a button elsewhere: `command="show-modal" commandfor="…"`. Generated when absent. */
+  id?: string;
+  /** Option: how the user may dismiss it — HTML's attribute and meaning. Default "any". */
+  closedby?: "any" | "closerequest" | "none";
+  /** A button rendered where the dialog is written, which opens it. */
+  $Trigger?: Slot<TriggerProps>;
+  /** The accessible name. */
+  $Title: Slot<ComponentProps<"h2">>;
+  /** Footer buttons, in the order written. Each closes the dialog unless it is a link. */
+  $Action?: KeyedSlot<DialogActionProps>;
+  /** Content: the accessible name of the close button. Default "Close". */
+  closeLabel?: string;
+  /** The body. */
+  children?: ReactNode;
+}
+
+// With `href` a link; otherwise it closes the dialog `dialog` names. Two
+// elements, because a link takes no command (`ButtonLinkProps`).
+function Action({ dialog, ...action }: DialogActionProps & { dialog: string }) {
+  return action.href !== undefined ? <Button {...action} /> : <Button command="close" commandfor={dialog} {...action} />;
+}
+
+export function Dialog({ id, closedby = "any", closeLabel = "Close", $Trigger, $Title, $Action, children }: DialogProps) {
+  const generated = useShellId("d");
+  const dialog = id ?? generated;
+  // A slot's props replace the attachment's: the author's `id` on the title is
+  // then the one the dialog is named by.
+  const title = (isAssigned($Title) ? $Title.id : undefined) ?? dialog + "-t";
+  // Page-level, both: Back must not restore it open; its buttons are dead
+  // below the floor without the fallback (components.md, *Behaviours*).
+  mount("@reactogenic/ui/behaviors/overlays");
+  mount("@reactogenic/ui/behaviors/invokers");
+  return (
+    <>
+      <Button slot={$Trigger} command="show-modal" commandfor={dialog} />
+      <dialog id={dialog} className="rg-dialog" closedby aria-labelledby={title}>
+        <div data-part="panel">
+          <header>
+            <h2 slot={$Title} id={title} />
+            {/* The first focusable element of the dialog, so that is where focus goes when it opens. */}
+            <button type="button" data-part="close" command="close" commandfor={dialog} aria-label={closeLabel}>✕</button>
+          </header>
+          <div data-part="body">{children}</div>
+          {$Action !== undefined ? (
+            <footer>
+              <Each items={slotKeys($Action)} { item: key }>
+                <Action key={key} slot={$Action} dialog />
+              </Each>
+            </footer>
+          ) : null}
+        </div>
+        {/* Light dismiss where `closedby` is missing (Safari): the dialog is the
+            whole viewport and this is everything around the panel. After the
+            panel, or the dialog would focus it first. A button of the dialog,
+            not a `<form method="dialog">`: inside the author's own form the
+            parser drops a nested form, and its button would submit theirs. */}
+        {closedby === "any" ? <button type="button" data-part="scrim" command="close" commandfor={dialog} tabIndex={-1} aria-hidden="true" /> : null}
+      </dialog>
+    </>
+  );
+}

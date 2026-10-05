@@ -1,0 +1,158 @@
+// "/syntax/": a tour of what .rtsx adds to TSX (specs/phase01/syntax.md).
+// The body is five segments, one file each, mounted by name. The menu has an
+// action item — it opens the cheat sheet — so it is a `role="menu"` and this
+// is the one page that ships the arrow keys, with typeahead
+// (specs/phase02/components.md, *DropdownMenu*).
+import { Each, Match } from "@reactogenic/core";
+import { Dialog, DropdownMenu } from "@reactogenic/ui";
+import { Layout } from "../../layout.rtsx";
+
+const SPECIFICATION = "https://github.com/reactogenic/reactogenic/blob/main/specs/phase01/syntax.md";
+
+const RESERVED = [
+  { form: "{ a, b }", also: "{}", use: "slot params" },
+  { form: "&name", also: "&&name", use: "slot args" },
+  { form: "#name", use: "segment roots" },
+];
+
+const PASSES = [
+  { pass: "checks on the source", does: "segment files — reported against what you wrote" },
+  { pass: "shorthand props", does: "a bare attribute becomes name={name}, while the source's scopes are intact" },
+  { pass: "flow lowering", does: "Match and Switch become conditional expressions" },
+  { pass: "slots", does: "attachments become conditional elements; slot elements become $X props; params become callbacks" },
+  { pass: "segment roots", does: "#name becomes an id, an import and a nested element" },
+];
+
+const CHEAT_SHEET: { write: string; becomes?: string; note: string }[] = [
+  { write: "<Input value />", becomes: "value={value}", note: "when value is bound in the module's scope chain; otherwise true, as in TSX" },
+  { write: '<$Icon className="i">…</$Icon>', becomes: '$Icon={{ className: "i", children: … }}', note: "a slot element is the prop of its parent component" },
+  { write: "<$Icon { size }>…</$Icon>", becomes: "children: ({ size }) => …", note: "params: the values the component hands out" },
+  { write: '<$Column key="email" />', becomes: '$Column={{ [KEYED]: true, "email": {} }}', note: "with a key: one entry of a KeyedSlot" },
+  { write: "<span slot={$Icon}>★</span>", note: "in the component: the slot renders as this element; the children are the fallback" },
+  { write: "<span slot={$Icon} &size &&value={x} />", note: "on an attachment: an arg for the slot's body; && is an arg and a prop" },
+  { write: "<Match on={user}>…</Match>", becomes: "{user ? … : null}", note: "the body is inline, so user is narrowed in it" },
+  { write: '<Switch on={s}><$Case is="a">…</$Case></Switch>', becomes: '{s === "a" ? … : null}', note: "first match wins; with exhaustive a missing case is a type error" },
+  { write: "<Each items { item, index }>…</Each>", becomes: "<Each items={items}>{({ item, index }) => …}</Each>", note: "a runtime component; the key goes on the body's root element" },
+  { write: "<section #pricing />", becomes: '<section id="pricing"><_Section_pricing /></section>', note: "the default export of ./pricing.rtsx, imported under that name" },
+];
+
+export default function Page() {
+  return (
+    <Layout title="Syntax" description="A tour of the .rtsx syntax: shorthand props, slots, flow control, segment roots and Each — each form with the TSX it becomes.">
+      <h1>Syntax</h1>
+      <p className="lead">
+        <code>.rtsx</code> is a superset of <code>.tsx</code>. This page lists everything it adds, each form with
+        the <code>.tsx</code> it becomes: that is what TypeScript 7 checks and what Vite runs.
+      </p>
+      <div className="actions">
+        <DropdownMenu typeahead>
+          <$Trigger>Reference</$Trigger>
+          <$Item key="cheat-sheet" command="show-modal" commandfor="cheat-sheet">Cheat sheet…</$Item>
+          <$Item key="specification" href={SPECIFICATION}>Specification on GitHub</$Item>
+          <$Item key="guide" href="/guide/">Getting started</$Item>
+        </DropdownMenu>
+        <Dialog id="cheat-sheet">
+          <$Title>Cheat sheet</$Title>
+          <table className="cheat-sheet">
+            <thead>
+              <tr>
+                <th>You write</th>
+                <th>It means</th>
+              </tr>
+            </thead>
+            <tbody>
+              <Each items={CHEAT_SHEET} { item: row }>
+                <tr key={row.write}>
+                  <td><code>{row.write}</code></td>
+                  <td>
+                    <Match on={row.becomes}>
+                      <code>{row.becomes}</code>
+                      <br />
+                    </Match>
+                    {row.note}
+                  </td>
+                </tr>
+              </Each>
+            </tbody>
+          </table>
+        </Dialog>
+      </div>
+
+      <h2 id="rule">The governing rule</h2>
+      <p>
+        New meaning goes only to forms that are <strong>syntax errors in today's TSX</strong> — rejected by the
+        compilers that build it, esbuild and Babel. No existing program uses such a form, so it is safe to reserve.
+        A form that already parses keeps its React meaning.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Reserved, in attribute position</th>
+            <th>Used by</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={RESERVED} { item: row }>
+            <tr key={row.form}>
+              <td>
+                <code>{row.form}</code>
+                <Match on={row.also}>
+                  , <code>{row.also}</code>
+                </Match>
+              </td>
+              <td>{row.use}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <p>Three forms that parse today change meaning, and only these:</p>
+      <ul>
+        <li>
+          a bare attribute, when a binding of the same name is in scope (<a href="#shorthand-props">shorthand props</a>);
+        </li>
+        <li>
+          a tag that starts with <code>$</code>: a slot element, never a component (<a href="#slots">slots</a>);
+        </li>
+        <li>
+          <code>{"slot={$X}"}</code>, when the value is a <code>$</code> reference: it renders a slot.{" "}
+          <code>slot="header"</code> keeps its HTML meaning.
+        </li>
+      </ul>
+
+      <h2 id="passes">Compilation passes</h2>
+      <p>
+        The desugarings are a sequence of small transforms. Each pass sees the output of the one before, so the
+        features compose without special cases: a slot can be filled conditionally only because slots are compiled
+        after <code>Match</code>.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Pass</th>
+            <th>Does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Each items={PASSES} { item: row, index }>
+            <tr key={row.pass}>
+              <td>{index}</td>
+              <td>{row.pass}</td>
+              <td>{row.does}</td>
+            </tr>
+          </Each>
+        </tbody>
+      </table>
+      <p>
+        The transpiler is purely syntactic: it never reads a type to decide what to emit. Types are TypeScript's
+        job, on the emitted code, and its errors are mapped back to the <code>.rtsx</code>.
+      </p>
+
+      <section #shorthand-props />
+      <section #slots />
+      <section #flow-control />
+      <section #segment-roots />
+      <section #each />
+    </Layout>
+  );
+}

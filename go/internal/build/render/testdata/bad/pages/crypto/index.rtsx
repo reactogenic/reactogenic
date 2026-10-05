@@ -1,0 +1,9 @@
+import { Page } from "../../ui/page";
+
+export default function CryptoPage() {
+  return (
+    <Page title="crypto">
+      <p>{crypto.getRandomValues(new Uint8Array(4)).join("")}</p>
+    </Page>
+  );
+}

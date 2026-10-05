@@ -186,6 +186,7 @@ func fromTS(d *rtsx.Diagnostic) Report {
 		return r
 	}
 	virtual := virtualSpan(d)
+	more := d.RelatedInformation() // TS's own, after the rewrite's
 	r.File, r.Span, r.Line, r.Col = position(file, virtual)
 	if f, ok := mapper.Of(file); ok && f.Map != nil {
 		source, _, _, _ := rtsx.MappedFile(file)
@@ -198,11 +199,15 @@ func fromTS(d *rtsx.Diagnostic) Report {
 			r.Code, r.Message, r.Related = code, message, related
 			if code == "slot-key-inline" {
 				r.supersede = innermostNote(f.Notes, r.at).Tag
+				// TS's own hint for a function where a value is wanted —
+				// "Did you mean to call this expression?" — is not the
+				// advice: the message says to write the function inline.
+				more = nil
 			}
 		}
 		r.Message = renameGenerated(r.Message, f.Generated)
 	}
-	for _, rel := range d.RelatedInformation() {
+	for _, rel := range more {
 		rr := Report{Severity: Message, Message: flatten(rel)}
 		if rel.File() != nil {
 			rr.File, rr.Span, rr.Line, rr.Col = position(rel.File(), virtualSpan(rel))

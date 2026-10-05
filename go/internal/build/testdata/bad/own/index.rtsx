@@ -1,0 +1,16 @@
+// shell-script: a page with a script of its own — a `<script>` that runs,
+// an event handler attribute, a `javascript:` URL. Page-author JS is
+// deferred: each is an error. The data block is not one.
+import { Page } from "../page.tsx";
+
+export default function OwnPage() {
+  return (
+    <Page title="Own">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: `{"@type":"WebPage"}` }} />
+      <script dangerouslySetInnerHTML={{ __html: `document.documentElement.classList.add("dark")` }} />
+      <script src="/theme.js" />
+      <div dangerouslySetInnerHTML={{ __html: `<button onclick="go()">Go</button>` }} />
+      <a href="javascript:void 0">Nowhere</a>
+    </Page>
+  );
+}

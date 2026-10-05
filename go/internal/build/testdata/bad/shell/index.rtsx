@@ -1,0 +1,19 @@
+// shell-error: the page throws while it renders.
+import { Page } from "../page.tsx";
+
+const PRICES: Record<string, number> = { free: 0, team: 12 };
+
+function Price({ plan }: { plan: string }) {
+  const price = PRICES[plan];
+  if (price === undefined) throw new Error(`no price for ${plan}`);
+  return <b>{price}</b>;
+}
+
+export default function ShellPage() {
+  return (
+    <Page title="Shell">
+      <Price plan="team" />
+      <Price plan="enterprise" />
+    </Page>
+  );
+}

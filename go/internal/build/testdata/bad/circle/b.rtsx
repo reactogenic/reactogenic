@@ -1,0 +1,5 @@
+import { A } from "./a.rtsx";
+
+export function B({ depth }: { depth: number }) {
+  return depth > 0 ? <A depth={depth - 1} /> : <b>b</b>;
+}

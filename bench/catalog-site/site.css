@@ -1,0 +1,391 @@
+/* The catalog site's own CSS, imported by layout.rtsx (README.md: a
+   measurement fixture). Unlayered, so it wins over the components' layers —
+   which is why nothing here is a bare `a`, `h2` or `ul`: text is styled as a
+   child of <main> or of one of its sections (components.md, *Known limits*).
+
+   One file for the site: the page grid and the text every page has, and what
+   a page lays out itself — the hero, the grids, the forms. Pruning takes a
+   page's sheet down to what the page has an element for. */
+:root {
+  --site-header: 3.5rem;
+  /* The table's sticky header stays under the site's. */
+  --bc-sticky-top: var(--site-header);
+  scroll-padding-top: calc(var(--site-header) + 1rem);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--rg-bg);
+  color: var(--rg-fg);
+  font:
+    1rem/1.6 system-ui,
+    sans-serif;
+}
+
+/* The page: a header over the side column and the content. */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  height: var(--site-header);
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--rg-line);
+  background: var(--rg-bg);
+}
+.site-name {
+  margin-inline-end: auto;
+  color: inherit;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+.site-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: calc(100dvh - var(--site-header));
+}
+main {
+  flex: 1;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 60rem;
+  padding: 1.5rem 1rem 3rem;
+}
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 2rem;
+  padding: 1.25rem 1rem;
+  border-top: 1px solid var(--rg-line);
+  color: var(--rg-muted);
+  font-size: 0.875rem;
+}
+.site-footer > nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}
+.site-footer > nav > a {
+  color: inherit;
+}
+.site-footer > p {
+  margin: 0;
+}
+/* Above the breakpoint the side menu is a column (50rem: the design
+   system's, written out — a media query cannot read a custom property). The
+   component sticks to the top of the viewport; here it sits below the
+   header. */
+@media (width >= 50rem) {
+  body {
+    display: grid;
+    grid-template: "header header" auto "nav content" 1fr / 15rem minmax(0, 1fr);
+  }
+  .site-header {
+    grid-area: header;
+  }
+  .site-content {
+    grid-area: content;
+  }
+  .rg-sidemenu {
+    top: var(--site-header);
+    height: calc(100dvh - var(--site-header));
+  }
+  main {
+    padding: 2rem 2rem 4rem;
+  }
+  .site-footer {
+    padding-inline: 2rem;
+  }
+}
+/* Below it the menu is a drawer, and its button is fixed to the corner: the
+   header leaves it room. */
+@media (width < 50rem) {
+  .site-header {
+    padding-inline-start: 3.75rem;
+  }
+}
+
+/* Text: the children of <main> and of its sections. */
+:is(main, main > section, main > article) > h1 {
+  margin: 0 0 0.75rem;
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+:is(main, main > section, main > article) > h2 {
+  margin: 2.5rem 0 0.75rem;
+  font-size: 1.375rem;
+  line-height: 1.3;
+}
+:is(main, main > section, main > article) > h3 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.0625rem;
+}
+:is(main, main > section, main > article) > :is(p, ul, ol) {
+  margin: 0 0 1rem;
+}
+:is(main, main > section, main > article) > :is(p, ul, ol) a {
+  color: var(--rg-accent);
+  text-underline-offset: 0.15em;
+}
+:is(main, main > section, main > article) > :is(ul, ol) {
+  padding-inline-start: 1.5rem;
+}
+.lead {
+  max-width: 40rem;
+  color: var(--rg-muted);
+  font-size: 1.125rem;
+}
+main code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: var(--rg-hover);
+  font: 0.875em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+main pre code {
+  padding: 0;
+  background: none;
+}
+main kbd {
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--rg-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font: 0.8125em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+/* The home page: the hero, the features, what people say. */
+.hero {
+  padding: 2.5rem 0 1.5rem;
+}
+.hero > h1 {
+  max-width: 18ch;
+  margin: 0.75rem 0;
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+.hero > .lead {
+  font-size: 1.25rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.grid p:not([class]) {
+  margin: 0;
+  color: var(--rg-muted);
+}
+.quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.quote {
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--rg-line);
+  border-radius: 12px;
+}
+.quote > blockquote {
+  margin: 0 0 1rem;
+  font-size: 1.0625rem;
+}
+.quote > figcaption {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+.quote > figcaption > span > small {
+  display: block;
+  color: var(--rg-muted);
+}
+
+/* Pricing: a plan's price, and what it holds. */
+.price {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--rg-fg);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.price > small {
+  color: var(--rg-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+.plan-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  color: var(--rg-fg);
+  font-size: 0.9375rem;
+  list-style: none;
+}
+.plan-list > li {
+  padding: 0.3rem 0 0.3rem 1.5rem;
+  background: linear-gradient(var(--bc-success), var(--bc-success)) 0.25rem 0.85rem / 0.6rem 2px no-repeat;
+}
+
+/* An article: the docs, the blog, the changelog. */
+.prose {
+  max-width: 44rem;
+}
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  color: var(--rg-muted);
+  font-size: 0.875rem;
+}
+.byline > .tags {
+  display: inline-flex;
+  gap: 0.375rem;
+  margin-inline-start: auto;
+}
+.release {
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--rg-line);
+}
+.release > h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+.release > h2 > time {
+  color: var(--rg-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+.release > ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.release > ul > li {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+}
+
+/* The dashboard: figures in a row, then two columns. */
+.figure {
+  margin: 0;
+  color: var(--rg-fg);
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.trend {
+  color: var(--rg-muted);
+  font-size: 0.8125rem;
+}
+.split {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (min-width: 64rem) {
+  .split {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+.panel {
+  padding: 1.25rem;
+  border: 1px solid var(--rg-line);
+  border-radius: 12px;
+}
+.panel > h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+.toolbar > h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+/* Forms: one column, a row of actions under it. */
+.form {
+  max-width: 32rem;
+}
+.form > fieldset {
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border: 0;
+}
+.form > fieldset > legend {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  font-weight: 600;
+}
+.form-row {
+  display: grid;
+  gap: 0 1rem;
+}
+@media (min-width: 36rem) {
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1.5rem;
+}
+.profile > p {
+  margin: 0;
+  color: var(--rg-muted);
+  font-size: 0.875rem;
+}
+.profile > p > strong {
+  display: block;
+  color: var(--rg-fg);
+  font-size: 1rem;
+}
+
+/* Not found. */
+.not-found {
+  padding: 4rem 0;
+  text-align: center;
+}
+.not-found > .code {
+  margin: 0;
+  color: var(--rg-muted);
+  font: 700 4rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.not-found > .actions {
+  justify-content: center;
+}

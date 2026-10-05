@@ -1,0 +1,27 @@
+// "/guide/flow/": a menu with an action — so `role="menu"` and its keys —
+// with typeahead; and a menu of links at the end of a tall page, to flip.
+import { DropdownMenu } from "@reactogenic/ui";
+import { DocsLayout } from "../../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <DocsLayout title="Flow control">
+      <h1>Flow control</h1>
+      <DropdownMenu id="actions" typeahead>
+        <$Trigger>Actions</$Trigger>
+        <$Item key="shortcuts" command="show-modal" commandfor="shortcuts">Keyboard shortcuts…</$Item>
+        <$Item key="source" href="https://github.com/reactogenic/reactogenic">Source</$Item>
+        <$Item key="print" disabled>Print</$Item>
+        <$Item key="spec" href="/guide/slots/">Spec</$Item>
+      </DropdownMenu>{" "}
+      <a id="after" href="/">The link after the menu</a>
+      <div className="tall" />
+      <DropdownMenu id="more">
+        <$Trigger>More</$Trigger>
+        <$Item key="intro" href="/">Introduction</$Item>
+        <$Item key="slots" href="/guide/slots/">Slots</$Item>
+        <$Item key="actions" href="/actions/">Actions</$Item>
+      </DropdownMenu>
+    </DocsLayout>
+  );
+}

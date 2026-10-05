@@ -1,0 +1,7 @@
+import { useState } from "react";
+
+// A dynamic segment's component: state. No shell renders it.
+export function Stepper() {
+  const [n] = useState(0);
+  return <output>{n}</output>;
+}

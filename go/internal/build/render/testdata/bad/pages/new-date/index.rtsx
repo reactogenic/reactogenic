@@ -1,0 +1,12 @@
+import { Page } from "../../ui/page";
+
+// A date with arguments is a compile-time value; one without is the clock.
+const released = new Date(2026, 9, 4).getFullYear();
+
+export default function NewDatePage() {
+  return (
+    <Page title="new Date">
+      <p>© {released}–{new Date().getFullYear()}</p>
+    </Page>
+  );
+}

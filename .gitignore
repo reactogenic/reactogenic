@@ -1,4 +1,6 @@
 node_modules/
+# every build output: the packages', and what `reactogenic build` writes
+# (site/dist; `--out` defaults to `dist` next to the tsconfig)
 dist/
 coverage/
 *.log
@@ -14,3 +16,6 @@ packages/*/LICENSE
 
 # release tokens (scripts/release.sh publish-vsix): never committed
 .env.release
+
+# written by the tests of packages/ui: the spec's examples, the stand-in build
+packages/ui/.examples/

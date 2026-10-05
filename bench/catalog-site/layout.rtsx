@@ -1,0 +1,77 @@
+// The catalog site's layout: the document from <html>, the header, the side
+// menu, <main>, the footer. A measurement fixture (README.md). As on the
+// docs site, nothing here names a style or a script: what a page ships is
+// what its components asked the builder for.
+import type { ReactNode } from "react";
+import { Button, DropdownMenu, SideMenu } from "@reactogenic/bench-catalog";
+import "./site.css";
+
+const SITE = "Exemplar";
+
+export interface LayoutProps {
+  /** The page's name in `<title>`; the home page has none. */
+  title?: string;
+  /** `<meta name="description">`. */
+  description: string;
+  children: ReactNode;
+}
+
+export function Layout({ title, description, children }: LayoutProps) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title === undefined ? `${SITE} — deploys you can reason about` : `${title} · ${SITE}`}</title>
+        <meta name="description" content={description} />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      </head>
+      <body>
+        <header className="site-header">
+          <a className="site-name" href="/">{SITE}</a>
+          {/* Every item is a link: a disclosure of links, no JS of its own. */}
+          <DropdownMenu align="end">
+            <$Trigger variant="ghost">Resources</$Trigger>
+            <$Item key="docs" href="/docs/">Documentation</$Item>
+            <$Item key="api" href="/docs/api/">API reference</$Item>
+            <$Item key="changelog" href="/changelog/">Changelog</$Item>
+            <$Item key="blog" href="/blog/">Blog</$Item>
+            <$Item key="status" href="https://status.exemplar.example/">System status</$Item>
+          </DropdownMenu>
+          <Button href="/dashboard/">Sign in</Button>
+        </header>
+        <SideMenu label="Site">
+          <$Section key="product" title="Product">
+            <$Item key="home" href="/">Overview</$Item>
+            <$Item key="pricing" href="/pricing/">Pricing</$Item>
+            <$Item key="changelog" href="/changelog/">Changelog</$Item>
+            <$Item key="blog" href="/blog/">Blog</$Item>
+          </$Section>
+          <$Section key="docs" title="Documentation">
+            <$Item key="quickstart" href="/docs/">Quickstart</$Item>
+            <$Item key="api" href="/docs/api/">API reference</$Item>
+          </$Section>
+          <$Section key="account" title="Account">
+            <$Item key="dashboard" href="/dashboard/">Dashboard</$Item>
+            <$Item key="settings" href="/settings/">Settings</$Item>
+          </$Section>
+          <$Section key="company" title="Company">
+            <$Item key="contact" href="/contact/">Contact sales</$Item>
+          </$Section>
+        </SideMenu>
+        <div className="site-content">
+          <main>{children}</main>
+          <footer className="site-footer">
+            <nav aria-label="Footer">
+              <a href="/pricing/">Pricing</a>
+              <a href="/docs/">Docs</a>
+              <a href="/changelog/">Changelog</a>
+              <a href="/contact/">Contact</a>
+            </nav>
+            <p>© 2026 Exemplar Systems. A fixture: no such company.</p>
+          </footer>
+        </div>
+      </body>
+    </html>
+  );
+}

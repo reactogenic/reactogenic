@@ -1,0 +1,90 @@
+// Button (specs/phase02/components.md): `<button>`, or `<a>` when it has
+// `href`. Its behaviour is declarative — a link, a command on a dialog, a
+// popover's target — so it is legal shell code: no handlers.
+import type { ButtonHTMLAttributes } from "react";
+import { mount } from "@reactogenic/core";
+import "./tokens.css";
+import "./button.css";
+
+/**
+ * The commands of the browser floor, which are also what the `invokers`
+ * behaviour covers below it: a dialog's. `request-close` is Chrome 139, above
+ * the floor's 135. A popover is targeted with `popoverTarget`.
+ */
+export type Command = "show-modal" | "close";
+
+type Html = ButtonHTMLAttributes<HTMLButtonElement>;
+
+// The three contracts below are named member by member: a type error then
+// says which case the author wrote ("Type 'string' is not assignable to type
+// 'undefined'" at the `command` of a link).
+
+/** What a button, a link and a trigger share. */
+interface ButtonCommonProps extends Pick<Html, "id" | "disabled" | "aria-label" | "aria-current" | "children"> {
+  /** Option: `data-variant` on the element. */
+  variant?: "solid" | "ghost";
+}
+
+/** A link: `<a>` — without its `href` when it is `disabled`. It takes nothing a `<button>` does. */
+export interface ButtonLinkProps extends ButtonCommonProps {
+  href: string;
+  command?: undefined;
+  commandfor?: undefined;
+  popoverTarget?: undefined;
+  popoverTargetAction?: undefined;
+  "aria-haspopup"?: undefined;
+}
+
+/** A `<button type="button">`: a command on a dialog, a popover's target, or nothing yet. */
+export interface ButtonActionProps extends ButtonCommonProps, Pick<Html, "commandfor" | "popoverTarget" | "popoverTargetAction" | "aria-haspopup"> {
+  href?: undefined;
+  /** What it does to the dialog `commandfor` names. */
+  command?: Command;
+}
+
+export type ButtonProps = ButtonLinkProps | ButtonActionProps;
+
+/**
+ * A button whose action is its component's: the contract of a `$Trigger`
+ * slot. A slot's props replace its attachment's, so what the component wires
+ * is not in the contract (components.md, rule 2) — and a link opens nothing.
+ */
+export interface TriggerProps extends ButtonCommonProps {
+  href?: undefined;
+  command?: undefined;
+  commandfor?: undefined;
+  popoverTarget?: undefined;
+  popoverTargetAction?: undefined;
+  "aria-haspopup"?: undefined;
+}
+
+export function Button({ variant, children, ...rest }: ButtonProps) {
+  // Only a variant that differs from the default is in the HTML.
+  const dataVariant = variant === "ghost" ? variant : undefined;
+  if (rest.href !== undefined) {
+    // A disabled link is HTML's placeholder link — `<a>` without `href`: not
+    // focusable, not a link — and says so to assistive technology.
+    return (
+      <a
+        className="rg-button"
+        data-variant={dataVariant}
+        id={rest.id}
+        href={rest.disabled ? undefined : rest.href}
+        aria-disabled={rest.disabled ? "true" : undefined}
+        aria-label={rest["aria-label"]}
+        aria-current={rest["aria-current"]}
+      >
+        {children}
+      </a>
+    );
+  }
+  // Below the floor a command button is dead without the fallback (components.md, *Behaviours*).
+  if (rest.command !== undefined) {
+    mount("@reactogenic/ui/behaviors/invokers");
+  }
+  return (
+    <button type="button" className="rg-button" data-variant={dataVariant} {...rest}>
+      {children}
+    </button>
+  );
+}

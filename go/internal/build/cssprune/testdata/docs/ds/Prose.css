@@ -1,0 +1,52 @@
+/* Prose: typography for authored content (slot content the page author writes).
+   Keyed by element: the compiler knows which elements a page's content contains. */
+.Prose {
+  font-size: var(--text-md); line-height: var(--leading-normal); overflow-wrap: break-word;
+  > * + * { margin-top: var(--space-4); }
+  h1 { font-size: var(--text-3xl); line-height: var(--leading-tight); letter-spacing: -0.02em; }
+  h2 { font-size: var(--text-2xl); line-height: var(--leading-tight); letter-spacing: -0.015em; margin-top: var(--space-7); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+  h3 { font-size: var(--text-xl); line-height: var(--leading-tight); margin-top: var(--space-6); }
+  h4 { font-size: var(--text-lg); margin-top: var(--space-5); }
+  [data-part="lead"] { font-size: var(--text-lg); color: var(--color-fg-muted); }
+  [data-part="anchor"] { margin-inline-start: var(--space-2); color: var(--color-fg-subtle); opacity: 0; transition: opacity var(--duration-fast); }
+  :is(h2, h3, h4):hover [data-part="anchor"], [data-part="anchor"]:focus-visible { opacity: 1; }
+  a:not([data-part]) { color: var(--color-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em;
+    &:hover { text-decoration-thickness: 2px; } }
+  strong { font-weight: 650; }
+  ul, ol { padding-inline-start: var(--space-5); }
+  ul { list-style: disc; }
+  ol { list-style: decimal; }
+  li + li { margin-top: var(--space-1); }
+  li::marker { color: var(--color-fg-subtle); }
+  blockquote { padding-inline-start: var(--space-4); border-inline-start: 3px solid var(--color-border-strong); color: var(--color-fg-muted); }
+  hr { border: 0; border-top: 1px solid var(--color-border); margin-block: var(--space-6); }
+  img { border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+  figcaption { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--color-fg-muted); text-align: center; }
+  kbd { padding: 1px var(--space-1); border: 1px solid var(--color-border-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); font: 0.85em var(--font-mono); background: var(--color-bg-subtle); }
+  :not(pre) > code { padding: 0.15em 0.35em; border-radius: var(--radius-sm); background: var(--color-bg-inset); font: 0.875em var(--font-mono); }
+  pre {
+    position: relative; padding: var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-border);
+    background: var(--color-bg-inset); overflow-x: auto; font: var(--text-sm)/1.55 var(--font-mono); tab-size: 2;
+    &[data-title]::before { content: attr(data-title); display: block; margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-3); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border); color: var(--color-fg-muted); font-family: var(--font-sans); font-size: var(--text-xs); }
+    [data-line="add"] { background: var(--color-success-subtle); }
+    [data-line="del"] { background: var(--color-danger-subtle); }
+    [data-line="mark"] { background: var(--color-accent-subtle); }
+    [data-tok="kw"] { color: var(--color-accent); }
+    [data-tok="str"] { color: var(--color-success); }
+    [data-tok="num"] { color: var(--color-warning); }
+    [data-tok="com"] { color: var(--color-fg-subtle); font-style: italic; }
+    [data-tok="tag"] { color: var(--color-danger); }
+    [data-tok="attr"] { color: var(--color-info); }
+  }
+  table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); display: block; overflow-x: auto; }
+  th, td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); text-align: start; vertical-align: top; }
+  th { font-weight: 650; color: var(--color-fg-muted); background: var(--color-bg-subtle); white-space: nowrap; }
+  tbody tr:hover { background: var(--color-bg-subtle); }
+  td code { white-space: nowrap; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); }
+  dt { font-weight: 650; font-family: var(--font-mono); font-size: var(--text-sm); }
+  dd { margin: 0; color: var(--color-fg-muted); }
+  details { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+    summary { cursor: pointer; font-weight: 600; }
+    &[open] summary { margin-bottom: var(--space-3); } }
+}

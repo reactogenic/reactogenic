@@ -1,0 +1,448 @@
+{
+  "base": "/docs/",
+  "inline": "always",
+  "specialize": true,
+  "pages": [
+    {
+      "pathname": "/",
+      "variant": "index",
+      "path": "/",
+      "file": "pages/index.rtsx",
+      "output": "index.html",
+      "document": {
+        "raw": 459,
+        "gzip": 298
+      },
+      "html": {
+        "raw": 164,
+        "gzip": 143
+      },
+      "css": {
+        "raw": 162,
+        "gzip": 107,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "f8cd5b8a"
+      },
+      "js": {
+        "raw": 87,
+        "gzip": 105,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "f561d7b7"
+      },
+      "components": [
+        {
+          "name": "HomePage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "Marked",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "./behaviors/mark",
+          "id": "marked"
+        }
+      ],
+      "modules": [
+        {
+          "module": "./behaviors/mark",
+          "path": "behaviors/mark.ts",
+          "bytes": 50
+        },
+        {
+          "path": "<entry>",
+          "bytes": 37
+        }
+      ],
+      "styles": {
+        "rules": 23,
+        "rulesDropped": 15,
+        "selectors": 25,
+        "selectorsDropped": 17,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 23,
+            "rulesDropped": 15,
+            "bytesIn": 813,
+            "bytesOut": 174
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/edit/",
+      "variant": "index",
+      "path": "/edit/",
+      "file": "pages/edit/index.rtsx",
+      "output": "edit/index.html",
+      "document": {
+        "raw": 817,
+        "gzip": 425
+      },
+      "html": {
+        "raw": 172,
+        "gzip": 146
+      },
+      "css": {
+        "raw": 630,
+        "gzip": 311,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "412e17c4"
+      },
+      "components": [
+        {
+          "name": "EditPage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "unpruned": true,
+        "why": "the page has an element the user edits (`contenteditable`)",
+        "rules": 23,
+        "rulesDropped": 0,
+        "selectors": 25,
+        "selectorsDropped": 0,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": []
+      }
+    },
+    {
+      "pathname": "/frame/",
+      "variant": "index",
+      "path": "/frame/",
+      "file": "pages/frame/index.rtsx",
+      "output": "frame/index.html",
+      "document": {
+        "raw": 799,
+        "gzip": 417
+      },
+      "html": {
+        "raw": 154,
+        "gzip": 134
+      },
+      "css": {
+        "raw": 630,
+        "gzip": 311,
+        "delivery": "inline",
+        "pages": 2,
+        "blob": "412e17c4"
+      },
+      "components": [
+        {
+          "name": "FramePage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "unpruned": true,
+        "why": "the page has a document of the site in a frame (`<iframe>`)",
+        "rules": 23,
+        "rulesDropped": 0,
+        "selectors": 25,
+        "selectorsDropped": 0,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": []
+      }
+    },
+    {
+      "pathname": "/guide/",
+      "variant": "index",
+      "path": "/guide/",
+      "file": "pages/guide/index.rtsx",
+      "output": "guide/index.html",
+      "document": {
+        "raw": 217,
+        "gzip": 171
+      },
+      "html": {
+        "raw": 132,
+        "gzip": 126
+      },
+      "css": {
+        "raw": 70,
+        "gzip": 71,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "2ec5d016"
+      },
+      "components": [
+        {
+          "name": "GuidePage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 23,
+        "rulesDropped": 19,
+        "selectors": 25,
+        "selectorsDropped": 21,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 23,
+            "rulesDropped": 19,
+            "bytesIn": 813,
+            "bytesOut": 76
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/styled/",
+      "variant": "index",
+      "path": "/styled/",
+      "file": "pages/styled/index.rtsx",
+      "output": "styled/index.html",
+      "document": {
+        "raw": 514,
+        "gzip": 323
+      },
+      "html": {
+        "raw": 445,
+        "gzip": 300
+      },
+      "css": {
+        "raw": 54,
+        "gzip": 55,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "7500403d"
+      },
+      "components": [
+        {
+          "name": "StyledPage",
+          "count": 1
+        }
+      ],
+      "mounts": [],
+      "styles": {
+        "rules": 33,
+        "rulesDropped": 24,
+        "selectors": 35,
+        "selectorsDropped": 26,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 23,
+            "rulesDropped": 20,
+            "bytesIn": 813,
+            "bytesOut": 61
+          },
+          {
+            "file": "<style>",
+            "rules": 10,
+            "rulesDropped": 4,
+            "bytesIn": 439,
+            "bytesOut": 205
+          }
+        ]
+      }
+    },
+    {
+      "pathname": "/toggle/",
+      "variant": "index",
+      "path": "/toggle/",
+      "file": "pages/toggle/index.rtsx",
+      "output": "toggle/index.html",
+      "document": {
+        "raw": 933,
+        "gzip": 546
+      },
+      "html": {
+        "raw": 289,
+        "gzip": 200
+      },
+      "css": {
+        "raw": 271,
+        "gzip": 187,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "1e9a855b"
+      },
+      "js": {
+        "raw": 327,
+        "gzip": 244,
+        "delivery": "inline",
+        "pages": 1,
+        "blob": "b2b3ea7b"
+      },
+      "components": [
+        {
+          "name": "Card",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "TogglePage",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "./behaviors/toggle",
+          "id": "c9"
+        }
+      ],
+      "modules": [
+        {
+          "module": "./behaviors/toggle",
+          "path": "behaviors/toggle.ts",
+          "bytes": 294
+        },
+        {
+          "path": "<entry>",
+          "bytes": 33
+        }
+      ],
+      "styles": {
+        "rules": 23,
+        "rulesDropped": 14,
+        "selectors": 25,
+        "selectorsDropped": 16,
+        "customPropertiesDropped": 0,
+        "keyframesDropped": 0,
+        "positionTryDropped": 0,
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 23,
+            "rulesDropped": 14,
+            "bytesIn": 813,
+            "bytesOut": 289
+          }
+        ]
+      }
+    }
+  ],
+  "blobs": [
+    {
+      "kind": "css",
+      "hash": "f8cd5b8a",
+      "size": {
+        "raw": 162,
+        "gzip": 107
+      },
+      "delivery": "inline",
+      "pages": [
+        "/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "f561d7b7",
+      "size": {
+        "raw": 87,
+        "gzip": 105
+      },
+      "delivery": "inline",
+      "pages": [
+        "/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "412e17c4",
+      "size": {
+        "raw": 630,
+        "gzip": 311
+      },
+      "delivery": "inline",
+      "pages": [
+        "/edit/",
+        "/frame/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "2ec5d016",
+      "size": {
+        "raw": 70,
+        "gzip": 71
+      },
+      "delivery": "inline",
+      "pages": [
+        "/guide/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "7500403d",
+      "size": {
+        "raw": 54,
+        "gzip": 55
+      },
+      "delivery": "inline",
+      "pages": [
+        "/styled/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "1e9a855b",
+      "size": {
+        "raw": 271,
+        "gzip": 187
+      },
+      "delivery": "inline",
+      "pages": [
+        "/toggle/"
+      ]
+    },
+    {
+      "kind": "js",
+      "hash": "b2b3ea7b",
+      "size": {
+        "raw": 327,
+        "gzip": 244
+      },
+      "delivery": "inline",
+      "pages": [
+        "/toggle/"
+      ]
+    }
+  ],
+  "public": [
+    "frame.html"
+  ]
+}

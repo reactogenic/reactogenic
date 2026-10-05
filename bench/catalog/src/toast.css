@@ -1,0 +1,68 @@
+@layer rg.components {
+  .bc-toast {
+    --bc-toast-fg: var(--rg-muted);
+    /* A popover is centred by the user agent: this one is in a corner. */
+    inset: auto 1rem 1rem auto;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(24rem, calc(100vw - 2rem));
+    margin: 0;
+    padding: 0.75rem 0.75rem 0.75rem 1rem;
+    border: 1px solid var(--rg-line);
+    border-inline-start: 3px solid var(--bc-toast-fg);
+    border-radius: var(--rg-radius);
+    background: var(--rg-bg);
+    color: var(--rg-fg);
+    box-shadow: var(--bc-shadow);
+    opacity: 0;
+
+    &[data-tone="success"] {
+      --bc-toast-fg: var(--bc-success);
+    }
+    &[data-tone="danger"] {
+      --bc-toast-fg: var(--bc-danger);
+    }
+    /* It rises in, for a reader who has not asked for less motion. */
+    @media (prefers-reduced-motion: no-preference) {
+      transition:
+        opacity 0.15s,
+        translate 0.15s,
+        overlay 0.15s allow-discrete,
+        display 0.15s allow-discrete;
+      translate: 0 0.5rem;
+    }
+    /* `display` only while it is shown: a closed popover is `display: none`. */
+    &:popover-open {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      opacity: 1;
+      translate: 0 0;
+
+      @starting-style {
+        opacity: 0;
+        translate: 0 0.5rem;
+      }
+    }
+
+    > [data-part="body"] {
+      flex: 1;
+      min-width: 0;
+    }
+    > [data-part="close"] {
+      flex: none;
+      padding: 0 0.35em;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: var(--rg-muted);
+      font: inherit;
+      cursor: pointer;
+
+      &:hover {
+        background: var(--rg-hover);
+        color: var(--rg-fg);
+      }
+    }
+  }
+}

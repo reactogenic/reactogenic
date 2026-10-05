@@ -1,0 +1,7 @@
+// public-conflict: `public/guide` is a file where this page needs a
+// directory.
+import { Page } from "../../../page.tsx";
+
+export default function GuidePage() {
+  return <Page title="Guide" />;
+}

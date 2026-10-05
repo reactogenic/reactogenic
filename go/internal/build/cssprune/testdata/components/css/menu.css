@@ -1,0 +1,18 @@
+/* The popover's implicit anchor is its invoker: no anchor-name per use site.
+   Without anchor positioning the UA's centred popover stays (usable, not pretty). */
+.rg-menu {
+  box-sizing: border-box; padding: .25rem; list-style: none;
+  border: 1px solid var(--rg-line); border-radius: var(--rg-radius); background: var(--rg-bg); color: var(--rg-fg);
+  box-shadow: 0 8px 30px #0003;
+}
+@supports (position-area: block-end) {
+  .rg-menu { inset: auto; margin: .25rem 0; min-width: anchor-size(width); position-area: block-end span-inline-end; position-try-fallbacks: flip-block, flip-inline; }
+  .rg-menu-end { position-area: block-end span-inline-start; }
+}
+.rg-menu :is(a, button) {
+  display: flex; box-sizing: border-box; width: 100%; padding: .4em .75em; border: 0; border-radius: 6px;
+  background: none; color: inherit; font: inherit; text-align: start; text-decoration: none; cursor: pointer;
+}
+.rg-menu :is(a, button):is(:hover, :focus-visible) { background: var(--rg-hover); }
+.rg-menu [aria-current] { font-weight: 600; }
+.rg-menu :disabled { color: var(--rg-muted); cursor: default; }

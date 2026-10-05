@@ -1,0 +1,51 @@
+// CodeBlock: a sample, as plain `<pre><code>` — no highlighting
+// (specs/phase02/decisions.md, 14) — with a title and, when asked, a button
+// that copies it: the `copy` behaviour, which a sample without the button
+// does not mount. A fixture (bench/catalog/README.md).
+import { mount, useShellId } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./code-block.css";
+
+export interface CodeBlockProps {
+  /** Over the sample: a file's name, a shell. */
+  title?: string;
+  /** Option: a button that copies the sample. */
+  copy?: boolean;
+  /** Option: long lines wrap; by default the sample scrolls sideways. */
+  wrap?: boolean;
+  /** Option: numbered lines. */
+  lines?: boolean;
+  /** The sample's text. */
+  children: string;
+}
+
+export function CodeBlock({ title, copy, wrap, lines, children }: CodeBlockProps) {
+  const id = useShellId("c");
+  if (copy) {
+    // What the button says once it has copied is content: the mount's data.
+    mount("@reactogenic/bench-catalog/behaviors/copy", id, undefined, { done: "Copied" });
+  }
+  return (
+    <figure id className="bc-code" data-wrap={wrap ? "" : undefined} data-lines={lines ? "" : undefined}>
+      {title !== undefined || copy ? (
+        <figcaption>
+          <span data-part="title">{title}</span>
+          {copy ? <button type="button" data-part="copy">Copy</button> : null}
+        </figcaption>
+      ) : null}
+      {/* A box that scrolls sideways is reachable by keyboard. */}
+      <pre tabIndex={0}>
+        <code>
+          {lines
+            ? children.split("\n").map((line, index) => (
+                <span key={index} data-part="line">
+                  {line + "\n"}
+                </span>
+              ))
+            : children}
+        </code>
+      </pre>
+    </figure>
+  );
+}

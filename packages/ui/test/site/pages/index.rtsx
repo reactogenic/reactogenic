@@ -1,0 +1,29 @@
+// "/": two dialogs with a $Trigger — the default one (light dismiss, so a
+// scrim) and one that asks for a decision.
+import { Dialog } from "@reactogenic/ui";
+import { DocsLayout } from "../layout.rtsx";
+
+export default function Page() {
+  return (
+    <DocsLayout title="Introduction">
+      <h1>Introduction</h1>
+      <div>
+        <Dialog>
+          <$Trigger>Install</$Trigger>
+          <$Title>Install</$Title>
+          <pre>pnpm add @reactogenic/core@alpha</pre>
+        </Dialog>{" "}
+        <Dialog closedby="closerequest">
+          <$Trigger variant="ghost">Delete project…</$Trigger>
+          <$Title>Delete the project?</$Title>
+          This cannot be undone.
+          <$Action key="cancel" variant="ghost">Cancel</$Action>
+          <$Action key="delete" href="/guide/slots/">Delete</$Action>
+        </Dialog>
+      </div>
+      {/* At the end of the line: beside the open drawer, under its backdrop. */}
+      <p className="end"><a id="behind" href="/guide/flow/">A link in the page</a></p>
+      <div className="tall" />
+    </DocsLayout>
+  );
+}

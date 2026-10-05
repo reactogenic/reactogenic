@@ -1,0 +1,80 @@
+/* The fixture site's own CSS: unlayered, so it wins over the design system's. */
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+  font: 1rem/1.6 system-ui, sans-serif;
+}
+.site-header {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+
+  & a {
+    color: inherit;
+    text-decoration: none;
+  }
+  & a:hover {
+    text-decoration: underline;
+  }
+}
+main {
+  max-width: 46rem;
+  padding: 1rem 2rem 4rem;
+}
+/* Used by /guide/ and /guide/more/ alone: one sheet for the two — a blob
+   they share, and under 4096 B, so inlined in each under `--inline auto`. */
+.prose {
+  line-height: 1.7;
+  overflow-wrap: break-word;
+
+  & :is(h1, h2) {
+    font-family: ui-serif, Georgia, serif;
+    text-wrap: balance;
+  }
+  & h1 {
+    margin-block: 0 1.5rem;
+    font-size: 2rem;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  & h2 {
+    margin-block: 2rem 0.5rem;
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
+  }
+  & p {
+    margin-block: 0 1rem;
+    text-wrap: pretty;
+  }
+  & code {
+    padding: 0.1em 0.3em;
+    border-radius: 4px;
+    background: color-mix(in srgb, CanvasText 8%, transparent);
+    font: 0.9em ui-monospace, monospace;
+  }
+  & pre {
+    overflow-x: auto;
+    padding: 0.75rem 1rem;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    border-radius: 8px;
+    font: 0.875rem/1.5 ui-monospace, monospace;
+  }
+  & a {
+    color: LinkText;
+    text-underline-offset: 0.2em;
+  }
+  & a:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+/* No page has one: pruned everywhere, with its animation. */
+.never {
+  animation: never 1s;
+}
+@keyframes never {
+  to {
+    opacity: 0;
+  }
+}

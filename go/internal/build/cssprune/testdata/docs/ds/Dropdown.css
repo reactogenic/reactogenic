@@ -1,0 +1,59 @@
+/* Dropdown. Props: placement = "bottom-start" | "bottom-end" | "top-start" | "top-end"; size = "sm" | "md"; variant = "menu" | "select".
+   Slots: $Trigger $Item(keyed) $Label $Separator. Item option: tone = "default" | "danger"; $IconStart, $Shortcut.
+   States: :popover-open, [aria-expanded], [aria-checked], :disabled. */
+.Dropdown {
+  position: relative; display: inline-block;
+
+  [data-slot="trigger"] {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+    background: var(--color-bg); font-size: var(--text-sm); anchor-name: --dropdown;
+    &:hover { border-color: var(--color-border-strong); background: var(--color-bg-subtle); }
+    &::after {
+      content: ""; width: 0.4em; height: 0.4em; border: solid currentColor; border-width: 0 1.5px 1.5px 0;
+      transform: translateY(-25%) rotate(45deg); transition: transform var(--duration-fast) var(--ease-out);
+    }
+    &[aria-expanded="true"]::after { transform: translateY(15%) rotate(-135deg); }
+  }
+  [data-part="menu"] {
+    position: fixed; position-anchor: --dropdown; inset: auto; margin: var(--space-1) 0;
+    min-width: max(11rem, anchor-size(width)); max-height: min(22rem, 60dvh); overflow-y: auto;
+    padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+    background: var(--color-bg-raised); box-shadow: var(--shadow-md); z-index: var(--z-dropdown);
+    font-size: var(--text-sm);
+    position-try-fallbacks: flip-block, flip-inline;
+    opacity: 0; translate: 0 -4px;
+    transition: opacity var(--duration-fast) var(--ease-out), translate var(--duration-fast) var(--ease-out),
+      display var(--duration-fast) allow-discrete, overlay var(--duration-fast) allow-discrete;
+    &:popover-open { opacity: 1; translate: 0 0; }
+    @starting-style { &:popover-open { opacity: 0; translate: 0 -4px; } }
+  }
+  [data-slot="item"] {
+    display: flex; align-items: center; gap: var(--space-2); width: 100%;
+    padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); text-align: start;
+    &:hover, &:focus-visible { background: var(--color-bg-subtle); outline: 0; }
+    &:disabled, &[aria-disabled="true"] { color: var(--color-fg-subtle); pointer-events: none; }
+    &[aria-current="true"], &[aria-checked="true"] { color: var(--color-accent); font-weight: 600; }
+    &[data-tone="danger"] { color: var(--color-danger); &:hover { background: var(--color-danger-subtle); } }
+  }
+  [data-slot="icon-start"] { flex: none; width: 1rem; height: 1rem; color: var(--color-fg-muted); }
+  [data-slot="shortcut"] { margin-inline-start: auto; padding-inline-start: var(--space-4); font: var(--text-xs) var(--font-mono); color: var(--color-fg-subtle); }
+  [data-slot="label"] { padding: var(--space-2) var(--space-3) var(--space-1); font-size: var(--text-xs); font-weight: 650; color: var(--color-fg-subtle); text-transform: uppercase; letter-spacing: 0.06em; }
+  [data-slot="separator"] { height: 1px; margin: var(--space-1) calc(-1 * var(--space-1)); background: var(--color-border); }
+
+  &[data-placement="bottom-start"] [data-part="menu"] { top: anchor(bottom); left: anchor(left); }
+  &[data-placement="bottom-end"] [data-part="menu"] { top: anchor(bottom); right: anchor(right); }
+  &[data-placement="top-start"] [data-part="menu"] { bottom: anchor(top); left: anchor(left); translate: 0 4px; }
+  &[data-placement="top-end"] [data-part="menu"] { bottom: anchor(top); right: anchor(right); translate: 0 4px; }
+
+  &[data-size="sm"] {
+    [data-slot="trigger"] { padding: 2px var(--space-2); font-size: var(--text-xs); }
+    [data-slot="item"] { padding: var(--space-1) var(--space-2); }
+  }
+
+  &[data-variant="select"] {
+    [data-slot="trigger"] { min-width: 10rem; justify-content: space-between; }
+    [data-slot="item"][aria-checked="true"]::before { content: "✓"; margin-inline-end: var(--space-1); }
+    [data-slot="item"]:not([aria-checked="true"]) { padding-inline-start: calc(var(--space-3) + 1.1em); }
+  }
+}

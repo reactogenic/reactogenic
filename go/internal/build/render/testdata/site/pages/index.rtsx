@@ -1,0 +1,26 @@
+import { Match } from "@reactogenic/core";
+import { Dialog } from "../ui/dialog";
+import { DocsLayout } from "../ui/layout";
+
+const version: string | undefined = "0.1.0";
+const beta: string | undefined = undefined;
+
+export default function HomePage() {
+  const title = "Reactogenic";
+  return (
+    <DocsLayout title>
+      <$Title className="hero">Reactogenic &mdash; docs</$Title>
+      <p>Apps built from framework-owned components.</p>
+      <Match on={version} { value }>
+        <p className="version">v{value}</p>
+      </Match>
+      <Match on={beta}>
+        <p>beta</p>
+      </Match>
+      <Dialog title="Install" modal>
+        <$Trigger className="primary">Install</$Trigger>
+        <pre>pnpm add @reactogenic/core</pre>
+      </Dialog>
+    </DocsLayout>
+  );
+}

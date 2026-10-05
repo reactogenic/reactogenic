@@ -327,6 +327,21 @@ func TestKeyedSlots(t *testing.T) {
 	}
 }
 
+// syntax.md, *Keyed slots*: entries are named by their keys encoded. What is
+// checked does not change — an entry's props, and the key itself.
+func TestKeyedKeys(t *testing.T) {
+	got := checkProject(t, "keyed-keys")
+	want := []string{
+		"src/menu.rtsx:23:43 TS2353",          // an excess prop of an entry under a literal name (`"#10"`)
+		"src/menu.rtsx:24:45 slot-type",       // … and under a computed one: TS says it of the whole slot, at the prop
+		"src/menu.rtsx:25:40 slot-key-inline", // `string | undefined` is no key: on the value
+		"src/menu.rtsx:26:47 TS2345",          // inside the key's expression: TypeScript's own
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
 // syntax.md, *Conditional slots*: a required slot that the component attaches
 // without a fallback cannot be filled conditionally — its false branch is
 // NOT_ASSIGNED, and nothing would render.
@@ -344,7 +359,7 @@ func TestKeyFunctions(t *testing.T) {
 	got := checkProject(t, "key-functions")
 	want := []string{
 		"src/select.rtsx:23:12 slot-key-no-args",
-		"src/select.rtsx:28:14 slot-key-inline",
+		"src/select.rtsx:28:19 slot-key-inline", // on the value: the argument of slotEntryName
 	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("got  %q\nwant %q", got, want)

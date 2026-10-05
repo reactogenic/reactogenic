@@ -1,0 +1,18 @@
+// "/plain/": nothing that opens — a Button that is a link — so the page
+// records no behaviour and ships no script.
+import { Button } from "@reactogenic/ui";
+
+export default function Page() {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <title>Plain · Example</title>
+      </head>
+      <body>
+        <h1>Plain</h1>
+        <Button href="/">Home</Button>
+      </body>
+    </html>
+  );
+}

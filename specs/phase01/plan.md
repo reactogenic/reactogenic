@@ -1604,7 +1604,7 @@ imports by its full name: gone with RGP1-106.)
   with `.rtsx` files and reports at `.rtsx` positions.
 - Depends on: 104.
 
-### RGP1-113 — Docs and release · S · prepared; publishing waits for your go-ahead
+### RGP1-113 — Docs and release · S · done (0.1.0-alpha.1 and the extension 0.1.1, 2026-10-04)
 *Done*: getting-started (*Editor*), the README, `CHANGELOG.md` (what
 `check` prints differently; the fixes) and the extension's own — its
 `README.md` is now the Marketplace page, the developer's notes are
@@ -1616,10 +1616,21 @@ language service, noted in decisions.md). `scripts/smoke-vsix.mjs` and the
 `publish-vsix`. Run here: the seven packaged from the six cross-compiled
 binaries, darwin-arm64's started; the editor suite against that `.vsix`
 (five windows, 41 tests, VS Code 1.140).
-*Left*: the npm version is still 0.1.0-alpha.0 — the bump needs the
-platform packages on the registry before the lockfile can name them, so it
-is the first step of the release (`release.sh`, the order in its header).
-The last two lines of *Done when* need the published alpha.
+*Released* (2026-10-04): the nine npm packages at 0.1.0-alpha.1, under
+`alpha` and `latest` (`release.sh latest`: the first publish set `latest`,
+a tagged one does not move it); the lockfile after the registry showed all
+six platform packages — one that lags is left out silently. The extension
+0.1.1, pre-release, seven packages: on the Marketplace by hand (a token
+needs an Azure DevOps organization, which now needs an Azure subscription),
+on Open VSX with `release.sh publish-vsix openvsx` (`.env.release`). Checked
+from the tarballs before publishing: `--version`, `check`, `vite build`,
+`lsp`. The `.vsix` binaries are byte-identical to npm's.
+*Left*: the last two lines of *Done when* — a project on the published
+alpha shows "workspace", one on 0.1.0-alpha.0 "bundled" — were not looked
+at in an editor. Seen once in CI (PR #3, the `go` job, not reproduced): a
+nil dereference in the server's push of tsconfig diagnostics
+(`lsconv.positionToLineAndCharacter`: no line map for the config file) —
+it ends the process; the extension restarts it. Not diagnosed.
 *In CI* (PR #2): the `package` workflow built the seven and each of the six
 binaries answered `initialize` on a runner of its platform — Windows x64 and
 arm64 included, their first start anywhere; the editor suite passed on Linux

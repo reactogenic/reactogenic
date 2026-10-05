@@ -132,7 +132,8 @@ type Note struct {
 	Name   string    // the slot (`$Title`), segment (`about-us`) or attribute
 	Detail string    // the container tag, the arg name, …
 	// Tag is, for slot-conditional, the owner's tag name in the source: the
-	// component whose slot may be left NOT_ASSIGNED; for slot-entry-key, the
+	// component whose slot may be left NOT_ASSIGNED; for slot-entry-key — on
+	// the `key` attribute, or on its value when that is an expression — the
 	// slot element.
 	Tag emit.Span
 }

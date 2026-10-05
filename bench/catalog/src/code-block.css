@@ -1,0 +1,80 @@
+@layer rg.components {
+  .bc-code {
+    margin: 1.25rem 0;
+    border: 1px solid var(--rg-line);
+    border-radius: var(--rg-radius);
+    background: var(--bc-surface);
+    overflow: hidden;
+
+    > figcaption {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 2.25rem;
+      padding: 0 0.5rem 0 1rem;
+      border-bottom: 1px solid var(--rg-line);
+      color: var(--rg-muted);
+      font-size: 0.8125rem;
+
+      > [data-part="title"] {
+        font-family: var(--bc-mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      > [data-part="copy"] {
+        flex: none;
+        padding: 0.2rem 0.6rem;
+        border: 1px solid var(--rg-line);
+        border-radius: 6px;
+        background: var(--rg-bg);
+        color: var(--rg-fg);
+        font: inherit;
+        cursor: pointer;
+
+        &:hover {
+          background: var(--rg-hover);
+        }
+        &:focus-visible {
+          outline: var(--bc-ring);
+          outline-offset: 1px;
+        }
+      }
+    }
+    > pre {
+      margin: 0;
+      padding: 0.875rem 1rem;
+      font: 0.8125rem/1.6 var(--bc-mono);
+      overflow-x: auto;
+      tab-size: 2;
+
+      &:focus-visible {
+        outline: var(--bc-ring);
+        outline-offset: -2px;
+      }
+      > code {
+        font: inherit;
+      }
+    }
+    &[data-wrap] > pre {
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    /* Numbered lines: a counter, so that a copy of the text has no numbers. */
+    &[data-lines] > pre > code {
+      counter-reset: bc-line;
+
+      > [data-part="line"]::before {
+        content: counter(bc-line);
+        display: inline-block;
+        width: 1.5rem;
+        margin-inline-end: 1rem;
+        color: var(--rg-muted);
+        text-align: end;
+        counter-increment: bc-line;
+        user-select: none;
+      }
+    }
+  }
+}

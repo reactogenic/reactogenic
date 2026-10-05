@@ -1,0 +1,15 @@
+import type { ComponentProps } from "react";
+import { Page } from "../../ui/page";
+
+// The handler arrives through a spread: there is no attribute to point at.
+function Field(props: ComponentProps<"input">) {
+  return <label>Name <input type="text" {...props} /></label>;
+}
+
+export default function SpreadPage() {
+  return (
+    <Page title="Spread">
+      <Field onChange={() => {}} />
+    </Page>
+  );
+}

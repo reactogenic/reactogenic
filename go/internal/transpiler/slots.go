@@ -2,6 +2,7 @@ package transpiler
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/microsoft/TypeScript/tsc/rtsx"
@@ -293,6 +294,7 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 	// A slot whose elements carry `key` is keyed (syntax.md, *Keyed slots*):
 	// its value collects the entries instead of keeping the last one.
 	keyed := map[string][][]emit.Piece{} // name → entries, or spreads of conditional entries
+	given := map[string]bool{}           // its first entry is the spread of an explicit attribute
 	keyedFirst := map[string]*rtsx.Node{}
 	isKeyed := func(name string, el *rtsx.Node) bool {
 		k := keyAttribute(el) != nil
@@ -321,7 +323,7 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 			group(name, ch)
 			if isKeyed(name, ch) {
 				if _, started := keyed[name]; !started && prev != nil {
-					keyed[name] = append(keyed[name], append([]emit.Piece{emit.Synth("...", first[name])}, prev...))
+					keyed[name], given[name] = append(keyed[name], spreadOf(prev)), true
 				}
 				keyed[name] = append(keyed[name], c.keyedEntry(ch))
 				values[name] = nil
@@ -344,7 +346,7 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 				}
 				if el := firstSlotLeaf(cond); el != nil && isKeyed(name, el) {
 					if _, started := keyed[name]; !started && prev != nil {
-						keyed[name] = append(keyed[name], append([]emit.Piece{emit.Synth("...", first[name])}, prev...))
+						keyed[name], given[name] = append(keyed[name], spreadOf(prev)), true
 					}
 					spread := append([]emit.Piece{emit.Synth("...(", c.span(ch))}, c.keyedConditional(cond, c.openingSpan(owner))...)
 					keyed[name] = append(keyed[name], append(spread, emit.Synth(")", c.span(ch))))
@@ -373,9 +375,14 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 		}
 	}
 	for name, entries := range keyed {
-		marker := c.core("KEYED", first[name])
-		props := append([][]emit.Piece{{emit.Synth("["+marker+"]: true", first[name])}}, entries...)
-		values[name] = objectLiteral(props, first[name])
+		// The marker follows the attribute's spread, which has one of its
+		// own: written before it, TS reports it as overwritten (TS2783).
+		// A symbol: wherever it is written, it is no entry and after them.
+		marker, at := [][]emit.Piece{{emit.Synth("["+c.core("KEYED", first[name])+"]: true", first[name])}}, 0
+		if given[name] {
+			at = 1
+		}
+		values[name] = objectLiteral(slices.Concat(entries[:at], marker, entries[at:]), first[name])
 	}
 	for _, name := range names {
 		if len(tags[name]) > 0 {
@@ -384,6 +391,14 @@ func (c *passContext) assignSlots(owner *rtsx.Node, a attributes) ([]string, map
 		}
 	}
 	return names, values, replaced, rest, first, firstTag
+}
+
+// spreadOf spreads the value a keyed slot had before its first element — an
+// explicit `$X={…}` attribute — into the entries: it comes first. The `...`
+// is the value's own: with the slot element as its origin the spread would
+// run backwards in the source, from the element to the attribute before it.
+func spreadOf(prev []emit.Piece) []emit.Piece {
+	return append([]emit.Piece{emit.Synth("...", prev[0].From)}, prev...)
 }
 
 // slotName is the emitted name of a slot prop: the tag name of its first
@@ -461,24 +476,80 @@ func firstSlotLeaf(expr *rtsx.Node) *rtsx.Node {
 	return nil
 }
 
-// keyedEntry is one entry of a keyed slot: `"email": { … }` for
-// `key="email"`, `[expr]: { … }` for `key={expr}`.
+// keyedEntry is one entry of a keyed slot, under its key's encoded name
+// (syntax.md, *Keyed slots*): `"email": { … }` for `key="email"`,
+// `"#10": { … }` for `key="10"`, `[_slotEntryName(expr)]: { … }` for
+// `key={expr}`. The name is never integer-like, so the object enumerates in
+// the order its entries are written.
 func (c *passContext) keyedEntry(el *rtsx.Node) []emit.Piece {
 	attr := keyAttribute(el)
 	if attr == nil { // keyed-slot-mixed was reported
 		return append([]emit.Piece{emit.Synth("[undefined]: ", c.openingSpan(el))}, c.slotObject(el)...)
 	}
-	c.noteTag(c.span(attr), c.span(el), "slot-entry-key", c.tagText(el))
+	v := value(attr)
+	name, literal := c.literalKey(v)
+	// The note is the attribute's — or, for an expression, the value's: a TS
+	// error on the whole of it is the key's own (slot-key-inline), one
+	// inside it is the expression's.
+	at := c.span(attr)
+	if v != nil && !literal {
+		at = c.span(v)
+	}
+	c.noteTag(at, c.span(el), "slot-entry-key", c.tagText(el))
 	var key []emit.Piece
-	switch v := value(attr); {
+	switch {
 	case v == nil:
 		key = []emit.Piece{emit.Synth("[undefined]", c.span(attr))} // a bare `key`: TS reports it
-	case v.Kind == rtsx.KindStringLiteral:
+	case literal && name != "":
+		key = []emit.Piece{emit.Synth(name, c.span(v))} // not the text the author wrote: an atom on the string
+	case literal:
 		key = []emit.Piece{c.copyValue(v)}
 	default:
-		key = append(append([]emit.Piece{emit.Synth("[", c.span(attr))}, c.operand(v, rtsx.PrecedenceComma)...), emit.Synth("]", c.span(attr)))
+		key = append([]emit.Piece{emit.Synth("["+c.core("slotEntryName", c.span(attr))+"(", c.span(attr))}, c.operand(v, rtsx.PrecedenceComma)...)
+		key = append(key, emit.Synth(")]", c.span(attr)))
 	}
 	return append(append(key, emit.Synth(": ", c.span(attr))), c.slotObject(el)...)
+}
+
+// integerLike: a property name JavaScript enumerates before the others,
+// ascending, wherever it is written. As slotEntryName of @reactogenic/core
+// has it: every run of digits without a leading zero, whatever its size.
+var integerLike = regexp.MustCompile(`^(?:0|[1-9][0-9]*)$`)
+
+// literalKey reads a key the transpiler can name itself — a string whose
+// value is its text: `key="email"`, `key={"email"}`. literal says it is one;
+// name is the property name to write when it is not the string as written:
+//
+//   - `"#10"` for `"10"` and `"##x"` for `"#x"`: slotEntryName's encoding;
+//   - `["__proto__"]` for `"__proto__"`, which an object literal reads as
+//     the prototype when written plain.
+//
+// Any other value — a number, a template, a JS string with an escape in it —
+// is an expression, encoded where it runs.
+func (c *passContext) literalKey(v *rtsx.Node) (name string, literal bool) {
+	if v == nil || v.Kind != rtsx.KindStringLiteral {
+		return "", false
+	}
+	text := c.text[c.span(v).Pos:v.End()]
+	if len(text) < 2 || text[len(text)-1] != text[0] {
+		return "", true // a string being typed: copied, as any other
+	}
+	quote, text := text[:1], text[1:len(text)-1]
+	if v.Parent != nil && v.Parent.Kind == rtsx.KindJsxAttribute {
+		// A JSX string is not a JS one (copyValue): read as the JS literal
+		// of its value, in which a digit and `#` stand for themselves.
+		js := jsxStringLiteral(text)
+		quote, text = `"`, js[1:len(js)-1]
+	} else if strings.Contains(text, `\`) {
+		return "", false // `key={"\x31"}`: its value is not its text
+	}
+	switch {
+	case integerLike.MatchString(text) || strings.HasPrefix(text, "#"):
+		return quote + "#" + text + quote, true
+	case text == "__proto__":
+		return `["__proto__"]`, true
+	}
+	return "", true
 }
 
 // keyedConditional rebuilds a conditional of keyed slot elements as a

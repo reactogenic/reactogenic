@@ -1,0 +1,167 @@
+/  pages/index.rtsx
+                  raw     gzip
+  HTML           1168      535
+  CSS            2934     1038   inline
+  JS              252      179   inline, the same on 2 pages
+  document       4400     1665   index.html
+  components Each ×3, HomePage ×1, Item ×4, Items ×2, Layout ×1, Section ×1, SideMenu ×1
+  behaviours @reactogenic/ui/behaviors/overlays
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
+                  4 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               0 kept,   4 dropped  @reactogenic/ui/src/button.css
+               0 kept,  14 dropped  @reactogenic/ui/src/dialog.css
+               0 kept,   7 dropped  @reactogenic/ui/src/dropdown-menu.css
+              22 kept,   3 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+/account/  pages/account/index.rtsx
+                  raw     gzip
+  HTML            962      515
+  CSS            2171      852   inline
+  JS              822      461   inline
+  document       4001     1736   account/index.html
+  components AccountPage ×1, Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×2, Plans ×1
+  behaviours @reactogenic/ui/behaviors/overlays
+             @reactogenic/ui/behaviors/menu-keys #account RG_MENU_TYPEAHEAD=false
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
+                532 B  @reactogenic/ui/src/behaviors/menu-keys.ts
+                 42 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               3 kept,   1 dropped  @reactogenic/ui/src/button.css
+               0 kept,  14 dropped  @reactogenic/ui/src/dialog.css
+               5 kept,   2 dropped  @reactogenic/ui/src/dropdown-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+/account/guest.html  pages/account/guest.rtsx
+                  raw     gzip
+  HTML           1129      554
+  CSS            2635     1001   inline
+  JS              563      328   inline, the same on 2 pages
+  document       4373     1809   account/guest.html
+  components Button ×1, Dialog ×1, GuestPage ×1, Layout ×1
+  behaviours @reactogenic/ui/behaviors/overlays
+             @reactogenic/ui/behaviors/invokers
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
+                307 B  @reactogenic/ui/src/behaviors/invokers.ts
+                  8 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               3 kept,   1 dropped  @reactogenic/ui/src/button.css
+              13 kept,   1 dropped  @reactogenic/ui/src/dialog.css
+               0 kept,   7 dropped  @reactogenic/ui/src/dropdown-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+/actions/  pages/actions/index.rtsx
+                  raw     gzip
+  HTML           1393      628
+  CSS            3773     1276   inline
+  JS             1448      708   inline
+  document       6660     2510   actions/index.html
+  components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
+  behaviours @reactogenic/ui/behaviors/overlays
+             @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true {"typeahead":true}
+             @reactogenic/ui/behaviors/invokers
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
+                832 B  @reactogenic/ui/src/behaviors/menu-keys.ts
+                307 B  @reactogenic/ui/src/behaviors/invokers.ts
+                 61 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               3 kept,   1 dropped  @reactogenic/ui/src/button.css
+              13 kept,   1 dropped  @reactogenic/ui/src/dialog.css
+               5 kept,   2 dropped  @reactogenic/ui/src/dropdown-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+/dialog/  pages/dialog/index.rtsx
+                  raw     gzip
+  HTML           1169      534
+  CSS            2803     1048   inline
+  JS              563      328   inline, the same on 2 pages
+  document       4581     1830   dialog/index.html
+  components Action ×1, Button ×2, Dialog ×1, DialogPage ×1, Each ×1, Layout ×1
+  behaviours @reactogenic/ui/behaviors/overlays
+             @reactogenic/ui/behaviors/invokers
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
+                307 B  @reactogenic/ui/src/behaviors/invokers.ts
+                  8 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               3 kept,   1 dropped  @reactogenic/ui/src/button.css
+              14 kept,   0 dropped  @reactogenic/ui/src/dialog.css
+               0 kept,   7 dropped  @reactogenic/ui/src/dropdown-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+/gate/closed.html  pages/gate/closed.rtsx
+                  raw     gzip
+  HTML            558      337
+  CSS             349      245   inline
+  JS                -        -   none
+  document        922      545   gate/closed.html
+  components ClosedPage ×1, Layout ×1
+  CSS rules    5 kept,  10 dropped  site.css
+
+/guide/  pages/guide/index.rtsx
+                  raw     gzip
+  HTML            901      498
+  CSS            1074      502   inline, the same on 2 pages
+  JS                -        -   none
+  document       1990      969   guide/index.html
+  components GuidePage ×1, Intro ×1, Layout ×1
+  CSS rules   14 kept,   1 dropped  site.css
+
+/guide/more/  pages/guide/more/index.rtsx
+                  raw     gzip
+  HTML            718      433
+  CSS            1074      502   inline, the same on 2 pages
+  JS                -        -   none
+  document       1807      901   guide/more/index.html
+  components Layout ×1, MorePage ×1
+  CSS rules   14 kept,   1 dropped  site.css
+
+/links/  pages/links/index.rtsx
+                  raw     gzip
+  HTML            819      447
+  CSS            2306      897   inline
+  JS              252      179   inline, the same on 2 pages
+  document       3423     1448   links/index.html
+  components Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, LinksPage ×1, MenuItem ×3
+  behaviours @reactogenic/ui/behaviors/overlays
+  JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
+                  4 B  <entry>  the mount calls
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               4 kept,   0 dropped  @reactogenic/ui/src/button.css
+               0 kept,  14 dropped  @reactogenic/ui/src/dialog.css
+               6 kept,   1 dropped  @reactogenic/ui/src/dropdown-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+/plain/  pages/plain/index.rtsx
+                  raw     gzip
+  HTML            558      332
+  CSS            1033      520   inline
+  JS                -        -   none
+  document       1606      821   plain/index.html
+  components Button ×1, Layout ×1, PlainPage ×1
+  CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
+               3 kept,   1 dropped  @reactogenic/ui/src/button.css
+               0 kept,  14 dropped  @reactogenic/ui/src/dialog.css
+               0 kept,   7 dropped  @reactogenic/ui/src/dropdown-menu.css
+               0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
+               5 kept,  10 dropped  site.css
+
+css  8ad4ebd4     2934     1038   inline                   /
+js   2f3112a3      252      179   inline                   / /links/
+css  386a967b     2171      852   inline                   /account/
+js   57a7746b      822      461   inline                   /account/
+css  777d7600     2635     1001   inline                   /account/guest.html
+js   560fac5c      563      328   inline                   /account/guest.html /dialog/
+css  6c082bb9     3773     1276   inline                   /actions/
+js   adead9cd     1448      708   inline                   /actions/
+css  84bd31d9     2803     1048   inline                   /dialog/
+css  288c2961      349      245   inline                   /gate/closed.html
+css  e28e8351     1074      502   inline                   /guide/ /guide/more/
+css  3a80b53d     2306      897   inline                   /links/
+css  5039d10c     1033      520   inline                   /plain/
+10 pages written to <out>

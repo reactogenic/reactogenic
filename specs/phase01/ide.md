@@ -131,7 +131,12 @@ of editor features it may answer.
   reads the same as a JS string, so hover and completion work inside
   `is="loading"`. One with a backslash, `&` or a line break does not (JSX has
   no escapes, allows line breaks and decodes `&amp;`): it is written as the
-  JS literal of its value, an atom on the string.
+  JS literal of its value, an atom on the string. So is the key of a keyed
+  slot's entry whose property name is not the key as written — an
+  integer-like one, or one that starts with `#`: `key="10"` is the atom
+  `"#10"` (syntax.md, *Keyed slots*); any other key string is copied, and a
+  `key={expr}` is copied inside the synthesized `[_slotEntryName(…)]`, so
+  hover, definition and rename reach the expression as before.
 
   ```tsx
   <$Label title="Tom &amp; Jerry" path="C:\new" />   // .rtsx

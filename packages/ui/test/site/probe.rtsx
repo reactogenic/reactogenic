@@ -1,0 +1,72 @@
+// Not pages: what site.test.ts renders by itself.
+import { Match } from "@reactogenic/core";
+import { Dialog, DropdownMenu, SideMenu } from "@reactogenic/ui";
+
+// A side menu of one link, for the table of which `href` is the page being
+// rendered.
+
+export function Probe({ href }: { href: string }) {
+  return (
+    <SideMenu id="probe" label="Probe">
+      <$Section key="only">
+        <$Item key="group">
+          Group
+          <$Item key="link" href>Link</$Item>
+        </$Item>
+      </$Section>
+    </SideMenu>
+  );
+}
+
+// Keyed slots keep the order written, whatever the keys look like
+// (phase01/syntax.md, *Keyed slots*): integer-like keys, a key from an
+// expression, a conditional entry — in a side menu, at every level, in both
+// forms of a dropdown menu and in a dialog's footer. And the close buttons'
+// name is the author's (`closeLabel`).
+export function Ordered({ more, n }: { more: boolean; n: number }) {
+  return (
+    <>
+      <SideMenu id="ordered" label="Ordered" closeLabel="Schließen">
+        <$Section key="10" title="Ten">
+          <$Item key="10" href="/ten/">10</$Item>
+          <$Item key="9" href="/nine/">9</$Item>
+          <$Item key="2">
+            2
+            <$Item key="1" href="/two/one/">2.1</$Item>
+            <$Item key="0" href="/two/zero/">2.0</$Item>
+          </$Item>
+          <$Item key="b" href="/b/">b</$Item>
+          <$Item key={n} href="/n/">n</$Item>
+          <$Item key="#1" href="/hash/">#1</$Item>
+        </$Section>
+        <$Section key={n} title="N">
+          <$Item key="1" href="/n/one/">n.1</$Item>
+        </$Section>
+        <$Section key="9" title="Nine" collapsed>
+          <$Item key="3" href="/nine/three/">9.3</$Item>
+          <$Item key="1" href="/nine/one/">9.1</$Item>
+        </$Section>
+      </SideMenu>
+      <DropdownMenu id="ordered-links">
+        <$Trigger>Links</$Trigger>
+        <$Item key="b" href="/b/">b</$Item>
+        <$Item key="10" href="/ten/">10</$Item>
+        <Match on={more}><$Item key="5" href="/five/">5</$Item></Match>
+        <$Item key="9" href="/nine/">9</$Item>
+        <$Item key={n} href="/n/">n</$Item>
+      </DropdownMenu>
+      <DropdownMenu id="ordered-actions">
+        <$Trigger>Actions</$Trigger>
+        <$Item key="10" disabled>10</$Item>
+        <$Item key="9">9</$Item>
+        <$Item key="2" href="/two/">2</$Item>
+        <$Item key={n}>n</$Item>
+      </DropdownMenu>
+      <Dialog id="ordered-dialog" closeLabel="Schließen">
+        <$Title>Ordered</$Title>
+        <$Action key="2">Later</$Action>
+        <$Action key="1" variant="solid">Now</$Action>
+      </Dialog>
+    </>
+  );
+}

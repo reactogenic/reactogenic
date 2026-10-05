@@ -1,0 +1,175 @@
+// SideMenu (specs/phase02/components.md): one `<nav popover>` — a column
+// above the breakpoint, a drawer in the top layer below it. The current page
+// is the builder's: the item whose `href` is the page being rendered.
+import type { ComponentProps, ReactNode } from "react";
+import { Each, isAssigned, mount, pathname, slotKeys, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import "./tokens.css";
+import "./side-menu.css";
+
+// The two unions below are named member by member: a type error then says
+// which case the author wrote ("'href' does not exist in type
+// 'SideMenuGroupProps'").
+
+/** An item that is a link. */
+export interface SideMenuLinkProps {
+  href?: string;
+  /** The label. */
+  children?: ReactNode;
+  $Item?: undefined;
+}
+
+/** An item that is a disclosure of nested items. It has no `href`: its label opens it. */
+export interface SideMenuGroupProps {
+  /** The label: the disclosure's summary. */
+  children?: ReactNode;
+  $Item: KeyedSlot<SideMenuItemProps>;
+}
+
+/** A link — or, with nested `$Item`s, a disclosure of them: one or the other, never both. */
+export type SideMenuItemProps = SideMenuLinkProps | SideMenuGroupProps;
+
+/** A section that is always open, titled or not. */
+export interface SideMenuPlainSectionProps {
+  title?: string;
+  collapsed?: undefined;
+  $Item: KeyedSlot<SideMenuItemProps>;
+}
+
+/** A section that opens and closes: a disclosure, so it has a title — what opens it. */
+export interface SideMenuCollapsibleSectionProps {
+  title: string;
+  /** Option: `false` = collapsible, open. Always open on the page it holds. */
+  collapsed: boolean;
+  $Item: KeyedSlot<SideMenuItemProps>;
+}
+
+/** A group of items. `collapsed` absent = not collapsible. */
+export type SideMenuSectionProps = SideMenuPlainSectionProps | SideMenuCollapsibleSectionProps;
+
+/**
+ * The drawer's button, without what the side menu wires: a slot's props
+ * replace its attachment's (components.md, rule 2).
+ */
+export interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "popoverTarget" | "popoverTargetAction" | "command" | "commandfor"> {}
+
+export interface SideMenuProps {
+  id?: string;
+  /** The landmark's name. */
+  label: string;
+  $Header?: Slot<ComponentProps<"div">>;
+  $Section: KeyedSlot<SideMenuSectionProps>;
+  $Footer?: Slot<ComponentProps<"div">>;
+  /** The drawer's button; the fallback is the menu icon, named by `label`. */
+  $Toggle?: Slot<SideMenuToggleProps>;
+  /** Content: the accessible name of the drawer's close button. Default "Close". */
+  closeLabel?: string;
+}
+
+// The forms a link to a page takes, as the builder's link check reads them
+// (builder.md, *Checks on the page*): `/guide/`, `/guide` and
+// `/guide/index.html` are one page, percent-encoded or not — the builder
+// names a page by its directory, `location.pathname` in React is encoded.
+// `decodeURI`, so an encoded separator (`%2F`) stays one.
+function page(path: string): string {
+  let route = path;
+  try {
+    route = decodeURI(path);
+  } catch {
+    // A `%` that encodes nothing stands for itself.
+  }
+  if (route.endsWith("/index.html")) {
+    route = route.slice(0, -"index.html".length);
+  }
+  return route.endsWith("/") ? route : route + "/";
+}
+
+// A link with a `?query` or a `#fragment` names a state or a place of a page,
+// not the page: it is never the current one.
+function isCurrent(href: string | undefined): boolean {
+  return href !== undefined && !/[?#]/.test(href) && page(href) === page(pathname());
+}
+
+// Is the current page among the items, at any depth? (`Object.values`: every
+// entry, in whatever order — the names are not read.)
+function holdsCurrent(items: KeyedSlot<SideMenuItemProps>): boolean {
+  return Object.values(items).some((item) => (item.$Item !== undefined ? holdsCurrent(item.$Item) : isCurrent(item.href)));
+}
+
+function Items({ $Item }: { $Item: KeyedSlot<SideMenuItemProps> }) {
+  return (
+    <ul>
+      <Each items={slotKeys($Item)} { item: key }>
+        <Item key={key} slot={$Item} />
+      </Each>
+    </ul>
+  );
+}
+
+// Not destructured: `$Item` tells the two cases apart, and `href` is the link's only.
+function Item(item: SideMenuItemProps) {
+  if (item.$Item !== undefined) {
+    // Every disclosure around the current page is open.
+    const open = holdsCurrent(item.$Item);
+    return (
+      <li>
+        <details open>
+          <summary>{item.children}</summary>
+          <Items $Item={item.$Item} />
+        </details>
+      </li>
+    );
+  }
+  return (
+    <li>
+      <a href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>{item.children}</a>
+    </li>
+  );
+}
+
+// An attachment on a component always passes `children`, so the section accepts it.
+function Section({ title, collapsed, $Item }: SideMenuSectionProps & { children?: ReactNode }) {
+  if (collapsed !== undefined) {
+    const open = !collapsed || holdsCurrent($Item);
+    return (
+      <details open>
+        <summary>{title}</summary>
+        <Items $Item={$Item} />
+      </details>
+    );
+  }
+  return (
+    <section>
+      {title !== undefined ? <h2>{title}</h2> : null}
+      <Items $Item={$Item} />
+    </section>
+  );
+}
+
+export function SideMenu({ id, label, closeLabel = "Close", $Header, $Section, $Footer, $Toggle }: SideMenuProps) {
+  const generated = useShellId("s");
+  const menu = id ?? generated;
+  // The drawer is a popover: Back must not restore the page with it open.
+  mount("@reactogenic/ui/behaviors/overlays");
+  // `label` names the fallback, an icon. A toggle with the author's own
+  // content is named by that content: a label over it would be a name that
+  // is not what the button shows (WCAG 2.5.3, Label in Name).
+  const toggleLabel = isAssigned($Toggle) && $Toggle.children !== undefined ? undefined : label;
+  return (
+    <>
+      <button slot={$Toggle} type="button" className="rg-sidemenu-toggle" popoverTarget={menu} aria-label={toggleLabel}>☰</button>
+      <nav id={menu} className="rg-sidemenu" popover="" aria-label={label}>
+        {/* Always there: on iOS 17–18.2 a popover does not close on an outside tap. */}
+        <button type="button" data-part="close" popoverTarget={menu} popoverTargetAction="hide" aria-label={closeLabel}>✕</button>
+        <div slot={$Header} data-part="header" />
+        <Each items={slotKeys($Section)} { item: key }>
+          <Section key={key} slot={$Section} />
+        </Each>
+        <div slot={$Footer} data-part="footer" />
+        {/* The drawer's own backdrop: a popover's `::backdrop` lets a tap
+            through, and closing on the way hands the click to what is behind.
+            This one is inside the popover, over the rest of the viewport. */}
+        <button type="button" data-part="scrim" popoverTarget={menu} popoverTargetAction="hide" tabIndex={-1} aria-hidden="true" />
+      </nav>
+    </>
+  );
+}

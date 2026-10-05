@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/ui",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./behaviors/*": "./src/behaviors/*.ts"
+  }
+}
