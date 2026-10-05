@@ -28,7 +28,10 @@ The builder: `reactogenic build` compiles pages in `.rtsx` plus the layout
 components of `@reactogenic/ui` (`SideMenu`, `Dialog`, `DropdownMenu`) into
 per-page plain HTML + CSS + minimal JS, **no React in the output**; the proof
 is a four-page docs site (`site/`) and a measured bet — thresholds T1–T8 in
-`plan.md` (RGP2-050), the result in `specs/phase02/bet.md`.
+`plan.md` (RGP2-050), the result in `specs/phase02/bet.md`: **undecided**.
+Zero React and every refuting threshold hold; what component awareness adds
+over the control (`--no-specialize`) is small on a site of three components
+in one layout, and over a four-page visit the control transfers less.
 No islands, no dev server, no view transitions.
 
 - `research.md` — esbuild is the linker (public Go API, in-process, never
@@ -40,7 +43,7 @@ No islands, no dev server, no view transitions.
 - `components.md` — the three components (and `Button`) on platform
   primitives.
 - `decisions.md` — what was decided, what is **for review**, what waits
-  *For the owner* (A–J), the binary's size.
+  *For the owner* (A–M), the binary's size.
 - `plan.md` — tasks `RGP2-xxx`, each with what was measured, what was not
   done and what was not verified.
 
@@ -153,7 +156,8 @@ list *For the owner*:
   not a `<template>`). *For the owner*, B–J: `children` vs `$Contents`, what
   islands need, integer-like keys, a page's own `<script>`, T2's budget, the
   close button's name, a dialog under a popover, disabled menu items, links
-  into the current page.
+  into the current page. K–M, from the measurement: a shared sheet plus each
+  page's rest, T5 and the verdict, state nothing can reach.
 
 ## Governing syntax rule
 
@@ -242,8 +246,8 @@ loaded segments; loops over constants in the shell; page-author raw JS.
 | `phase01/ide.md` | implemented and released (RGP1-100–113: npm 0.1.0-alpha.1, the extension 0.1.1); 114 (re-vendor) later |
 | `phase02/research.md`, `phase02/research/` | done (RGP2-001) |
 | `phase02/builder.md`, `phase02/components.md` | implemented (RGP2-010–040): `reactogenic build`, `@reactogenic/ui`, `site/`; `> OPEN:` notes inside |
-| `phase02/plan.md`, `phase02/decisions.md` | RGP2-001–040 and 060 done; 050 (measure) is the last. Decisions **for review** and *For the owner*: not ruled on |
-| `phase02/bet.md` | the measured bet, written by RGP2-050 |
+| `phase02/plan.md`, `phase02/decisions.md` | RGP2-001–060 done. Decisions **for review** and *For the owner* (A–M): not ruled on |
+| `phase02/bet.md` | the measured bet: undecided (T5 fails); re-run with `node bench/site.mjs`, `bench/delta.mjs`, `bench/verify.mjs` |
 | `later/layout.md`, `later/persistent-state.md` | parked; phase 2 reads the shell rules as in `phase02/builder.md` |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
