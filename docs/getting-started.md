@@ -157,7 +157,10 @@ function Button({ $Label, $Icon, size }: ButtonProps) {
   something once per item, attach the slot inside an `Each` in the component.
 - Many values of one kind — table columns, form fields — are a `KeyedSlot`:
   the caller writes `<$Column key="email" …/>` per entry, and the component's
-  `<th key={col.name} slot={$Column} />` renders the entry of each key.
+  `<th key={col.name} slot={$Column} />` renders the entry of each key. A
+  component that renders every entry iterates `slotKeys($Column)` — the keys
+  in the order you wrote them, whatever they look like (`key="10"` before
+  `key="9"`) — never `Object.keys($Column)`.
 - A function slot the component attaches once per item is keyed by you when
   only you know the items' identity: `<$Row key={({ row }) => row.id} { row }>`
   — an inline function of the args.
@@ -219,20 +222,32 @@ go build -o /tmp/reactogenic github.com/reactogenic/reactogenic/go/cmd/reactogen
 cd site && /tmp/reactogenic build --report      # → site/dist
 ```
 
-**Pages.** `index.rtsx` of a directory under `pages/`, next to the tsconfig,
-is a page; the directory is its pathname.
+**Routes and variants.** A directory under `pages/`, next to the tsconfig, is
+a route: the directory is its pathname. An `.rtsx` file of it that nothing
+of the project mounts or imports is a *variant* of the route, and is built
+to a document: `index.rtsx` to `index.html` — the page a static host serves
+at the pathname — any other under its own name. Every other file of the
+directory is a segment or a module of a variant.
 
 ```
 tsconfig.json                    "include": ["layout.rtsx", "pages"]
 layout.rtsx                      an ordinary module
 site.css
-pages/index.rtsx                 /
-pages/guide/index.rtsx           /guide/
-pages/guide/install.rtsx         not a page: a segment or a module of /guide/
+pages/index.rtsx                 /            → dist/index.html
+pages/guide/index.rtsx           /guide/      → dist/guide/index.html
+pages/guide/install.rtsx         mounted by index.rtsx (`<section #install />`): a segment, not a page
+pages/account/index.rtsx         /account/    → dist/account/index.html
+pages/account/guest.rtsx         /account/    → dist/account/guest.html: a second variant
 public/favicon.svg               /favicon.svg: copied as it is
 ```
 
-A page is the module's default export: a component without props that
+Which files are variants is read from the project's imports, not from their
+names: a segment that nothing mounts is a variant, and the build says so
+(`page-not-document`). There is no server yet to choose between the
+variants of a route: all are built, and `index.html` is the one a static
+host serves.
+
+A variant is its module's default export: a component without props that
 renders the whole document, from `<html>`. There is no layout file to name:
 **the layout is an ordinary component**, imported and rendered as in React.
 
@@ -311,8 +326,12 @@ dist/_rg/report.json       what every page ships, in bytes
 ```
 
 - CSS or JS that two or more pages share is a file under `dist/_rg/`, named
-  by its content, when that is cheaper than a copy in each page: `--inline
-  auto` (the default), `always` or `never`.
+  by its content, when it is 4096 B or more; anything smaller, and whatever
+  only one page has, is in the page: `--inline auto` (the default), `always`
+  or `never`.
+- A page has no script of its own: a `<script>` that runs, an `onclick`
+  attribute or a `javascript:` URL in a page is an error (`shell-script`).
+  A `<style>` element is allowed, and pruned as the page's CSS is.
 - Links are written from the site's root (`/guide/`); `--base /docs/` builds
   the site for a path.
 - A build empties `dist`, so `--out` takes only a directory that is empty or
@@ -379,7 +398,7 @@ opening, closing, focus and placement are the browser's own.
 
 | | |
 | --- | --- |
-| islands | no React in the page at all, so nothing interactive beyond what the components bring: `<Dynamic>` is specified ([later/layout.md](../specs/later/layout.md)) and not built |
+| dynamic segments | no React in the page at all, so nothing interactive beyond what the components bring: `<Dynamic>` is specified ([later/layout.md](../specs/later/layout.md)) and not built |
 | a dev server | no watch mode, no HMR: run `build` again |
 | Markdown | pages are `.rtsx`; code samples are plain `<pre>`, not highlighted |
 | assets | `public/` is copied as it is; images, fonts and `url()` in CSS are not processed |

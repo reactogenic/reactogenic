@@ -2,7 +2,7 @@
 // above the breakpoint, a drawer in the top layer below it. The current page
 // is the builder's: the item whose `href` is the page being rendered.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, isAssigned, mount, pathname, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import { Each, isAssigned, mount, pathname, slotKeys, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
 import "./tokens.css";
 import "./side-menu.css";
 
@@ -61,6 +61,8 @@ export interface SideMenuProps {
   $Footer?: Slot<ComponentProps<"div">>;
   /** The drawer's button; the fallback is the menu icon, named by `label`. */
   $Toggle?: Slot<SideMenuToggleProps>;
+  /** Content: the accessible name of the drawer's close button. Default "Close". */
+  closeLabel?: string;
 }
 
 // The forms a link to a page takes, as the builder's link check reads them
@@ -87,7 +89,8 @@ function isCurrent(href: string | undefined): boolean {
   return href !== undefined && !/[?#]/.test(href) && page(href) === page(pathname());
 }
 
-// Is the current page among the items, at any depth?
+// Is the current page among the items, at any depth? (`Object.values`: every
+// entry, in whatever order — the names are not read.)
 function holdsCurrent(items: KeyedSlot<SideMenuItemProps>): boolean {
   return Object.values(items).some((item) => (item.$Item !== undefined ? holdsCurrent(item.$Item) : isCurrent(item.href)));
 }
@@ -95,7 +98,7 @@ function holdsCurrent(items: KeyedSlot<SideMenuItemProps>): boolean {
 function Items({ $Item }: { $Item: KeyedSlot<SideMenuItemProps> }) {
   return (
     <ul>
-      <Each items={Object.keys($Item)} { item: key }>
+      <Each items={slotKeys($Item)} { item: key }>
         <Item key={key} slot={$Item} />
       </Each>
     </ul>
@@ -142,7 +145,7 @@ function Section({ title, collapsed, $Item }: SideMenuSectionProps & { children?
   );
 }
 
-export function SideMenu({ id, label, $Header, $Section, $Footer, $Toggle }: SideMenuProps) {
+export function SideMenu({ id, label, closeLabel = "Close", $Header, $Section, $Footer, $Toggle }: SideMenuProps) {
   const generated = useShellId("s");
   const menu = id ?? generated;
   // The drawer is a popover: Back must not restore the page with it open.
@@ -156,9 +159,9 @@ export function SideMenu({ id, label, $Header, $Section, $Footer, $Toggle }: Sid
       <button slot={$Toggle} type="button" className="rg-sidemenu-toggle" popoverTarget={menu} aria-label={toggleLabel}>☰</button>
       <nav id={menu} className="rg-sidemenu" popover="" aria-label={label}>
         {/* Always there: on iOS 17–18.2 a popover does not close on an outside tap. */}
-        <button type="button" data-part="close" popoverTarget={menu} popoverTargetAction="hide" aria-label="Close">✕</button>
+        <button type="button" data-part="close" popoverTarget={menu} popoverTargetAction="hide" aria-label={closeLabel}>✕</button>
         <div slot={$Header} data-part="header" />
-        <Each items={Object.keys($Section)} { item: key }>
+        <Each items={slotKeys($Section)} { item: key }>
           <Section key={key} slot={$Section} />
         </Each>
         <div slot={$Footer} data-part="footer" />

@@ -611,7 +611,7 @@ async function suite(name, launch, site, control) {
     await plain.context().close();
 
     const menus = await open(site.origin, "/menus/", WIDE);
-    await check("typeahead is the menu's: on a page that has one with it, a menu without it has none", async () => {
+    await check("typeahead is the menu's — its mount's data, no attribute: on a page that has one with it, a menu without it has none", async () => {
       const after = async (id, key) => {
         await focusByKeyboard(menus, `[popovertarget="${id}"]`);
         const walk = [await menus.evaluate(probe.active)];
@@ -623,6 +623,10 @@ async function suite(name, launch, site, control) {
       };
       equal(await after("one", "b"), ["Alpha", "Beta"], "the menu with typeahead: focus before and after `b`");
       equal(await after("two", "b"), ["Alpha", "Alpha"], "the menu without: focus before and after `b`");
+      // Only the script knows which menu asked: the page's HTML does not say.
+      equal(await menus.evaluate(() => document.querySelectorAll("[data-typeahead]").length), 0, "elements with `data-typeahead`");
+      const script = /<script type="module">([\s\S]*?)<\/script>/.exec(readFileSync(join(site.dir, "/menus/", "index.html"), "utf8"))?.[1] ?? "";
+      equal([/getElementById\("one"\),\{typeahead:!0\}\)/.test(script), /getElementById\("two"\)\)/.test(script)], [true, true], "[the call of `one` has the data, the call of `two` has one argument]");
     });
     await check("action menu: the author's id on $Trigger is the one that names the menu, and focus returns to it", async () => {
       equal(

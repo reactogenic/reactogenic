@@ -68,7 +68,7 @@ engine.
 | --- | --- |
 | a Go evaluator over the tsgo AST for a shell-safe subset | **not first.** A 1,455-line prototype was byte-identical on its own fixture, but on 36 ordinary cases it matched React on 12, refused 5 and was **silently wrong on 19** (`aria-expanded`, `aria-hidden`, `aria-modal` among them). It is a second implementation of JS semantics, of React DOM's attribute rules and of `@reactogenic/core` |
 | an embedded engine with our own serializer | the serializer is the same liability: 11 of 12 trees differ from `react-dom/server` |
-| **an embedded engine running React's static renderer** | **chosen.** `modernc.org/quickjs` (pure Go, +2.6 MiB) runs the esbuild bundle of the page with React's legacy static renderer unmodified, no polyfills: HTML equal to Node's `react-dom/server` on 36 of 36 cases; 101 components in 20 ms. Shell HTML equals what React renders for the same component by construction of the serializer — which islands will need. The engine's JavaScript is not V8's where ICU is involved: no `Intl`, and `localeCompare` sorts `["b","a","C"]` as `Cab` (V8: `abC`). The builder refuses those (builder.md, *The engine*) |
+| **an embedded engine running React's static renderer** | **chosen.** `modernc.org/quickjs` (pure Go, +2.6 MiB) runs the esbuild bundle of the page with React's legacy static renderer unmodified, no polyfills: HTML equal to Node's `react-dom/server` on 36 of 36 cases; 101 components in 20 ms. Shell HTML equals what React renders for the same component by construction of the serializer — which dynamic segments will need. The engine's JavaScript is not V8's where ICU is involved: no `Intl`, and `localeCompare` sorts `["b","a","C"]` as `Cab` (V8: `abC`). The builder refuses those (builder.md, *The engine*) |
 | a Node subprocess | the test oracle. Node is not guaranteed next to the binary (the extension's bundled one, a Go server later) |
 
 React is a **build-time** dependency of a project; no byte of it reaches the
@@ -161,4 +161,4 @@ CSS is 77–97% of the bundle there, not the 39–76% above.
 - A catalog of 20 components where a page uses 3–5: the realistic test of
   per-page precision. Three components in a shared layout barely differ per
   page.
-- Islands: how holes and `Dynamic` meet the executor's record.
+- Dynamic segments: how holes and `Dynamic` meet the executor's record.

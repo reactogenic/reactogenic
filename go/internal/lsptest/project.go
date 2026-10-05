@@ -91,7 +91,9 @@ export declare function renderSlot<S extends object>(slot: S, args: S extends re
 export declare function Match(props: { on: unknown; children?: unknown }): never;
 export declare function Switch(props: { on: unknown; exhaustive?: true; $Case?: unknown; children?: unknown }): null;
 export declare function noMatch(value: never): never;
-export declare function Each<T>(props: { items: readonly T[]; children: (params: { item: T; index: number }) => ReactNode }): ReactNode;`,
+export declare function Each<T>(props: { items: readonly T[]; children: (params: { item: T; index: number }) => ReactNode }): ReactNode;
+export declare function slotEntryName(key: string | number): string;
+export declare function slotKeys(slot: unknown): string[];`,
 }
 
 // With returns files plus more, for Project.

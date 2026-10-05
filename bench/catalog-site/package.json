@@ -1,0 +1,18 @@
+{
+  "name": "@reactogenic/bench-catalog-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A measurement fixture: a ten-page product site on @reactogenic/bench-catalog, built by `reactogenic build` and measured by bench/catalog.mjs (specs/phase02/bet.md).",
+  "type": "module",
+  "dependencies": {
+    "@reactogenic/bench-catalog": "workspace:*",
+    "@reactogenic/core": "workspace:*",
+    "@reactogenic/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

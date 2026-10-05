@@ -1,0 +1,87 @@
+// "/dashboard/": figures in cards, quota bars, recent deploys with their
+// status, and one row's actions — a menu that commands a dialog
+// (README.md: a fixture).
+import { Badge, Card, Dialog, DropdownMenu, Progress, Table } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+const live = <Badge tone="success" dot>Live</Badge>;
+const building = <Badge tone="info" dot>Building</Badge>;
+const failed = <Badge tone="danger" dot>Failed</Badge>;
+const replaced = <Badge>Replaced</Badge>;
+
+const DEPLOYS = [
+  { id: <code>dpl_8Hq2</code>, ref: "main · 4f2a91c", status: live, regions: "fra, iad", took: "41 s", when: "12 min ago" },
+  { id: <code>dpl_8Hp9</code>, ref: "checkout-v2 · 77be0d1", status: building, regions: "fra", took: "—", when: "14 min ago" },
+  { id: <code>dpl_8Hn4</code>, ref: "main · 1c09aa3", status: replaced, regions: "fra, iad", took: "39 s", when: "3 h ago" },
+  { id: <code>dpl_8Hk1</code>, ref: "fix-tax-rounding · e21f5b0", status: failed, regions: "fra", took: "1 min 52 s", when: "5 h ago" },
+  { id: <code>dpl_8Hj7</code>, ref: "main · 9ab33f2", status: replaced, regions: "fra, iad", took: "44 s", when: "yesterday" },
+  { id: <code>dpl_8Hg3</code>, ref: "main · 0d4c8e6", status: replaced, regions: "fra, iad", took: "40 s", when: "2 days ago" },
+];
+
+export default function Page() {
+  return (
+    <Layout title="storefront · Dashboard" description="The storefront project: its deploys, their status, and what is left of this month's quota.">
+      <div className="toolbar">
+        <h1>storefront</h1>
+        <DropdownMenu align="end" typeahead>
+          <$Trigger>Actions</$Trigger>
+          <$Item key="redeploy" command="show-modal" commandfor="redeploy">Redeploy main…</$Item>
+          <$Item key="rollback" command="show-modal" commandfor="redeploy">Roll back…</$Item>
+          <$Item key="logs" href="/docs/api/#deploys">View logs</$Item>
+          <$Item key="settings" href="/settings/">Project settings</$Item>
+          <$Item key="pause" disabled>Pause project</$Item>
+        </DropdownMenu>
+      </div>
+
+      <div className="grid">
+        <Card>
+          <$Eyebrow>Deploys this month</$Eyebrow>
+          <$Title>Shipped</$Title>
+          <p className="figure">128</p>
+          <span className="trend">+18% on September</span>
+        </Card>
+        <Card>
+          <$Eyebrow>Median build</$Eyebrow>
+          <$Title>Time to live</$Title>
+          <p className="figure">41 s</p>
+          <span className="trend">−2 min 24 s since 2.4.0</span>
+        </Card>
+        <Card>
+          <$Eyebrow>Availability, 30 days</$Eyebrow>
+          <$Title>Uptime</$Title>
+          <p className="figure">99.98%</p>
+          <span className="trend">one incident, 8 min</span>
+        </Card>
+      </div>
+
+      <div className="split">
+        <Table caption="Recent deploys" rowHeader="id" rows={DEPLOYS}>
+          <$Column key="id">Deploy</$Column>
+          <$Column key="ref">Branch · commit</$Column>
+          <$Column key="status">Status</$Column>
+          <$Column key="regions">Regions</$Column>
+          <$Column key="took" align="end">Build</$Column>
+          <$Column key="when" align="end">When</$Column>
+        </Table>
+        <section className="panel" aria-labelledby="quota">
+          <h2 id="quota">Quota, October</h2>
+          <Progress label="Build minutes" value={1840} max={3000} text="1,840 of 3,000" />
+          <Progress label="Egress" value={86} max={100} text="86 of 100 GB" tone="warning" />
+          <Progress label="Preview deploys" value={12} max={200} text="12 of 200" size="sm" />
+          <Progress label="Seats" value={5} max={5} text="5 of 5" tone="danger" size="sm" />
+          <Progress label="Usage report for September" />
+        </section>
+      </div>
+
+      <Dialog id="redeploy" closedby="closerequest">
+        <$Title>Redeploy main to production?</$Title>
+        <p>
+          This builds <code>main</code> at its newest commit and releases it to <code>fra</code> and <code>iad</code>.
+          The deploy that is live now stays available for a rollback.
+        </p>
+        <$Action key="cancel" variant="ghost">Cancel</$Action>
+        <$Action key="go" href="/dashboard/">Redeploy</$Action>
+      </Dialog>
+    </Layout>
+  );
+}

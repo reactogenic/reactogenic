@@ -1,0 +1,23 @@
+// "/account/", the variant a static host serves: `account/index.html`. Nothing
+// mounts or imports this file, which is what makes it a variant of the route
+// — as `guest.rtsx` beside it is. An action menu without typeahead:
+// `menu-keys` with no data.
+import { pathname } from "@reactogenic/core";
+import { DropdownMenu } from "@reactogenic/ui";
+import { Layout } from "../../layout.rtsx";
+import { greeting } from "./copy.ts";
+
+export default function AccountPage() {
+  return (
+    <Layout title="Account">
+      <h1>{greeting("Ada")}</h1>
+      <p data-route={pathname()}>Signed in.</p>
+      <section #plans />
+      <DropdownMenu id="account">
+        <$Trigger>Account</$Trigger>
+        <$Item key="export">Export</$Item>
+        <$Item key="guest" href="/account/guest.html">As a guest</$Item>
+      </DropdownMenu>
+    </Layout>
+  );
+}

@@ -1,9 +1,11 @@
 package cssprune
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -202,6 +204,175 @@ func TestPruneWithScript(t *testing.T) {
 	}
 }
 
+// TestPruneState: state that only a script can write is decided on the page,
+// unless the page's script names it (builder.md, CSS, *Runtime state*; the
+// owner's ruling on M, decisions.md). Of the attributes that were "maybe"
+// whoever could write them, only what the browser writes by itself still
+// is: `open`, `hidden`, `style` — and `dir` on a text control, `controls`
+// and `loop` on a player. Both ways for
+// each of the others: dropped when nothing can write it, kept when the
+// script names it — as the attribute, or as the property that reflects it.
+func TestPruneState(t *testing.T) {
+	// No element of the page has any of the state.
+	// (No class here is a word of the scripts below: a class the script names
+	// is "maybe" on every element.)
+	const page = `<p class="a">x</p><button class="b">b</button><input class="i"><ul class="list"><li class="o">o</li></ul>`
+	// What the browser itself writes: never decided, script or no script.
+	const browser = `.a[open]{x:y}.a:not([open]){x:y}.a[hidden]{x:y}.a[hidden=until-found]{x:y}.a[style*=width]{x:y}.i[dir=rtl]{x:y}`
+	if out, _, err := PruneWith(browser+`.a[dir=rtl]{x:y}.a[controls]{x:y}.gone[open]{x:y}`, parsePage(t, page), Options{}); err != nil || out != browser {
+		t.Errorf("what the browser writes: %v\n got: %s\nwant: %s", err, out, browser)
+	}
+	// … and what it writes on one kind of element, from that element's own
+	// menu: `dir` on a text control, `controls` and `loop` on a player.
+	const media = `<video class="v" src="/a.webm"></video><audio class="s" controls></audio><textarea class="t"></textarea><p class="a" dir="ltr">x</p>`
+	const own = `.v[controls]{x:y}.v[loop]{x:y}.s:not([controls]){x:y}.t[dir=rtl]{x:y}.a[dir=ltr]{x:y}`
+	if out, _, err := PruneWith(own+`.a[dir=rtl]{x:y}.a[loop]{x:y}.v[muted]{x:y}.t[controls]{x:y}`, parsePage(t, media), Options{}); err != nil || out != own {
+		t.Errorf("what the browser writes on an element of its own: %v\n got: %s\nwant: %s", err, out, own)
+	}
+	for _, tt := range []struct {
+		name string
+		css  string   // rules on state the page does not have
+		by   []string // scripts that may write it, each naming it its own way
+	}{
+		{"inert", `.a[inert]{x:y}`, []string{
+			`function m(e){e.inert=!0}`, `function m(e){e.toggleAttribute("inert")}`, `function m(e){e.setAttribute("inert","")}`,
+		}},
+		{"disabled", `.b[disabled]{x:y}`, []string{
+			`function m(e){e.disabled=!0}`, `function m(e){e.toggleAttribute("disabled",!0)}`, `function m(e){Object.assign(e,{disabled:!0})}`,
+		}},
+		{"checked", `.i[checked]{x:y}`, []string{
+			`function m(e){e.defaultChecked=!0}`, `function m(e){e.setAttribute("checked","")}`,
+			`function m(e){e.checked=!0}`, // the property does not reflect: its name is the attribute's all the same
+		}},
+		{"selected", `.o[selected]{x:y}`, []string{
+			`function m(e){e.defaultSelected=!0}`, `function m(e){e.setAttribute("selected","")}`, `function m(e){e.selected=!0}`,
+		}},
+		{"value", `.i[value=x]{x:y}.o[value="3"]{x:y}`, []string{
+			`function m(e){e.defaultValue="x"}`, `function m(e){e.setAttribute("value","x")}`,
+			`function m(e){e.value=3}`, // reflects on a button, an option, a list item, a hidden input …
+		}},
+		{"aria-expanded", `.b[aria-expanded=true]{x:y}`, []string{
+			`function m(e){e.setAttribute("aria-expanded","true")}`, `function m(e){e.ariaExpanded="true"}`,
+			`function m(e){e.toggleAttribute("aria-expanded")}`, `function m(e){e.removeAttribute("aria-expanded")}`,
+			`function m(e){e["ariaExpanded"]="true"}`,
+		}},
+		{"aria-disabled", `.a[aria-disabled=true]{x:y}.b:is(.gone,[aria-disabled=true]){x:y}`, []string{
+			`function m(e){e.ariaDisabled="true"}`, `function m(e){e.setAttribute("aria-disabled","true")}`,
+			// As menu-keys reads it, in a selector: named is named.
+			`function m(e){return e.querySelectorAll("[role=menuitem]:not(:disabled, [aria-disabled=true])")}`,
+		}},
+		{"aria-current", `.o[aria-current]{x:y}.o[aria-current=page]{x:y}.list:has([aria-current]){x:y}`, []string{
+			`function m(e){e.ariaCurrent="page"}`, `function m(e){e.setAttribute("aria-current","page")}`,
+		}},
+		{"aria-controls, by element", `.b[aria-controls]{x:y}`, []string{
+			`function m(e,t){e.ariaControlsElements=[t]}`, `function m(e){e.setAttribute("aria-controls","t")}`,
+		}},
+		{"aria-activedescendant, by element", `.list[aria-activedescendant]{x:y}`, []string{
+			`function m(e,t){e.ariaActiveDescendantElement=t}`, `function m(e){e.setAttribute("aria-activedescendant","o1")}`,
+		}},
+		{"data-state", `.a[data-state=open]{x:y}`, []string{
+			`function m(e){e.dataset.state="open"}`, `function m(e){e.setAttribute("data-state","open")}`, `function m(e){delete e.dataset.state}`,
+		}},
+	} {
+		css := tt.css + `.gone{x:y}`
+		// Nobody can write it: no script at all, and a script that names
+		// none of it. What the page has not, it never has.
+		for _, script := range []string{``, `function m(e){e.addEventListener("click",()=>e.focus());e.hidden=!e.open}`} {
+			out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
+			if err != nil || out != "" || stats.Unpruned {
+				t.Errorf("%s, script %q: %v\n kept: %s", tt.name, script, err, out)
+			}
+		}
+		for _, script := range tt.by {
+			out, stats, err := PruneWith(css, parsePage(t, page), Options{Script: script})
+			if err != nil || out != tt.css || stats.Unpruned {
+				t.Errorf("%s, script %q: %v\n got: %s\nwant: %s", tt.name, script, err, out, tt.css)
+			}
+		}
+	}
+	// A pseudo-class is "maybe" whoever writes: the ruling leaves those as
+	// they were, and a list that holds one is kept for it.
+	const pseudo = `.b:is(:disabled,[aria-disabled=true]){x:y}.i:checked{x:y}.b:disabled{x:y}`
+	if out, _, err := PruneWith(pseudo+`.i[checked]{x:y}`, parsePage(t, page), Options{}); err != nil || out != pseudo {
+		t.Errorf("pseudo-classes: %v\n got: %s\nwant: %s", err, out, pseudo)
+	}
+
+	// A page that has the state, and no script: what it has, it has — and
+	// keeps. `:not()` of it is "no" there, and a rule on it stays.
+	const has = `<p class="a" inert aria-hidden="true" data-state="open">x</p><button class="b" disabled aria-disabled="true" aria-expanded="false">b</button>` +
+		`<input class="i" checked value="x"><ul class="list"><li class="o" aria-current="page">o</li></ul>`
+	const rules = `.a[inert]{x:y}.a:not([inert]){x:y}.b[disabled]{x:y}.b[aria-disabled=true]{x:y}.b:not([aria-disabled]){x:y}.b[aria-expanded=true]{x:y}.b[aria-expanded=false]{x:y}` +
+		`.i[checked]{x:y}.i[value=x]{x:y}.i:not([value]){x:y}.o[aria-current=page]{x:y}.list:not(:has([aria-current])){x:y}.a[data-state=open]{x:y}.a[data-state=closed]{x:y}`
+	const stay = `.a[inert]{x:y}.b[disabled]{x:y}.b[aria-disabled=true]{x:y}.b[aria-expanded=false]{x:y}.i[checked]{x:y}.i[value=x]{x:y}.o[aria-current=page]{x:y}.a[data-state=open]{x:y}`
+	if out, _, err := PruneWith(rules, parsePage(t, has), Options{}); err != nil || out != stay {
+		t.Errorf("a page that has the state: %v\n got: %s\nwant: %s", err, out, stay)
+	}
+	// … and with a behaviour that takes it away, the negations are back.
+	out, _, err := PruneWith(rules, parsePage(t, has), Options{Script: `function m(e){e.removeAttribute("aria-disabled");e.inert=!1;e.ariaExpanded="true";delete e.dataset.state;e.defaultValue=""}`})
+	if want := `.a[inert]{x:y}.a:not([inert]){x:y}.b[disabled]{x:y}.b[aria-disabled=true]{x:y}.b:not([aria-disabled]){x:y}.b[aria-expanded=true]{x:y}.b[aria-expanded=false]{x:y}` +
+		`.i[checked]{x:y}.i[value=x]{x:y}.i:not([value]){x:y}.o[aria-current=page]{x:y}.a[data-state=open]{x:y}.a[data-state=closed]{x:y}`; err != nil || out != want {
+		t.Errorf("a behaviour that takes the state away: %v\n got: %s\nwant: %s", err, out, want)
+	}
+}
+
+// TestPruneReflects: a property that reflects an attribute names it
+// (builder.md, CSS, *The page's script*, the table of names): by the
+// attribute's own name whatever its case and hyphens, with `default` before
+// it, with `Element` or `Elements` after it, and the token lists.
+func TestPruneReflects(t *testing.T) {
+	const page = `<p class="a">x</p>`
+	for attr, scripts := range map[string][]string{
+		"value":                 {"value", "defaultValue"},
+		"checked":               {"checked", "defaultChecked"},
+		"selected":              {"selected", "defaultSelected"},
+		"muted":                 {"muted", "defaultMuted"},
+		"disabled":              {"disabled"},
+		"inert":                 {"inert"},
+		"readonly":              {"readOnly"},
+		"tabindex":              {"tabIndex"},
+		"aria-expanded":         {"ariaExpanded", `"aria-expanded"`},
+		"aria-haspopup":         {"ariaHasPopup"},
+		"aria-labelledby":       {"ariaLabelledByElements", `"aria-labelledby"`},
+		"aria-describedby":      {"ariaDescribedByElements"},
+		"aria-controls":         {"ariaControlsElements"},
+		"aria-owns":             {"ariaOwnsElements"},
+		"aria-flowto":           {"ariaFlowToElements"},
+		"aria-details":          {"ariaDetailsElements"},
+		"aria-errormessage":     {"ariaErrorMessageElements"},
+		"aria-activedescendant": {"ariaActiveDescendantElement"},
+		"popovertarget":         {"popoverTargetElement"},
+		"commandfor":            {"commandForElement"},
+		"data-state":            {"state", `"data-state"`},
+		"for":                   {"htmlFor"},
+		"rel":                   {"relList"},
+	} {
+		css := `.a[` + attr + `]{x:y}`
+		if out, _, err := PruneWith(css, parsePage(t, page), Options{Script: `function m(e){e.focus()}`}); err != nil || out != "" {
+			t.Errorf("[%s], a script that does not name it: %v: kept %q", attr, err, out)
+		}
+		for _, name := range scripts {
+			script := `function m(e){e.` + name + `=1}`
+			if strings.HasPrefix(name, `"`) {
+				script = `function m(e){e.setAttribute(` + name + `,"")}`
+			}
+			if out, _, err := PruneWith(css, parsePage(t, page), Options{Script: script}); err != nil || out != css {
+				t.Errorf("[%s], script %q: %v: got %q", attr, script, err, out)
+			}
+		}
+	}
+	// Not the other way: another name is another name. (`class` has its own
+	// test: TestPruneWithScript.)
+	for attr, script := range map[string]string{
+		"aria-expanded": `function m(e){e.ariaExpandedBy=1;e.expanded=1;e.aria=1}`,
+		"value":         `function m(e){e.valueAsNumber=1;e.defaultValues=1}`,
+		"checked":       `function m(e){e.indeterminate=!0}`,
+	} {
+		if out, _, err := PruneWith(`.a[`+attr+`]{x:y}`, parsePage(t, page), Options{Script: script}); err != nil || out != "" {
+			t.Errorf("[%s], script %q: %v: kept %q", attr, script, err, out)
+		}
+	}
+}
+
 // TestPruneScriptRemoves: a behaviour takes away as well as it adds. A class
 // or an id the page has is "maybe" once the page's script names it — or may
 // write the attribute whole — so its negation is "maybe" too: `:not(.x)` is
@@ -366,6 +537,7 @@ func TestDesignSystemScripts(t *testing.T) {
 		t.Fatalf("no behaviours of @reactogenic/ui: %v", err)
 	}
 	flag := regexp.MustCompile(`\bRG_[A-Z0-9_]+\b`)
+	state := uiState(t)
 	for _, file := range files {
 		source, err := os.ReadFile(file)
 		if err != nil {
@@ -391,11 +563,68 @@ func TestDesignSystemScripts(t *testing.T) {
 			t.Errorf("%s may write `class` or `id` whole: classes %v, ids %v", filepath.Base(file), names.writesClass(), names.writesID())
 		}
 		// What it names is state a selector may be about: none of it a
-		// class the CSS convention forbids a script to toggle.
-		for _, name := range []string{"classList", "className", "dataset", "setAttribute", "toggleAttribute"} {
+		// class the CSS convention forbids a script to toggle — and no
+		// attribute written through an API that could take a name the
+		// reader does not see (`setAttribute("aria-" + state)`).
+		for _, name := range []string{
+			"classList", "className", "dataset", "setAttribute", "toggleAttribute", "removeAttribute",
+			"setAttributeNS", "removeAttributeNS", "setAttributeNode", "setAttributeNodeNS", "removeAttributeNode",
+			"setNamedItem", "setNamedItemNS", "removeNamedItem", "removeNamedItemNS",
+		} {
 			if names.words[name] {
 				t.Errorf("%s names `%s`: it writes what the HTML does not show", filepath.Base(file), name)
 			}
 		}
+		// The state the design system's CSS selects on, and each behaviour
+		// names: on a page that mounts it those rules are "maybe"
+		// (builder.md, CSS, *Runtime state* — state only a script writes is
+		// decided on the page unless the page's script names it). So a
+		// behaviour that writes `aria-expanded` has to be seen here, by the
+		// attribute's name or the property's: one that starts to is not a
+		// mistake, and this table says which rules its pages then keep.
+		var named []string
+		for _, attr := range state {
+			if !dynamic(attr) && names.attribute(attr) {
+				named = append(named, attr)
+			}
+		}
+		if got, want := strings.Join(named, " "), stateNamed[filepath.Base(file)]; got != want {
+			t.Errorf("%s names the state %q, not %q: update stateNamed, and components.md (*CSS convention*)", filepath.Base(file), got, want)
+		}
 	}
+	// The table is about something: the CSS does select on state.
+	if !slices.Contains(state, "aria-disabled") || !slices.Contains(state, "aria-current") {
+		t.Errorf("the state attributes of @reactogenic/ui's CSS: %v", state)
+	}
+}
+
+// stateNamed: the attributes of @reactogenic/ui's CSS that each behaviour
+// names — but `open`, `hidden` and `style`, which are "maybe" without it.
+// `menu-keys` writes none: it reads `aria-disabled`, in the selector of the
+// items it moves between — named is named, the safe side.
+var stateNamed = map[string]string{
+	"invokers.ts":  "",
+	"menu-keys.ts": "aria-disabled",
+	"overlays.ts":  "",
+}
+
+// uiState is every attribute a selector of @reactogenic/ui's CSS is about,
+// sorted.
+func uiState(t *testing.T) []string {
+	t.Helper()
+	files, err := filepath.Glob("../../../../packages/ui/src/*.css")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no CSS of @reactogenic/ui: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, file := range files {
+		source, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range regexp.MustCompile(`\[\s*([a-zA-Z][\w-]*)\s*(?:[~|^$*]?=[^\]]*)?\]`).FindAllStringSubmatch(string(source), -1) {
+			seen[strings.ToLower(m[1])] = true
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
 }

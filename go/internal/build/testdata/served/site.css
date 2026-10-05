@@ -75,3 +75,21 @@ head > script {
 .card:not(.list) {
   order: 20; /* never: nothing names `list`, or writes `class` whole */
 }
+
+/* State only a script can write (builder.md, *CSS*, *Runtime state*) is
+   decided on the page unless the page's script names it. "/toggle/" has
+   none of it as it loads; its behaviour writes the first two — through the
+   property that reflects the attribute, and through `dataset` — and after a
+   click both rules match the item (each seen by a property of its own).
+   Nothing names `aria-pressed`: nobody can make the third match, and no
+   pruned page has it. */
+.card[aria-expanded="true"] > .item {
+  order: 21; /* `.ariaExpanded = "true"` */
+  flex-grow: 21;
+}
+.card[data-state="open"] > .item {
+  order: 22; /* `.dataset.state = "open"` */
+}
+.card[aria-pressed="true"] {
+  order: 23; /* never: no script of the site names it */
+}

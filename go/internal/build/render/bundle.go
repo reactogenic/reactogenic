@@ -47,7 +47,7 @@ var (
 	reactJS string
 )
 
-// bundle is the render bundle (plan.md, RGP2-010): every page and React's
+// bundle is the render bundle (plan.md, RGP2-010): every variant and React's
 // static renderer as one script that defines `__reactogenic_render`.
 type bundle struct {
 	code      string
@@ -73,8 +73,10 @@ type variant struct {
 
 // entry is the generated entry (builder.md, *What shell code can ask the
 // builder*; plan.md, *The build-time protocol*): `__reactogenic_render`
-// renders one page and returns { html, mounts, components }, or throws;
-// while it renders, `__reactogenic_build` is the page's.
+// renders one document — a variant of a route, named by its path
+// (Route.Path) — and returns { html, mounts, components }, or throws; while
+// it renders, `__reactogenic_build` is the page's. `pathname` there is the
+// route's, in every variant of it (*Routes*).
 func entry(routes []Route, v variant) string {
 	var b strings.Builder
 	if v.plain {
@@ -92,7 +94,7 @@ func entry(routes []Route, v variant) string {
 	}
 	b.WriteString("const pages = {")
 	for i, route := range routes {
-		fmt.Fprintf(&b, " %s: page%d,", strconv.Quote(route.Pathname), i)
+		fmt.Fprintf(&b, " %s: [page%d, %s],", strconv.Quote(route.Path()), i, strconv.Quote(route.Pathname))
 	}
 	b.WriteString(` };
 
@@ -102,10 +104,58 @@ function coded(name, message) {
   return error;
 }
 
-function render(pathname) {
+// What a value that is not JSON is, for the message.
+function kind(value) {
+  if (value === undefined) return "undefined";
+  if (typeof value === "number") return String(value);
+  if (typeof value !== "object") return "a " + typeof value;
+  const type = Object.getPrototypeOf(value)?.constructor?.name;
+  return type ? "an instance of ` + "`" + `" + type + "` + "`" + `" : "an object";
+}
+
+// A mount's data as the builder writes it into the page's script: JSON —
+// a plain object of JSON values, and nothing a literal cannot say — with
+// its keys sorted, so that the same data is the same text however a use
+// site wrote it (builder.md, *Behaviours*, mount-data). A key whose value
+// is undefined is left out, as JSON.stringify leaves it.
+function json(value, at, within, wrong) {
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return JSON.stringify(value);
+    case "number":
+      if (Number.isFinite(value)) return JSON.stringify(value);
+      break;
+    case "object": {
+      if (value === null) return "null";
+      if (within.includes(value)) throw wrong(at, "an object that holds itself");
+      const inside = [...within, value];
+      if (Array.isArray(value)) {
+        const items = [];
+        for (let i = 0; i < value.length; i++) items.push(json(value[i], at + "[" + i + "]", inside, wrong));
+        return "[" + items.join(",") + "]";
+      }
+      const proto = Object.getPrototypeOf(value);
+      if (proto !== Object.prototype && proto !== null) break;
+      if (Object.getOwnPropertySymbols(value).length > 0) throw wrong(at, "an object with a symbol for a key");
+      const members = [];
+      for (const key of Object.keys(value).sort()) {
+        const member = /^[A-Za-z_$][\w$]*$/.test(key) ? at + "." + key : at + "[" + JSON.stringify(key) + "]";
+        // In a literal, "__proto__" is the object's prototype, not a key.
+        if (key === "__proto__") throw wrong(member, "not a key a literal can have");
+        if (value[key] !== undefined) members.push(JSON.stringify(key) + ":" + json(value[key], member, inside, wrong));
+      }
+      return "{" + members.join(",") + "}";
+    }
+  }
+  throw wrong(at, kind(value));
+}
+
+function render(path) {
   start();
-  if (!Object.hasOwn(pages, pathname)) throw new Error("no page at " + pathname);
-  const page = pages[pathname].default;
+  if (!Object.hasOwn(pages, path)) throw new Error("no page at " + path);
+  const [module, pathname] = pages[path];
+  const page = module.default;
   if (typeof page !== "function") throw coded("page-no-default", "The page has no default export that is a component");
   const mounts = [], ids = {};
   globalThis.__reactogenic_build = {
@@ -118,11 +168,19 @@ function render(pathname) {
       ids[p] = (ids[p] || 0) + 1;
       return p + ids[p];
     },
-    mount(module, id, flags) {
+    mount(module, id, flags, data) {
       const mount = { module: String(module), id: id == null ? "" : String(id) };
       if (flags != null) {
         mount.flags = {};
         for (const name of Object.keys(flags)) mount.flags[name] = Boolean(flags[name]);
+      }
+      if (data != null) {
+        const said = "` + "`" + `mount(" + JSON.stringify(mount.module) + ")` + "`" + `: ";
+        // A behaviour of the page is called once, for all who mounted it:
+        // there is no use site to hand it anything of.
+        if (mount.id === "") throw coded("mount-data", said + "a behaviour of the page — mounted without an id — takes no data");
+        if (typeof data !== "object" || Array.isArray(data)) throw coded("mount-data", said + "the data is not a plain object of JSON values: it is " + (Array.isArray(data) ? "an array" : kind(data)));
+        mount.data = json(data, "data", [], (at, what) => coded("mount-data", said + "the data is not JSON: ` + "`" + `" + at + "` + "`" + ` is " + what));
       }
       mounts.push(mount);
     },
@@ -141,9 +199,9 @@ function render(pathname) {
 
 // For a host that cannot read an exception's properties: the page, or what
 // was thrown and the components it passed through, as JSON.
-function renderJSON(pathname) {
+function renderJSON(path) {
   try {
-    return JSON.stringify({ page: render(pathname) });
+    return JSON.stringify({ page: render(path) });
   } catch (thrown) {
     const isError = thrown instanceof Error;
     return JSON.stringify({

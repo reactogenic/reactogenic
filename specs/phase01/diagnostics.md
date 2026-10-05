@@ -137,6 +137,7 @@ Origins of synthesized code:
 | `value={value}` / bare `value` | the bare attribute |
 | `$X={{ … }}`, an item of `$X={[ … ]}` | the slot element's tag |
 | a property of the slot object | the slot attribute it came from |
+| the name of a keyed slot's entry, when it is not the key as written — `"#10":` for `key="10"`, `[_slotEntryName(…)]` around `key={expr}` (syntax.md, *Keyed slots*) | the `key` string; the `key` attribute |
 | `children: (params) => …` | the params pattern |
 | ternary chain, `_on`, IIFE of `Match` / `Switch` | the `Match` / `Switch` tag |
 | `_on === value` | the `is` attribute |
@@ -167,7 +168,7 @@ they never wrote:
 | slot-no-args | a property of `renderSlot`'s args is not assignable to `never` (args to a slot whose body is not a function) | that arg: "`$Label` takes no args: its body is not a function" |
 | slot-list | `renderSlot`'s args are `never` (a slot typed as an array) | the attachment: "`$List` is a list; a slot is one value" |
 | slot-key-no-args | the `[SLOT_KEY]` property is excess (TS2353): a key function on a slot without args | the `key` attribute |
-| slot-key-inline | a computed entry key is not a string or number (TS2464): a key function passed by reference | the `key` value; TS's other errors inside that slot element are dropped |
+| slot-key-inline | an entry key is not a string or number: the argument of `slotEntryName(…)`, which `key={expr}` is emitted as, is not assignable (TS2345, on the whole value — an error inside the expression keeps TS's message) — a key function passed by reference; or a bare `key`, `[undefined]` (TS2464) | the `key` value (a bare `key`: the attribute); TS's other errors inside that slot element are dropped, and its hint "Did you mean to call this expression?" with them |
 
 Rewrites are matched by the error's origin and its TS code, never by message
 text. An error that matches no rule keeps TS's message, at the origin.

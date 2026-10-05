@@ -77,6 +77,7 @@ type rendered struct {
 			Module string          `json:"module"`
 			ID     string          `json:"id"`
 			Flags  map[string]bool `json:"flags"`
+			Data   string          `json:"data"` // JSON text, its keys sorted; "": none
 		} `json:"mounts"`
 		Components map[string]int `json:"components"`
 	} `json:"page"`
@@ -136,9 +137,9 @@ func (e *engine) close() {
 	e.vm.Close()
 }
 
-// render renders one page.
-func (e *engine) render(pathname string) (*rendered, error) {
-	value, err := e.vm.Call("__reactogenic_render_json", pathname)
+// render renders one document: path is its Route.Path.
+func (e *engine) render(path string) (*rendered, error) {
+	value, err := e.vm.Call("__reactogenic_render_json", path)
 	if err != nil {
 		// Not an exception of the page — those come back as JSON: the
 		// engine ended the call.

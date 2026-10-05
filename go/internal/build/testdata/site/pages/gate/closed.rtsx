@@ -1,0 +1,13 @@
+// "/gate/" has a variant and no `index`: a static host serves nothing at
+// its pathname, and it is a route all the same — `gate/closed.html` is
+// built, and a link to "/gate/" is a link to a route.
+import { Layout } from "../../layout.rtsx";
+
+export default function ClosedPage() {
+  return (
+    <Layout title="Closed">
+      <h1>Closed</h1>
+      <p>Come back <a href="/account/guest.html">as a guest</a>.</p>
+    </Layout>
+  );
+}

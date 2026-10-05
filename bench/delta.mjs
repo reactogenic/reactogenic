@@ -22,7 +22,9 @@
 //                 `menu-keys` leaves with `invokers`. Reported, not judged.
 //   typeahead     one option of one component: `typeahead` off on the action
 //                 menu of `/syntax/`. The site's one flag
-//                 (`RG_MENU_TYPEAHEAD`): what it is worth. Reported.
+//                 (`RG_MENU_TYPEAHEAD`) and its one mount with data
+//                 (`{ typeahead: true }`): what it is worth, and that the
+//                 page's HTML does not carry it. Reported.
 //
 // Exit status: 1 when T4 fails, or when the build takes the cheat sheet
 // deleted alone. No dependency (node >= 22).
@@ -151,7 +153,11 @@ function compare(title, edit, expect) {
   md += `\n**HTML.** `;
   const cut = cutOut(a.html, b.html, expect.markup);
   let gone = [];
-  if (expect.spans === 1) {
+  if (expect.spans === 0) {
+    // What only the behaviour reads is the mount's data (builder.md,
+    // *Behaviours*): nothing of it is in the page.
+    md += a.html === b.html ? `The page's HTML is the same bytes before and after: ${expect.markupIs}.\n` : fail("the page's HTML changed") + "\n";
+  } else if (expect.spans === 1) {
     if (!cut) md += fail("the page after is not the page before with one span cut out");
     else {
       md += `The page after is the page before with one span of ${n(Buffer.byteLength(cut.span))} B cut out, at byte ${n(Buffer.byteLength(a.html.slice(0, cut.at)))}; every other byte is where it was. `;
@@ -206,6 +212,8 @@ function compare(title, edit, expect) {
   md += resized.length === 0 ? `Every module that stays is the same bytes.` : `Of those that stay, ${resized.map((f) => `\`${f}\` went from ${n(ma[f])} to ${n(mb[f])} B`).join(", ")}.`;
   const flagsOf = (entry) => (entry.mounts ?? []).flatMap((m) => Object.entries(m.flags ?? {}).map(([k, v]) => `\`${k}=${v}\``)).join(" ") || "none";
   if (flagsOf(a.entry) !== flagsOf(b.entry)) md += ` Flags: ${flagsOf(a.entry)} → ${flagsOf(b.entry)}.`;
+  const dataOf = (entry) => (entry.mounts ?? []).filter((m) => m.data).map((m) => `\`${JSON.stringify(m.data)}\` on \`#${m.id}\``).join(", ") || "none";
+  if (dataOf(a.entry) !== dataOf(b.entry)) md += ` Mount data: ${dataOf(a.entry)} → ${dataOf(b.entry)}.`;
   md += "\n";
   if (expect.judged && !(JSON.stringify(left) === JSON.stringify(expect.behaviours) && resized.length === 0)) md += `\n${fail(`expected ${expect.behaviours.join(", ")} to leave and the rest to stay as it was`)}\n`;
   const twin = PAGES.find((p) => p !== expect.page && parts("always", "after", p).js === b.js);
@@ -256,9 +264,8 @@ compare("cheat-sheet", (dir) => [
 
 compare("typeahead", (dir) => [remove(dir, "pages/syntax/index.rtsx", /(?<=<DropdownMenu) typeahead(?=>)/, "the menu's `typeahead`")], {
   heading: "One option: `typeahead` off on the action menu of `/syntax/`",
-  file: "pages/syntax/index.rtsx", page: "/syntax/", judged: false, spans: 1,
-  markup: (span) => span === ' data-typeahead=""',
-  markupIs: "the attribute the behaviour reads",
+  file: "pages/syntax/index.rtsx", page: "/syntax/", judged: false, spans: 0,
+  markupIs: "the option is no attribute — only the behaviour reads it, so it is the mount's data, in the script",
 });
 
 md += `\n## Verdict\n\n${failures.length === 0 ? "T4 **passes**: deleting the *Install* dialog from `/` removed its markup, the CSS selectors that name it and the `invokers` behaviour from that page, nothing else of the page, and no byte of any other page." : "T4 **fails**:\n\n" + failures.map((f) => "- " + f).join("\n")}\n`;

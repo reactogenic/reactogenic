@@ -95,7 +95,7 @@ function effects(type) {
 // Suspense boundary renders its fallback for anything its content throws —
 // a shell rule among it — so there is none in the shell; a `lazy` component
 // has nothing to wait for, and is an error where it is rendered, not where
-// it is made: an island's, exported beside the shell's, is nobody's mistake.
+// it is made: a dynamic segment's, exported beside the shell's, is nobody's mistake.
 function check(type, props) {
   if (type === SUSPENSE) throw suspends("`<Suspense>`");
   if (typeof type === "object" && type !== null && type.$$typeof === LAZY) throw suspends("a `lazy` component");

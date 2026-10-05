@@ -2,6 +2,7 @@ package render
 
 import (
 	"cmp"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -20,9 +21,9 @@ type run struct {
 	bundle  *bundle
 }
 
-// Render executes the pages of routes — modules of program, which has been
-// checked — and returns the record of each page that rendered, in the order
-// of routes, and the reports: the shell rules (builder.md, *Shell code in
+// Render executes the pages of routes — the variants of the site's routes:
+// modules of program, which has been checked — and returns the record of
+// each page that rendered, in the order of routes, and the reports: the shell rules (builder.md, *Shell code in
 // phase 2*), the pages that are not documents (*Routes*), and — as warnings
 // — what shell code printed. A page that threw, or is not a document, has no
 // record; when the bundle cannot be made, or a module throws while it loads,
@@ -97,7 +98,7 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 				continue
 			}
 		}
-		result, err := engine.render(route.Pathname)
+		result, err := engine.render(route.Path())
 		reports = append(reports, r.printed(route, engine.console())...)
 		engine.close()
 		switch {
@@ -114,7 +115,7 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 				continue
 			}
 			for _, m := range result.Page.Mounts {
-				page.Mounts = append(page.Mounts, Mount{Module: m.Module, ID: m.ID, Flags: m.Flags})
+				page.Mounts = append(page.Mounts, Mount{Module: m.Module, ID: m.ID, Flags: m.Flags, Data: m.Data})
 			}
 			pages = append(pages, page)
 		}
@@ -151,9 +152,15 @@ func (r *run) pageAt(route *Route) (name string, at emit.Span, line, col int) {
 	return route.File, emit.Span{}, 1, 1
 }
 
-// notDocument is page-not-document.
+// notDocument is page-not-document. For a variant other than `index` the
+// message says what made the file a page: nothing mounts or imports it — a
+// segment or a module that was left behind is found here (builder.md,
+// *Routes*).
 func (r *run) notDocument(route *Route) report.Report {
 	out := report.Report{Code: "page-not-document", Message: "The page's root element is not `<html>`: a page renders the whole document"}
+	if route.Name() != Index {
+		out.Message = "`" + path.Base(route.File) + "` is a variant of the route " + route.Pathname + " — nothing mounts or imports it — and its root element is not `<html>`: a variant renders the whole document"
+	}
 	out.File, out.Span, out.Line, out.Col = r.pageAt(route)
 	return out
 }

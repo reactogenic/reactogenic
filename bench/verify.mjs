@@ -27,7 +27,8 @@
 //      comparison is made on the builder's own fixture
 //      (go/internal/build/testdata/served): a page whose behaviour takes
 //      away a class, an id and an element's content — before and after it
-//      does — and a page that a document in its frame writes to;
+//      does — a page that a document in its frame writes to, and a page
+//      with `<style>` elements of its own, which are pruned with its sheet;
 //   3. the validity probe of the pruner (plan.md, RGP2-050): every
 //      pseudo-class and pseudo-element `cssprune` takes for known to every
 //      browser of the floor, and the `:nth-*()` forms it accepts, must parse
@@ -518,7 +519,8 @@ for (const engineName of engineList) {
   // one, writes an id over and sets a text over an element — four rules that
   // match nothing in the page as written match then (`.card:not(.collapsed)
   // > .body`, …), and must be in its sheet. Its `/frame/` holds a document of
-  // the site, whose script gives the page's body a class.
+  // the site, whose script gives the page's body a class. Its `/styled/` has
+  // `<style>` elements of its own, pruned with the page's sheet.
   {
     const pruned = await serve(fixtureDir), whole = await serve(fixtureControlDir);
     const context = await browser.newContext({ viewport: { width: WIDE, height: 800 } });
@@ -537,6 +539,13 @@ for (const engineName of engineList) {
     await compare("", "the fixture's /frame/, written to by the document in its frame", page, other);
     const lit = await orders(page, ["body"]);
     check("", "(the frame's script gave the body a class, and its rule is in the page's sheet)", lit.join() === "15", JSON.stringify(lit));
+    // Its `/styled/` has `<style>` elements of its own — CSS of the page:
+    // the default build prunes them with the page's sheet and writes them
+    // back, the control leaves them as they were written.
+    await page.goto(pruned.origin + "/styled/"); await other.goto(whole.origin + "/styled/");
+    await compare("", "the fixture's /styled/, whose own <style> elements are pruned with its sheet", page, other);
+    const noted = await page.evaluate(() => [getComputedStyle(document.querySelector(".note")).color, getComputedStyle(document.querySelector(".note b")).animationName].join());
+    check("", "(its own rules apply: the note's colour from a custom property, its animation)", noted === "rgb(0, 128, 128),blink", noted);
     await context.close();
     pruned.close(); whole.close();
   }
@@ -627,7 +636,7 @@ for (const engineName of engineList) {
 // ---- the report --------------------------------------------------------------------
 const count = (s, e) => results.filter((r) => r.state === s && (!e || r.engine === e)).length;
 const engines = [...new Set(results.map((r) => r.engine))];
-let md = `# The built site in a browser\n\nWritten by \`node bench/verify.mjs${opts.inline ? " --inline " + opts.inline : ""}\` (specs/phase02/plan.md, RGP2-050, T7). The site as \`reactogenic build${flags.length ? " " + flags.join(" ") : ""}\` writes it, and the control (\`--no-specialize\`), served over HTTP; every page at ${WIDE} and ${NARROW} px. With it the builder's fixture for what a page's script takes away (\`go/internal/build/testdata/served\`: \`/toggle/\`, \`/frame/\`), built the same two ways — the site's own behaviours write nothing to the page.\n\n`;
+let md = `# The built site in a browser\n\nWritten by \`node bench/verify.mjs${opts.inline ? " --inline " + opts.inline : ""}\` (specs/phase02/plan.md, RGP2-050, T7). The site as \`reactogenic build${flags.length ? " " + flags.join(" ") : ""}\` writes it, and the control (\`--no-specialize\`), served over HTTP; every page at ${WIDE} and ${NARROW} px. With it the builder's fixture for what the site cannot show (\`go/internal/build/testdata/served\`), built the same two ways: what a page's script takes away (\`/toggle/\`, \`/frame/\`) — the site's own behaviours write nothing to the page — and a page's own \`<style>\` elements, pruned with its sheet (\`/styled/\`).\n\n`;
 md += `| Engine | Passed | Known | Failed |\n| --- | ---: | ---: | ---: |\n`;
 for (const e of engines) md += `| ${e} | ${count("ok", e)} | ${count("known", e)} | ${count("FAIL", e)} |\n`;
 const styles = results.filter((r) => r.name.startsWith("styles, "));

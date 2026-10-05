@@ -49,7 +49,8 @@ threshold that refutes the bet fails.
 | `verify.mjs` | the built site and the control in Chromium and WebKit, at 1200 and 400 px: the components' behaviour on real output, the computed style of every element in the two builds — at rest, dark, reduced motion, hover, keyboard focus, each overlay open — the same comparison on the builder's fixture for what a page's script takes away (`go/internal/build/testdata/served`: `/toggle/` before and after its behaviour runs, `/frame/`), which the site cannot show: its behaviours write nothing — and the probe of the pruner's selector tables (`go/internal/build/cssprune/selector.go`) | Playwright and its browsers, which are `packages/ui`'s: `pnpm --filter @reactogenic/ui exec playwright install chromium webkit`. `--engines chromium`, `--inline never`, `--shots <dir>` |
 
 `lib.mjs` is what they share: the binary, a build, a page of a build taken
-apart, a sheet read as its selectors.
+apart, a page's script read statement by statement (T1), a sheet read as
+its selectors.
 
 `site.mjs` and `delta.mjs` write the same bytes on every run of the same
 tree: nothing in their reports is a path, a date or a version.
@@ -60,3 +61,31 @@ the site's own suite, with `--base` and screenshots of whole pages;
 `verify.mjs` is the measurement of T7: it adds Back, hover, dark, reduced
 motion, the menu's Tab, the probe, and a check that the style comparison
 sees a missing rule.
+
+## The catalog
+
+The docs site has three components in one layout; what component awareness
+is worth where a page uses a few of many is measured on a **fixture**
+(`specs/phase02/bet.md`, *The catalog*; decisions.md, *For the owner*, L):
+
+| | |
+| --- | --- |
+| `catalog/` | `@reactogenic/bench-catalog`: twenty components — the four of `@reactogenic/ui` and sixteen written for the measurement, in `.rtsx`, each with its CSS, four with a behaviour. **Not the design system** (`catalog/README.md`) |
+| `catalog-site/` | ten pages of the kinds a product site has, each on three to five components beyond the layout's — one on eight, one on none. Which page uses what, and why, was written down before anything was measured (`catalog-site/README.md`) |
+
+Both are private workspace packages (`pnpm-workspace.yaml`): the site
+resolves the catalog as a site resolves a design system.
+
+```sh
+node bench/catalog.mjs          # bytes: T5 in brotli, T1, T2, T6, T8, a delta in T4's style → results/catalog.md
+node bench/catalog-verify.mjs   # browsers: the pages load, and pruning changes nothing      → results/catalog-verify.md
+```
+
+| Script | Does | Needs |
+| --- | --- | --- |
+| `catalog.mjs` | type-checks the site (`reactogenic check`), builds it three ways — as it ships, the control `--no-specialize`, `--inline never` — each of which must print no diagnostic, and runs `measure.mjs` on each. Then: what each component weighs, what each page is, the default against the control page by page (CSS, JS, CSS + JS, and as a share of the page), the session of ten pages with its running total, **T5 page by page in brotli bytes** with gzip and raw beside, and T1, T2, T6, T8 as each can be read on a catalog. Last, one component deleted from one page, twice (the FAQ accordion of `/pricing/`, the toast of `/settings/`): what leaves, and that no other page changes. The same options as `site.mjs`; the same bytes on every run | Node ≥ 22; Chrome for the cold loads, or `--static` |
+| `catalog-verify.mjs` | the site and the control in Chromium and WebKit, at 1200 and 400 px: every page loads with no console error and no failed request; and in each of 244 states per engine — at rest, dark, reduced motion, forced colours, keyboard focus, the layout's menu and drawer, and what the catalog's own behaviours write (a tab selected by a click, a key and the hash, a field counted to its limit, a password shown, a toast, a sample copied, …) — the computed style of every element is the same in the two builds, **and no selector that the page's sheet lacks matches an element**: that one names what was wrongly dropped. `--engines`, `--inline never`, `--shots <dir>` | Playwright and its browsers, as `verify.mjs` |
+
+`compare.mjs` is the comparison of two builds of one page, lifted from
+`verify.mjs` — which keeps its own copy, so that the measurement of the docs
+site is the script that was reviewed.

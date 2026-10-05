@@ -1,3 +1,5 @@
 packages:
   - packages/*
   - site
+  - bench/catalog
+  - bench/catalog-site

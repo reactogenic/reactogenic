@@ -1,0 +1,102 @@
+// "/docs/": the quickstart. The install command per package manager is a set
+// of tabs that follows the URL's hash, the samples can be copied
+// (README.md: a fixture).
+import { Breadcrumbs, Callout, CodeBlock, Tabs } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+const CONFIG = `# exemplar.toml
+name = "storefront"
+regions = ["fra", "iad"]
+
+[build]
+command = "pnpm build"
+output = "dist"
+
+[health]
+path = "/healthz"
+timeout = "5s"`;
+
+const DEPLOY = `$ exemplar deploy
+  building   storefront@4f2a91c
+  pushed     registry.exemplar.example/storefront:4f2a91c  (48 MB)
+  released   fra  iad
+  ready      https://storefront-4f2a91c.exemplar.example  in 41s`;
+
+const WORKFLOW = `name: deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: exemplar/setup@v2
+      - run: exemplar deploy --token "$EXEMPLAR_TOKEN"
+        env:
+          EXEMPLAR_TOKEN: \${{ secrets.EXEMPLAR_TOKEN }}`;
+
+export default function Page() {
+  return (
+    <Layout title="Quickstart" description="Install the Exemplar CLI, link a repository and ship the first deploy: five minutes, three commands.">
+      <article className="prose">
+        <Breadcrumbs>
+          <$Crumb key="home" href="/">Exemplar</$Crumb>
+          <$Crumb key="docs" href="/docs/">Documentation</$Crumb>
+          <$Crumb key="page">Quickstart</$Crumb>
+        </Breadcrumbs>
+        <h1>Quickstart</h1>
+        <p className="lead">From an empty terminal to a service on a public URL: three commands, about five minutes.</p>
+
+        <h2 id="install">Install the CLI</h2>
+        <p>
+          The CLI is one binary. Install it with the package manager your project already uses, or download it from the{" "}
+          <a href="/changelog/">releases</a>.
+        </p>
+        <Tabs id="pm" label="Package manager" hash>
+          <$Tab key="pnpm" label="pnpm"><CodeBlock title="shell" copy>pnpm add -D @exemplar/cli</CodeBlock></$Tab>
+          <$Tab key="npm" label="npm"><CodeBlock title="shell" copy>npm install --save-dev @exemplar/cli</CodeBlock></$Tab>
+          <$Tab key="yarn" label="Yarn"><CodeBlock title="shell" copy>yarn add --dev @exemplar/cli</CodeBlock></$Tab>
+          <$Tab key="brew" label="Homebrew"><CodeBlock title="shell" copy>brew install exemplar/tap/exemplar</CodeBlock></$Tab>
+        </Tabs>
+        <Callout tone="tip">
+          <$Title>Check the install</$Title>
+          <p><code>exemplar --version</code> prints the version and the commit it was built from. Anything from 2.0 on reads the config below.</p>
+        </Callout>
+
+        <h2 id="configure">Describe the service</h2>
+        <p>
+          One file at the root of the repository says what to build and where to run it. Every key has a default; this
+          is a complete config for a static storefront in two regions.
+        </p>
+        <CodeBlock title="exemplar.toml" copy lines>{CONFIG}</CodeBlock>
+        <p>
+          <code>regions</code> takes the codes listed in the <a href="/docs/api/#regions">API reference</a>. The health
+          check is what a deploy waits for before it takes traffic: a service that never answers is never released.
+        </p>
+
+        <h2 id="deploy">Deploy</h2>
+        <p>Link the directory to a project once, then deploy. The first build is the slow one; later builds reuse its layers.</p>
+        <CodeBlock title="shell">{DEPLOY}</CodeBlock>
+        <Callout tone="warning">
+          <$Title>Deploy tokens are secrets</$Title>
+          <p>
+            A token can release to every environment of its project. Keep it in your CI's secret store, never in the
+            repository, and rotate it from <a href="/settings/">Settings</a> when someone leaves.
+          </p>
+        </Callout>
+
+        <h2 id="ci">Deploy from CI</h2>
+        <p>On every push to <code>main</code>, with the token from the step above:</p>
+        <CodeBlock title=".github/workflows/deploy.yml" copy lines>{WORKFLOW}</CodeBlock>
+
+        <h2 id="next">Next</h2>
+        <ul>
+          <li><a href="/docs/api/">The API reference</a>: every option of the config and of the HTTP API.</li>
+          <li><a href="/dashboard/">The dashboard</a>: the deploy you just made, its logs and its quota.</li>
+          <li><a href="/pricing/">Pricing</a>: what the free plan holds, and when you will leave it.</li>
+        </ul>
+      </article>
+    </Layout>
+  );
+}

@@ -57,7 +57,7 @@ func isSyntaxError(code int) bool {
 
 // The names the transform generates, and the runtime helpers it calls: none
 // is the author's, so none may be in a message.
-var generatedName = regexp.MustCompile(`\b(isAssigned|renderSlot|slotArgs|slotEntry|slotProps|slotKey|noMatch|NOT_ASSIGNED|SLOT_KEY|_on|_args|_entry|_slot|_[A-Z]\w*_\w+)\b`)
+var generatedName = regexp.MustCompile(`\b(isAssigned|renderSlot|slotArgs|slotEntryName|slotEntry|slotProps|slotKey|noMatch|NOT_ASSIGNED|SLOT_KEY|_on|_args|_entry|_slot|_[A-Z]\w*_\w+)\b`)
 
 // reworded are the names the reporting layer gives a TypeScript error
 // (diagnostics.md, *Rewrites*), and the rule that asks the checker

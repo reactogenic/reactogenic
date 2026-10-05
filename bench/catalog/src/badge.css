@@ -1,0 +1,52 @@
+@layer rg.components {
+  .bc-badge {
+    --bc-badge-fg: var(--rg-fg);
+    --bc-badge-bg: var(--rg-hover);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.1em 0.6em;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--bc-badge-bg);
+    color: var(--bc-badge-fg);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: middle;
+
+    &[data-tone="info"] {
+      --bc-badge-fg: var(--bc-info);
+      --bc-badge-bg: var(--bc-info-bg);
+    }
+    &[data-tone="success"] {
+      --bc-badge-fg: var(--bc-success);
+      --bc-badge-bg: var(--bc-success-bg);
+    }
+    &[data-tone="warning"] {
+      --bc-badge-fg: var(--bc-warning);
+      --bc-badge-bg: var(--bc-warning-bg);
+    }
+    &[data-tone="danger"] {
+      --bc-badge-fg: var(--bc-danger);
+      --bc-badge-bg: var(--bc-danger-bg);
+    }
+    &[data-variant="solid"] {
+      background: var(--bc-badge-fg);
+      color: var(--rg-bg);
+    }
+    /* Forced colours drop a background: the outline is what is left of it. */
+    &[data-variant="outline"] {
+      border-color: currentColor;
+      background: none;
+    }
+    &[data-dot]::before {
+      content: "";
+      width: 0.5em;
+      height: 0.5em;
+      border-radius: 50%;
+      background: currentColor;
+    }
+  }
+}

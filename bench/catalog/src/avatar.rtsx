@@ -1,0 +1,31 @@
+// Avatar: a person — a picture, or the initials of the name. A fixture
+// (bench/catalog/README.md).
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./avatar.css";
+
+export interface AvatarProps {
+  /** The person: the accessible name, and where the initials come from. */
+  name: string;
+  /** A picture; without one, the initials. */
+  src?: string;
+  /** Option: `data-size`. Default "md". */
+  size?: "sm" | "md" | "lg";
+  /** Option: `data-shape`. Default "circle". */
+  shape?: "circle" | "square";
+}
+
+// "Ada Lovelace" → "AL"; one word → its first two letters.
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const letters = words.length > 1 ? words[0]![0]! + words.at(-1)![0]! : words[0]!.slice(0, 2);
+  return letters.toUpperCase();
+}
+
+export function Avatar({ name, src, size, shape }: AvatarProps) {
+  return (
+    <span className="bc-avatar" role="img" aria-label={name} data-size={size === "md" ? undefined : size} data-shape={shape === "circle" ? undefined : shape}>
+      {src !== undefined ? <img src alt="" /> : <span data-part="initials" aria-hidden="true">{initials(name)}</span>}
+    </span>
+  );
+}

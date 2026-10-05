@@ -1,6 +1,6 @@
-import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotArgs as _slotArgs, slotEntry as _slotEntry, slotKey as _slotKey, slotProps as _slotProps, KEYED as _KEYED } from "@reactogenic/core";
+import { isAssigned as _isAssigned, renderSlot as _renderSlot, slotArgs as _slotArgs, slotEntry as _slotEntry, slotKey as _slotKey, slotProps as _slotProps, KEYED as _KEYED, slotEntryName as _slotEntryName } from "@reactogenic/core";
 export const a = (
-  <Table data $Column={{ [_KEYED]: true, "email": { ...emailColumn }, [nameKey]: { width: 2, children: "Name" }, ...(showAge ? { "age": {} } : {}) }} />
+  <Table data $Column={{ [_KEYED]: true, "email": { ...emailColumn }, [_slotEntryName(nameKey)]: { width: 2, children: "Name" }, ...(showAge ? { "age": {} } : {}) }} />
 );
 export const b = <Table $Column={{ [_KEYED]: true, "x": {}, [undefined]: {} }} />;
 export function Table({ columns, $Column }: any) {

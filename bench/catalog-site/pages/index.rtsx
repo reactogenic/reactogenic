@@ -1,0 +1,83 @@
+// "/": the marketing home. The hero is the page's own markup; the features
+// are cards, the voices have their authors (README.md: a fixture).
+import { Avatar, Badge, Button, Card } from "@reactogenic/bench-catalog";
+import { Layout } from "../layout.rtsx";
+
+const FEATURES = [
+  { key: "preview", eyebrow: "Ship", title: "A preview for every branch", text: "Each push gets its own URL, built from the same image that will go to production. Share it, test it, throw it away." },
+  { key: "rollback", eyebrow: "Recover", title: "Rollbacks in one step", text: "Every deploy is kept whole. Going back is a pointer moved, not a rebuild — eleven seconds at the median." },
+  { key: "regions", eyebrow: "Scale", title: "Fourteen regions, one config", text: "Say where your users are. Routing, certificates and failover follow, and nothing else in the config changes." },
+  { key: "logs", eyebrow: "Observe", title: "Logs that keep their context", text: "A request's logs, traces and the deploy that served it are one view. No query language to learn first." },
+  { key: "secrets", eyebrow: "Secure", title: "Secrets that never reach a build", text: "Values are injected at start, scoped to an environment, and rotated without a deploy." },
+  { key: "budget", eyebrow: "Plan", title: "A bill you can predict", text: "Per-project budgets with a hard stop. You decide what happens at the limit — we never decide it for you." },
+];
+
+export default function Page() {
+  return (
+    <Layout description="Exemplar builds, ships and rolls back your services: a preview for every branch, fourteen regions, and a bill you can predict.">
+      <section className="hero">
+        <Badge tone="info" dot>New: scheduled deploys</Badge>
+        <h1>Deploys you can reason about</h1>
+        <p className="lead">
+          Exemplar builds your service once and runs that exact image everywhere — on a preview URL, in staging, in
+          fourteen regions. What you tested is what ships.
+        </p>
+        <div className="actions">
+          <Button href="/docs/">Start in five minutes</Button>
+          <Button href="/pricing/" variant="ghost">See pricing</Button>
+        </div>
+      </section>
+
+      <section aria-labelledby="features">
+        <h2 id="features">Everything between a commit and a customer</h2>
+        <div className="grid">
+          {FEATURES.map((feature) => (
+            <Card key={feature.key}>
+              <$Eyebrow>{feature.eyebrow}</$Eyebrow>
+              <$Title>{feature.title}</$Title>
+              <p>{feature.text}</p>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="start">
+        <h2 id="start">Pick where to begin</h2>
+        <div className="grid">
+          <Card href="/docs/" variant="filled">
+            <$Title>Read the quickstart</$Title>
+            <p>Install the CLI, link a repository and watch the first deploy go out.</p>
+          </Card>
+          <Card href="/pricing/" variant="filled">
+            <$Title>Compare the plans</$Title>
+            <p>Free for one project. Team and Scale add seats, regions and support.</p>
+          </Card>
+          <Card href="/contact/" variant="filled">
+            <$Title>Talk to an engineer <Badge variant="outline">30 min</Badge></$Title>
+            <p>Bring your architecture diagram. We will tell you honestly whether we fit.</p>
+          </Card>
+        </div>
+      </section>
+
+      <section aria-labelledby="voices">
+        <h2 id="voices">What teams say after a quarter</h2>
+        <div className="quotes">
+          <figure className="quote">
+            <blockquote>We stopped having a deploy day. It is a button now, and nobody watches it.</blockquote>
+            <figcaption>
+              <Avatar name="Mira Okafor" src="/avatars/mira.svg" />
+              <span>Mira Okafor<small>Platform lead, Tessel</small></span>
+            </figcaption>
+          </figure>
+          <figure className="quote">
+            <blockquote>The rollback paid for the year in one night. Eleven seconds, and I went back to sleep.</blockquote>
+            <figcaption>
+              <Avatar name="Jonas Weber" />
+              <span>Jonas Weber<small>Staff engineer, Lakeshore</small></span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+    </Layout>
+  );
+}

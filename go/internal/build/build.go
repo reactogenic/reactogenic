@@ -24,7 +24,6 @@ import (
 	"cmp"
 	"fmt"
 	"net/url"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -90,11 +89,12 @@ func (o Options) public() string {
 func Run(opts Options) (reports []report.Report, bytes *Report, err error) {
 	dir := opts.dir()
 
-	// Routes first: they cost nothing, and without a page there is nothing
-	// to check the project for.
-	routes, err := findRoutes(opts.Pages)
-	if err != nil || len(routes) == 0 {
-		message := fmt.Sprintf("%s holds no page: no `index.rtsx` or `index.tsx`", opts.Pages)
+	// The `.rtsx` files first: they cost nothing, and without one there is
+	// nothing to check the project for. Which of them are variants — built
+	// to documents — is the program's to say.
+	found, err := candidates(opts.Pages)
+	if err != nil || len(found) == 0 {
+		message := fmt.Sprintf("%s holds no page: no `.rtsx` file", opts.Pages)
 		if err != nil {
 			message = opts.Pages + " is not a directory"
 		}
@@ -109,14 +109,21 @@ func Run(opts Options) (reports []report.Report, bytes *Report, err error) {
 	// tsconfig references too: any error stops the build. The pages are
 	// rendered from the project that lists them.
 	var files []string
-	for _, route := range routes {
+	for _, route := range found {
 		files = append(files, route.File, filepath.ToSlash(real(filepath.FromSlash(route.File))))
 	}
 	reports, program := check.Program(filepath.ToSlash(opts.Config), files)
 	if program == nil || check.Errors(reports) > 0 {
 		return reports, nil, nil
 	}
-	named(program, routes)
+	named(program, found)
+
+	// Routes: the variants are the files nothing of the program imports
+	// (builder.md, *Routes*).
+	routes := variants(program, found)
+	if len(routes) == 0 {
+		return append(reports, report.Report{Code: "pages-not-found", Message: fmt.Sprintf("%s holds no page: every `.rtsx` file under it is mounted or imported by another module", opts.Pages)}), nil, nil
+	}
 
 	// What `public/` holds is in the output where the build would write.
 	reports = append(reports, conflicts(opts, routes, static)...)
@@ -196,13 +203,13 @@ func Run(opts Options) (reports []report.Report, bytes *Report, err error) {
 	return reports, bytes, err
 }
 
-// named gives each route's file the name the program has for it. They
+// named gives each `.rtsx` file found the name the program has for it. They
 // differ when the pages are reached through a symbolic link: the program
 // names a file its tsconfig lists as the tsconfig reaches it (`pages/…`,
 // link or not) and one it imports by where it is. A page the program does
 // not hold keeps its name: render says so (render-bundle).
 func named(program *rtsx.Program, routes []render.Route) {
-	var byFile map[string]string // the program's modules that may be pages, by the file they are
+	var byFile map[string]string // the program's `.rtsx` modules, by the file they are
 	for i, route := range routes {
 		if render.Source(program, route.File) != nil {
 			continue
@@ -211,7 +218,7 @@ func named(program *rtsx.Program, routes []render.Route) {
 			byFile = map[string]string{}
 			for _, file := range program.GetSourceFiles() {
 				name := file.FileName()
-				if !slices.Contains(index, path.Base(name)) || file.IsDeclarationFile {
+				if !strings.HasSuffix(name, extension) || file.IsDeclarationFile {
 					continue
 				}
 				// One file under two names: the first, as the program orders them.
@@ -244,6 +251,11 @@ var rounds = 8
 // stylesheet's own element holds no text there: a sheet is not pruned
 // against itself.
 //
+// A `<style>` of the page's own is CSS of the page as its sheet is: the
+// pruner is given each (stylesOf), prunes them together, and what it leaves
+// is written in place of the element's text when the page is packaged
+// (ownStyle).
+//
 // Those two elements are the builder's, and the pruner is told which they
 // are (builders): the page's `<script>` is the one whose text it is given —
 // the script was built before the CSS for that — and not "a script of the
@@ -264,6 +276,14 @@ func prune(opts Options, site []built, sheets []string) (reports []report.Report
 		}
 		return minified[css]
 	}
+	// The page's own `<style>` elements are CSS of the page: pruned with its
+	// sheet, and written back in place (builder.md, *The builder's own
+	// elements*).
+	for i := range site {
+		var said []report.Report
+		site[i].own, said = ownStyles(site[i].page)
+		reports = append(reports, said...)
+	}
 	for round := 0; ; round++ {
 		blobs, of, err := pack(site, opts.Inline)
 		if err != nil {
@@ -272,19 +292,26 @@ func prune(opts Options, site []built, sheets []string) (reports []report.Report
 		settled := true
 		for i := range site {
 			p := &site[i]
-			if sheets[i] == "" || whole[i] {
+			// Nothing to prune: no sheet, and no `<style>` of its own that
+			// is CSS.
+			if sheets[i] == "" && !slices.ContainsFunc(p.own, func(style ownStyle) bool { return style.flat != "" }) || whole[i] {
 				continue
 			}
 			head := "<style></style>"
-			if round > 0 {
+			if round > 0 || sheets[i] == "" {
 				head = element(blobs, of[i][0], opts)
 			}
 			body := element(blobs, of[i][1], opts)
+			// As served, but for the page's own `<style>` elements: they
+			// are pruned from their text as it was written, every round.
 			served := doctype + document(p.page.HTML, opts.Base, head, body)
 			if served == against[i] {
 				continue
 			}
 			settled, against[i] = false, served
+			for k := range p.own {
+				p.own[k].out = nil
+			}
 			if round >= rounds {
 				stats, err := cssprune.Whole(sheets[i])
 				if err != nil {
@@ -298,13 +325,28 @@ func prune(opts Options, site []built, sheets []string) (reports []report.Report
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", p.page.File, err)
 			}
-			pruned, stats, err := cssprune.PruneWith(sheets[i], doc, cssprune.Options{Script: p.js, Builder: builders(doc, head, body)})
+			builder := builders(doc, head, body)
+			styles, at := stylesOf(doc, builder, p.own)
+			pruned, stats, err := cssprune.PruneWith(sheets[i], doc, cssprune.Options{Script: p.js, Builder: builder, Styles: styles})
 			if err != nil {
-				reports = append(reports, report.Page(p.page.File, p.page.Pathname, "css-bundle", err.Error()))
+				reports = append(reports, report.Page(p.page.File, p.page.Path(), "css-bundle", err.Error()))
 				p.css, p.styles, whole[i] = "", nil, true
 				continue
 			}
 			p.css, p.styles = small(pruned), &stats
+			for k, style := range styles {
+				switch out := small(style.Out); {
+				case style.Err != nil:
+					// It does not read: kept byte for byte, and said.
+					reports = append(reports, report.Report{Severity: report.Warning, File: p.page.File, Code: "css-warning", Message: "Page " + p.page.Path() + ": a `<style>` of the page is not pruned: " + strings.TrimPrefix(style.Err.Error(), "cssprune: ")})
+				case stats.Unpruned || strings.Contains(strings.ToLower(out), "</style"):
+					// The page is not pruned; or the text cannot stand in
+					// its element. As it is — which is sound: it is what
+					// the pruner read, and more.
+				default:
+					p.own[at[k]].out = &out
+				}
+			}
 		}
 		if settled {
 			return reports, nil
@@ -373,6 +415,7 @@ type built struct {
 	css, js string                  // minified; "": none
 	styles  *cssprune.Stats         // what pruning did; nil for the control
 	modules []behaviors.ModuleBytes // the script's bytes by input; nil for the control
+	own     []ownStyle              // the page's own `<style>` elements; nil for the control, which prunes none
 }
 
 // doctype is written before every page (builder.md, *Routes*); with it a

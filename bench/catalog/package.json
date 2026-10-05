@@ -1,0 +1,29 @@
+{
+  "name": "@reactogenic/bench-catalog",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A measurement fixture: about twenty components for the bet's catalog run (specs/phase02/bet.md). Not the design system — that is packages/ui.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./behaviors/*": "./src/behaviors/*.ts",
+    "./*.css": "./src/*.css"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "dependencies": {
+    "@reactogenic/core": "workspace:*",
+    "@reactogenic/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

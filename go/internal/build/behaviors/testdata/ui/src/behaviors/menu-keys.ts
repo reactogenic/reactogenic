@@ -7,8 +7,11 @@ import { onType } from "../lib/typeahead";
 
 declare const RG_MENU_TYPEAHEAD: boolean;
 
-export default function mountMenuKeys(root: HTMLElement): void {
+// `own` is the mount's data: what this use site handed the behaviour
+// (builder.md, *Behaviours*). Recorded, for the tests that run the script.
+export default function mountMenuKeys(root: HTMLElement, own?: Record<string, unknown>): void {
   root.dataset.menuKeys = "fx:menu-keys";
+  if (own) root.dataset.own = JSON.stringify(own);
   root.addEventListener("keydown", onKey);
   if (RG_MENU_TYPEAHEAD) root.addEventListener("keydown", onType);
 }

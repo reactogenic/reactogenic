@@ -5,11 +5,13 @@
   "pages": [
     {
       "pathname": "/",
+      "variant": "index",
+      "path": "/",
       "file": "pages/index.rtsx",
       "output": "index.html",
       "document": {
-        "raw": 1340,
-        "gzip": 601
+        "raw": 3067,
+        "gzip": 1390
       },
       "html": {
         "raw": 1218,
@@ -20,16 +22,15 @@
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
-        "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -68,32 +69,161 @@
       ]
     },
     {
-      "pathname": "/actions/",
-      "file": "pages/actions/index.rtsx",
-      "output": "actions/index.html",
+      "pathname": "/account/",
+      "variant": "index",
+      "path": "/account/",
+      "file": "pages/account/index.rtsx",
+      "output": "account/index.html",
       "document": {
-        "raw": 1568,
-        "gzip": 700
+        "raw": 2851,
+        "gzip": 1361
       },
       "html": {
-        "raw": 1446,
-        "gzip": 640
+        "raw": 1002,
+        "gzip": 520
       },
       "css": {
         "raw": 7531,
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
+      },
+      "components": [
+        {
+          "name": "AccountPage",
+          "count": 1
+        },
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "DropdownMenu",
+          "count": 1
+        },
+        {
+          "name": "Each",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        },
+        {
+          "name": "MenuItem",
+          "count": 2
+        },
+        {
+          "name": "Plans",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/menu-keys",
+          "id": "account",
+          "flags": {
+            "RG_MENU_TYPEAHEAD": false
+          }
+        }
+      ]
+    },
+    {
+      "pathname": "/account/",
+      "variant": "guest",
+      "path": "/account/guest.html",
+      "file": "pages/account/guest.rtsx",
+      "output": "account/guest.html",
+      "document": {
+        "raw": 3018,
+        "gzip": 1404
+      },
+      "html": {
+        "raw": 1169,
+        "gzip": 562
+      },
+      "css": {
+        "raw": 7531,
+        "gzip": 2093,
         "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "url": "/docs/_rg/site-1622bb1d.css",
+        "pages": 10,
+        "blob": "1622bb1d"
+      },
+      "js": {
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
+      },
+      "components": [
+        {
+          "name": "Button",
+          "count": 1
+        },
+        {
+          "name": "Dialog",
+          "count": 1
+        },
+        {
+          "name": "GuestPage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": [
+        {
+          "module": "@reactogenic/ui/behaviors/overlays"
+        },
+        {
+          "module": "@reactogenic/ui/behaviors/invokers"
+        }
+      ]
+    },
+    {
+      "pathname": "/actions/",
+      "variant": "index",
+      "path": "/actions/",
+      "file": "pages/actions/index.rtsx",
+      "output": "actions/index.html",
+      "document": {
+        "raw": 3277,
+        "gzip": 1465
+      },
+      "html": {
+        "raw": 1428,
+        "gzip": 633
+      },
+      "css": {
+        "raw": 7531,
+        "gzip": 2093,
+        "delivery": "file",
+        "url": "/docs/_rg/site-1622bb1d.css",
+        "pages": 10,
+        "blob": "1622bb1d"
+      },
+      "js": {
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -134,6 +264,9 @@
           "id": "actions",
           "flags": {
             "RG_MENU_TYPEAHEAD": true
+          },
+          "data": {
+            "typeahead": true
           }
         },
         {
@@ -143,11 +276,13 @@
     },
     {
       "pathname": "/dialog/",
+      "variant": "index",
+      "path": "/dialog/",
       "file": "pages/dialog/index.rtsx",
       "output": "dialog/index.html",
       "document": {
-        "raw": 1326,
-        "gzip": 601
+        "raw": 3053,
+        "gzip": 1386
       },
       "html": {
         "raw": 1204,
@@ -158,16 +293,15 @@
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
-        "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -205,12 +339,55 @@
       ]
     },
     {
+      "pathname": "/gate/",
+      "variant": "closed",
+      "path": "/gate/closed.html",
+      "file": "pages/gate/closed.rtsx",
+      "output": "gate/closed.html",
+      "document": {
+        "raw": 2447,
+        "gzip": 1198
+      },
+      "html": {
+        "raw": 598,
+        "gzip": 343
+      },
+      "css": {
+        "raw": 7531,
+        "gzip": 2093,
+        "delivery": "file",
+        "url": "/docs/_rg/site-1622bb1d.css",
+        "pages": 10,
+        "blob": "1622bb1d"
+      },
+      "js": {
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
+      },
+      "components": [
+        {
+          "name": "ClosedPage",
+          "count": 1
+        },
+        {
+          "name": "Layout",
+          "count": 1
+        }
+      ],
+      "mounts": []
+    },
+    {
       "pathname": "/guide/",
+      "variant": "index",
+      "path": "/guide/",
       "file": "pages/guide/index.rtsx",
       "output": "guide/index.html",
       "document": {
-        "raw": 1063,
-        "gzip": 566
+        "raw": 2790,
+        "gzip": 1364
       },
       "html": {
         "raw": 941,
@@ -221,16 +398,15 @@
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
-        "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -250,11 +426,13 @@
     },
     {
       "pathname": "/guide/more/",
+      "variant": "index",
+      "path": "/guide/more/",
       "file": "pages/guide/more/index.rtsx",
       "output": "guide/more/index.html",
       "document": {
-        "raw": 880,
-        "gzip": 500
+        "raw": 2607,
+        "gzip": 1301
       },
       "html": {
         "raw": 758,
@@ -265,16 +443,15 @@
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
-        "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -290,11 +467,13 @@
     },
     {
       "pathname": "/links/",
+      "variant": "index",
+      "path": "/links/",
       "file": "pages/links/index.rtsx",
       "output": "links/index.html",
       "document": {
-        "raw": 986,
-        "gzip": 512
+        "raw": 2713,
+        "gzip": 1307
       },
       "html": {
         "raw": 864,
@@ -305,16 +484,15 @@
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
-        "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -350,11 +528,13 @@
     },
     {
       "pathname": "/plain/",
+      "variant": "index",
+      "path": "/plain/",
       "file": "pages/plain/index.rtsx",
       "output": "plain/index.html",
       "document": {
-        "raw": 720,
-        "gzip": 397
+        "raw": 2447,
+        "gzip": 1196
       },
       "html": {
         "raw": 598,
@@ -365,16 +545,15 @@
         "gzip": 2093,
         "delivery": "file",
         "url": "/docs/_rg/site-1622bb1d.css",
-        "pages": 7,
+        "pages": 10,
         "blob": "1622bb1d"
       },
       "js": {
-        "raw": 1664,
-        "gzip": 823,
-        "delivery": "file",
-        "url": "/docs/_rg/site-6141d4d6.js",
-        "pages": 7,
-        "blob": "6141d4d6"
+        "raw": 1760,
+        "gzip": 858,
+        "delivery": "inline",
+        "pages": 10,
+        "blob": "620e82e2"
       },
       "components": [
         {
@@ -405,8 +584,11 @@
       "file": "_rg/site-1622bb1d.css",
       "pages": [
         "/",
+        "/account/",
+        "/account/guest.html",
         "/actions/",
         "/dialog/",
+        "/gate/closed.html",
         "/guide/",
         "/guide/more/",
         "/links/",
@@ -415,17 +597,19 @@
     },
     {
       "kind": "js",
-      "hash": "6141d4d6",
+      "hash": "620e82e2",
       "size": {
-        "raw": 1664,
-        "gzip": 823
+        "raw": 1760,
+        "gzip": 858
       },
-      "delivery": "file",
-      "file": "_rg/site-6141d4d6.js",
+      "delivery": "inline",
       "pages": [
         "/",
+        "/account/",
+        "/account/guest.html",
         "/actions/",
         "/dialog/",
+        "/gate/closed.html",
         "/guide/",
         "/guide/more/",
         "/links/",

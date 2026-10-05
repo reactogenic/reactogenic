@@ -33,6 +33,7 @@ fixtures/slots/conditional-previous
 fixtures/slots/errors
 fixtures/slots/hyphen-names
 fixtures/slots/keyed
+fixtures/slots/keyed-order
 fixtures/slots/last-wins
 fixtures/slots/nested
 fixtures/slots/params-on-components
@@ -62,6 +63,8 @@ syntax.md#grammar-1/1
 syntax.md#key-functions/1
 syntax.md#keyed-slots/1
 syntax.md#keyed-slots/2
+syntax.md#keyed-slots/3
+syntax.md#keyed-slots/4
 syntax.md#params-on-a-component-children-is-the-default-slot/1
 syntax.md#recursive-slots/1
 syntax.md#repeated-slots-last-assignment-wins/1

@@ -1,0 +1,59 @@
+@layer rg.components {
+  .bc-pagination {
+    margin: 2rem 0 0;
+
+    > ul {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.25rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+
+      > li > a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        min-width: 2.25rem;
+        height: 2.25rem;
+        padding: 0 0.6rem;
+        border: 1px solid transparent;
+        border-radius: var(--rg-radius);
+        color: var(--rg-fg);
+        font-variant-numeric: tabular-nums;
+        text-decoration: none;
+
+        &:hover {
+          background: var(--rg-hover);
+        }
+        &:focus-visible {
+          outline: var(--bc-ring);
+          outline-offset: 1px;
+        }
+        /* Marked by more than a background: its weight and its border. */
+        &[aria-current] {
+          border-color: var(--rg-line);
+          background: var(--rg-hover);
+          font-weight: 700;
+        }
+        &[aria-disabled="true"] {
+          background: none;
+          color: var(--rg-muted);
+          cursor: default;
+        }
+        &:is([data-part="prev"], [data-part="next"]) {
+          border-color: var(--rg-line);
+        }
+      }
+      > li > :is([data-part="gap"], [data-part="status"]) {
+        padding: 0 0.5rem;
+        color: var(--rg-muted);
+      }
+    }
+    &[data-variant="compact"] > ul {
+      justify-content: space-between;
+    }
+  }
+}

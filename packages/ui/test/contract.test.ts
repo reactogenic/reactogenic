@@ -134,10 +134,10 @@ describe("what an example mounts", () => {
     ]);
   });
 
-  test("typeahead turns the flag of that mount on", () => {
+  test("typeahead turns the flag of that mount on, and is that mount's data — not an attribute", () => {
     expect(mounts("DropdownMenu/3")).toEqual([
       { module: OVERLAYS },
-      { module: MENU_KEYS, id: "m3", flags: { RG_MENU_TYPEAHEAD: true } },
+      { module: MENU_KEYS, id: "m3", flags: { RG_MENU_TYPEAHEAD: true }, data: { typeahead: true } },
       { module: INVOKERS },
     ]);
   });

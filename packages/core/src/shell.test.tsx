@@ -62,16 +62,26 @@ describe("at build time", () => {
     expect(renderToStaticMarkup(<Ids prefix="d" />)).toBe('<i id="d1"></i>');
   });
 
-  test("mount is recorded as called: module, id, flags", () => {
+  test("mount is recorded as called: module, id, flags, data", () => {
     const mounts = standIn("/");
     mount("@reactogenic/ui/behaviors/overlays");
-    mount("@reactogenic/ui/behaviors/menu-keys", "m1", { RG_MENU_TYPEAHEAD: true });
+    mount("@reactogenic/ui/behaviors/menu-keys", "m1", { RG_MENU_TYPEAHEAD: true }, { typeahead: true });
     mount("@reactogenic/ui/behaviors/menu-keys", "m2");
+    mount("@reactogenic/ui/behaviors/menu-keys", "m3", undefined, { items: [1, "two", null], wrap: undefined });
     expect(mounts).toEqual([
-      ["@reactogenic/ui/behaviors/overlays", undefined, undefined],
-      ["@reactogenic/ui/behaviors/menu-keys", "m1", { RG_MENU_TYPEAHEAD: true }],
-      ["@reactogenic/ui/behaviors/menu-keys", "m2", undefined],
+      ["@reactogenic/ui/behaviors/overlays", undefined, undefined, undefined],
+      ["@reactogenic/ui/behaviors/menu-keys", "m1", { RG_MENU_TYPEAHEAD: true }, { typeahead: true }],
+      ["@reactogenic/ui/behaviors/menu-keys", "m2", undefined, undefined],
+      ["@reactogenic/ui/behaviors/menu-keys", "m3", undefined, { items: [1, "two", null], wrap: undefined }],
     ]);
+  });
+
+  test("what the builder throws for a mount's data is the mount's", () => {
+    standIn("/");
+    host.__reactogenic_build!.mount = () => {
+      throw new Error("mount-data");
+    };
+    expect(() => mount("@reactogenic/ui/behaviors/overlays", undefined, undefined, { typeahead: true })).toThrow("mount-data");
   });
 });
 
@@ -96,6 +106,6 @@ describe("in React", () => {
   });
 
   test("mount does nothing", () => {
-    expect(mount("@reactogenic/ui/behaviors/overlays", "x", { RG_FLAG: true })).toBeUndefined();
+    expect(mount("@reactogenic/ui/behaviors/overlays", "x", { RG_FLAG: true }, { typeahead: true })).toBeUndefined();
   });
 });

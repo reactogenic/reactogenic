@@ -1,0 +1,85 @@
+// Field: one labelled text input, with its hint and its error. Two features
+// need a script, and a field that uses neither mounts nothing: a character
+// count (`counter`), and a password that can be shown (`reveal`). A fixture
+// (bench/catalog/README.md).
+import type { ComponentProps, ReactNode } from "react";
+import { mount, useShellId, type Slot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./field.css";
+
+export interface FieldProps {
+  /** The field's id; the input is `<id>-i`. Generated when absent. */
+  id?: string;
+  label: string;
+  name: string;
+  /** Default "text". */
+  type?: "text" | "email" | "password" | "url" | "tel";
+  /** Option: a `<textarea>`. */
+  multiline?: boolean;
+  /** The value as the page loads. */
+  value?: string;
+  placeholder?: string;
+  autoComplete?: string;
+  required?: boolean;
+  disabled?: boolean;
+  maxLength?: number;
+  /** Under the input. */
+  hint?: ReactNode;
+  /** The field is invalid, and this says why. */
+  error?: string;
+  /** Option: "12 / 160" under the input, as the reader types. Needs `maxLength`. */
+  counter?: boolean;
+  /** Option, `type="password"` only: a button that shows what was typed. */
+  reveal?: boolean;
+  /** Before the input, inside its box: "https://". */
+  $Prefix?: Slot<ComponentProps<"span">>;
+}
+
+export function Field({ id, label, name, type = "text", multiline, value, placeholder, autoComplete, required, disabled, maxLength, hint, error, counter, reveal, $Prefix }: FieldProps) {
+  const generated = useShellId("f");
+  const field = id ?? generated;
+  const input = field + "-i";
+  const counts = counter === true && maxLength !== undefined;
+  const reveals = reveal === true && type === "password" && !multiline;
+  // What describes the input: the parts that are there, in reading order.
+  const describedBy = [hint !== undefined ? field + "-h" : "", error !== undefined ? field + "-e" : "", counts ? field + "-c" : ""].filter(Boolean).join(" ") || undefined;
+  // A flag says the page needs the code; the data, that this field uses it
+  // (builder.md, *Behaviours*). A plain field has no script.
+  if (counts || reveals) {
+    mount(
+      "@reactogenic/bench-catalog/behaviors/field",
+      field,
+      { RG_FIELD_COUNT: counts, RG_FIELD_REVEAL: reveals },
+      { count: counts ? true : undefined, reveal: reveals ? true : undefined },
+    );
+  }
+  const shared = {
+    id: input,
+    name,
+    placeholder,
+    autoComplete,
+    required,
+    disabled,
+    maxLength,
+    defaultValue: value,
+    "aria-describedby": describedBy,
+    "aria-invalid": error !== undefined ? ("true" as const) : undefined,
+  };
+  return (
+    <div id={field} className="bc-field" data-invalid={error !== undefined ? "" : undefined}>
+      <label htmlFor={input}>
+        {label}
+        {required ? <span data-part="required" aria-hidden="true">*</span> : null}
+      </label>
+      <div data-part="control">
+        <span slot={$Prefix} data-part="prefix" />
+        {multiline ? <textarea rows={4} {...shared} /> : <input type {...shared} />}
+        {reveals ? <button type="button" data-part="reveal" aria-pressed="false" aria-controls={input}>Show</button> : null}
+      </div>
+      {hint !== undefined ? <p id={field + "-h"} data-part="hint">{hint}</p> : null}
+      {error !== undefined ? <p id={field + "-e"} data-part="error">{error}</p> : null}
+      {counts ? <output id={field + "-c"} data-part="count" htmlFor={input}>{(value ?? "").length} / {maxLength}</output> : null}
+    </div>
+  );
+}

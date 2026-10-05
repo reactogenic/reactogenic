@@ -11,7 +11,7 @@ import Index from "./site/pages/index.rtsx";
 import Menus from "./site/pages/menus/index.rtsx";
 import Nested from "./site/pages/nested/index.rtsx";
 import Plain from "./site/pages/plain/index.rtsx";
-import { Probe } from "./site/probe.rtsx";
+import { Ordered, Probe } from "./site/probe.rtsx";
 import { distinct, normalise, Page } from "./stand-in.ts";
 
 const OVERLAYS = "@reactogenic/ui/behaviors/overlays";
@@ -137,23 +137,25 @@ describe("Dialog", () => {
 });
 
 describe("DropdownMenu", () => {
-  test("typeahead turns the flag on; a disabled item is skipped for the first focus", () => {
+  test("typeahead turns the flag on and is the mount's data; a disabled item is skipped for the first focus", () => {
     const { html, mounts } = build("/guide/flow/", Flow);
-    expect(mounts).toContainEqual({ module: MENU_KEYS, id: "actions", flags: { RG_MENU_TYPEAHEAD: true } });
+    expect(mounts).toContainEqual({ module: MENU_KEYS, id: "actions", flags: { RG_MENU_TYPEAHEAD: true }, data: { typeahead: true } });
     expect(html).toContain(
       '<button type="button" class="rg-button" id="actions-t" popovertarget="actions" aria-haspopup="menu">Actions</button>' +
-        '<div id="actions" class="rg-menu" data-typeahead popover role="menu" aria-labelledby="actions-t">' +
+        '<div id="actions" class="rg-menu" popover role="menu" aria-labelledby="actions-t">' +
         '<button type="button" role="menuitem" autofocus command="show-modal" commandfor="shortcuts">Keyboard shortcuts…</button>',
     );
     expect(html).toContain('<button type="button" role="menuitem" disabled>Print</button>');
   });
 
-  test("typeahead is the menu's: the flag is the page's, the attribute says which menu asked", () => {
+  test("typeahead is the menu's: the flag is the page's, the mount's data says which menu asked", () => {
     const { html, mounts } = build("/menus/", Menus);
-    expect(mounts).toContainEqual({ module: MENU_KEYS, id: "one", flags: { RG_MENU_TYPEAHEAD: true } });
+    expect(mounts).toContainEqual({ module: MENU_KEYS, id: "one", flags: { RG_MENU_TYPEAHEAD: true }, data: { typeahead: true } });
     expect(mounts).toContainEqual({ module: MENU_KEYS, id: "two", flags: { RG_MENU_TYPEAHEAD: false } });
-    expect(html).toContain('<div id="one" class="rg-menu" data-typeahead popover role="menu" aria-labelledby="one-t">');
+    // Only the behaviour reads it: the page's HTML does not carry it.
+    expect(html).toContain('<div id="one" class="rg-menu" popover role="menu" aria-labelledby="one-t">');
     expect(html).toContain('<div id="two" class="rg-menu" popover role="menu" aria-labelledby="two-t">');
+    expect(html).not.toContain("typeahead");
   });
 
   test("the author's id on $Trigger is the one an action menu is named by", () => {
@@ -176,18 +178,79 @@ describe("DropdownMenu", () => {
     expect(html).toContain('<a class="rg-button" id="off" aria-disabled="true">A disabled link button</a>');
   });
 
-  // Known limit (components.md): JavaScript enumerates integer-like keys
-  // first, ascending. When the KEYED marker carries the written order, this
-  // test and the limit go.
-  test("known limit: integer-like keys are rendered first, not in the order written", () => {
+  // phase01/syntax.md, *Keyed slots*: it was a known limit — JavaScript
+  // enumerates integer-like property names first, ascending.
+  test("integer-like keys are rendered in the order written", () => {
     const { html } = build("/menus/", Menus);
     const order = html.slice(html.indexOf('<ul id="order"'), html.indexOf("</ul>", html.indexOf('<ul id="order"')));
-    expect([...order.matchAll(/<a href="\/">(\w+)<\/a>/g)].map((match) => match[1])).toEqual(["9", "10", "b", "a"]); // written: b, 10, 9, a
+    expect([...order.matchAll(/<a href="\/">(\w+)<\/a>/g)].map((match) => match[1])).toEqual(["b", "10", "9", "a"]);
   });
 
   test("generated ids count per page, whatever ids the author gave", () => {
     // The layout's menu is `versions` (the author's); the page's own is the builder's.
     expect(build("/actions/", Actions).html).toContain('<div id="m2" class="rg-menu" popover role="menu" aria-labelledby="m2-t">');
+  });
+});
+
+// phase01/syntax.md, *Keyed slots*: a container renders a keyed slot's
+// entries in the order the page wrote them — `slotKeys`, never `Object.keys`.
+describe("keyed slots keep the order written", () => {
+  const labels = (html: string, from: string, to: string) => {
+    const part = html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
+    return [...part.matchAll(/<(?:a|button|summary|h2)\b[^>]*>([^<]*)</g)].map((match) => match[1]);
+  };
+  const { html } = build("/n/", () => createElement(Ordered, { more: true, n: 4 }));
+
+  test("a side menu: its sections, their items and the items nested in them", () => {
+    expect(labels(html, '<nav id="ordered"', "</nav>")).toEqual(["✕", "Ten", "10", "9", "2", "2.1", "2.0", "b", "n", "#1", "N", "n.1", "Nine", "9.3", "9.1", ""]);
+    // The entries are found by their keys: the current page is the item of `key={n}`.
+    expect(html).toContain('<li><a href="/n/" aria-current="page">n</a></li>');
+  });
+
+  test("a menu of links, with a conditional item at its place — or absent", () => {
+    expect(labels(html, '<ul id="ordered-links"', "</ul>")).toEqual(["b", "10", "5", "9", "n"]);
+    const without = build("/n/", () => createElement(Ordered, { more: false, n: 4 })).html;
+    expect(labels(without, '<ul id="ordered-links"', "</ul>")).toEqual(["b", "10", "9", "n"]);
+  });
+
+  test("an action menu: the first focus is the first item written that can take it", () => {
+    const menu = html.slice(html.indexOf('<div id="ordered-actions"'), html.indexOf("</div>", html.indexOf('<div id="ordered-actions"')));
+    expect(menu).toContain(
+      '<button type="button" role="menuitem" disabled>10</button>' +
+        '<button type="button" role="menuitem" autofocus>9</button>' +
+        '<a href="/two/" role="menuitem">2</a>' +
+        '<button type="button" role="menuitem">n</button>',
+    );
+  });
+
+  test("a key from an expression that is integer-like at run time keeps its place too", () => {
+    const zero = build("/", () => createElement(Ordered, { more: true, n: 0 })).html;
+    expect(labels(zero, '<ul id="ordered-links"', "</ul>")).toEqual(["b", "10", "5", "9", "n"]);
+    expect(labels(zero, '<nav id="ordered"', "</nav>").slice(1, 12)).toEqual(["Ten", "10", "9", "2", "2.1", "2.0", "b", "n", "#1", "N", "n.1"]);
+  });
+
+  test("a dialog's footer", () => {
+    expect(labels(html, "<footer>", "</footer>")).toEqual(["Later", "Now"]);
+  });
+});
+
+// components.md, `Dialog` and `SideMenu`: `closeLabel` names the close
+// button — content, so a page in another language says it in its own.
+describe("closeLabel", () => {
+  const { html } = build("/", () => createElement(Ordered, { more: false, n: 4 }));
+
+  test("the dialog's close button and the drawer's are named by it; the scrims stay hidden and unnamed", () => {
+    expect(html).toContain('<button type="button" data-part="close" popovertarget="ordered" popovertargetaction="hide" aria-label="Schließen">✕</button>');
+    expect(html).toContain('<button type="button" data-part="close" command="close" commandfor="ordered-dialog" aria-label="Schließen">✕</button>');
+    expect(html).toContain('<button type="button" data-part="scrim" popovertarget="ordered" popovertargetaction="hide" tabindex="-1" aria-hidden="true"></button>');
+    expect(html).toContain('<button type="button" data-part="scrim" command="close" commandfor="ordered-dialog" tabindex="-1" aria-hidden="true"></button>');
+    expect(html).not.toContain('"Close"');
+  });
+
+  test("the default is Close", () => {
+    const index = build("/", Index).html;
+    expect(index).toContain('<button type="button" data-part="close" popovertarget="nav" popovertargetaction="hide" aria-label="Close">✕</button>');
+    expect(index).toContain('<button type="button" data-part="close" command="close" commandfor="d1" aria-label="Close">');
   });
 });
 
@@ -224,7 +287,7 @@ describe("what a page mounts", () => {
     expect(build("/guide/flow/", Flow).mounts).toEqual([
       { module: OVERLAYS },
       { module: INVOKERS },
-      { module: MENU_KEYS, id: "actions", flags: { RG_MENU_TYPEAHEAD: true } },
+      { module: MENU_KEYS, id: "actions", flags: { RG_MENU_TYPEAHEAD: true }, data: { typeahead: true } },
     ]);
     expect(build("/actions/", Actions).mounts).toEqual([
       { module: OVERLAYS },

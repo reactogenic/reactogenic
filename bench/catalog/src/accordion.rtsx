@@ -1,0 +1,46 @@
+// Accordion: disclosures in a column. `<details>`, and `<details name>` for
+// "one open at a time": no JS. A fixture (bench/catalog/README.md).
+import type { ReactNode } from "react";
+import { Each, slotKeys, useShellId, type KeyedSlot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./accordion.css";
+
+export interface AccordionItemProps {
+  /** What opens it: the `<summary>`. */
+  title: ReactNode;
+  /** Open as the page loads. */
+  open?: boolean;
+  children?: ReactNode;
+}
+
+export interface AccordionProps {
+  /** Option: opening one closes the others — the platform's `name` group. */
+  exclusive?: boolean;
+  /** Option: `data-variant`. Default "separated": each item a box. */
+  variant?: "separated" | "flush";
+  /** In order. */
+  $Item: KeyedSlot<AccordionItemProps>;
+}
+
+// An attachment on a component passes `children` and the group's name.
+function Item({ title, open, group, children }: AccordionItemProps & { group: string | undefined }) {
+  return (
+    <details name={group} open>
+      <summary>{title}</summary>
+      <div data-part="panel">{children}</div>
+    </details>
+  );
+}
+
+export function Accordion({ exclusive, variant, $Item }: AccordionProps) {
+  const generated = useShellId("a");
+  const group = exclusive ? generated : undefined;
+  return (
+    <div className="bc-accordion" data-variant={variant === "flush" ? variant : undefined}>
+      <Each items={slotKeys($Item)} { item: key }>
+        <Item key={key} slot={$Item} group />
+      </Each>
+    </div>
+  );
+}

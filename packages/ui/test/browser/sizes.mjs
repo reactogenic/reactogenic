@@ -27,10 +27,10 @@ const rows = [
   row("overlays", await behaviours([{ module: at("overlays") }])),
   row("invokers", await behaviours([{ module: at("invokers") }])),
   row("menu-keys", await behaviours([menu])),
-  row("menu-keys + RG_MENU_TYPEAHEAD", await behaviours([{ ...menu, flags: { RG_MENU_TYPEAHEAD: true } }])),
+  row("menu-keys + RG_MENU_TYPEAHEAD", await behaviours([{ ...menu, flags: { RG_MENU_TYPEAHEAD: true }, data: { typeahead: true } }])),
   row("overlays + invokers (a page with a dialog)", await behaviours([{ module: at("overlays") }, { module: at("invokers") }])),
   row("all three (an action menu and a dialog)", await behaviours([{ module: at("overlays") }, { module: at("invokers") }, menu])),
-  row("all three + RG_MENU_TYPEAHEAD", await behaviours([{ module: at("overlays") }, { module: at("invokers") }, { ...menu, flags: { RG_MENU_TYPEAHEAD: true } }])),
+  row("all three + RG_MENU_TYPEAHEAD", await behaviours([{ module: at("overlays") }, { module: at("invokers") }, { ...menu, flags: { RG_MENU_TYPEAHEAD: true }, data: { typeahead: true } }])),
   ...(await Promise.all(["tokens.css", "button.css", "dialog.css", "dropdown-menu.css", "side-menu.css"].map(css))),
 ];
 await esbuild.stop();

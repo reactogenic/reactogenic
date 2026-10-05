@@ -1,0 +1,23 @@
+// Callout: a note beside the text — a tip, a warning. A fixture
+// (bench/catalog/README.md).
+import type { ComponentProps, ReactNode } from "react";
+import type { Slot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./callout.css";
+
+export interface CalloutProps {
+  /** Option: `data-tone`. Default "note". */
+  tone?: "note" | "tip" | "warning" | "danger";
+  $Title?: Slot<ComponentProps<"p">>;
+  children?: ReactNode;
+}
+
+export function Callout({ tone, $Title, children }: CalloutProps) {
+  return (
+    <aside className="bc-callout" role="note" data-tone={tone === "note" ? undefined : tone}>
+      <p slot={$Title} data-part="title" />
+      <div data-part="body">{children}</div>
+    </aside>
+  );
+}

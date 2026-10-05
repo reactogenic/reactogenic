@@ -1,0 +1,44 @@
+// "/styled/": `<style>` elements of the page's own. Each is CSS of the page:
+// pruned with the page's sheet — what one names the other may define — and
+// written back in place, minified. In the head it precedes the sheet, in
+// the body it follows it. One with a `media` is pruned too; one whose `type`
+// is not CSS is left as it is.
+import "../../site.css";
+
+const HEAD = `
+.note {
+  color: var(--note);
+  & b { font-weight: 600; }
+}
+.never { color: red; }
+:root { --note: teal; --unread: 0; }
+@layer late { .never { order: 21; } }
+`;
+
+const BODY = `
+@keyframes blink { to { opacity: 0; } }
+@keyframes fade { to { opacity: 0; } }
+.note b { animation: blink 1s; }
+.never { animation: fade 1s; }
+@layer late { .note { margin: 0; } }
+`;
+
+export default function StyledPage() {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <title>Styled</title>
+        <style>{HEAD}</style>
+      </head>
+      <body>
+        <p className="note">
+          A note, <b>bold</b>.
+        </p>
+        <style media="print">{`.note { display: none; } .never { display: none; }`}</style>
+        <style>{BODY}</style>
+        <style type="text/x-less">{`.never { .mixin(); }`}</style>
+      </body>
+    </html>
+  );
+}

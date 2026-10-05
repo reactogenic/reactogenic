@@ -2,7 +2,7 @@
 // protocol*): renders with React's static renderer while
 // `globalThis.__reactogenic_build` answers `pathname()`, `useShellId()` and
 // `mount()`, and returns what the builder would record.
-import type { ShellBuild } from "@reactogenic/core";
+import type { MountData, ShellBuild } from "@reactogenic/core";
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -11,6 +11,8 @@ export interface Mount {
   module: string;
   id?: string;
   flags?: Record<string, boolean>;
+  /** What the use site hands the behaviour: the second argument of its call. */
+  data?: MountData;
 }
 
 /** A page being rendered: its pathname, its id counters, its mounts. */
@@ -29,8 +31,8 @@ export class Page {
         this.#counters.set(prefix, n);
         return prefix + n;
       },
-      mount: (module, id, flags) => {
-        this.mounts.push({ module, ...(id === undefined ? {} : { id }), ...(flags === undefined ? {} : { flags }) });
+      mount: (module, id, flags, data) => {
+        this.mounts.push({ module, ...(id === undefined ? {} : { id }), ...(flags === undefined ? {} : { flags }), ...(data === undefined ? {} : { data }) });
       },
     };
     const host = globalThis as { __reactogenic_build?: ShellBuild };
@@ -47,7 +49,7 @@ export class Page {
 export function distinct(mounts: Mount[]): Mount[] {
   const seen = new Set<string>();
   return mounts.filter((mount) => {
-    const key = JSON.stringify([mount.module, mount.id, mount.flags]);
+    const key = JSON.stringify([mount.module, mount.id, mount.flags, mount.data]);
     return !seen.has(key) && seen.add(key);
   });
 }

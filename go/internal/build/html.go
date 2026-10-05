@@ -5,15 +5,23 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/evanw/esbuild/pkg/api"
 	"golang.org/x/net/html"
 
+	"github.com/reactogenic/reactogenic/go/internal/build/cssprune"
+	"github.com/reactogenic/reactogenic/go/internal/build/markup"
 	"github.com/reactogenic/reactogenic/go/internal/build/pagecheck"
+	"github.com/reactogenic/reactogenic/go/internal/build/render"
+	"github.com/reactogenic/reactogenic/go/internal/report"
 )
 
 // A page's HTML is React's, to the byte (builder.md, *The record*), and
 // packaging keeps it so: the page is not parsed and written again — it is
 // read token by token for the few places packaging writes at, and everything
-// else is copied.
+// else is copied. Those places: the base before a root-relative `href`, the
+// page's stylesheet and script, and the text of a `<style>` element of the
+// page's own, which is CSS of the page and pruned as its sheet is
+// (*Packaging*).
 
 // edit replaces src[pos:end] with text; pos == end inserts.
 type edit struct {
@@ -25,9 +33,10 @@ type edit struct {
 // src, the page as rendered, with the base before every root-relative
 // `href`, head — the page's stylesheet — at the end of `<head>`, and body —
 // its script — at the end of `<body>`. base is normalised; "/" changes no
-// link.
-func document(src, base, head, body string) string {
-	var edits []edit
+// link. rewrites are texts of src written anew: the page's own `<style>`
+// elements, pruned (ownStyle.rewrite).
+func document(src, base, head, body string, rewrites ...edit) string {
+	edits := slices.Clone(rewrites)
 	headAt, bodyAt, htmlEnd := -1, -1, -1
 	prefix := strings.TrimSuffix(base, "/")
 	z := html.NewTokenizer(strings.NewReader(src))
@@ -177,4 +186,130 @@ func withBase(value, prefix string, quoted bool) (string, bool) {
 		written = `"` + written + `"`
 	}
 	return written, true
+}
+
+// ownStyle is a `<style>` element of the page's own (builder.md, *The
+// builder's own elements*): CSS of the page, pruned with its sheet and
+// written back in place.
+type ownStyle struct {
+	pos, end int    // its text, in the page as rendered
+	text     string // as a parser reads it: what the element's node holds
+	css      bool   // its text is CSS: no `type`, or `text/css` (markup.CSS)
+	// flat is the text in the form the pruner reads — nesting lowered, as
+	// the page's bundled sheet has it; "": the element is not CSS, or
+	// esbuild cannot read it. It is then left as it is, and read for the
+	// names it uses.
+	flat string
+	// out is what is written in place of the text: what the page can use
+	// of it, minified. nil: the text as it is.
+	out *string
+}
+
+// ownStyles finds the `<style>` elements of a page as rendered, in document
+// order, each with the place of its text — an element without text among
+// them, so that they can be told from the parser's by their order
+// (stylesOf) — and, for one that is CSS, the text as the pruner reads it.
+// The reports are what esbuild says of a text (css-warning), at the page.
+func ownStyles(page render.Page) (styles []ownStyle, reports []report.Report) {
+	src := page.HTML
+	warn := func(text string) {
+		reports = append(reports, report.Report{Severity: report.Warning, File: page.File, Code: "css-warning", Message: "Page " + page.Path() + ": a `<style>` of the page: " + text})
+	}
+	z := html.NewTokenizer(strings.NewReader(src))
+	open := false // the token before was a `<style>` start tag
+	for pos := 0; ; {
+		kind := z.Next()
+		if kind == html.ErrorToken {
+			flatten(styles, warn)
+			return styles, reports
+		}
+		start := pos
+		pos += len(z.Raw())
+		token := z.Token()
+		switch {
+		case kind == html.StartTagToken && token.Data == "style":
+			css := markup.CSS(&html.Node{Type: html.ElementNode, Data: token.Data, Attr: token.Attr})
+			styles, open = append(styles, ownStyle{pos: pos, end: pos, css: css}), true
+			continue
+		case kind == html.TextToken && open:
+			style := &styles[len(styles)-1]
+			style.pos, style.end, style.text = start, pos, token.Data
+		}
+		open = false
+	}
+}
+
+// flatten gives each own style that is CSS the form the pruner reads: what
+// esbuild prints of it with nesting lowered. A text esbuild cannot read is
+// left as it is, and said.
+func flatten(styles []ownStyle, warn func(text string)) {
+	for i := range styles {
+		style := &styles[i]
+		if !style.css || strings.TrimSpace(style.text) == "" {
+			continue
+		}
+		result := api.Transform(style.text, api.TransformOptions{Loader: api.LoaderCSS, Supported: map[string]bool{"nesting": false}, LogLevel: api.LogLevelSilent})
+		for _, message := range result.Warnings {
+			warn(message.Text)
+		}
+		if len(result.Errors) > 0 {
+			for _, message := range result.Errors {
+				warn("it is not pruned: " + message.Text)
+			}
+			continue
+		}
+		style.flat = string(result.Code)
+	}
+}
+
+// rewrites are the texts of the page's own `<style>` elements that are
+// written anew.
+func rewrites(styles []ownStyle) (edits []edit) {
+	for _, style := range styles {
+		if style.out != nil {
+			edits = append(edits, edit{style.pos, style.end, *style.out})
+		}
+	}
+	return edits
+}
+
+// stylesOf pairs the page's own `<style>` elements, as the driver found
+// them in the page's text (ownStyles), with the elements of doc — the page
+// as it is served, parsed — and returns those to prune: the ones that are
+// CSS. own are the builder's elements in doc. The two are paired by their
+// order and told apart by their text: when a parser sees other `<style>`
+// elements than the text has — markup in an SVG `<style>` — none is
+// returned, and each is left as it is: the pruner reads it for the names it
+// uses, which is sound.
+func stylesOf(doc *html.Node, own []*html.Node, styles []ownStyle) (pruned []*cssprune.Style, at []int) {
+	var nodes []*html.Node
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "style" && !slices.Contains(own, n) {
+			nodes = append(nodes, n)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	if len(nodes) != len(styles) {
+		return nil, nil
+	}
+	for i, n := range nodes {
+		var text strings.Builder
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if c.Type != html.TextNode {
+				return nil, nil
+			}
+			text.WriteString(c.Data)
+		}
+		if text.String() != styles[i].text {
+			return nil, nil
+		}
+		if styles[i].flat != "" {
+			pruned, at = append(pruned, &cssprune.Style{Node: n, CSS: styles[i].flat}), append(at, i)
+		}
+	}
+	return pruned, at
 }

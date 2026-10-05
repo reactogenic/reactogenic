@@ -9,12 +9,19 @@
 // top-level function, state is module-level.
 declare const RG_MENU_TYPEAHEAD: boolean;
 
-export default function mountMenuKeys(root: HTMLElement): void {
+/** What a menu hands its keys: the mount's data. */
+export interface MenuKeysData {
+  /** A printable key moves to the next item that starts with it. */
+  typeahead?: boolean;
+}
+
+export default function mountMenuKeys(root: HTMLElement, own?: MenuKeysData): void {
   root.addEventListener("keydown", onKey);
   root.addEventListener("click", onPick);
   // The flag is the page's — the union of its menus: it only says whether the
-  // code is here. Which menu asked is an attribute on its root.
-  if (RG_MENU_TYPEAHEAD && root.hasAttribute("data-typeahead")) {
+  // code is here. Which menu asked is that menu's data, the second argument
+  // of its call.
+  if (RG_MENU_TYPEAHEAD && own?.typeahead) {
     root.addEventListener("keydown", onType);
   }
 }

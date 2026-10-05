@@ -1,4 +1,0 @@
-// pages-not-found: a directory of modules, none of them an `index`.
-export default function Intro() {
-  return <p>No page mounts this.</p>;
-}

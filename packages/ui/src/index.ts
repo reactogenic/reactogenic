@@ -1,6 +1,6 @@
 // @reactogenic/ui — the first components of the design system
 // (specs/phase02/components.md). Authored in .rtsx; executed by the builder
-// in shell code, rendered by React in an island.
+// in shell code, rendered by React in a dynamic segment.
 /// <reference path="./css.d.ts" />
 /// <reference path="./html.d.ts" />
 export { Button } from "./button.rtsx";

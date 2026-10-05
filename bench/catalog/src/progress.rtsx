@@ -1,0 +1,35 @@
+// Progress: the platform's `<progress>`, labelled, with its value in text.
+// Without a value it is indeterminate, and moves. No JS. A fixture
+// (bench/catalog/README.md).
+import { useShellId } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./progress.css";
+
+export interface ProgressProps {
+  label: string;
+  /** 0…`max`; absent = indeterminate. */
+  value?: number;
+  /** Default 100. */
+  max?: number;
+  /** The value as the reader should see it: "6.2 of 10 GB". Default: a percentage. */
+  text?: string;
+  /** Option: `data-tone`. Default "accent". */
+  tone?: "accent" | "success" | "warning" | "danger";
+  /** Option: `data-size`. Default "md". */
+  size?: "md" | "sm";
+}
+
+export function Progress({ label, value, max = 100, text, tone, size }: ProgressProps) {
+  const id = useShellId("p");
+  const shown = text ?? (value !== undefined ? `${Math.round((value / max) * 100)}%` : undefined);
+  return (
+    <div className="bc-progress" data-tone={tone === "accent" ? undefined : tone} data-size={size === "sm" ? size : undefined}>
+      <div data-part="header">
+        <label htmlFor={id}>{label}</label>
+        {shown !== undefined ? <span data-part="value">{shown}</span> : null}
+      </div>
+      <progress id value max>{shown}</progress>
+    </div>
+  );
+}

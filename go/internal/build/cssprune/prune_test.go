@@ -93,13 +93,16 @@ func TestPrune(t *testing.T) {
 			want: `.a,svg|a{x:y}.gone , svg|a{x:y}.gone,a||b,.gone2{x:y}.gone,@font-face{font-family:x}`,
 		},
 		{
-			name: "runtime state is maybe: pseudo-classes and the attributes behaviours write",
+			// Without a script, the state only a script writes — `inert`,
+			// `disabled`, `aria-*`, `data-state`, `value` — is decided on
+			// the page, as any attribute (TestPruneState has the script).
+			name: "runtime state is maybe: pseudo-classes and the attributes the browser writes",
 			css: `.a:hover{x:y}.a:focus-visible{x:y}.a:popover-open{x:y}.a[open]{x:y}.a[hidden]{x:y}.a[inert]{x:y}.a[disabled]{x:y}` +
 				`.a[aria-expanded=true]{x:y}.a[data-state=open]{x:y}.a[style*=color]{x:y}.a[value=""]{x:y}.a:first-child{x:y}` +
 				`.gone:hover{x:y}.gone[open]{x:y}.a[data-other=open]{x:y}.a[title]{x:y}:focus-visible{x:y}`,
 			page: `<p class="a"></p>`,
-			want: `.a:hover{x:y}.a:focus-visible{x:y}.a:popover-open{x:y}.a[open]{x:y}.a[hidden]{x:y}.a[inert]{x:y}.a[disabled]{x:y}` +
-				`.a[aria-expanded=true]{x:y}.a[data-state=open]{x:y}.a[style*=color]{x:y}.a[value=""]{x:y}.a:first-child{x:y}:focus-visible{x:y}`,
+			want: `.a:hover{x:y}.a:focus-visible{x:y}.a:popover-open{x:y}.a[open]{x:y}.a[hidden]{x:y}` +
+				`.a[style*=color]{x:y}.a:first-child{x:y}:focus-visible{x:y}`,
 		},
 		{
 			name: "pseudo-elements are ignored for matching",
@@ -297,7 +300,7 @@ func TestPrune(t *testing.T) {
 				`@keyframes linear{to{opacity:0}}@keyframes sp\69n2{to{opacity:0}}` +
 				`.Button[aria-busy=true]::after{animation:spin 1s linear infinite}.Button{animation-name:"quoted",spin2;--a: viaprop;-webkit-animation:old 1s}` +
 				`.Button:hover{animation:var(--a) 1s}.gone{animation:zip 1s}.Button:active{transition:fade 1s}`,
-			page: `<button class="Button" style="animation: attr 2s">go</button>`,
+			page: `<button class="Button" aria-busy="true" style="animation: attr 2s">go</button>`,
 			want: `@keyframes spin{to{rotate:360deg}}@keyframes "quoted"{to{opacity:0}}` +
 				`@keyframes viaprop{to{opacity:0}}@keyframes attr{to{opacity:0}}@-webkit-keyframes old{to{opacity:0}}` +
 				`@keyframes linear{to{opacity:0}}@keyframes sp\69n2{to{opacity:0}}` +

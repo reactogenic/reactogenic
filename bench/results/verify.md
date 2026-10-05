@@ -1,13 +1,13 @@
 # The built site in a browser
 
-Written by `node bench/verify.mjs` (specs/phase02/plan.md, RGP2-050, T7). The site as `reactogenic build` writes it, and the control (`--no-specialize`), served over HTTP; every page at 1200 and 400 px. With it the builder's fixture for what a page's script takes away (`go/internal/build/testdata/served`: `/toggle/`, `/frame/`), built the same two ways — the site's own behaviours write nothing to the page.
+Written by `node bench/verify.mjs` (specs/phase02/plan.md, RGP2-050, T7). The site as `reactogenic build` writes it, and the control (`--no-specialize`), served over HTTP; every page at 1200 and 400 px. With it the builder's fixture for what the site cannot show (`go/internal/build/testdata/served`), built the same two ways: what a page's script takes away (`/toggle/`, `/frame/`) — the site's own behaviours write nothing to the page — and a page's own `<style>` elements, pruned with its sheet (`/styled/`).
 
 | Engine | Passed | Known | Failed |
 | --- | ---: | ---: | ---: |
-| chromium 153.0.8010.12 | 353 | 0 | 0 |
-| webkit 26.6 | 345 | 8 | 0 |
+| chromium 153.0.8010.12 | 355 | 0 | 0 |
+| webkit 26.6 | 347 | 8 | 0 |
 
-Of those, 254 are comparisons of computed styles between the two builds (254 equal): 2,309 elements and pseudo-elements each on average, custom properties included.
+Of those, 256 are comparisons of computed styles between the two builds (256 equal): 2,317 elements and pseudo-elements each on average, custom properties included.
 
 | Check | chromium 153.0.8010.12 | webkit 26.6 |
 | --- | --- | --- |
@@ -96,6 +96,8 @@ Of those, 254 are comparisons of computed styles between the two builds (254 equ
 | (the click makes four rules match that matched nothing: the comparison can fail) | 1 of 1 | 1 of 1 |
 | styles, the fixture's /frame/, written to by the document in its frame: the two builds are equal | 1 of 1 | 1 of 1 |
 | (the frame's script gave the body a class, and its rule is in the page's sheet) | 1 of 1 | 1 of 1 |
+| styles, the fixture's /styled/, whose own <style> elements are pruned with its sheet: the two builds are equal | 1 of 1 | 1 of 1 |
+| (its own rules apply: the note's colour from a custom property, its animation) | 1 of 1 | 1 of 1 |
 | without the engine's `command`, the page's script opens the Install dialog | 1 of 1 | 1 of 1 |
 | … and closes it | 1 of 1 | 1 of 1 |
 | … and the menu's item opens the cheat sheet | 1 of 1 | 1 of 1 |

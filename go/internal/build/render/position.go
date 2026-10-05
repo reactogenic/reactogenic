@@ -2,6 +2,7 @@ package render
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -127,15 +128,20 @@ func attribute(at site, name string) site {
 // exception reports what a page threw — route nil: what a module threw while
 // the bundle loaded. The exception's name is the code when the builder threw
 // it (shell-handler, shell-react, shell-nondeterministic, shell-error for
-// what the engine lacks, page-no-default); anything else is shell-error,
-// with the exception's message.
+// what the engine lacks, page-no-default, mount-data); anything else is
+// shell-error, with the exception's message.
 func (r *run) exception(route *Route, t *thrown) report.Report {
 	out := report.Report{Code: "shell-error", Message: t.Message}
 	switch {
-	case strings.HasPrefix(t.Name, "shell-"), strings.HasPrefix(t.Name, "page-"):
+	case strings.HasPrefix(t.Name, "shell-"), strings.HasPrefix(t.Name, "page-"), strings.HasPrefix(t.Name, "mount-"):
 		out.Code = t.Name
 	case t.Name != "" && t.Name != "Error":
 		out.Message = t.Name + ": " + t.Message
+	}
+	// A variant other than `index`: the message says what made the file a
+	// page — a module left behind in a route directory is found here.
+	if out.Code == "page-no-default" && route != nil && route.Name() != Index {
+		out.Message = "`" + path.Base(route.File) + "` is a variant of the route " + route.Pathname + " — nothing mounts or imports it — and has no default export that is a component"
 	}
 	at, found := r.thrownAt(t.Stack)
 	if found {

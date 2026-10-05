@@ -11,7 +11,7 @@ plain HTML + CSS + minimal JS per page, with no React in the output; and a
 measurement that confirms or refutes the bet: *if the compiler is aware of
 components it can ridiculously optimise the output build*.
 
-Out of scope: a dev server, view transitions, islands.
+Out of scope: a dev server, view transitions, dynamic segments.
 
 > OPEN (for the owner, decisions.md): loop-produced slot items (`Each`
 > around slot elements) are "phase 2" in CLAUDE.md and in
@@ -254,6 +254,10 @@ state does not cross pages (builder.md, *Shell code in phase 2*).
 ### RGP2-012 — `@reactogenic/core`: `pathname`, `useShellId`, `mount` · S · done
 In `packages/core`, with the protocol above and the React fallbacks; unit
 tests for both sides.
+- **2026-10-05, the owner's rule on behaviours** (RGP2-050, *The rulings,
+  built*): `mount(module, id?, flags?, data?)` — the fourth argument is the
+  use site's data; the protocol's `mount` takes it, and `pathname` is the
+  route's in every variant. Types `MountData`, `MountValue`.
 
 ## M2 — What the builder decides
 
@@ -324,12 +328,22 @@ esbuild's public API produces.
     taken away.
     **Not seen**, and said so in builder.md: a name the script computes; a
     document that reaches the page by opening it or by framing it.
+- **2026-10-05, the owner's rule on `<style>` and `<link>`** (RGP2-050,
+  *The rulings, built*): a `<style>` of the page's own is pruned with the
+  sheet (`Options.Styles`) — one cascade, in document order — and a
+  `<link>` is a stylesheet by its `rel` (`markup.Link`). The guard for a
+  script of the page's own stays, as defence in depth: the driver stops on
+  such a page before it (shell-script).
 
 ### RGP2-021 — Page checks · S · done
 `pagecheck`: id-duplicate, idref-not-found, command-target, link-not-found
 (builder.md, *Checks on the page*), on `golang.org/x/net/html`. The content
 of a `<template>` and of a `<noscript>` is not of the page, however the
 document was parsed.
+- **2026-10-05, the owner's rules** (RGP2-050, *The rulings, built*):
+  shell-script — a script of the page's own is an error, found here; a
+  link is checked whatever its `rel` (the table of `<link>`); a route is
+  linked to by its pathname, a variant by its file.
 
 ### RGP2-022 — Behaviours: the page's JS · M · done
 `behaviors`: the generated entry from a page's mounts, one `api.Build` per
@@ -353,10 +367,19 @@ page with the page's `Define`s, the metafile's bytes per module.
   (`go test`), and in Chrome with `RG_TEST_CHROME=<binary>`.
 - **Done when:** a fixture with three behaviour modules gives, per page, a
   script that holds only what was mounted, and a flag off removes its code.
+- **2026-10-05, the owner's rule on behaviours** (RGP2-050, *The rulings,
+  built*): a mount's data is the second argument of its call in the entry,
+  and the third member of its row in the control's table; mount-data. The
+  control's table is keyed by a document's path (`/account/guest.html`).
 
 ### RGP2-025 — `@reactogenic/ui` · L · done
 `packages/ui`: `Button`, `Dialog`, `DropdownMenu`, `SideMenu` in `.rtsx`,
 their CSS, the three behaviours, the JSX augmentation (components.md).
+- **2026-10-05, the owner's rule on behaviours** (RGP2-050, *The rulings,
+  built*): `typeahead` is the mount's data — `menu-keys` takes `(root,
+  own?)` — and no attribute: the menu's HTML is the same with and without.
+  No rule of the package's CSS selected `data-typeahead`. The package is to
+  be public under a branded name (decisions.md, 15).
 - It type-checks under `reactogenic check`.
 - HTML contract tests (vitest): each example of components.md, rendered
   through the phase 1 transpiler and `react-dom/server` with a stand-in for
@@ -385,6 +408,11 @@ their CSS, the three behaviours, the JSX augmentation (components.md).
 ### RGP2-030 — `reactogenic build` · L · done
 `go/internal/build`: routes, the pipeline of builder.md, packaging, the
 report, the command in `go/cmd/reactogenic`.
+- **2026-10-05, the owner's rules** (RGP2-050, *The rulings, built*):
+  routes and variants (`routes.go`: `candidates`, then `variants` from the
+  program's graph); the inline threshold of 4096 B (`pack.go`); a page's own
+  `<style>` pruned and written back (`html.go`: `ownStyles`, `stylesOf`);
+  `markup`, a package for what the stages have to agree on.
 - The page's JS first (`behaviors.Build`), then its CSS: one esbuild build
   with every page as an entry (CSS in import order per entry; the JS
   outputs are discarded), then `cssprune.PruneWith` — the page as served,
@@ -626,7 +654,7 @@ fails:
 | T2 JS per page | ≤ 1.5 KB raw (≈ 0.7 KB brotli) on the heaviest page | refutes above 5 KB brotli — a micro-runtime, not compilation |
 | T3 against React | ≥ 100× below the best React build of an equivalent site (Astro + React islands + Radix: 317 KB raw, measured in research/baselines.md) | |
 | T4 precision | deleting the *Install* dialog from `/` — it has its own `$Trigger`: nothing else refers to it — removes its markup, the CSS rules only it matched and the `invokers` behaviour from that page, and nothing else of it; and every other page's HTML as rendered, CSS and script are the same bytes. Compared under `--inline always`: sharing couples how pages are delivered, not what they are (builder.md, *Packaging*) | refutes |
-| T5 awareness | against the control: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one — in raw bytes, as T2 and T3 are (it gave no unit until it was measured: bet.md has all three) | |
+| T5 awareness | against the control, **in brotli bytes** — what a page transfers: `brotli -q 11`, each blob on its own, as `bench/measure.mjs` does; raw and gzip are reported beside it — per-page CSS ≥ 20% smaller on at least two pages (of a catalog: on at least half of its pages), JS ≥ 30% smaller on every page that ships one. The unit is the owner's ruling (2026-10-05; decisions.md, L): T5 gave none until it was measured, and was first read raw | |
 | T6 authoring | the authoring rule of RGP2-040: no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source | refutes |
 | T7 behaviour | the browser checks pass on the built site | refutes |
 | T8 requests | ≤ 3 per page, cold | |
@@ -637,25 +665,39 @@ What the table cannot measure on this site, and where it is tested instead:
 | --- | --- |
 | "a page with nothing that opens ships no script" | every page of the site has the layout's `SideMenu` and `DropdownMenu`, so each mounts `overlays`. RGP2-030's golden fixture has such a page |
 | T4 as first written — deleting the dialog of `/syntax/` | its menu item commands it (`commandfor`): deleting the dialog alone is idref-not-found, and deleting the item with it also takes `menu-keys` and the menu's `role` away |
+| T5 where a page uses a few components of many | the docs site has three components in one layout, and one page that mounts everything. The owner's ruling (decisions.md, L): measured again on a catalog of about twenty — `bench/catalog` and `bench/catalog-site`, **measurement fixtures**, not the design system and not a product (their READMEs; bet.md, *The catalog*). T5's "at least two pages" reads "at least half of the pages" there; T2's 1.5 KB — a budget for the docs site's three behaviours — is not carried over: its bound (5 KB brotli) is, and the heaviest page is reported; T3 has no React build to stand against |
 | T2 as a multiple of the hand-written floor | none is claimed. The research's floors are of a site with theme, copy and search — 76% of the first floor's JS (research/baselines.md, *Verification*) — which this site does not have (decisions.md, 14); at behaviour parity that floor is 1,584 B raw, 571 B brotli, mean per page. T2 is a budget for this site's three behaviours |
 
 The result, with the tables, is written to `specs/phase02/bet.md`.
 - Depends on: 040.
 - **Done:** `bench/site.mjs`, `bench/delta.mjs`, `bench/verify.mjs`
   (`bench/lib.mjs` is what they share), their reports in `bench/results/`,
-  and [bet.md](bet.md). **The bet is undecided**: every threshold that
-  refutes holds, and T5 does not.
+  and [bet.md](bet.md). **The bet holds for a page loaded cold, and does
+  not hold over a visit** — bet.md's verdict, in two parts. Cold: every
+  threshold that refutes holds; T5 fails on the docs site and holds on the
+  catalog (*T5's unit, and the catalog*, below). A visit: the build without
+  awareness transfers less from the second page of the docs site and from
+  the third of the catalog (decisions.md, K: open). By the rule above —
+  all eight — that reads "confirmed" if T5 is taken where ruling L sent
+  it, and "undecided" if T5 must also hold on the docs site: the owner has
+  not chosen the word.
+
+  The docs site, as measured last — 2026-10-05, on the tree with every
+  ruling built (`bench/results/site.md`, `delta.md`):
 
   | | Measured | |
   | --- | --- | --- |
-  | T1 | the report's rows add up to each page's script (563, 252, 1,446, 252 B); no `<runtime>` row; the only statements that run are the mount calls | pass |
-  | T2 | `/syntax/`: 1,446 B raw, 591 B brotli | pass |
+  | T1 | the report's rows add up to each page's script (563, 252, 1,443, 252 B); no `<runtime>` row; the only statements that run are the mount calls | pass |
+  | T2 | `/syntax/`: 1,443 B raw, 588 B brotli | pass |
   | T3 | 219× raw, 152× brotli, at the worst pairing — against another site of the same shape | pass |
-  | T4 | the *Install* dialog deleted from `/`: 1,070 B of markup in one span, 14 selectors that name `.rg-dialog`, `invokers`; the other pages the same bytes | pass |
-  | T5 | CSS 22.8% and 23.2% raw on two pages (15.9%, 16.3% brotli); JS 12.1% on `/syntax/`, which mounts everything the site has | **fail** |
+  | T4 | the *Install* dialog deleted from `/`: 1,070 B of markup in one span, 14 selectors that name `.rg-dialog` (1,752 B), `invokers`; the other pages the same bytes | pass |
+  | T5 | in brotli: CSS 2.6%, 16.1%, 3.6%, 16.5% — no page at 20% (raw: 23.5% and 24.0% on two); JS 17.2% on `/syntax/`, which mounts everything the site has | **fail** |
   | T6 | 21 source files; nothing found | pass |
-  | T7 | 698 checks pass, 8 known, none fails: Chromium 153, WebKit 26.6 (688 of the site, 10 of the pruner's fixture) | pass |
+  | T7 | 702 checks pass, 8 known, none fails: Chromium 153.0.8010.12 (355), WebKit 26.6 (347 and the 8 known); 688 of the site, 14 of the pruner's fixture; 256 comparisons of computed styles, all equal | pass |
   | T8 | 2 requests per page: the document and the favicon | pass |
+
+  The notes below are in the order things were measured: the numbers in
+  each are of its time.
 
   - Four builds, not three: `--inline never` too — the default's blobs as
     files. Under `auto` the default build *is* `--inline always`'s on this
@@ -686,14 +728,145 @@ The result, with the tables, is written to `specs/phase02/bet.md`.
     was, the frame's fail.
   - Found by the same measurement, and the owner's (decisions.md, M): 301 B
     of each page's sheet are rules for a state no element of the page can
-    reach.
+    reach. (Ruled since — option 2 — and built: 72 B of it went, the rule
+    on an attribute; 229 B stay, the rules on `:disabled`.)
   - **Not run:** Firefox — the checks and the probe; Safari proper; the
     floor's versions (Chrome 135, Firefox 147, Safari 26.2); a touch
     device; Windows; `--base` (the site's own suite builds under one);
     `--no-specialize --inline always`; time (CPU, parse, paint).
   - **Not built**, so not measured: the React baseline and a hand-written
     floor *of this site* — T3 is against the research's site, and no ratio
-    to a floor is claimed; a catalog of ~20 components (*Later*).
+    to a floor is claimed; a catalog of ~20 components (*Later*) — built
+    since, as a fixture: *T5's unit, and the catalog*, below.
+- **The rulings, built (2026-10-05).** The owner ruled on the decisions
+  (decisions.md, *Ruled by the owner*); five rulings changed the builder,
+  and the bet was measured again on the result. What each touched — the
+  specs have the rules; the tasks above point here:
+
+  | Ruling | Built | Tasks |
+  | --- | --- | --- |
+  | routes (12) | a directory under `--pages` is a route; an `.rtsx` file of it that no module of the program imports is a variant, built to `<pathname><name>.html`; `index.tsx` makes no page. A document is named by route and variant in the render bundle, the record, the checks, the report (`pathname`, `variant`, `path`) and the control's table. `server.ts` is not read | 010, 011, 021, 022, 030 |
+  | behaviours (9) | `mount(module, id?, flags?, data?)`: the data is JSON, recorded with the mount, written into the generated entry as that mount's second argument; mount-data. `DropdownMenu` passes `{ typeahead: true }` and emits no `data-typeahead` | 011, 012, 022, 025 |
+  | packaging (10) | `--inline auto`: a file when two or more documents share a blob of 4096 B or more as written; otherwise inlined | 030 |
+  | a page's own script (19) | shell-script, an error of the page checks: a `<script>` that runs, an `on…` attribute, a `javascript:` URL | 021, 020 |
+  | `<style>` and `<link>` (20) | a `<style>` of the page's own is pruned with the page's sheet and written back in place; a `<link>` is classified by `rel` in one table (`markup`) | 020, 021, 030 |
+
+  - **Tests.** Each rule has tests that fail on the tree before it. The
+    fixture `site` gained `/account/` (two variants, a segment, a module, a
+    `server.ts`) and `/gate/` (a variant and no `index`); `bad` gained a
+    stray segment (page-not-document), two `--pages` roots without a page,
+    and a page with scripts of its own; `served` lost `/own/` and gained
+    `/styled/`. The goldens were rewritten, and their diff read: new pages;
+    `variant` and `path` in every report; `/actions/` without
+    `data-typeahead` and with its data in the entry; the sheet two guide
+    pages share and the control's script inlined (under 4096 B); `/own/`
+    gone, `/styled/` there. The docs site builds its four pages in all six
+    modes, and no sheet of it changed by a byte.
+  - **Measured again** (bet.md): no threshold's outcome changes — T5
+    fails. `/syntax/`'s script is 1,443 B (was 1,446), its HTML 18 B
+    smaller; the control's script is 1,667 B (was 1,645) and, under the new
+    threshold, inlined in every page — so over a four-page visit the
+    control now transfers 12.9% less than the default build, not 19.8%.
+    T7: 702 checks pass, 8 known, none fails (Chromium 153, WebKit 26.6):
+    the 688 of the site as before, and 14 of the fixture — its `/styled/`
+    is compared too, pruned `<style>` elements against the control's whole
+    ones.
+  - **Decided where the rulings were silent** — each in builder.md:
+    an import of types alone counts as an import (the program's graph, as
+    it is); a directory without a variant is no route for the link check;
+    a document is named by its path on a static host
+    (`/account/guest.html`) wherever one name is needed; data that is not
+    JSON is reported where `mount()` is called, two mounts that disagree at
+    the page; a key whose value is `undefined` is left out; the control
+    prunes no `<style>`; a `<style>` that cannot be paired with the page's
+    text, or does not read, is left as it is; any attribute that starts
+    with `on` is a handler; `stylesheet` decides a `rel` of several tokens.
+  - **Found on the way.** `bench/site.mjs` took the word `javascript:` in a
+    page's text for a `javascript:` URL (T1's check): it reads attributes
+    now. `bench/measure.mjs` once counted three requests for `/` in the
+    `--inline never` build — the favicon's was missed; the run was repeated
+    and is the same bytes twice. A paused animation in the fixture hung
+    `verify.mjs`, which waits for animations to end: the fixture's runs.
+  - **Not done.** A warning for an `index.rtsx` that is no variant because
+    something imports it (builder.md, *Routes*, OPEN). Two outputs that
+    collide — `a/b.rtsx` and a route `a/b.html/` — are not reported: the
+    write fails, and the old output stays. The render package's fixtures
+    still have `index.tsx` pages: render is given its routes.
+  - **Not verified.** Firefox, Safari proper and the floor's versions, as
+    before. `verify.mjs --inline never` was run, and gives the same 702, 8 and 0;
+    `--base` was not, here. The binary's size was
+    not measured again. An SVG `<style>` whose text holds markup: such a
+    page's `<style>` elements are left as they are, by reasoning and one
+    unit test of the pairing's refusal — none in a browser.
+
+- **T5's unit, and the catalog (2026-10-05).** The owner's ruling on L
+  (decisions.md): "fix the ambiguity around units and rerun on a catalog of
+  ~20 components".
+  - **The unit.** T5 is decided in brotli bytes (the table above);
+    `bench/site.mjs` decides it so and prints gzip and raw beside. On the
+    docs site it fails in brotli on both halves — CSS 2.6% to 16.5%, no
+    page at 20%; JS 17.2% on `/syntax/` — where raw its CSS half had held.
+  - **Built**, as measurement fixtures (their READMEs say so: neither is
+    the design system): `bench/catalog` (`@reactogenic/bench-catalog`) —
+    the four components of `@reactogenic/ui` and sixteen more, each with
+    its CSS in components.md's convention, four with a behaviour in
+    builder.md's authoring style, three flags of its own — and
+    `bench/catalog-site`, ten pages. Two private workspace packages
+    (`pnpm-workspace.yaml`, the lockfile's two importers). The pages, and
+    which components each uses, were written down before the first build
+    was measured (`bench/catalog-site/README.md`).
+  - **Run:** `bench/catalog.mjs` → `bench/results/catalog.md` —
+    `reactogenic check` and three builds (default, `--no-specialize`,
+    `--inline never`) with no diagnostic; every page cold in headless
+    Chrome and a warm session of ten; T5 page by page; T1, T2, T6, T8; one
+    component deleted from one page, twice. The same bytes on two runs.
+    `bench/catalog-verify.mjs` → `bench/results/catalog-verify.md` —
+    Chromium and WebKit, 1200 and 400 px.
+
+    | | On the catalog | |
+    | --- | --- | --- |
+    | T1 | the rows add up to each of the ten scripts (252 B to 2,448 B); no `<runtime>` row | pass |
+    | T2 | its 1.5 KB is the docs site's budget and is not carried over; its bound is: the heaviest page, `/settings/`, is 2,448 B raw, 876 B brotli | pass on the bound |
+    | T4's question | an accordion deleted from `/pricing/` (1,115 B of markup, 12 selectors), a toast from `/settings/` (387 B, 8 selectors, its behaviour: 2,448 → 1,932 B); no other page changed | pass |
+    | T5 | brotli: CSS 41.7% to 73.0% smaller on ten pages of ten, JS 41.9% to 91.6% | **pass** |
+    | T6 | 17 source files; nothing found | pass |
+    | T7, as a sanity pass | 1,348 checks pass, none known, none fails (674 in each of Chromium 153.0.8010.12 and WebKit 26.6): 488 comparisons of computed styles, all equal, and 488 times no dropped selector matched an element | pass |
+    | T8 | 2 requests a page, 3 on the one with a picture | pass |
+
+  - **The session.** Cold, a page of the default build is 50.7% lighter
+    than the control's (brotli, mean of ten). Over the ten pages the
+    control transfers 44.8% less — 24,034 B against 43,505 — and is ahead
+    from the third page. On the docs site: 8.0% lighter cold, 12.8% less
+    for the control over four pages, ahead from the second. Per-page
+    pruned sheets share nothing (decisions.md, K: open, not designed).
+  - **The verdict** is the one at the head of *Done*: it holds for a page
+    loaded cold, and does not hold over a visit; which word of the rule
+    that is, the owner has not chosen.
+  - **Decided where the plan was silent.** T5's "at least two pages" reads
+    "at least half of the pages" on ten. Its JS half is judged on the
+    scripts as shipped; against the control's behaviours alone — builder.md
+    has the table reported apart — it is given beside, and holds too (32.6%
+    at the least). T2's budget is not judged on a page that mounts five
+    behaviours; per behaviour mounted the figure is printed for the
+    heaviest page and for the worst (`/docs/`: 583 B, over the docs site's
+    500), and not judged either. T3 is not asked: there is no React build
+    of the fixture. T4 is the docs site's by name; its question is asked of
+    two other components. "T7" there is the style comparison and a check
+    per behaviour, not a suite.
+  - **Measured twice.** First with a binary built before decision M's
+    change to the pruner was in the tree; then — the numbers above, and
+    bet.md's — on the tree that has M, D (`slotKeys`) and G (`closeLabel`)
+    built, both sites with one binary. Between the two: every sheet lost
+    the menu's `[aria-current]` rule, 72 B (the catalog's `/404/`, which
+    has no current page, 230 B); `/syntax/` gained a sentence; no script
+    moved. The catalog's five containers of keyed slots iterate with
+    `slotKeys` now.
+  - **Not done.** No contract tests and no spec for the sixteen.
+  - **Not verified.** Firefox; Safari proper; the floor's versions; a
+    touch device; the catalog under `--base`, `--inline always`, and its
+    browser pass under `--inline never`; that the fixture's pages stand for
+    a real site's — their HTML is 2.5–9.4 KB, a quarter of the docs
+    site's, which flatters every share "of the page" and no part of T5.
 
 ### RGP2-060 — CI and docs · S · done
 A `site` job (build + the byte report as an artifact); getting-started gains
@@ -737,22 +910,31 @@ A `site` job (build + the byte report as an artifact); getting-started gains
 
 ## Later, noted here so it is not lost
 
-- Keyed slots and integer-like keys (components.md, *Known limits*): a menu
-  written `10, 9, 2` renders `2, 9, 10`, and `check` is silent. The
-  research asked for the fix before the site is written; it changes what
-  phase 1 emits, so it is the owner's (decisions.md, *For the owner*).
-  > OPEN: until then the site's keys are not integer-like.
+- ~~Keyed slots and integer-like keys~~: fixed (decisions.md, D — an
+  entry's name is its key encoded, and a container iterates `slotKeys`:
+  phase01/syntax.md, *Keyed slots*). ~~State that nothing can reach stays
+  "maybe"~~: ruled and built (decisions.md, M — an attribute only a script
+  writes is decided on the page unless the page's script names it:
+  builder.md, *CSS*); the rules on `:disabled` and the other
+  pseudo-classes stay, 229 B a page of the docs site.
 - The false `segment-children` warning on `<Dialog #install><$Title>…`; the
   opaque TS2559 for a keyed slot element without `key`
   (research/components.md, section 7).
 - Loop-produced slot items (above).
-- A catalog of ~20 components where a page uses 3–5: the scale test of
-  per-page precision.
+- ~~A catalog of ~20 components where a page uses 3–5: the scale test of
+  per-page precision.~~ Built as a measurement fixture (RGP2-050, *T5's
+  unit, and the catalog*). A catalog that is the design system's own — a
+  spec, contract tests, a browser suite per component — is still later.
 - Firefox, Safari 26.x (the floor), real key and pointer input in Safari,
   and every touch device: not run. The platform research's verifier ran
   Safari 27.0.1, script-driven (research/platform.md, *Verification*).
 - A check of what a behaviour writes to the page (builder.md, *Not in phase
   2*); hashes of inlined blobs for a `Content-Security-Policy`.
+- `rel=preload` could be classified further by `as` (a preloaded style,
+  script, font) — the owner: not now (builder.md, *Checks on the page*, the
+  table of `<link>`).
+- A route's `server.ts`, and the server it is middleware of (builder.md,
+  *Routes*, *Variants*).
 - **Before the next release**: the notices of what the binary now links.
   `scripts/build-binaries.sh` puts tsgo's licence and notice into each
   platform package, and nothing else; since RGP2-030 the binary also holds

@@ -11,17 +11,32 @@ import { useId } from "react";
 /**
  * The build-time protocol (specs/phase02/plan.md, M1): while `reactogenic
  * build` renders a page, its engine provides this object as
- * `globalThis.__reactogenic_build`. Its absence means React — an island, or
+ * `globalThis.__reactogenic_build`. Its absence means React — a dynamic segment, or
  * Vite.
  */
 export interface ShellBuild {
-  /** The route being rendered: "/guide/". */
+  /** The route being rendered: "/guide/" — the same in every variant of it. */
   readonly pathname: string;
   /** The next id of `prefix` on this page: "d1", "d2". */
   id(prefix: string): string;
-  /** Records a behaviour for the page: its module, the root's id, the flags this use site turns on. */
-  mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined): void;
+  /**
+   * Records a behaviour for the page: its module, the root's id, the flags
+   * this use site turns on, and the data it hands the behaviour. Throws
+   * (`mount-data`) when the data is not a plain object of JSON values, or is
+   * given without an id.
+   */
+  mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined, data: MountData | undefined): void;
 }
+
+/** A value a mount's data may hold: JSON, and nothing else. */
+export type MountValue = string | number | boolean | null | undefined | readonly MountValue[] | { readonly [key: string]: MountValue };
+
+/**
+ * What a use site hands its behaviour (builder.md, *Behaviours*): a plain
+ * object of JSON values — the builder writes it into the page's script as a
+ * literal. A key whose value is `undefined` is left out.
+ */
+export type MountData = { readonly [key: string]: MountValue };
 
 // Read on every call, never cached: the engine sets it per page.
 function build(): ShellBuild | undefined {
@@ -53,7 +68,14 @@ export function useShellId(prefix = "r"): string {
  * on the element with `id` — or once per page when there is no id — with
  * `flags` turned on (builder.md, *Behaviours*). At build time the call is
  * recorded; in React it does nothing in phase 2.
+ *
+ * `flags` are the page's: a flag any mount turns on is on for every mount of
+ * the page — it says whether the code is in the page's script. `data` is
+ * this use site's own: what only the behaviour reads, handed to it as the
+ * second argument of this mount's call — `module(root, data)`. It is JSON,
+ * and a behaviour of the page (no `id`) takes none. What a CSS rule selects
+ * stays an attribute.
  */
-export function mount(module: string, id?: string, flags?: Record<string, boolean>): void {
-  build()?.mount(module, id, flags);
+export function mount(module: string, id?: string, flags?: Record<string, boolean>, data?: MountData): void {
+  build()?.mount(module, id, flags, data);
 }

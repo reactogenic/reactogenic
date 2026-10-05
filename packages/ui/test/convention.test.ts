@@ -129,14 +129,18 @@ describe("CSS convention", () => {
   });
 });
 
-// builder.md, *CSS*: runtime state is "maybe" for the attributes a script may
-// set; anything else a script wrote would make a pruned rule match. These
+// builder.md, *CSS*: state only a script can write is decided on the page
+// unless the page's script names it — a behaviour names the state it writes
+// (components.md, *CSS convention*), and anything a script wrote under a
+// name the builder cannot read would make a pruned rule match. These
 // behaviours write nothing: they call the platform.
 describe("behaviours", () => {
   const dir = resolve(src, "behaviors");
-  // Reading is fine (`button.id === …`); a call or an assignment is a write —
-  // and `classList`, `dataset` and `style` are there to be written.
-  const writes = /\.(classList|dataset|style)\b|\.(className|id|innerHTML|outerHTML|textContent|innerText|hidden|inert|tabIndex|setAttribute|toggleAttribute|removeAttribute|insertAdjacent\w+|append\w*|prepend|before|after|replace\w+|remove|cloneNode)\s*(\(|=[^=])|\bcreateElement\b/;
+  // Reading is fine (`button.id === …`, `dialog.open`); a call or an
+  // assignment is a write — and `classList`, `dataset` and `style` are there
+  // to be written. The properties that reflect state are among them:
+  // `disabled`, `ariaExpanded`, `defaultChecked` …
+  const writes = /\.(classList|dataset|style)\b|\.(className|id|innerHTML|outerHTML|textContent|innerText|hidden|inert|open|disabled|value|checked|selected|role|aria[A-Z]\w*|default[A-Z]\w*|tabIndex|setAttribute\w*|toggleAttribute|removeAttribute\w*|insertAdjacent\w+|append\w*|prepend|before|after|replace\w+|remove|cloneNode)\s*(\(|=[^=])|\bcreateElement\b/;
 
   test.each(readdirSync(dir))("%s writes no class, attribute or element", (file) => {
     const code = readFileSync(resolve(dir, file), "utf8").replace(/\/\/.*$/gm, "");
@@ -144,9 +148,22 @@ describe("behaviours", () => {
   });
 
   test("the check sees a write", () => {
-    for (const code of ['menu.classList.add("open")', 'root.dataset.placement = "top"', 'item.setAttribute("tabindex", "0")', "item.tabIndex = 0;root.hidden = true", 'document.createElement("div")']) {
+    for (const code of [
+      'menu.classList.add("open")',
+      'root.dataset.placement = "top"',
+      'item.setAttribute("tabindex", "0")',
+      "item.tabIndex = 0;root.hidden = true",
+      'document.createElement("div")',
+      'trigger.ariaExpanded = "true"',
+      "item.disabled = true",
+      "page.inert = true",
+      "input.defaultChecked = true",
+      'option.value = "x"',
+      'item.removeAttribute("aria-disabled")',
+      "trigger.ariaControlsElements = [menu]",
+    ]) {
       expect(writes.test(code), code).toBe(true);
     }
-    expect(writes.test('menu.hidePopover(); trigger.focus(); if (button.id === "x") dialog.showModal()')).toBe(false);
+    expect(writes.test('menu.hidePopover(); trigger.focus(); if (button.id === "x" && !dialog.open) dialog.showModal(); item.textContent!.trim()')).toBe(false);
   });
 });

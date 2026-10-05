@@ -1,7 +1,7 @@
 // Dialog (specs/phase02/components.md): a live modal `<dialog>` where it is
 // written. Opening, closing, focus and the inert page are the browser's.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, isAssigned, mount, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import { Each, isAssigned, mount, slotKeys, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
 import { Button, type ButtonLinkProps, type TriggerProps } from "./button.rtsx";
 import "./tokens.css";
 import "./dialog.css";
@@ -18,8 +18,10 @@ export interface DialogProps {
   $Trigger?: Slot<TriggerProps>;
   /** The accessible name. */
   $Title: Slot<ComponentProps<"h2">>;
-  /** Footer buttons, in order. Each closes the dialog unless it is a link. */
+  /** Footer buttons, in the order written. Each closes the dialog unless it is a link. */
   $Action?: KeyedSlot<DialogActionProps>;
+  /** Content: the accessible name of the close button. Default "Close". */
+  closeLabel?: string;
   /** The body. */
   children?: ReactNode;
 }
@@ -30,7 +32,7 @@ function Action({ dialog, ...action }: DialogActionProps & { dialog: string }) {
   return action.href !== undefined ? <Button {...action} /> : <Button command="close" commandfor={dialog} {...action} />;
 }
 
-export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, children }: DialogProps) {
+export function Dialog({ id, closedby = "any", closeLabel = "Close", $Trigger, $Title, $Action, children }: DialogProps) {
   const generated = useShellId("d");
   const dialog = id ?? generated;
   // A slot's props replace the attachment's: the author's `id` on the title is
@@ -48,12 +50,12 @@ export function Dialog({ id, closedby = "any", $Trigger, $Title, $Action, childr
           <header>
             <h2 slot={$Title} id={title} />
             {/* The first focusable element of the dialog, so that is where focus goes when it opens. */}
-            <button type="button" data-part="close" command="close" commandfor={dialog} aria-label="Close">✕</button>
+            <button type="button" data-part="close" command="close" commandfor={dialog} aria-label={closeLabel}>✕</button>
           </header>
           <div data-part="body">{children}</div>
           {$Action !== undefined ? (
             <footer>
-              <Each items={Object.keys($Action)} { item: key }>
+              <Each items={slotKeys($Action)} { item: key }>
                 <Action key={key} slot={$Action} dialog />
               </Each>
             </footer>

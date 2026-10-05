@@ -1,6 +1,9 @@
 // Package pagecheck checks what only something that sees a whole page can:
 // its ids, the references to them, the targets of its commands and its links
-// to the site's other pages (specs/phase02/builder.md, *Checks on the page*).
+// to the site's other pages (specs/phase02/builder.md, *Checks on the page*)
+// — and that nothing in it runs: a script of the page's own is shell-script
+// (*Shell code in phase 2*), by the one notion of "runs" the pruner has too
+// (package markup).
 //
 // It works on the parsed HTML of the rendered page, so a report is about the
 // page — its file and pathname — and quotes the attribute; the renderer
@@ -14,14 +17,16 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/reactogenic/reactogenic/go/internal/build/markup"
 	"github.com/reactogenic/reactogenic/go/internal/build/render"
 	"github.com/reactogenic/reactogenic/go/internal/report"
 )
 
-// Check returns the id-duplicate, idref-not-found, command-target and
-// link-not-found reports of page, in document order. doc is the page's HTML,
-// parsed; routes are the site's pages; files are the other files of the
-// output, by their path from its root ("/favicon.svg").
+// Check returns the id-duplicate, idref-not-found, command-target,
+// link-not-found and shell-script reports of page, in document order. doc is the page's HTML,
+// parsed; routes are the site's documents — the variants of its routes;
+// files are the other files of the output, by their path from its root
+// ("/favicon.svg").
 //
 // The page is checked as it is rendered, before it is packaged: its links
 // name the site from its root, whatever `--base` the build then prefixes
@@ -30,9 +35,10 @@ import (
 // The same mistake is reported once per page however often it is rendered: a
 // link of the layout is on every item of a list.
 func Check(page render.Page, doc *html.Node, routes []render.Route, files map[string]bool) []report.Report {
-	c := &checker{page: page, routes: map[string]bool{}, files: files, ids: map[string][]*html.Node{}, names: map[string]bool{}, seen: map[string]bool{}}
+	c := &checker{page: page, routes: map[string]bool{}, documents: map[string]bool{}, files: files, ids: map[string][]*html.Node{}, names: map[string]bool{}, seen: map[string]bool{}}
 	for _, r := range routes {
 		c.routes[r.Pathname] = true
+		c.documents["/"+r.Output()] = true
 	}
 	var elements []*html.Node
 	var walk func(n *html.Node)
@@ -67,17 +73,18 @@ func Check(page render.Page, doc *html.Node, routes []render.Route, files map[st
 }
 
 type checker struct {
-	page    render.Page
-	routes  map[string]bool
-	files   map[string]bool
-	ids     map[string][]*html.Node
-	names   map[string]bool // <a name>: what a fragment names when no id does
-	seen    map[string]bool
-	reports []report.Report
+	page      render.Page
+	routes    map[string]bool // the routes, by pathname: a route with a variant, whichever
+	documents map[string]bool // the variants' documents, by their file: "/guide/index.html", "/account/guest.html"
+	files     map[string]bool
+	ids       map[string][]*html.Node
+	names     map[string]bool // <a name>: what a fragment names when no id does
+	seen      map[string]bool
+	reports   []report.Report
 }
 
 func (c *checker) report(code, format string, args ...any) {
-	r := report.Page(c.page.File, c.page.Pathname, code, fmt.Sprintf(format, args...))
+	r := report.Page(c.page.File, c.page.Path(), code, fmt.Sprintf(format, args...))
 	if key := code + "\x00" + r.Message; !c.seen[key] {
 		c.seen[key] = true
 		c.reports = append(c.reports, r)
@@ -95,7 +102,35 @@ var (
 	popoverCommands = map[string]bool{"show-popover": true, "hide-popover": true, "toggle-popover": true}
 )
 
+// script reports what of an element runs (shell-script): page-author JS is
+// deferred, so a page has no script but the builder's — which packaging
+// writes after these checks. What runs is package markup's to say, for the
+// pruner too: a `<script>` that is not a data block, an event handler
+// attribute, a `javascript:` URL. A `<link>` runs nothing, whatever its
+// `rel` (the table of `<link>`): `modulepreload` fetches.
+func (c *checker) script(n *html.Node) {
+	const cannot = "The shell cannot run a script of the page's own: "
+	switch tag := strings.ToLower(n.Data); {
+	case tag == "script" && markup.Runs(n):
+		written := "<script"
+		for _, key := range []string{"type", "src", "href"} {
+			if value, ok := markup.Attr(n, key); ok {
+				written += fmt.Sprintf(" %s=%q", key, value)
+			}
+		}
+		c.report("shell-script", cannot+"`%s>`", written)
+	case tag == "link" && markup.Link(n).Effect().Runs:
+		c.report("shell-script", cannot+"`<link>`")
+	}
+	for _, a := range n.Attr {
+		if markup.Handler(a.Key) || markup.JavaScriptURL(a.Key, a.Val) {
+			c.report("shell-script", cannot+"`%s=%q` on `<%s>`", a.Key, a.Val, n.Data)
+		}
+	}
+}
+
 func (c *checker) element(n *html.Node) {
+	c.script(n)
 	for _, a := range n.Attr {
 		if a.Namespace != "" {
 			continue
@@ -148,6 +183,8 @@ func (c *checker) element(n *html.Node) {
 			// What a URL parser strips around a URL: spaces and controls.
 			switch value := strings.TrimFunc(a.Val, func(r rune) bool { return r <= ' ' }); {
 			case n.Data == "base" && n.Namespace == "":
+			case n.Data == "link" && n.Namespace == "" && !markup.Link(n).Effect().Checked:
+				// The table of `<link>`: a link of every `rel` is checked.
 			case strings.HasPrefix(value, "#"):
 				if !c.fragment(value[1:]) {
 					c.report("idref-not-found", "%s names no element of the page", written)
@@ -219,16 +256,17 @@ func (c *checker) link(href string) bool {
 	}
 	p := pathOf(href)
 	file := func(p string) bool { return c.files[p] || c.files[strings.TrimPrefix(p, "/")] }
-	if c.routes[p] || file(p) {
+	// A route — also one without an `index`: it is the server's to say what
+	// is served there (builder.md, *Routes*) — or the file a variant is
+	// written to: `/guide/index.html`, `/account/guest.html`.
+	if c.routes[p] || c.documents[p] || file(p) {
 		return true
 	}
 	if strings.HasSuffix(p, "/") {
 		return file(p + "index.html") // a directory of `public/` with an index
 	}
-	// `/guide` is `/guide/` after the host's redirect; `/guide/index.html` is
-	// the file the page is written to.
-	dir, index := strings.CutSuffix(p, "/index.html")
-	return c.routes[p+"/"] || file(p+"/index.html") || index && c.routes[dir+"/"]
+	// `/guide` is `/guide/` after the host's redirect.
+	return c.routes[p+"/"] || file(p+"/index.html")
 }
 
 // RootRelative says whether href — the value of an `href`, as written — is a

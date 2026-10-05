@@ -147,7 +147,10 @@ func TestCheck(t *testing.T) {
 		{"external and relative links are not checked", `
 			<a href="https://example.com/gone/">a</a><a href="//example.com/gone/">b</a><a href="mailto:x@example.com">c</a>
 			<a href="slot/">d</a><a href="../gone/">e</a><a href="?tab=2">f</a><a href="">g</a><a href="/\example.com/">h</a>
-			<a>i</a><a href="javascript:void 0">j</a>`, nil},
+			<a>i</a><a href="tel:+1">j</a>`, nil},
+		// A `javascript:` URL is no link: it is a script of the page's own.
+		{"a javascript: URL is not a link, and runs", `<a href="javascript:void 0">j</a>`,
+			[]string{"shell-script: The shell cannot run a script of the page's own: `href=\"javascript:void 0\"` on `<a>`"}},
 		{"dot segments and percent-encoding, as the browser resolves them", `<a href="/x/../guide/">a</a><a href="/%67uide/">b</a><a href="/guide/../gone/">c</a>`,
 			[]string{"link-not-found: `href=\"/guide/../gone/\"` on `<a>` is neither a page nor a file of the output"}},
 		{"whitespace around a URL", `<a href=" /guide/ ">a</a><a href=" #nope ">b</a>`,
@@ -242,6 +245,90 @@ func TestNames(t *testing.T) {
 		"Page /: `href=\"/a/b/\"` on `<a>` is neither a page nor a file of the output",
 		"Page /: `href=\"/senor/\"` on `<a>` is neither a page nor a file of the output",
 		"Page /: `href=\"/q\"` on `<a>` is neither a page nor a file of the output",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// Variants (builder.md, *Routes*): a route is linked to by its pathname —
+// also one that has no `index` — and a variant by the file it is written
+// to. A report names the document: the pathname for `index`, the file for
+// another variant.
+func TestVariants(t *testing.T) {
+	routes := []render.Route{
+		{Pathname: "/", File: "/site/pages/index.rtsx"},
+		{Pathname: "/account/", Variant: "index", File: "/site/pages/account/index.rtsx"},
+		{Pathname: "/account/", Variant: "guest", File: "/site/pages/account/guest.rtsx"},
+		{Pathname: "/gate/", Variant: "closed", File: "/site/pages/gate/closed.rtsx"},
+	}
+	page := render.Page{Route: routes[2], HTML: `<html><body>
+		<a href="/account/">a</a><a href="/account">b</a><a href="/account/index.html">c</a><a href="/account/guest.html#x">d</a>
+		<a href="/gate/">e</a><a href="/gate">f</a><a href="/gate/closed.html">g</a>
+		<a href="/gate/index.html">h</a><a href="/account/plans.html">i</a><a href="/account/guest">j</a><a href="/account/guest.html/">k</a></body></html>`}
+	doc, _ := html.Parse(strings.NewReader(page.HTML))
+	var got []string
+	for _, r := range Check(page, doc, routes, nil) {
+		if r.File != "/site/pages/account/guest.rtsx" {
+			t.Errorf("not a report of the variant's file: %+v", r)
+		}
+		got = append(got, r.Message)
+	}
+	want := []string{
+		"Page /account/guest.html: `href=\"/gate/index.html\"` on `<a>` is neither a page nor a file of the output", // the route has no `index`
+		"Page /account/guest.html: `href=\"/account/plans.html\"` on `<a>` is neither a page nor a file of the output",
+		"Page /account/guest.html: `href=\"/account/guest\"` on `<a>` is neither a page nor a file of the output",
+		"Page /account/guest.html: `href=\"/account/guest.html/\"` on `<a>` is neither a page nor a file of the output",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// shell-script (builder.md, *Shell code in phase 2*): a page has no script
+// of its own. What runs — a `<script>` that is not a data block, an event
+// handler attribute, a `javascript:` URL — is reported at the page, quoted;
+// a data block, an empty `<script>`, a hint that only fetches and what a
+// `<template>` or a `<noscript>` holds are not.
+func TestScript(t *testing.T) {
+	const cannot = "shell-script: The shell cannot run a script of the page's own: "
+	for name, tt := range map[string]struct {
+		body string
+		want []string
+	}{
+		"an inline script":    {`<script>document.documentElement.classList.add("dark")</script>`, []string{cannot + "`<script>`"}},
+		"a script file":       {`<script src="/theme.js"></script>`, []string{cannot + "`<script src=\"/theme.js\">`"}},
+		"a module":            {`<script type="module" src="/favicon.svg"></script>`, []string{cannot + "`<script type=\"module\" src=\"/favicon.svg\">`"}},
+		"in SVG":              {`<svg><script href="/favicon.svg"></script></svg>`, []string{cannot + "`<script href=\"/favicon.svg\">`"}},
+		"an event handler":    {`<button onclick="go()">x</button>`, []string{cannot + "`onclick=\"go()\"` on `<button>`"}},
+		"a javascript: URL":   {`<a href=" JavaScript:void 0">x</a>`, []string{cannot + "`href=\" JavaScript:void 0\"` on `<a>`"}},
+		"a form's action":     {`<form action="javascript:go()"></form>`, []string{cannot + "`action=\"javascript:go()\"` on `<form>`"}},
+		"each, once per page": {`<script>a()</script><script>b()</script><p onclick="a()"></p><p onclick="a()"></p>`, []string{cannot + "`<script>`", cannot + "`onclick=\"a()\"` on `<p>`"}},
+		// What does not run.
+		"data blocks":           {`<script type="application/json">{"a":1}</script><script type="application/ld+json">{}</script><script type="importmap">{"imports":{}}</script><script type="speculationrules">{}</script>`, nil},
+		"an empty script":       {`<script></script>`, nil},
+		"a hint fetches":        {`<link rel="modulepreload" href="/favicon.svg"><link rel="preload" as="script" href="/favicon.svg">`, nil},
+		"in a template":         {`<template><script>go()</script><p onclick="go()"></p></template>`, nil},
+		"in a noscript":         {`<noscript><p onclick="go()"></p></noscript>`, nil},
+		"an attribute named on": {`<p on="x" data-onclick="go()" title="javascript:go()">x</p>`, nil},
+	} {
+		if got := run(t, tt.body); !slices.Equal(got, tt.want) {
+			t.Errorf("%s:\n got %q\nwant %q", name, got, tt.want)
+		}
+	}
+}
+
+// The table of `<link>` (builder.md, *Checks on the page*): whatever its
+// `rel` — a stylesheet the builder did not bundle, a hint, a relation, one
+// nobody knows, none — a root-relative `href` is checked, in the head and
+// in the body.
+func TestLinks(t *testing.T) {
+	got := run(t, `<link rel="stylesheet" href="/theme.css"><link rel="alternate stylesheet" href="/dark.css"><link rel="preload" as="style" href="/hint.css">`+
+		`<link rel="icon" href="/icon.png"><link rel="canonical" href="/nowhere/"><link rel="pingback" href="/ping"><link href="/none.css">`+
+		`<link rel="stylesheet" href="/favicon.svg"><link rel="icon" href="/favicon.svg"><link rel="canonical" href="/guide/"><link rel="preconnect" href="https://example.com">`)
+	var want []string
+	for _, href := range []string{"/theme.css", "/dark.css", "/hint.css", "/icon.png", "/nowhere/", "/ping", "/none.css"} {
+		want = append(want, "link-not-found: `href=\""+href+"\"` on `<link>` is neither a page nor a file of the output")
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))

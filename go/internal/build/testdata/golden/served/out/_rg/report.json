@@ -5,6 +5,8 @@
   "pages": [
     {
       "pathname": "/",
+      "variant": "index",
+      "path": "/",
       "file": "pages/index.rtsx",
       "output": "index.html",
       "document": {
@@ -26,7 +28,7 @@
         "raw": 87,
         "gzip": 105,
         "delivery": "inline",
-        "pages": 2,
+        "pages": 1,
         "blob": "f561d7b7"
       },
       "components": [
@@ -61,19 +63,19 @@
         }
       ],
       "styles": {
-        "rules": 20,
-        "rulesDropped": 13,
-        "selectors": 22,
-        "selectorsDropped": 15,
+        "rules": 23,
+        "rulesDropped": 16,
+        "selectors": 25,
+        "selectorsDropped": 18,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 20,
-            "rulesDropped": 13,
-            "bytesIn": 658,
+            "rules": 23,
+            "rulesDropped": 16,
+            "bytesIn": 813,
             "bytesOut": 142
           }
         ]
@@ -81,22 +83,24 @@
     },
     {
       "pathname": "/edit/",
+      "variant": "index",
+      "path": "/edit/",
       "file": "pages/edit/index.rtsx",
       "output": "edit/index.html",
       "document": {
-        "raw": 691,
-        "gzip": 368
+        "raw": 817,
+        "gzip": 425
       },
       "html": {
         "raw": 172,
         "gzip": 146
       },
       "css": {
-        "raw": 504,
-        "gzip": 255,
+        "raw": 630,
+        "gzip": 311,
         "delivery": "inline",
-        "pages": 3,
-        "blob": "c08c523b"
+        "pages": 2,
+        "blob": "412e17c4"
       },
       "components": [
         {
@@ -112,9 +116,9 @@
       "styles": {
         "unpruned": true,
         "why": "the page has an element the user edits (`contenteditable`)",
-        "rules": 20,
+        "rules": 23,
         "rulesDropped": 0,
-        "selectors": 22,
+        "selectors": 25,
         "selectorsDropped": 0,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
@@ -124,22 +128,24 @@
     },
     {
       "pathname": "/frame/",
+      "variant": "index",
+      "path": "/frame/",
       "file": "pages/frame/index.rtsx",
       "output": "frame/index.html",
       "document": {
-        "raw": 673,
-        "gzip": 358
+        "raw": 799,
+        "gzip": 417
       },
       "html": {
         "raw": 154,
         "gzip": 134
       },
       "css": {
-        "raw": 504,
-        "gzip": 255,
+        "raw": 630,
+        "gzip": 311,
         "delivery": "inline",
-        "pages": 3,
-        "blob": "c08c523b"
+        "pages": 2,
+        "blob": "412e17c4"
       },
       "components": [
         {
@@ -155,9 +161,9 @@
       "styles": {
         "unpruned": true,
         "why": "the page has a document of the site in a frame (`<iframe>`)",
-        "rules": 20,
+        "rules": 23,
         "rulesDropped": 0,
-        "selectors": 22,
+        "selectors": 25,
         "selectorsDropped": 0,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
@@ -167,6 +173,8 @@
     },
     {
       "pathname": "/guide/",
+      "variant": "index",
+      "path": "/guide/",
       "file": "pages/guide/index.rtsx",
       "output": "guide/index.html",
       "document": {
@@ -196,119 +204,105 @@
       ],
       "mounts": [],
       "styles": {
-        "rules": 20,
-        "rulesDropped": 17,
-        "selectors": 22,
-        "selectorsDropped": 19,
+        "rules": 23,
+        "rulesDropped": 20,
+        "selectors": 25,
+        "selectorsDropped": 22,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 20,
-            "rulesDropped": 17,
-            "bytesIn": 658,
+            "rules": 23,
+            "rulesDropped": 20,
+            "bytesIn": 813,
             "bytesOut": 49
           }
         ]
       }
     },
     {
-      "pathname": "/own/",
-      "file": "pages/own/index.rtsx",
-      "output": "own/index.html",
+      "pathname": "/styled/",
+      "variant": "index",
+      "path": "/styled/",
+      "file": "pages/styled/index.rtsx",
+      "output": "styled/index.html",
       "document": {
-        "raw": 832,
-        "gzip": 449
+        "raw": 514,
+        "gzip": 323
       },
       "html": {
-        "raw": 195,
-        "gzip": 162
+        "raw": 445,
+        "gzip": 300
       },
       "css": {
-        "raw": 504,
-        "gzip": 255,
+        "raw": 54,
+        "gzip": 55,
         "delivery": "inline",
-        "pages": 3,
-        "blob": "c08c523b"
-      },
-      "js": {
-        "raw": 87,
-        "gzip": 105,
-        "delivery": "inline",
-        "pages": 2,
-        "blob": "f561d7b7"
+        "pages": 1,
+        "blob": "7500403d"
       },
       "components": [
         {
-          "name": "Layout",
-          "count": 1
-        },
-        {
-          "name": "Marked",
-          "count": 1
-        },
-        {
-          "name": "OwnPage",
+          "name": "StyledPage",
           "count": 1
         }
       ],
-      "mounts": [
-        {
-          "module": "./behaviors/mark",
-          "id": "marked"
-        }
-      ],
-      "modules": [
-        {
-          "module": "./behaviors/mark",
-          "path": "behaviors/mark.ts",
-          "bytes": 50
-        },
-        {
-          "path": "<entry>",
-          "bytes": 37
-        }
-      ],
+      "mounts": [],
       "styles": {
-        "unpruned": true,
-        "why": "the page has a script of its own",
-        "rules": 20,
-        "rulesDropped": 0,
-        "selectors": 22,
-        "selectorsDropped": 0,
-        "customPropertiesDropped": 0,
-        "keyframesDropped": 0,
+        "rules": 33,
+        "rulesDropped": 24,
+        "selectors": 35,
+        "selectorsDropped": 26,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
         "positionTryDropped": 0,
-        "sources": []
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 23,
+            "rulesDropped": 20,
+            "bytesIn": 813,
+            "bytesOut": 61
+          },
+          {
+            "file": "<style>",
+            "rules": 10,
+            "rulesDropped": 4,
+            "bytesIn": 439,
+            "bytesOut": 205
+          }
+        ]
       }
     },
     {
       "pathname": "/toggle/",
+      "variant": "index",
+      "path": "/toggle/",
       "file": "pages/toggle/index.rtsx",
       "output": "toggle/index.html",
       "document": {
-        "raw": 796,
-        "gzip": 474
+        "raw": 933,
+        "gzip": 546
       },
       "html": {
         "raw": 289,
         "gzip": 200
       },
       "css": {
-        "raw": 179,
-        "gzip": 136,
+        "raw": 271,
+        "gzip": 187,
         "delivery": "inline",
         "pages": 1,
-        "blob": "65c28104"
+        "blob": "1e9a855b"
       },
       "js": {
-        "raw": 282,
-        "gzip": 215,
+        "raw": 327,
+        "gzip": 244,
         "delivery": "inline",
         "pages": 1,
-        "blob": "63652cb2"
+        "blob": "b2b3ea7b"
       },
       "components": [
         {
@@ -334,7 +328,7 @@
         {
           "module": "./behaviors/toggle",
           "path": "behaviors/toggle.ts",
-          "bytes": 249
+          "bytes": 294
         },
         {
           "path": "<entry>",
@@ -342,20 +336,20 @@
         }
       ],
       "styles": {
-        "rules": 20,
-        "rulesDropped": 13,
-        "selectors": 22,
-        "selectorsDropped": 15,
+        "rules": 23,
+        "rulesDropped": 14,
+        "selectors": 25,
+        "selectorsDropped": 16,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 20,
-            "rulesDropped": 13,
-            "bytesIn": 658,
-            "bytesOut": 190
+            "rules": 23,
+            "rulesDropped": 14,
+            "bytesIn": 813,
+            "bytesOut": 289
           }
         ]
       }
@@ -383,22 +377,20 @@
       },
       "delivery": "inline",
       "pages": [
-        "/",
-        "/own/"
+        "/"
       ]
     },
     {
       "kind": "css",
-      "hash": "c08c523b",
+      "hash": "412e17c4",
       "size": {
-        "raw": 504,
-        "gzip": 255
+        "raw": 630,
+        "gzip": 311
       },
       "delivery": "inline",
       "pages": [
         "/edit/",
-        "/frame/",
-        "/own/"
+        "/frame/"
       ]
     },
     {
@@ -415,10 +407,22 @@
     },
     {
       "kind": "css",
-      "hash": "65c28104",
+      "hash": "7500403d",
       "size": {
-        "raw": 179,
-        "gzip": 136
+        "raw": 54,
+        "gzip": 55
+      },
+      "delivery": "inline",
+      "pages": [
+        "/styled/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "1e9a855b",
+      "size": {
+        "raw": 271,
+        "gzip": 187
       },
       "delivery": "inline",
       "pages": [
@@ -427,10 +431,10 @@
     },
     {
       "kind": "js",
-      "hash": "63652cb2",
+      "hash": "b2b3ea7b",
       "size": {
-        "raw": 282,
-        "gzip": 215
+        "raw": 327,
+        "gzip": 244
       },
       "delivery": "inline",
       "pages": [

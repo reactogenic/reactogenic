@@ -58,12 +58,25 @@ func mount(module, id string, flags ...string) render.Mount {
 	return m
 }
 
+// with is a mount with data: the JSON a use site hands the behaviour.
+func with(m render.Mount, data string) render.Mount {
+	m.Data = data
+	return m
+}
+
 func page(pathname, body string, mounts ...render.Mount) render.Page {
 	return render.Page{
 		Route:  render.Route{Pathname: pathname, File: "/site/pages" + pathname + "index.rtsx"},
 		HTML:   "<html><head><title>t</title></head><body>" + body + "</body></html>",
 		Mounts: mounts,
 	}
+}
+
+// variant is a page that is another variant of its route than `index`.
+func variant(pathname, name, body string, mounts ...render.Mount) render.Page {
+	p := page(pathname, body, mounts...)
+	p.Variant, p.File = name, "/site/pages"+pathname+name+".rtsx"
+	return p
 }
 
 // The site: what each page mounted is what its components rendered.
@@ -73,6 +86,10 @@ var (
 	syntax = page("/syntax/", `<nav id="s1" popover></nav><div id="m1"></div><div id="m2"></div><dialog id="d1"></dialog>`,
 		mount("overlays", ""), mount("menu-keys", "m1"), mount("overlays", ""), mount("menu-keys", "m2", "RG_MENU_TYPEAHEAD", "RG_MENU_WRAP"), mount("invokers", ""), mount("overlays", ""))
 	cli = page("/reference/cli/", `<p>nothing opens</p>`)
+	// Two variants of one route: `index`, and one a static host serves as a
+	// file. Each has its own mounts; one of them hands data to its menu.
+	account = page("/account/", `<div id="m1"></div>`, mount("menu-keys", "m1"))
+	guest   = variant("/account/", "guest", `<div id="m1"></div><div id="m2"></div>`, mount("overlays", ""), mount("menu-keys", "m1"), with(mount("menu-keys", "m2", "RG_MENU_TYPEAHEAD"), `{"items":[1,"</script>"],"typeahead":true}`))
 	// Pages whose pathname a browser encodes: location.pathname is
 	// /se%C3%B1or/ and /a%20b%25/.
 	senor   = page("/señor/", `<div id="m1"></div>`, mount("menu-keys", "m1"))
@@ -182,14 +199,72 @@ m1(document.getElementById("m1"));
 m1(document.getElementById("m2"));
 m2();
 `},
+		// A mount's data is the second argument of its call, as it was
+		// recorded; a mount without data has the call of one argument.
+		{guest, `import m0 from "@fixture/ui/behaviors/overlays";
+import m1 from "@fixture/ui/behaviors/menu-keys";
+m0();
+m1(document.getElementById("m1"));
+m1(document.getElementById("m2"), {"items":[1,"</script>"],"typeahead":true});
+`},
 		// One module on one element twice is one call; an id is a string of
 		// the page, whatever is in it.
 		{page("/x/", "", mount("menu-keys", "m1"), mount("menu-keys", "m1", "RG_MENU_WRAP"), mount("menu-keys", `a"</script>`)),
 			"import m0 from \"@fixture/ui/behaviors/menu-keys\";\nm0(document.getElementById(\"m1\"));\nm0(document.getElementById(\"a\\\"\\u003c/script\\u003e\"));\n"},
 	} {
 		if got := planOf(tt.page).entry(); got != tt.want {
-			t.Errorf("%s:\n%s\nwant:\n%s", tt.page.Pathname, got, tt.want)
+			t.Errorf("%s:\n%s\nwant:\n%s", tt.page.Path(), got, tt.want)
 		}
+	}
+}
+
+// A mount's data (builder.md, *Behaviours*): one element gets one call of a
+// module, with one second argument — two mounts that disagree are
+// mount-data, however they spell the module; a behaviour of the page takes
+// none; and what is written into the script is JSON, an object.
+func TestData(t *testing.T) {
+	opts := project(t)
+	const body = `<div id="m1"></div><div id="m2"></div>`
+	const said = "Page /d/: `mount(\"@fixture/ui/behaviors/menu-keys\")`: "
+	for _, tt := range []struct {
+		name   string
+		mounts []render.Mount
+		want   string // the one report's message; "": none
+	}{
+		{"the same data twice is one call", []render.Mount{with(mount("menu-keys", "m1"), `{"a":1}`), with(mount("menu-keys", "m1"), `{"a":1}`), mount("menu-keys", "m2")}, ""},
+		{"each element its own", []render.Mount{with(mount("menu-keys", "m1"), `{"a":1}`), with(mount("menu-keys", "m2"), `{"a":2}`)}, ""},
+		{"different data on one element", []render.Mount{with(mount("menu-keys", "m1"), `{"a":1}`), with(mount("menu-keys", "m1"), `{"a":2}`), with(mount("menu-keys", "m1"), `{"a":3}`)},
+			said + "the module is mounted on `#m1` twice, with `{\"a\":1}` and with `{\"a\":2}`: an element gets one call, with one data"},
+		{"data and none", []render.Mount{mount("menu-keys", "m1"), with(mount("menu-keys", "m1"), `{"a":1}`)},
+			said + "the module is mounted on `#m1` twice, with no data and with `{\"a\":1}`: an element gets one call, with one data"},
+		{"two spellings of the module", []render.Mount{with(mount("menu-keys", "m1"), `{"a":1}`), {Module: "./" + src + "behaviors/menu-keys.ts", ID: "m1"}},
+			"Page /d/: `mount(\"./node_modules/@fixture/ui/src/behaviors/menu-keys.ts\")`: the module is mounted on `#m1` twice, with `{\"a\":1}` and with no data: an element gets one call, with one data"},
+		{"a behaviour of the page", []render.Mount{mount("overlays", ""), with(mount("overlays", ""), `{"a":1}`)},
+			"Page /d/: `mount(\"@fixture/ui/behaviors/overlays\")`: a behaviour of the page — mounted without an id — takes no data"},
+		{"not JSON", []render.Mount{with(mount("menu-keys", "m1"), `{a:1}`)}, said + "the data is not a plain object of JSON values: `{a:1}`"},
+		{"not an object", []render.Mount{with(mount("menu-keys", "m1"), `[1]`)}, said + "the data is not a plain object of JSON values: `[1]`"},
+	} {
+		p := page("/d/", body, tt.mounts...)
+		js, _, reports := Build(p, opts)
+		control, controlReports := BuildControl([]render.Page{home, p}, opts)
+		if tt.want == "" {
+			if len(reports) != 0 || len(controlReports) != 0 || js == "" || control == "" {
+				t.Errorf("%s: %+v, %+v", tt.name, reports, controlReports)
+			}
+			continue
+		}
+		if len(reports) != 1 || reports[0].Code != "mount-data" || reports[0].Message != tt.want || js != "" {
+			t.Errorf("%s: %q\n got  %+v\n want %s", tt.name, js, reports, tt.want)
+		}
+		if len(controlReports) != 1 || controlReports[0].Code != "mount-data" || control != "" {
+			t.Errorf("%s, the control: %q %+v", tt.name, control, controlReports)
+		}
+	}
+	// In the script the data is a literal, minified with the rest — and a
+	// string of it is no flag, whatever it says.
+	js, _, reports := Build(page("/d/", body, with(mount("menu-keys", "m1", "RG_MENU_TYPEAHEAD"), `{"flag":"RG_MENU_TYPEAHEAD","typeahead":true}`)), opts)
+	if len(reports) != 0 || !strings.Contains(js, `document.getElementById("m1"),{flag:"RG_MENU_TYPEAHEAD",typeahead:!0})`) {
+		t.Errorf("the script: %+v\n%s", reports, js)
 	}
 }
 
@@ -421,12 +496,19 @@ func TestElementIDs(t *testing.T) {
 // every flag on, and the table from pathname to the page's mounts.
 func TestControl(t *testing.T) {
 	opts := project(t)
-	pages := []render.Page{home, guide, syntax, cli}
+	pages := []render.Page{home, account, guest, guide, syntax, cli}
 	js, reports := BuildControl(pages, opts)
 	if len(reports) > 0 {
 		t.Fatalf("reports: %+v", reports)
 	}
 	validESM(t, js)
+	// A document is keyed by its path on a static host: the pathname for
+	// `index`, the file for another variant — with its mounts' data.
+	for _, row := range []string{`"/account/":[[1,"m1"]]`, `"/account/guest.html":[[0],[1,"m1"],[1,"m2",{items:[1,"<\/script>"],typeahead:!0}]]`} {
+		if !strings.Contains(js, row) {
+			t.Errorf("no %s in the table\n%s", row, js)
+		}
+	}
 	// Every flag: also the one no page of the site turned on.
 	if got := holds(js); !slices.Equal(got, markers) {
 		t.Errorf("the control holds %v, want all of %v\n%s", got, markers, js)
@@ -444,9 +526,9 @@ func TestControl(t *testing.T) {
 	for _, p := range pages {
 		own, _, _ := Build(p, opts)
 		if len(own) >= len(js) {
-			t.Errorf("%s: its script is %d B, the control %d B", p.Pathname, len(own), len(js))
+			t.Errorf("%s: its script is %d B, the control %d B", p.Path(), len(own), len(js))
 		}
-		t.Logf("%s: %d B; the control: %d B", p.Pathname, len(own), len(js))
+		t.Logf("%s: %d B; the control: %d B", p.Path(), len(own), len(js))
 	}
 	t.Logf("\n%s", js)
 
@@ -772,7 +854,7 @@ func TestRun(t *testing.T) {
 	}
 	opts := project(t)
 	opts.Base = "/docs"
-	pages := []render.Page{home, guide, syntax, cli, senor, percent}
+	pages := []render.Page{home, guide, syntax, cli, senor, percent, account, guest}
 	control, reports := BuildControl(pages, opts)
 	if len(reports) > 0 {
 		t.Fatalf("reports: %+v", reports)
@@ -834,6 +916,26 @@ func TestRun(t *testing.T) {
 			}
 		})
 	}
+	// Two variants of a route: each document has its own mounts, and a
+	// mount's data is what its behaviour is called with — on the page's own
+	// script and in the control, which knows the document by its file.
+	const data = `{"items":[1,"</script>"],"typeahead":true}`
+	own, _, reports := Build(guest, opts)
+	if len(reports) > 0 {
+		t.Fatalf("reports: %+v", reports)
+	}
+	for name, got := range map[string]ran{"the page's script": node(t, own, "/docs/account/guest.html", "m1,m2"), "the control": node(t, control, "/docs/account/guest.html", "m1,m2")} {
+		if !slices.Equal(got.Added, []string{"window:pagehide", "m1:keydown", "m1:keydown", "m2:keydown", "m2:keydown"}) || got.Datasets["m2"]["own"] != data || got.Datasets["m1"]["own"] != "" {
+			t.Errorf("%s on the guest's document: %+v", name, got)
+		}
+	}
+	// The route's pathname is its `index`: the other variant's mounts are
+	// not run there, nor the index's on the other's file.
+	for _, pathname := range []string{"/docs/account/", "/docs/account", "/docs/account/index.html"} {
+		if got := node(t, control, pathname, "m1,m2"); !slices.Equal(got.Added, []string{"m1:keydown", "m1:keydown"}) || got.Datasets["m2"] != nil {
+			t.Errorf("the control at %s: %+v", pathname, got)
+		}
+	}
 	// A pathname is what the browser makes of the page's: encoded.
 	for _, pathname := range []string{"/docs/se%C3%B1or/", "/docs/se%c3%b1or", "/docs/señor/index.html", "/docs/a%20b%25/", "/docs/a%20b%25/index.html"} {
 		if got := node(t, control, pathname, "m1"); !slices.Equal(got.Added, []string{"m1:keydown", "m1:keydown"}) {
@@ -856,7 +958,7 @@ func TestRun(t *testing.T) {
 	}
 	// On a page that mounts nothing, and on one that is not the site's, the
 	// control does nothing.
-	for _, pathname := range []string{"/docs/reference/cli/", "/guide/", "/docs/guide/x/", "/docs/senor/"} {
+	for _, pathname := range []string{"/docs/reference/cli/", "/guide/", "/docs/guide/x/", "/docs/senor/", "/docs/account/guest.html/", "/docs/account/other.html", "/docs/guide.html"} {
 		if got := node(t, control, pathname, "m1"); len(got.Added) != 0 {
 			t.Errorf("the control at %s: %+v", pathname, got)
 		}

@@ -12,6 +12,12 @@ export const site = join(repo, "site");
 // The site's pages, in the order a visitor of the session opens them.
 export const PAGES = ["/", "/guide/", "/syntax/", "/reference/cli/"];
 
+// The catalog run (bench/catalog-site/README.md): a fixture of ten pages on
+// the twenty components of bench/catalog, in the order of its session.
+export const catalog = join(repo, "bench/catalog");
+export const catalogSite = join(repo, "bench/catalog-site");
+export const CATALOG_PAGES = ["/", "/pricing/", "/docs/", "/docs/api/", "/changelog/", "/blog/", "/dashboard/", "/settings/", "/contact/", "/404/"];
+
 // The builds that are measured (plan.md, RGP2-050). `never` is not one of the
 // three the plan names: it is the default build's blobs as files — what a
 // page is, apart from how it is delivered — and the worst case of T8.
@@ -116,6 +122,55 @@ export function controlEntry(js) {
   const at = [...js.matchAll(/var \w+=\[[\w$,]*\],\w+=\{/g)].at(-1)?.index ?? -1;
   if (at < 0 || !js.slice(at).includes("decodeURIComponent(location.pathname)")) return null;
   return { behaviours: js.slice(0, at), entry: js.slice(at) };
+}
+
+// ---- T1: every byte of a page's script (plan.md, RGP2-050) ----------------------
+// A script is the behaviours' functions and constants, then the entry: the
+// mount calls. Nothing else is a statement of its top level.
+function topLevel(js) {
+  const out = [];
+  let depth = 0, start = 0, quote = "";
+  for (let i = 0; i < js.length; i++) {
+    const c = js[i];
+    if (quote) { if (c === "\\") i++; else if (c === quote) quote = ""; continue; }
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "{" || c === "(" || c === "[") depth++;
+    else if (c === "}" || c === ")" || c === "]") {
+      depth--;
+      // A function declaration ends at its brace: no semicolon follows it.
+      if (depth === 0 && c === "}" && js.startsWith("function ", start)) { out.push(js.slice(start, i + 1)); start = i + 1; }
+    } else if (c === ";" && depth === 0) { out.push(js.slice(start, i + 1)); start = i + 1; }
+  }
+  if (start < js.length) out.push(js.slice(start));
+  return out;
+}
+// A mount call: the module's function, its element and — the mount's data
+// (builder.md, *Behaviours*) — an object literal; or nothing, for a
+// behaviour of the page.
+const MOUNT_CALL = /^[\w$]+\((document\.getElementById\("[^"]*"\)(,\{[\s\S]*\})?)?\);$/;
+const RUNTIME = /react|hydrat|createElement|createRoot|customElements|innerHTML|import\(|eval\(|new Function/i;
+// `p` is a page of a build: its report entry, its parts (`page()`) and their sizes.
+export function scriptChecks(pathname, p) {
+  const rows = p.entry.modules ?? [];
+  const sum = rows.reduce((a, r) => a + r.bytes, 0);
+  const entryBytes = rows.find((r) => r.path === "<entry>")?.bytes ?? 0;
+  const statements = topLevel(p.js);
+  const calls = statements.filter((s) => !s.startsWith("function ") && !s.startsWith("var "));
+  const scripts = [...p.document.matchAll(/<script\b/g)].length;
+  const handlers = [...p.html.matchAll(/<[a-z][^>]*\s(on[a-z]+)=/gi)].map((m) => m[1]);
+  const mounted = new Set((p.entry.mounts ?? []).map((m) => m.module));
+  const checks = {
+    "the rows add up to the script": sum === p.sizes.js.raw,
+    "no <runtime> row": !rows.some((r) => r.path === "<runtime>"),
+    "every row is a mounted behaviour or the entry": rows.every((r) => r.path === "<entry>" || mounted.has(r.module)),
+    "the script's only statements that run are the entry's mount calls": calls.length > 0 && calls.every((s) => MOUNT_CALL.test(s)) && Buffer.byteLength(calls.join("")) === entryBytes,
+    "one <script> in the document, the builder's": scripts === 1,
+    // In an attribute's value: the page may say the word in its text (the
+    // site documents `shell-script`).
+    "no handler attribute, no javascript: URL": handlers.length === 0 && !/<[a-z][^>]*=\s*["']?\s*javascript:/i.test(p.html),
+    "nothing of React or of a runtime in the script": !RUNTIME.test(p.js),
+  };
+  return { pathname, rows, sum, entryBytes, calls: calls.join(""), mounts: p.entry.mounts ?? [], checks, ok: Object.values(checks).every(Boolean) };
 }
 
 // ---- a sheet as a list of items, and the difference of two ----------------------

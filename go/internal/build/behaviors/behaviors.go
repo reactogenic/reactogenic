@@ -85,8 +85,8 @@ const Runtime = "<runtime>"
 // then esbuild's helpers if there are any: the bytes add up to the script.
 //
 // The reports are mount-not-found, mount-no-element (an id is looked up in
-// page.HTML), mount-kind, mount-flag, mount-side-effect and mount-error; with
-// any, there is no script.
+// page.HTML), mount-kind, mount-flag, mount-data, mount-side-effect and
+// mount-error; with any, there is no script.
 func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, reports []report.Report) {
 	opts = opts.resolved()
 	p := planOf(page)
@@ -129,7 +129,7 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 	bytes := meta.bytes()
 	for _, file := range meta.files() {
 		if _, ok := mounted[file]; !ok {
-			reports = append(reports, report.Page(page.File, page.Pathname, "internal", fmt.Sprintf("`%s` is in the page's script and no mounted module imports it", file)))
+			reports = append(reports, report.Page(page.File, page.Path(), "internal", fmt.Sprintf("`%s` is in the page's script and no mounted module imports it", file)))
 		}
 	}
 	if len(reports) > 0 {
@@ -156,7 +156,7 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 	}
 	switch {
 	case rest < 0:
-		return "", nil, []report.Report{report.Page(page.File, page.Pathname, "internal", fmt.Sprintf("the inputs of the page's script add up to %d B, the script is %d B", len(js)-rest, len(js)))}
+		return "", nil, []report.Report{report.Page(page.File, page.Path(), "internal", fmt.Sprintf("the inputs of the page's script add up to %d B, the script is %d B", len(js)-rest, len(js)))}
 	case rest > 0:
 		modules = append(modules, ModuleBytes{Path: Runtime, Bytes: rest})
 	}
@@ -168,16 +168,23 @@ func Build(page render.Page, opts Options) (js string, modules []ModuleBytes, re
 func undefined(page render.Page, js string) []report.Report {
 	var reports []report.Report
 	for _, flag := range undefinedFlags(js) {
-		reports = append(reports, report.Page(page.File, page.Pathname, "mount-flag", fmt.Sprintf("the page's script reads the flag `%s`, which is not defined: the builder finds a flag by its name in the text of a module, written without an escape", flag)))
+		reports = append(reports, report.Page(page.File, page.Path(), "mount-flag", fmt.Sprintf("the page's script reads the flag `%s`, which is not defined: the builder finds a flag by its name in the text of a module, written without an escape", flag)))
 	}
 	return reports
 }
 
 // BuildControl returns the one script of a site built with --no-specialize:
-// every module mounted on any page, every flag on, and a table from pathname
-// to that page's mounts, applied to `location.pathname`. It is what a build
-// that does not know what a page rendered ships: the same behaviour on every
-// page, at the cost the per-page scripts are measured against.
+// every module mounted on any page, every flag on, and a table from a
+// document's path on a static host (render.Route.Path) to that document's
+// mounts — module, element, data — applied to `location.pathname`. It is
+// what a build that does not know what a page rendered ships: the same
+// behaviour on every page, at the cost the per-page scripts are measured
+// against.
+//
+// The script knows its document by the URL alone. So a server that serves
+// several artifacts of a route under one URL — the variants' router — is
+// outside what the control can do: there it would mount the mounts of
+// `index` on whichever variant was served (builder.md, *The control*).
 //
 // The reports are those of Build, for every page. A site that mounts nothing
 // has no script.
@@ -210,7 +217,7 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 		if decoded, err := url.PathUnescape(under); err == nil {
 			under = decoded
 		}
-		r := row{pathname: under + page.Pathname}
+		r := row{pathname: under + page.Path()}
 		for _, c := range p.calls {
 			i := slices.Index(files, mods[c.module].file)
 			if i < 0 {
@@ -220,7 +227,7 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 					define[flag] = "true"
 				}
 			}
-			r.calls = append(r.calls, call{i, c.id})
+			r.calls = append(r.calls, call{i, c.id, c.data})
 		}
 		table = append(table, r)
 	}
@@ -230,8 +237,8 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 
 	// import m0 from "…";
 	// …
-	// const m = [m0, …], t = {"/guide/": [[0, "m1"], [1]], …};
-	// for (const [i, id] of t[<pathname>] || []) id ? m[i](document.getElementById(id)) : m[i]();
+	// const m = [m0, …], t = {"/guide/": [[0, "m1"], [0, "m2", {"typeahead":true}], [1]], …};
+	// for (const [i, id, d] of t[<pathname>] || []) id ? m[i](document.getElementById(id), d) : m[i]();
 	var entry strings.Builder
 	site.imports(&entry)
 	entry.WriteString("const m = [")
@@ -242,15 +249,18 @@ func BuildControl(pages []render.Page, opts Options) (js string, reports []repor
 	for _, r := range table {
 		fmt.Fprintf(&entry, "  %s: [", quote(r.pathname))
 		for _, c := range r.calls {
-			if c.id == "" {
+			switch {
+			case c.id == "":
 				fmt.Fprintf(&entry, "[%d], ", c.module)
-			} else {
+			case c.data == "":
 				fmt.Fprintf(&entry, "[%d, %s], ", c.module, quote(c.id))
+			default:
+				fmt.Fprintf(&entry, "[%d, %s, %s], ", c.module, quote(c.id), c.data)
 			}
 		}
 		entry.WriteString("],\n")
 	}
-	entry.WriteString("};\nfor (const [i, id] of t[" + controlPathname + "] || []) id ? m[i](document.getElementById(id)) : m[i]();\n")
+	entry.WriteString("};\nfor (const [i, id, d] of t[" + controlPathname + "] || []) id ? m[i](document.getElementById(id), d) : m[i]();\n")
 
 	js, _, errs := opts.bundle(entry.String(), define)
 	for _, e := range errs {
@@ -278,11 +288,12 @@ type plan struct {
 }
 
 // call is one mount call of the entry: a per-root module once per element it
-// is mounted on; a page-level module — mounted without an id — once per
-// page, however often it is mounted.
+// is mounted on, with that use site's data; a page-level module — mounted
+// without an id — once per page, however often it is mounted.
 type call struct {
 	module int    // index in specs
 	id     string // "" for a page-level module
+	data   string // the call's second argument, as JSON; "": none
 }
 
 func planOf(page render.Page) plan {
@@ -294,9 +305,10 @@ func planOf(page render.Page) plan {
 			p.specs = append(p.specs, m.Module)
 		}
 		// Two mounts of one module on one element are one: its listeners
-		// would be there twice.
-		if c := (call{i, m.ID}); !slices.Contains(p.calls, c) {
-			p.calls = append(p.calls, c)
+		// would be there twice. They hand it the same data, or it is
+		// mount-data (mistakes).
+		if !slices.ContainsFunc(p.calls, func(c call) bool { return c.module == i && c.id == m.ID }) {
+			p.calls = append(p.calls, call{i, m.ID, m.Data})
 		}
 		for flag, on := range m.Flags {
 			p.on[flag] = p.on[flag] || on
@@ -321,7 +333,8 @@ func (p plan) byFile(mods []*module) (plan, []*module) {
 		}
 	}
 	for _, c := range p.calls {
-		if c.module = to[c.module]; !slices.Contains(q.calls, c) {
+		c.module = to[c.module]
+		if !slices.ContainsFunc(q.calls, func(had call) bool { return had.module == c.module && had.id == c.id }) {
 			q.calls = append(q.calls, c)
 		}
 	}
@@ -341,27 +354,36 @@ func (p plan) imports(entry *strings.Builder) {
 //	import m0 from "@reactogenic/ui/behaviors/menu-keys";
 //	import m1 from "@reactogenic/ui/behaviors/overlays";
 //	m0(document.getElementById("m1"));
-//	m0(document.getElementById("m2"));
+//	m0(document.getElementById("m2"), {"typeahead":true});
 //	m1();
+//
+// A mount's data is the second argument of its call, written as the literal
+// it is: JSON. A mount without data keeps the call of one argument.
 func (p plan) entry() string {
 	var entry strings.Builder
 	p.imports(&entry)
 	for _, c := range p.calls {
-		if c.id == "" {
+		switch {
+		case c.id == "":
 			fmt.Fprintf(&entry, "m%d();\n", c.module)
-		} else {
+		case c.data == "":
 			fmt.Fprintf(&entry, "m%d(document.getElementById(%s));\n", c.module, quote(c.id))
+		default:
+			fmt.Fprintf(&entry, "m%d(document.getElementById(%s), %s);\n", c.module, quote(c.id), c.data)
 		}
 	}
 	return entry.String()
 }
 
-// controlPathname is the page the control's script is on, as the table
-// names it: a page answers to `/guide/`, to `/guide` on a host that does not
-// redirect, and to the file it is written to, `/guide/index.html`. The table
-// names a page as its directories are named, `location.pathname` as the
-// browser encodes that (`/se%C3%B1or/`): it is decoded.
-const controlPathname = `decodeURIComponent(location.pathname).replace(/(\/index\.html|\/)?$/, "/")`
+// controlPathname is the document the control's script is on, as the table
+// names it (render.Route.Path). The `index` of a route answers to `/guide/`,
+// to `/guide` on a host that does not redirect, and to the file it is
+// written to, `/guide/index.html`; any other variant to its file alone,
+// `/account/guest.html` — what ends in `.html` and is no `index.html` is
+// left as it is. The table names a document as its directories are named,
+// `location.pathname` as the browser encodes that (`/se%C3%B1or/`): it is
+// decoded.
+const controlPathname = `decodeURIComponent(location.pathname).replace(/(\/index\.html|\/|(\.html))?$/, (all, index, file) => file || "/")`
 
 // mistakes returns what is wrong with a page's mounts, in render order.
 func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.Report {
@@ -387,6 +409,9 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 		}
 		return m.Module
 	}
+	// One element gets one call of a module, with one second argument
+	// (mount-data): per module and element, the data of the first mount.
+	data := map[string]string{}
 	for _, m := range page.Mounts {
 		k := kinds[module(m)]
 		if k == nil {
@@ -398,6 +423,9 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 		} else if k.id == "" {
 			k.id = m.ID
 		}
+		if _, had := data[module(m)+"\x00"+m.ID]; !had {
+			data[module(m)+"\x00"+m.ID] = m.Data
+		}
 	}
 	for _, m := range page.Mounts {
 		mod := mods[slices.Index(p.specs, m.Module)]
@@ -406,9 +434,9 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 		if once(m.Module) && (mod.file == "" || once("\x00file\x00"+mod.file)) {
 			switch {
 			case mod.notFound:
-				reports = append(reports, report.Page(page.File, page.Pathname, "mount-not-found", mount+": the module does not resolve from the project directory"))
+				reports = append(reports, report.Page(page.File, page.Path(), "mount-not-found", mount+": the module does not resolve from the project directory"))
 			case mod.unread != "":
-				reports = append(reports, report.Page(page.File, page.Pathname, "internal", mount+": "+mod.unread))
+				reports = append(reports, report.Page(page.File, page.Path(), "internal", mount+": "+mod.unread))
 			case len(mod.errors) > 0:
 				reports = append(reports, opts.buildErrors(page, nil, mod.errors)...)
 			case len(mod.effects) > 0:
@@ -416,23 +444,47 @@ func mistakes(page render.Page, p plan, mods []*module, opts Options) []report.R
 			}
 		}
 		if m.ID != "" && !ids[m.ID] && once(m.Module+"\x00id\x00"+m.ID) {
-			reports = append(reports, report.Page(page.File, page.Pathname, "mount-no-element", fmt.Sprintf("%s: no element of the page has `id=%q`", mount, m.ID)))
+			reports = append(reports, report.Page(page.File, page.Path(), "mount-no-element", fmt.Sprintf("%s: no element of the page has `id=%q`", mount, m.ID)))
 		}
 		// Its page-level call would hand the function no root: a TypeError
 		// that ends the script, and every mount after it.
 		if k := kinds[module(m)]; k.page && k.id != "" && once(module(m)+"\x00kind") {
-			reports = append(reports, report.Page(page.File, page.Pathname, "mount-kind", fmt.Sprintf("%s: the module is mounted on an element (`%s`) and without one: a behaviour is of an element or of the page", mount, k.id)))
+			reports = append(reports, report.Page(page.File, page.Path(), "mount-kind", fmt.Sprintf("%s: the module is mounted on an element (`%s`) and without one: a behaviour is of an element or of the page", mount, k.id)))
+		}
+		// The data is written into the script as it is: JSON, an object.
+		// Render refuses anything else where `mount()` is called; a record
+		// made otherwise is asked here.
+		switch first := data[module(m)+"\x00"+m.ID]; {
+		case m.Data == "" && first == "":
+		case m.ID == "":
+			if once(module(m) + "\x00data") {
+				reports = append(reports, report.Page(page.File, page.Path(), "mount-data", mount+": a behaviour of the page — mounted without an id — takes no data"))
+			}
+		case m.Data != "" && !(json.Valid([]byte(m.Data)) && strings.HasPrefix(m.Data, "{")):
+			if once(module(m) + "\x00data\x00" + m.ID) {
+				reports = append(reports, report.Page(page.File, page.Path(), "mount-data", fmt.Sprintf("%s: the data is not a plain object of JSON values: `%s`", mount, m.Data)))
+			}
+		case m.Data != first && once(module(m)+"\x00data\x00"+m.ID):
+			reports = append(reports, report.Page(page.File, page.Path(), "mount-data", fmt.Sprintf("%s: the module is mounted on `#%s` twice, with %s and with %s: an element gets one call, with one data", mount, m.ID, dataOr(first), dataOr(m.Data))))
 		}
 		if mod.flags == nil {
 			continue // not read: its flags are not known
 		}
 		for _, flag := range sortedKeys(m.Flags) {
 			if !mod.flags[flag] && once(m.Module+"\x00flag\x00"+flag) {
-				reports = append(reports, report.Page(page.File, page.Pathname, "mount-flag", fmt.Sprintf("%s: the module has no flag `%s`", mount, flag)))
+				reports = append(reports, report.Page(page.File, page.Path(), "mount-flag", fmt.Sprintf("%s: the module has no flag `%s`", mount, flag)))
 			}
 		}
 	}
 	return reports
+}
+
+// dataOr words a mount's data for a message.
+func dataOr(data string) string {
+	if data == "" {
+		return "no data"
+	}
+	return "`" + data + "`"
 }
 
 // elementIDs are the ids of a page's elements, a template's content aside —
@@ -572,17 +624,17 @@ func (o Options) buildErrors(page render.Page, specs []string, errors []api.Mess
 		l := e.Location
 		switch {
 		case l == nil:
-			reports = append(reports, report.Page(page.File, page.Pathname, "mount-error", e.Text))
+			reports = append(reports, report.Page(page.File, page.Path(), "mount-error", e.Text))
 		case l.File == stdin:
 			text := e.Text
 			if l.Line >= 1 && l.Line <= len(specs) {
 				text = fmt.Sprintf("`mount(%q)`: %s", specs[l.Line-1], text)
 			}
-			reports = append(reports, report.Page(page.File, page.Pathname, "mount-error", text))
+			reports = append(reports, report.Page(page.File, page.Path(), "mount-error", text))
 		default:
 			reports = append(reports, report.Report{
 				File: o.path(l.File), Line: l.Line, Col: l.Column + 1, Code: "mount-error", Message: e.Text,
-				Related: []report.Report{{Severity: report.Message, Message: "mounted on the page " + page.Pathname}},
+				Related: []report.Report{{Severity: report.Message, Message: "mounted on the page " + page.Path()}},
 			})
 		}
 	}

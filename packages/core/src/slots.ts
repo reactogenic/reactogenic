@@ -43,26 +43,71 @@ export type Slot<Props, Args = never> = SlotValue<Props, Args> | NotAssigned;
 export const KEYED: unique symbol = Symbol.for("reactogenic.keyed");
 
 /**
- * A keyed slot: entries by key, each a `Slot<P, A>` value. The caller fills
- * it with `<$X key=…>`; an attachment with `key` renders the entry of that
- * key. Keys are strings or numbers (integer-like keys enumerate first).
+ * A keyed slot: entries by key, in the order the caller wrote them, each a
+ * `Slot<P, A>` value. The caller fills it with `<$X key=…>`; an attachment
+ * with `key` renders the entry of that key (`slotEntry`), and a container
+ * that renders every entry iterates `slotKeys(slot)` — never `Object.keys`:
+ * an entry's property name is its key *encoded* (`slotEntryName`), so that
+ * JavaScript's own order of property names is the written one. Keys are
+ * strings or numbers; a number and its string are one key.
  */
 export type KeyedSlot<Props, Args = never> = { readonly [KEYED]: true } & {
-  readonly [key: string]: SlotValue<Props, Args>;
+  readonly [name: string]: SlotValue<Props, Args>;
 };
 
 /** A keyed slot's entry type, or the slot itself for a singular one. */
-export type SlotEntry<S> = S extends { readonly [KEYED]: true } & { readonly [key: string]: infer Entry }
+export type SlotEntry<S> = S extends { readonly [KEYED]: true } & { readonly [name: string]: infer Entry }
   ? Entry | undefined
   : S;
 
+// JavaScript enumerates these property names first, ascending, wherever they
+// were written. (An array index stops at 2³² − 2; every run of digits is
+// taken, so that no engine's limit is part of the encoding.)
+const INTEGER_LIKE = /^(?:0|[1-9][0-9]*)$/;
+
+/**
+ * The property name of a keyed slot's entry: the key, encoded so that it is
+ * never integer-like — a key that is (`"10"`, `2`) or that starts with `#`
+ * gets one `#` in front, every other key is itself. No two keys share a
+ * name, and the object then enumerates in the order it was written, through
+ * spreads too. Compiled code calls it for `key={expr}`; a keyed slot written
+ * by hand names its entries with it: `{ [KEYED]: true, [slotEntryName(id)]: … }`.
+ */
+export function slotEntryName(key: string | number): string {
+  const name = String(key);
+  return INTEGER_LIKE.test(name) || name.startsWith("#") ? "#" + name : name;
+}
+
+const hasOwn = Object.prototype.hasOwnProperty;
+
+function isKeyed(slot: unknown): slot is Record<string, unknown> {
+  return typeof slot === "object" && slot !== null && (slot as { [KEYED]?: true })[KEYED] === true;
+}
+
+/**
+ * The keys of a keyed slot, as the caller wrote them and in that order —
+ * what a container iterates to render every entry. A repeated key is there
+ * once, where it was first written. Empty for a slot that is not there
+ * (`undefined`, `NOT_ASSIGNED`) and for a singular one, which has no keys.
+ * (An object written by hand with raw integer names has them first: that is
+ * JavaScript's order, and `slotEntryName` is how to avoid it.)
+ */
+export function slotKeys(slot: unknown): string[] {
+  return isKeyed(slot) ? Object.keys(slot).map((name) => (name.startsWith("#") ? name.slice(1) : name)) : [];
+}
+
 /**
  * The value an attachment with `key` renders: a keyed slot's entry for that
- * key, or — for a singular slot attached many times — the slot itself.
+ * key, or — for a singular slot attached many times — the slot itself. An
+ * entry is found under its encoded name; under the key as it is too, so an
+ * object written by hand with raw integer names keeps working.
  */
 export function slotEntry<S>(slot: S, key: string | number): SlotEntry<S> {
-  if (typeof slot === "object" && slot !== null && (slot as { [KEYED]?: true })[KEYED] === true) {
-    return (slot as unknown as Record<string, unknown>)[key] as SlotEntry<S>;
+  if (isKeyed(slot)) {
+    const name = slotEntryName(key);
+    // Own names only: `toString` is no entry of any slot.
+    const own = hasOwn.call(slot, name) ? name : hasOwn.call(slot, key) ? String(key) : undefined;
+    return (own === undefined ? undefined : slot[own]) as SlotEntry<S>;
   }
   return slot as SlotEntry<S>;
 }

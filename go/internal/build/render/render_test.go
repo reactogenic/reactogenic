@@ -38,7 +38,10 @@ func TestMain(m *testing.M) {
 type fixture struct {
 	dir     string
 	program *rtsx.Program
-	routes  []Route // pages/**/index.rtsx and index.tsx, by pathname
+	// pages/**/index.rtsx and index.tsx, by pathname: render is given its
+	// routes, and renders the module of each — which files of a project are
+	// variants is the driver's to say (only `.rtsx`: builder.md, *Routes*).
+	routes []Route
 }
 
 // load builds the program of testdata/<name>. The fixtures are projects that
@@ -352,6 +355,59 @@ func TestShellReact(t *testing.T) {
 	}
 	if len(pages) != 1 || pages[0].Pathname != "/plain/" || !strings.Contains(pages[0].HTML, "<b>useId is not state</b>") {
 		t.Errorf("pages: %+v", pages)
+	}
+}
+
+// A mount's data (builder.md, *Behaviours*): what a use site hands its
+// behaviour is recorded with the mount as JSON, its keys sorted — the same
+// data is the same text — and anything a literal of the page's script could
+// not say is mount-data, where `mount()` was called. One module rendered at
+// a pathname per form.
+func TestMountData(t *testing.T) {
+	f := load(t, "bad")
+	file := f.dir + "/forms/data.tsx"
+	var routes []Route
+	for _, form := range []string{"menu", "function", "page", "array", "string", "date", "nan", "proto", "circle"} {
+		routes = append(routes, Route{Pathname: "/" + form + "/", File: file})
+	}
+	// A second variant of a route: the same pathname, a document of its own.
+	routes = append(routes, Route{Pathname: "/menu/", Variant: "guest", File: file})
+	pages, reports := Render(f.program, routes, Options{})
+	want := []string{
+		"forms/data.tsx:20:7 error mount-data: `mount(\"ui/keys\")`: the data is not JSON: `data.onPick` is a function",
+		"forms/data.tsx:23:7 error mount-data: `mount(\"ui/page\")`: a behaviour of the page — mounted without an id — takes no data",
+		"forms/data.tsx:26:7 error mount-data: `mount(\"ui/keys\")`: the data is not a plain object of JSON values: it is an array",
+		"forms/data.tsx:29:7 error mount-data: `mount(\"ui/keys\")`: the data is not a plain object of JSON values: it is a string",
+		"forms/data.tsx:32:7 error mount-data: `mount(\"ui/keys\")`: the data is not JSON: `data.since[0]` is an instance of `Date`",
+		"forms/data.tsx:35:7 error mount-data: `mount(\"ui/keys\")`: the data is not JSON: `data.delay` is NaN",
+		"forms/data.tsx:38:7 error mount-data: `mount(\"ui/keys\")`: the data is not JSON: `data.a.__proto__` is not a key a literal can have",
+		"forms/data.tsx:41:7 error mount-data: `mount(\"ui/keys\")`: the data is not JSON: `data[\"the circle\"].self` is an object that holds itself",
+	}
+	var got []string
+	for _, r := range reports {
+		got = append(got, line(f.dir, r)+": "+r.Message)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("reports\n got  %q\n want %q", got, want)
+	}
+	mounts := []Mount{
+		{Module: "ui/keys", ID: "m1", Flags: map[string]bool{"RG_TYPE": true}, Data: `{"data-x":"</script>","items":[1,"two",null,{"a":0.5,"b":false}],"typeahead":true}`},
+		{Module: "ui/keys", ID: "m2"},
+		{Module: "ui/keys", ID: "m3", Data: `{}`},
+		{Module: "ui/page"},
+	}
+	if len(pages) != 2 {
+		t.Fatalf("pages: %+v", pages)
+	}
+	for i, path := range []string{"/menu/", "/menu/guest.html"} {
+		page := pages[i]
+		// `pathname()` is the route's in every variant of it.
+		if page.Path() != path || page.Pathname != "/menu/" || !strings.Contains(page.HTML, `<b id="m1">/menu/</b>`) {
+			t.Errorf("page %d: %s, %s: %s", i, page.Path(), page.Pathname, page.HTML)
+		}
+		if !reflect.DeepEqual(page.Mounts, mounts) {
+			t.Errorf("%s: mounts\n got  %+v\n want %+v", path, page.Mounts, mounts)
+		}
 	}
 }
 

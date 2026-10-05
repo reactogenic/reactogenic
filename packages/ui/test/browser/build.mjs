@@ -59,7 +59,8 @@ function rtsx(server) {
   };
 }
 
-// pages/index.rtsx → "/", pages/a/b/index.rtsx → "/a/b/" (builder.md, *Routes*).
+// pages/index.rtsx → "/", pages/a/b/index.rtsx → "/a/b/": the `index` variant
+// of each route (builder.md, *Routes*) — the test site has no other.
 function routes(pagesDir) {
   const walk = (dir) =>
     readdirSync(dir).flatMap((name) => {
@@ -77,8 +78,9 @@ function routes(pagesDir) {
 /**
  * The script of a page from its mounts, as builder.md's *Behaviours* has it:
  * a generated entry, one build, every `RG_…` flag of a mounted module defined
- * — `false` unless a mount set it. `flags` overrides the page's own (the
- * sizes script turns each one on and off).
+ * — `false` unless a mount set it; a mount's data is the second argument of
+ * its call. `flags` overrides the page's own (the sizes script turns each
+ * one on and off).
  */
 export async function behaviours(mounts, flags) {
   const modules = [...new Set(mounts.map((mount) => mount.module))];
@@ -101,7 +103,8 @@ export async function behaviours(mounts, flags) {
   const calls = [];
   for (const mount of mounts) {
     const name = `m${modules.indexOf(mount.module)}`;
-    const call = mount.id === undefined ? `${name}();` : `${name}(document.getElementById(${JSON.stringify(mount.id)}));`;
+    const data = mount.data === undefined ? "" : `, ${JSON.stringify(mount.data)}`;
+    const call = mount.id === undefined ? `${name}();` : `${name}(document.getElementById(${JSON.stringify(mount.id)})${data});`;
     // A page-level behaviour runs once, however often it is mounted.
     if (!calls.includes(call)) calls.push(call);
   }
@@ -172,8 +175,8 @@ export async function build(out, { script = true } = {}) {
           counters.set(prefix, n);
           return prefix + n;
         },
-        mount(module, id, flags) {
-          mounts.push({ module, id, flags });
+        mount(module, id, flags, data) {
+          mounts.push({ module, id, flags, data });
         },
       };
       let html;

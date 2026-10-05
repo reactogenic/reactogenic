@@ -1,0 +1,5 @@
+// page-no-default: a module of components that nothing imports. It is a
+// variant of the route all the same, and has nothing to render.
+export function Part() {
+  return <i>part</i>;
+}

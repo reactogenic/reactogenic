@@ -24,8 +24,8 @@ REACTOGENIC_BINARY=/tmp/reactogenic pnpm --filter @reactogenic/site build
 
 | Path | What |
 | --- | --- |
-| `pages/**/index.rtsx` | a page; its pathname is the directory: `pages/guide/index.rtsx` → `/guide/` |
-| `pages/**/<name>.rtsx` | a segment of the page next to it, mounted by `<section #name />` — which is also the section's `id` |
+| `pages/**/index.rtsx` | a page: the one variant of its route, whose pathname is the directory — `pages/guide/index.rtsx` → `/guide/` |
+| `pages/**/<name>.rtsx` | a segment of the page next to it, mounted by `<section #name />` — which is also the section's `id`. Mounted, so not a variant: an `.rtsx` file here that nothing mounts or imports would be built as a second document of the route (builder.md, *Routes*) |
 | `layout.rtsx` | the document from `<html>`: header, side menu, `<main>`, footer |
 | `code.rtsx` | `Code`: a sample as plain `<pre><code>`; the text is a template-literal constant of the module that shows it |
 | `site.css` | page grid, text, code, tables. Unlayered, so it wins over the design system's layers |

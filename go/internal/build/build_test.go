@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"io/fs"
 	"maps"
@@ -33,17 +32,22 @@ func TestMain(m *testing.M) {
 // @reactogenic/ui — both resolved from the root's node_modules, as a project
 // resolves them.
 //
-//	site    seven pages that differ in what they use: nothing that opens
+//	site    pages that differ in what they use: nothing that opens
 //	        (/plain/, /guide/, /guide/more/), a drawer (/), a menu of links
 //	        (/links/), a dialog (/dialog/), an action menu with typeahead
-//	        that opens a dialog (/actions/); a segment; `public/`
+//	        that opens a dialog (/actions/); a segment; `public/`. And two
+//	        routes for the variants (TestVariants): /account/, with two —
+//	        `index.rtsx`, `guest.rtsx` — beside a segment, a module and a
+//	        `server.ts`; /gate/, with one that is not `index`
 //	served  pages for what packaging changes of a page: the base in its
 //	        links, the elements it adds — and a page the user edits, one
-//	        with a script of its own, one with a frame, and one whose
-//	        behaviour takes away what the page has as it loads (/toggle/)
+//	        with a frame, one whose behaviour takes away what the page has
+//	        as it loads (/toggle/), and one with `<style>` elements of its
+//	        own, which are pruned with its sheet (/styled/)
 //	bad     one project, a `--pages` root per mistake
 //	types   a project that does not check
-//	both    `index.rtsx` and `index.tsx` in one directory
+//	both    `index.rtsx` and `index.tsx` in one directory: only the first
+//	        is a page, and `check` refuses the pair
 //
 // `site` and `types` also have a `tsconfig.solution.json`: a tsconfig that
 // only references the project's, as Vite's template lays one out.
@@ -257,15 +261,16 @@ func load(t *testing.T, args ...string) site {
 	return s
 }
 
-// page is a page of the report.
-func (s site) page(t *testing.T, pathname string) PageReport {
+// page is a page of the report, by its path: the route's pathname for its
+// `index`, the file for another variant ("/account/guest.html").
+func (s site) page(t *testing.T, path string) PageReport {
 	t.Helper()
 	for _, p := range s.report.Pages {
-		if p.Pathname == pathname {
+		if p.Path == path {
 			return p
 		}
 	}
-	t.Fatalf("no page %s in the report", pathname)
+	t.Fatalf("no page %s in the report", path)
 	return PageReport{}
 }
 
@@ -335,13 +340,13 @@ const (
 // TestShips: what each page of the fixture ships is what it uses (builder.md,
 // *Behaviours*, *CSS*) — in every way of delivering it.
 func TestShips(t *testing.T) {
-	everything := []string{"/", "/actions/", "/dialog/", "/guide/", "/guide/more/", "/links/", "/plain/"}
+	everything := []string{"/", "/account/", "/account/guest.html", "/actions/", "/dialog/", "/gate/closed.html", "/guide/", "/guide/more/", "/links/", "/plain/"}
 	for _, inline := range []string{InlineAuto, InlineAlways, InlineNever} {
 		t.Run(inline, func(t *testing.T) {
 			s := load(t, "-p", "site", "--inline", inline)
 			var pathnames []string
 			for _, p := range s.report.Pages {
-				pathnames = append(pathnames, p.Pathname)
+				pathnames = append(pathnames, p.Path)
 				if html := s.files[p.Output]; !strings.HasPrefix(html, "<!doctype html><html lang=\"en\"><head>") || !strings.HasSuffix(html, "</body></html>") {
 					t.Errorf("%s is not a document: %.60s … %s", p.Output, html, html[max(0, len(html)-30):])
 				}
@@ -355,7 +360,7 @@ func TestShips(t *testing.T) {
 			// is lost and nothing else fails.
 			for _, p := range s.report.Pages {
 				if p.Styles == nil || p.Styles.Unpruned || p.Styles.Why != "" {
-					t.Errorf("%s is not pruned: %+v", p.Pathname, p.Styles)
+					t.Errorf("%s is not pruned: %+v", p.Path, p.Styles)
 				}
 			}
 
@@ -371,6 +376,11 @@ func TestShips(t *testing.T) {
 				{"/links/", []string{overlays}}, // a menu of links: no keys
 				{"/dialog/", []string{overlays, invokers}},
 				{"/actions/", []string{overlays, invokers, menuKeys, typeahead}},
+				// Two variants of one route, each with what it uses: an action
+				// menu that did not ask for typeahead; a dialog.
+				{"/account/", []string{overlays, menuKeys}},
+				{"/account/guest.html", []string{overlays, invokers}},
+				{"/gate/closed.html", nil},
 			}
 			for _, want := range scripts {
 				js := s.js(t, want.pathname)
@@ -407,6 +417,9 @@ func TestShips(t *testing.T) {
 				{"/links/", []string{".rg-button", ".rg-menu", ".site-header"}},
 				{"/dialog/", []string{".rg-button", ".rg-dialog", ".site-header"}},
 				{"/actions/", []string{".rg-button", ".rg-dialog", ".rg-menu", ".site-header"}},
+				{"/account/", []string{".rg-button", ".rg-menu", ".site-header"}},
+				{"/account/guest.html", []string{".rg-button", ".rg-dialog", ".site-header"}},
+				{"/gate/closed.html", []string{".site-header"}},
 			}
 			for _, want := range sheets {
 				css := s.css(t, want.pathname)
@@ -468,23 +481,27 @@ func TestInline(t *testing.T) {
 		}
 	})
 	t.Run("auto", func(t *testing.T) {
-		s := load(t, "-p", "site")
+		// A file when it serves two documents or more and is 4096 B or
+		// more, as written. The fixture's pages have no such blob of their
+		// own — the sheet two guide pages share is a kilobyte — so the
+		// control's is asked too: its stylesheet is every page's, and large.
 		inline, file, shared := 0, 0, 0
-		for _, b := range s.report.Blobs {
-			// A file when it serves two pages or more and is larger than
-			// a request, as it is sent: gzipped.
-			want := "inline"
-			if len(b.Pages) > 1 && b.Size.Gzip > 250 {
-				want = "file"
-				file++
-			} else {
-				inline++
-			}
-			if b.Delivery != want {
-				t.Errorf("blob %s (%d B, %d gzipped, %d pages) is %s, want %s", b.Hash, b.Size.Raw, b.Size.Gzip, len(b.Pages), b.Delivery, want)
-			}
-			if len(b.Pages) > 1 && want == "inline" {
-				shared++
+		for _, args := range [][]string{{"-p", "site"}, {"-p", "site", "--no-specialize"}} {
+			s := load(t, args...)
+			for _, b := range s.report.Blobs {
+				want := "inline"
+				if len(b.Pages) > 1 && b.Size.Raw >= 4096 {
+					want = "file"
+					file++
+				} else {
+					inline++
+				}
+				if b.Delivery != want {
+					t.Errorf("%v: blob %s (%d B, %d pages) is %s, want %s", args, b.Hash, b.Size.Raw, len(b.Pages), b.Delivery, want)
+				}
+				if len(b.Pages) > 1 && want == "inline" {
+					shared++
+				}
 			}
 		}
 		if inline == 0 || file == 0 || shared == 0 {
@@ -511,29 +528,32 @@ func TestControl(t *testing.T) {
 		}
 	}
 	for _, p := range control.report.Pages {
-		css, js := control.css(t, p.Pathname), control.js(t, p.Pathname)
+		css, js := control.css(t, p.Path), control.js(t, p.Path)
 		// Every component's rules, the page's or not; the rule of no page.
 		for _, class := range []string{".rg-button", ".rg-dialog", ".rg-menu", ".rg-sidemenu", ".site-header", ".prose", ".never", "@keyframes never"} {
 			if !strings.Contains(css, class) {
-				t.Errorf("%s: the control's CSS has no %s", p.Pathname, class)
+				t.Errorf("%s: the control's CSS has no %s", p.Path, class)
 			}
 		}
-		for _, marker := range []string{overlays, invokers, menuKeys, typeahead, `"/actions/"`} {
+		// The table: a document by its path on a static host — the route's
+		// pathname for `index`, the file for another variant — and a mount's
+		// data with its element.
+		for _, marker := range []string{overlays, invokers, menuKeys, typeahead, `"/actions/"`, `"/account/"`, `"/account/guest.html"`, `"actions",{typeahead:!0}`} {
 			if !strings.Contains(js, marker) {
-				t.Errorf("%s: the control's script has no %s", p.Pathname, marker)
+				t.Errorf("%s: the control's script has no %s\n%s", p.Path, marker, js)
 			}
 		}
 		if p.Modules != nil || p.Styles != nil {
-			t.Errorf("%s: the control reports modules or styles", p.Pathname)
+			t.Errorf("%s: the control reports modules or styles", p.Path)
 		}
 		// The same HTML: only the two elements packaging adds differ.
-		own := built.page(t, p.Pathname)
+		own := built.page(t, p.Path)
 		if p.HTML != own.HTML {
-			t.Errorf("%s: HTML %+v, and %+v when specialized", p.Pathname, p.HTML, own.HTML)
+			t.Errorf("%s: HTML %+v, and %+v when specialized", p.Path, p.HTML, own.HTML)
 		}
 		// What awareness is worth: never more than the control.
 		if own.CSS.Raw >= p.CSS.Raw || own.JS != nil && own.JS.Raw >= p.JS.Raw {
-			t.Errorf("%s: CSS %d B against the control's %d B, JS %+v against %d B", p.Pathname, own.CSS.Raw, p.CSS.Raw, own.JS, p.JS.Raw)
+			t.Errorf("%s: CSS %d B against the control's %d B, JS %+v against %d B", p.Path, own.CSS.Raw, p.CSS.Raw, own.JS, p.JS.Raw)
 		}
 	}
 }
@@ -668,16 +688,12 @@ func TestDocument(t *testing.T) {
 // TestPack: identical content is one blob, by kind; the rule of `auto`; a
 // blob that cannot stand in its element is a file.
 func TestPack(t *testing.T) {
-	// The rule of `auto` counts what is sent: 1200 B of one rule repeated
-	// are under 250 B gzipped, 200 rules that differ are over.
-	repeated := strings.Repeat("a{color:red}", 100)
-	var rules strings.Builder
-	for i := range 200 {
-		fmt.Fprintf(&rules, ".c%x{order:%d}", i*40503%65536, i*7919%1000)
-	}
-	big := rules.String()
-	if raw, sent := sizeOf(repeated), sizeOf(big); raw.Gzip > request || sent.Gzip <= request {
-		t.Fatalf("the blobs do not straddle the rule: %+v, %+v", raw, sent)
+	// The rule of `auto` counts the blob as written: 4096 B is a file, one
+	// byte less is not — however small either is once it is compressed.
+	big := strings.Repeat("a{color:red}", 342)[:inlineLimit]
+	under := big[:inlineLimit-1]
+	if len(big) != 4096 || sizeOf(big).Gzip > 250 {
+		t.Fatalf("the blob is not what the rule is tested with: %d B, %+v", len(big), sizeOf(big))
 	}
 	pages := []built{
 		{css: "p{}", js: "a()"},
@@ -687,8 +703,8 @@ func TestPack(t *testing.T) {
 		{js: "p{}"}, // the same text, another kind
 		{css: `a{content:"</STYLE>"}`},
 		{},
-		{css: repeated},
-		{css: repeated},
+		{css: under},
+		{css: under},
 	}
 	type delivery struct {
 		kind  string
@@ -762,42 +778,110 @@ func TestNormalBase(t *testing.T) {
 	}
 }
 
-// TestRoutes: `index.rtsx` or `index.tsx` of a directory is a page; anything
-// else is a module of one (builder.md, *Routes*).
+// TestRoutes: every `.rtsx` file under the pages is a candidate — a variant
+// of its directory's route unless the program imports it (TestVariants) —
+// and no other file is (builder.md, *Routes*).
 func TestRoutes(t *testing.T) {
 	dir := t.TempDir()
 	for _, file := range []string{
 		"index.rtsx", "guide/index.rtsx", "guide/install.rtsx", "guide/index.css", "reference/cli/index.tsx",
-		"both/index.rtsx", "both/index.tsx", "empty/readme.md", "señor/index.rtsx", "deep/er/est/index.tsx", "not/index.ts", "not/index.jsx",
+		"account/guest.rtsx", "account/index.rtsx", "account/admin.rtsx", "account/server.ts", "account/copy.ts",
+		"empty/readme.md", "señor/index.rtsx", "deep/er/est/only.rtsx", "not/index.ts", "not/index.jsx", "not/.rtsx",
 	} {
 		if err := writeFile(dir, file, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// A directory named as a page's file is no page.
+	// A directory named as a variant's file is none.
 	if err := os.MkdirAll(filepath.Join(dir, "dir", "index.rtsx"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	routes, err := findRoutes(dir)
+	routes, err := candidates(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := [][2]string{
-		{"/", "index.rtsx"}, {"/both/", "both/index.rtsx"}, {"/deep/er/est/", "deep/er/est/index.tsx"},
-		{"/guide/", "guide/index.rtsx"}, {"/reference/cli/", "reference/cli/index.tsx"}, {"/señor/", "señor/index.rtsx"},
+	// By route, `index` first; `index.tsx` makes no page.
+	want := [][4]string{
+		{"/", "index", "index.rtsx", "index.html"},
+		{"/account/", "index", "account/index.rtsx", "account/index.html"},
+		{"/account/", "admin", "account/admin.rtsx", "account/admin.html"},
+		{"/account/", "guest", "account/guest.rtsx", "account/guest.html"},
+		{"/deep/er/est/", "only", "deep/er/est/only.rtsx", "deep/er/est/only.html"},
+		{"/guide/", "index", "guide/index.rtsx", "guide/index.html"},
+		{"/guide/", "install", "guide/install.rtsx", "guide/install.html"},
+		{"/señor/", "index", "señor/index.rtsx", "señor/index.html"},
 	}
-	var got [][2]string
+	var got [][4]string
 	for _, r := range routes {
-		got = append(got, [2]string{r.Pathname, strings.TrimPrefix(r.File, filepath.ToSlash(dir)+"/")})
+		got = append(got, [4]string{r.Pathname, r.Variant, strings.TrimPrefix(r.File, filepath.ToSlash(dir)+"/"), r.Output()})
 	}
 	if !slices.Equal(got, want) {
-		t.Errorf("routes:\n got %q\nwant %q", got, want)
+		t.Errorf("candidates:\n got %q\nwant %q", got, want)
 	}
-	if _, err := findRoutes(filepath.Join(dir, "index.rtsx")); err == nil {
+	// A document's path: what a static host serves it at.
+	if a, b := routes[1].Path(), routes[3].Path(); a != "/account/" || b != "/account/guest.html" {
+		t.Errorf("paths: %s, %s", a, b)
+	}
+	if _, err := candidates(filepath.Join(dir, "index.rtsx")); err == nil {
 		t.Error("a file is taken for a directory of pages")
 	}
-	if _, err := findRoutes(filepath.Join(dir, "nowhere")); err == nil {
+	if _, err := candidates(filepath.Join(dir, "nowhere")); err == nil {
 		t.Error("a directory that is not there is taken for one of pages")
+	}
+}
+
+// TestVariants: a route's variants are the `.rtsx` files of its directory
+// that nothing mounts or imports; each is built to a document, and
+// `pathname()` is the route's in every one (builder.md, *Routes*).
+func TestVariants(t *testing.T) {
+	s := load(t, "-p", "site", "--inline", "never")
+	// The documents of the two routes: `index` at the pathname, another
+	// variant under its name; the segment, the module and `server.ts` beside
+	// them make no file.
+	var written []string
+	for file := range s.files {
+		if strings.HasPrefix(file, "account/") || strings.HasPrefix(file, "gate/") {
+			written = append(written, file)
+		}
+	}
+	slices.Sort(written)
+	if want := []string{"account/guest.html", "account/index.html", "gate/closed.html"}; !slices.Equal(written, want) {
+		t.Errorf("written: %q, want %q", written, want)
+	}
+	for _, want := range []struct{ path, pathname, variant, file, output string }{
+		{"/account/", "/account/", "index", "pages/account/index.rtsx", "account/index.html"},
+		{"/account/guest.html", "/account/", "guest", "pages/account/guest.rtsx", "account/guest.html"},
+		{"/gate/closed.html", "/gate/", "closed", "pages/gate/closed.rtsx", "gate/closed.html"},
+		{"/guide/", "/guide/", "index", "pages/guide/index.rtsx", "guide/index.html"},
+	} {
+		p := s.page(t, want.path)
+		if p.Pathname != want.pathname || p.Variant != want.variant || p.File != want.file || p.Output != want.output {
+			t.Errorf("%s: %+v", want.path, p)
+		}
+	}
+	index, guest := s.files["account/index.html"], s.files["account/guest.html"]
+	// Two documents of one route: `pathname()` is the route's in both.
+	for name, html := range map[string]string{"index": index, "guest": guest} {
+		if !strings.Contains(html, `<p data-route="/account/">`) {
+			t.Errorf("%s: pathname() is not the route's:\n%s", name, html)
+		}
+	}
+	if !strings.Contains(index, "Welcome back, Ada") || !strings.Contains(index, "<h2>Plans</h2>") || strings.Contains(index, "<dialog") {
+		t.Errorf("index:\n%s", index)
+	}
+	if !strings.Contains(guest, "<h1>Welcome</h1>") || !strings.Contains(guest, "<dialog") || strings.Contains(guest, "Plans") {
+		t.Errorf("guest:\n%s", guest)
+	}
+	// Each has its own CSS and its own script.
+	a, b := s.page(t, "/account/"), s.page(t, "/account/guest.html")
+	if a.CSS.Blob == b.CSS.Blob || a.JS.Blob == b.JS.Blob {
+		t.Errorf("the two variants share a blob: %+v %+v, %+v %+v", a.CSS, b.CSS, a.JS, b.JS)
+	}
+	// A blob names the documents it serves.
+	for _, blob := range s.report.Blobs {
+		if blob.Hash == b.CSS.Blob && !slices.Equal(blob.Pages, []string{"/account/guest.html"}) {
+			t.Errorf("the guest's sheet serves %q", blob.Pages)
+		}
 	}
 }
 
@@ -848,15 +932,47 @@ func TestErrors(t *testing.T) {
 				"bad/mount/index.rtsx: error mount-no-element: Page /: `mount(\"./behaviors/nope\")`: no element of the page has `id=\"w1\"`\n",
 		},
 		{
+			// A page has no script but the builder's (builder.md, *Shell
+			// code in phase 2*): what runs is an error, quoted; the data
+			// block beside it is not one.
+			"a script of the page's own",
+			[]string{"-p", "bad", "--pages", "bad/own"},
+			"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `<script>`\n" +
+				"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `<script src=\"/theme.js\">`\n" +
+				"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `onclick=\"go()\"` on `<button>`\n" +
+				"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `href=\"javascript:throw new Error('React has blocked a javascript: URL as a security precaution.')\"` on `<a>`\n",
+		},
+		{
+			"… in the control too: it is the page's, not the build's",
+			[]string{"-p", "bad", "--pages", "bad/own", "--no-specialize"},
+			"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `<script>`\n" +
+				"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `<script src=\"/theme.js\">`\n" +
+				"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `onclick=\"go()\"` on `<button>`\n" +
+				"bad/own/index.rtsx: error shell-script: Page /: The shell cannot run a script of the page's own: `href=\"javascript:throw new Error('React has blocked a javascript: URL as a security precaution.')\"` on `<a>`\n",
+		},
+		{
 			"the same in the control",
 			[]string{"-p", "bad", "--pages", "bad/mount", "--no-specialize"},
 			"bad/mount/index.rtsx: error mount-not-found: Page /: `mount(\"./behaviors/nope\")`: the module does not resolve from the project directory\n" +
 				"bad/mount/index.rtsx: error mount-no-element: Page /: `mount(\"./behaviors/nope\")`: no element of the page has `id=\"w1\"`\n",
 		},
 		{
-			"no page",
-			[]string{"-p", "bad", "--pages", "bad/segments"},
-			"error pages-not-found: <testdata>/bad/segments holds no page: no `index.rtsx` or `index.tsx`\n",
+			"no page: no `.rtsx` file",
+			[]string{"-p", "bad", "--pages", "bad/none"},
+			"error pages-not-found: <testdata>/bad/none holds no page: no `.rtsx` file\n",
+		},
+		{
+			"no page: every `.rtsx` file is a module of another",
+			[]string{"-p", "bad", "--pages", "bad/circle"},
+			"error pages-not-found: <testdata>/bad/circle holds no page: every `.rtsx` file under it is mounted or imported by another module\n",
+		},
+		{
+			// A variant is found in the program's graph, not by its name:
+			// the segment nothing mounts is one, and fails as one.
+			"a stray `.rtsx` file is a variant, and fails as one",
+			[]string{"-p", "bad", "--pages", "bad/stray"},
+			"bad/stray/intro.rtsx(4,1): error page-not-document: `intro.rtsx` is a variant of the route / — nothing mounts or imports it — and its root element is not `<html>`: a variant renders the whole document\n" +
+				"bad/stray/parts.rtsx(1,1): error page-no-default: `parts.rtsx` is a variant of the route / — nothing mounts or imports it — and has no default export that is a component\n",
 		},
 		{
 			"no pages directory: the default is `pages`, next to the tsconfig",
@@ -921,6 +1037,72 @@ func TestWarning(t *testing.T) {
 	}
 	if html := tree(t, out)["index.html"]; !strings.Contains(html, "<style>.lead{widht:2px;font-weight:600;background:url(/not/there.png)}</style></head>") {
 		t.Errorf("the page: %s", html)
+	}
+}
+
+// TestKeyedOrder: a keyed slot's entries are rendered in the order the page
+// wrote them (phase01/syntax.md, *Keyed slots*) — through the whole pipeline:
+// the transpiler names an entry by its key encoded, the engine enumerates the
+// names as written, and the components iterate `slotKeys`. Integer-like
+// keys, which JavaScript would put first and ascending; a key from an
+// expression; a conditional entry.
+func TestKeyedOrder(t *testing.T) {
+	work := scratch(t, nil, map[string]string{
+		// As the fixtures' own: the design system is read from its sources.
+		"tsconfig.json": strings.Replace(tsconfig, `"skipLibCheck": true`, `"skipLibCheck": true, "allowImportingTsExtensions": true`, 1),
+		"pages/index.rtsx": `import { Match } from "@reactogenic/core";
+import { DropdownMenu, SideMenu } from "@reactogenic/ui";
+
+const four: number = 4;
+const more = four > 3;
+
+export default function Page() {
+  return (
+    <html lang="en">
+      <head><title>t</title></head>
+      <body>
+        <SideMenu id="nav" label="Docs">
+          <$Section key="10" title="s10">
+            <$Item key="10" href="/">a10</$Item>
+            <$Item key="9" href="/">a9</$Item>
+            <$Item key="2">
+              g2
+              <$Item key="1" href="/">a21</$Item>
+              <$Item key="0" href="/">a20</$Item>
+            </$Item>
+            <$Item key="b" href="/">ab</$Item>
+            <$Item key={four} href="/">a4</$Item>
+          </$Section>
+          <$Section key="9" title="s9">
+            <$Item key="0" href="/">b0</$Item>
+          </$Section>
+        </SideMenu>
+        <DropdownMenu id="menu">
+          <$Trigger>Menu</$Trigger>
+          <$Item key="10" href="/">m10</$Item>
+          <$Item key="9" href="/">m9</$Item>
+          <Match on={more}><$Item key="5" href="/">m5</$Item></Match>
+          <$Item key="2" href="/">m2</$Item>
+          <$Item key={four - 3} href="/">m1</$Item>
+        </DropdownMenu>
+      </body>
+    </html>
+  );
+}
+`,
+	})
+	stdout, stderr, status := runIn(t, work)
+	if status != 0 || stderr != "" {
+		t.Fatalf("status %d\n%s%s", status, stdout, stderr)
+	}
+	html := tree(t, filepath.Join(work, "dist"))["index.html"]
+	var got []string
+	for _, m := range regexp.MustCompile(`<(?:a|h2|summary)\b[^>]*>([a-z]+[0-9]+|ab)<`).FindAllStringSubmatch(html, -1) {
+		got = append(got, m[1])
+	}
+	want := "s10 a10 a9 g2 a21 a20 ab a4 s9 b0 m10 m9 m5 m2 m1"
+	if strings.Join(got, " ") != want {
+		t.Errorf("got  %s\nwant %s\n%s", strings.Join(got, " "), want, html)
 	}
 }
 

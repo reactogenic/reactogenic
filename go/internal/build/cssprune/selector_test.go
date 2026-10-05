@@ -272,9 +272,10 @@ func TestMatch(t *testing.T) {
 		{`[data-missing]`, no},
 		// Runtime state never decides.
 		{`:hover`, maybe}, {`p:focus-visible`, maybe}, {`div:hover`, no}, {`:nth-child(2)`, maybe}, {`:first-child`, maybe},
-		{`[hidden]`, maybe}, {`[open]`, maybe}, {`[aria-current=page]`, maybe}, {`[data-state=open]`, maybe},
-		{`[disabled]`, maybe}, {`[style*=color]`, maybe}, {`[value=x]`, maybe}, {`[inert]`, maybe}, {`[checked]`, maybe}, {`[selected]`, maybe},
-		{`.B[aria-busy=true]`, maybe}, {`.gone[aria-busy=true]`, no},
+		{`[hidden]`, maybe}, {`[open]`, maybe}, {`[style*=color]`, maybe}, {`.B[open]`, maybe}, {`.gone[open]`, no},
+		// … and what only a script writes is the page's, when there is no script (TestPruneState).
+		{`[aria-current=page]`, no}, {`[data-state=open]`, no}, {`.B[aria-busy=true]`, no}, {`:not([aria-busy])`, yes},
+		{`[disabled]`, no}, {`[value=x]`, no}, {`[inert]`, no}, {`[checked]`, no}, {`[selected]`, no},
 		{`&`, maybe}, {`&.B`, maybe}, {`&.gone`, no},
 		// Pseudo-elements are ignored.
 		{`.B::before`, yes}, {`.gone::before`, no}, {`::selection`, yes}, {`.B::backdrop:hover`, maybe},

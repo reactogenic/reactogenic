@@ -1,0 +1,77 @@
+// Table: rows of data, static. Its cells are the page's data, by column
+// key; it scrolls sideways in its own box. A fixture
+// (bench/catalog/README.md).
+import type { ReactNode } from "react";
+import { Each, slotEntry, slotKeys, type KeyedSlot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./table.css";
+
+export interface TableColumnProps {
+  /** Option: `data-align` on the column's cells. Default "start". */
+  align?: "start" | "end";
+  /** The header. */
+  children?: ReactNode;
+}
+
+export interface TableProps {
+  /** The table's name: its `<caption>`, and the scrolling region's label. */
+  caption: string;
+  /** Option: `data-density`. Default "comfortable". */
+  density?: "comfortable" | "compact";
+  /** Option: every other row is tinted. */
+  striped?: boolean;
+  /** Option: the header row stays while the page scrolls. */
+  sticky?: boolean;
+  /** The column whose cells are the rows' headers (`<th scope="row">`). */
+  rowHeader?: string;
+  /** In order. A column's key names its cells in `rows`. */
+  $Column: KeyedSlot<TableColumnProps>;
+  /** A row: its cells by column key. */
+  rows: readonly Readonly<Record<string, ReactNode>>[];
+}
+
+function Head({ align, children }: TableColumnProps) {
+  return <th scope="col" data-align={align === "end" ? align : undefined}>{children}</th>;
+}
+
+export function Table({ caption, density, striped, sticky, rowHeader, $Column, rows }: TableProps) {
+  const keys = slotKeys($Column);
+  return (
+    // A box that scrolls must be reachable by keyboard: a named region with a tab stop.
+    <div
+      className="bc-table"
+      role="region"
+      aria-label={caption}
+      tabIndex={0}
+      data-density={density === "compact" ? density : undefined}
+      data-striped={striped ? "" : undefined}
+      data-sticky={sticky ? "" : undefined}
+    >
+      <table>
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            <Each items={keys} { item: key }>
+              <Head key={key} slot={$Column} />
+            </Each>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              {keys.map((key) => {
+                const align = slotEntry($Column, key)!.align === "end" ? "end" : undefined;
+                return key === rowHeader ? (
+                  <th key={key} scope="row" data-align={align}>{row[key]}</th>
+                ) : (
+                  <td key={key} data-align={align}>{row[key]}</td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

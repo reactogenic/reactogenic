@@ -154,7 +154,7 @@ export default function Page() {
         </tbody>
       </table>
       <p>
-        Not built yet: islands (React components that stay interactive inside a built page), a server, a dev server.
+        Not built yet: dynamic segments (React components that stay interactive inside a built page), a server, a dev server.
       </p>
 
       <h2 id="rules">The rules it keeps</h2>

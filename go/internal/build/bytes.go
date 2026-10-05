@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/reactogenic/reactogenic/go/internal/build/behaviors"
+	"github.com/reactogenic/reactogenic/go/internal/build/cssprune"
 )
 
 // Report is the byte report of a build (builder.md, *The report*): what each
@@ -44,11 +45,16 @@ type Size struct {
 	Gzip int `json:"gzip"`
 }
 
-// PageReport is one page.
+// PageReport is one page: a variant of a route.
 type PageReport struct {
-	Pathname string `json:"pathname"`
-	File     string `json:"file"`   // the page's module
-	Output   string `json:"output"` // its file in the output
+	Pathname string `json:"pathname"` // the route
+	Variant  string `json:"variant"`  // "index": the one a static host serves at the pathname
+	// Path names the document wherever the report names one — a blob's
+	// pages, the printed rows: its URL path on a static host, the pathname
+	// for `index`, the file for any other variant ("/account/guest.html").
+	Path   string `json:"path"`
+	File   string `json:"file"`   // the variant's module
+	Output string `json:"output"` // its document among the artifacts
 	// Document is the file as written — what the request for the page
 	// carries: the HTML and whatever is inlined in it.
 	Document Size `json:"document"`
@@ -88,6 +94,9 @@ type Mount struct {
 	Module string          `json:"module"`
 	ID     string          `json:"id,omitempty"`
 	Flags  map[string]bool `json:"flags,omitempty"`
+	// Data is what the use site hands the behaviour: the second argument of
+	// the mount's call in the page's script.
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 // Module is behaviors.ModuleBytes.
@@ -97,7 +106,8 @@ type Module struct {
 	Bytes  int    `json:"bytes"`
 }
 
-// Styles is cssprune.Stats.
+// Styles is cssprune.Stats: of the page's sheet and of its own `<style>`
+// elements, whose row among Sources is `<style>`.
 type Styles struct {
 	Unpruned         bool     `json:"unpruned,omitempty"` // the page's CSS is whole, and Why says why: "the page has a <template>"
 	Why              string   `json:"why,omitempty"`
@@ -127,7 +137,7 @@ type BlobReport struct {
 	Size     Size     `json:"size"`
 	Delivery string   `json:"delivery"`
 	File     string   `json:"file,omitempty"` // in the output, when it is one
-	Pages    []string `json:"pages"`
+	Pages    []string `json:"pages"`          // the documents it serves, by path
 }
 
 func sizeOf(content string) Size {
@@ -159,7 +169,7 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 			out.File = b.path(opts.NoSpecialize)
 		}
 		for _, page := range b.pages {
-			out.Pages = append(out.Pages, site[page].page.Pathname)
+			out.Pages = append(out.Pages, site[page].page.Path())
 		}
 		r.Blobs = append(r.Blobs, out)
 	}
@@ -181,7 +191,7 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 			file = filepath.ToSlash(rel)
 		}
 		page := PageReport{
-			Pathname: p.page.Pathname, File: file, Output: output(p.page.Pathname),
+			Pathname: p.page.Pathname, Variant: p.page.Name(), Path: p.page.Path(), File: file, Output: p.page.Output(),
 			Document: sizeOf(documents[i]), HTML: sizeOf(bare[i]),
 			CSS: asset(of[i][0]), JS: asset(of[i][1]),
 			Components: []Component{}, Mounts: []Mount{},
@@ -191,12 +201,13 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 		}
 		// A module on an element once, however often the page's components
 		// mounted it — every Dialog mounts `overlays` — with the flags any
-		// of those mounts turned on, as the page's script has it.
+		// of those mounts turned on and the data they hand it, as the
+		// page's script has it.
 		for _, m := range p.page.Mounts {
 			at := slices.IndexFunc(page.Mounts, func(had Mount) bool { return had.Module == m.Module && had.ID == m.ID })
 			if at < 0 {
 				at = len(page.Mounts)
-				page.Mounts = append(page.Mounts, Mount{Module: m.Module, ID: m.ID})
+				page.Mounts = append(page.Mounts, Mount{Module: m.Module, ID: m.ID, Data: json.RawMessage(m.Data)})
 			}
 			for flag, on := range m.Flags {
 				if page.Mounts[at].Flags == nil {
@@ -245,7 +256,7 @@ type naming struct {
 
 // of is the name of a file that esbuild names name.
 func (s *naming) of(name string) string {
-	if name == behaviors.Entry || name == behaviors.Runtime {
+	if name == behaviors.Entry || name == behaviors.Runtime || name == cssprune.OwnStyle {
 		return name
 	}
 	file := filepath.FromSlash(name)
@@ -296,11 +307,11 @@ func (r *Report) JSON() ([]byte, error) {
 
 // Print writes the report as `--report` shows it: per page, the bytes of its
 // HTML, CSS and JS, raw and gzip, and how each is delivered; the components
-// it rendered; the behaviours it mounted, with their flags; the bytes of its
+// it rendered; the behaviours it mounted, with their flags and their data; the bytes of its
 // script by module; the rules of its CSS kept and dropped, by source file.
 func (r *Report) Print(w io.Writer) {
 	for _, p := range r.Pages {
-		fmt.Fprintf(w, "%s  %s\n", p.Pathname, p.File)
+		fmt.Fprintf(w, "%s  %s\n", p.Path, p.File)
 		fmt.Fprintf(w, "  %-10s %8s %8s\n", "", "raw", "gzip")
 		row := func(name string, size Size, note string) {
 			fmt.Fprintln(w, strings.TrimRight(fmt.Sprintf("  %-10s %8d %8d   %s", name, size.Raw, size.Gzip, note), " "))
@@ -349,6 +360,9 @@ func (r *Report) Print(w io.Writer) {
 			for _, flag := range slices.Sorted(maps.Keys(m.Flags)) {
 				line += fmt.Sprintf(" %s=%v", flag, m.Flags[flag])
 			}
+			if len(m.Data) > 0 {
+				line += " " + string(m.Data)
+			}
 			mounts = append(mounts, line)
 		}
 		list("behaviours", mounts)
@@ -369,7 +383,11 @@ func (r *Report) Print(w io.Writer) {
 				sources = append(sources, "not pruned: "+s.Why)
 			}
 			for _, src := range s.Sources {
-				sources = append(sources, fmt.Sprintf("%3d kept, %3d dropped  %s", src.Rules-src.RulesDropped, src.RulesDropped, src.File))
+				line := fmt.Sprintf("%3d kept, %3d dropped  %s", src.Rules-src.RulesDropped, src.RulesDropped, src.File)
+				if src.File == cssprune.OwnStyle {
+					line += "  the page's own, in its HTML"
+				}
+				sources = append(sources, line)
 			}
 			list("CSS rules", sources)
 		}

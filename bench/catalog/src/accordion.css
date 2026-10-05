@@ -1,0 +1,74 @@
+@layer rg.components {
+  .bc-accordion {
+    display: grid;
+    gap: 0.5rem;
+    margin: 1rem 0;
+
+    > details {
+      border: 1px solid var(--rg-line);
+      border-radius: var(--rg-radius);
+      background: var(--rg-bg);
+
+      > summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.875rem 1rem;
+        font-weight: 600;
+        list-style: none;
+        cursor: pointer;
+
+        /* The chevron replaces the marker. */
+        &::-webkit-details-marker {
+          display: none;
+        }
+        &::after {
+          content: "";
+          flex: none;
+          width: 0.5rem;
+          height: 0.5rem;
+          border: solid var(--rg-muted);
+          border-width: 0 2px 2px 0;
+          rotate: 45deg;
+          translate: 0 -25%;
+
+          @media (prefers-reduced-motion: no-preference) {
+            transition: rotate 0.15s;
+          }
+        }
+        &:hover {
+          background: var(--rg-hover);
+        }
+        &:focus-visible {
+          outline: var(--bc-ring);
+          outline-offset: -2px;
+        }
+      }
+      &[open] > summary::after {
+        rotate: 225deg;
+        translate: 0 25%;
+      }
+      > [data-part="panel"] {
+        padding: 0 1rem 1rem;
+        color: var(--rg-muted);
+
+        > :first-child {
+          margin-top: 0;
+        }
+        > :last-child {
+          margin-bottom: 0;
+        }
+      }
+    }
+    /* One list under rules, not boxes. */
+    &[data-variant="flush"] {
+      gap: 0;
+
+      > details {
+        border-width: 0 0 1px;
+        border-radius: 0;
+      }
+    }
+  }
+}

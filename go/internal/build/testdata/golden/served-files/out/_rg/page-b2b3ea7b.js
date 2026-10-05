@@ -1,0 +1,1 @@
+function t(e){e.addEventListener("click",()=>{e.classList.toggle("collapsed");for(let n of e.querySelectorAll(".item"))n.classList.remove("active");let l=e.querySelector("i");l&&(l.id="second");let i=e.lastElementChild;i&&(i.textContent="Copied"),e.ariaExpanded="true",e.dataset.state="open"})}t(document.getElementById("c9"));

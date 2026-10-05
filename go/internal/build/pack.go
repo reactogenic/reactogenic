@@ -18,7 +18,8 @@ const (
 )
 
 // blob is the CSS or the JS of one page or of several: identical content is
-// one blob (builder.md, *Packaging*).
+// one blob (builder.md, *Packaging*). With the pages' documents, the blobs
+// that are files are the site's artifacts.
 type blob struct {
 	kind    string // "css", "js"
 	content string
@@ -74,17 +75,17 @@ func pack(site []built, inline string) (blobs []*blob, of [][2]int, err error) {
 	return blobs, of, nil
 }
 
-// request is what a file costs over its content, in bytes: the headers of
-// its request and response (builder.md, *Packaging*: 180–330 B, 250 B in the
-// research's tables).
-const request = 250
+// inlineLimit is the size, in bytes as written, from which a blob that
+// documents share is a file (builder.md, *Packaging*): 4096 — Vite's
+// `assetsInlineLimit`, which Astro's `inlineStylesheets: "auto"` uses.
+const inlineLimit = 4096
 
-// asFile is the `--inline` rule (builder.md, *Packaging*). It is about
-// caching, not size: a file costs a request, so a blob one page uses is
-// cheaper inline, and one that pages share is cheaper as a file from a
-// visitor's second page on — when it is larger than the request, as it is
-// sent: gzipped. How many pages share it beyond two does not count: the
-// builder knows the site's pages, not a visitor's.
+// asFile is the `--inline` rule (builder.md, *Packaging*): under `auto` a
+// blob is a file when it serves two or more documents and is inlineLimit
+// bytes or more as written; otherwise it is inlined. A blob one document
+// uses is never worth a request; a small one that several share is not
+// either. How many share it beyond two does not count: the builder knows
+// the site's pages, not a visitor's.
 func asFile(b *blob, inline string) bool {
 	if !inlinable(b) {
 		return true
@@ -95,7 +96,7 @@ func asFile(b *blob, inline string) bool {
 	case InlineNever:
 		return true
 	}
-	return len(b.pages) > 1 && sizeOf(b.content).Gzip > request
+	return len(b.pages) > 1 && len(b.content) >= inlineLimit
 }
 
 // inlinable: the content can stand inside its element. HTML ends a `<style>`
@@ -130,7 +131,7 @@ func (b *blob) tag(base string, control bool) string {
 
 // write packages the site and writes it to opts.Out in place of what was
 // there (builder.md, *Packaging*, *The output directory*): the byte report,
-// the blobs that are files, each page's `index.html`, and `public/` as it
+// the blobs that are files, each variant's document, and `public/` as it
 // is.
 func write(opts Options, site []built, static []string) (*Report, error) {
 	blobs, of, err := pack(site, opts.Inline)
@@ -147,8 +148,9 @@ func write(opts Options, site []built, static []string) (*Report, error) {
 		if at := of[i][1]; at >= 0 {
 			body = blobs[at].tag(opts.Base, opts.NoSpecialize)
 		}
-		documents[i] = doctype + document(p.page.HTML, opts.Base, head, body)
-		bare[i] = doctype + document(p.page.HTML, opts.Base, "", "")
+		// With the page's own `<style>` elements as pruning left them.
+		documents[i] = doctype + document(p.page.HTML, opts.Base, head, body, rewrites(p.own)...)
+		bare[i] = doctype + document(p.page.HTML, opts.Base, "", "", rewrites(p.own)...)
 	}
 	bytes := byteReport(opts, site, blobs, of, documents, bare, static)
 	encoded, err := bytes.JSON()
@@ -183,7 +185,7 @@ func write(opts Options, site []built, static []string) (*Report, error) {
 			}
 		}
 		for i, p := range site {
-			if err := writeFile(dir, output(p.page.Pathname), []byte(documents[i])); err != nil {
+			if err := writeFile(dir, p.page.Output(), []byte(documents[i])); err != nil {
 				return err
 			}
 		}
@@ -193,11 +195,6 @@ func write(opts Options, site []built, static []string) (*Report, error) {
 		return nil, err
 	}
 	return bytes, nil
-}
-
-// output is a page's file, from the output's root: `<pathname>index.html`.
-func output(pathname string) string {
-	return strings.TrimPrefix(pathname, "/") + "index.html"
 }
 
 func writeFile(out, name string, content []byte) error {

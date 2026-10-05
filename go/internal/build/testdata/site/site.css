@@ -23,8 +23,8 @@ main {
   max-width: 46rem;
   padding: 1rem 2rem 4rem;
 }
-/* Used by /guide/ and /guide/more/ alone: one sheet for the two, and large
-   enough to be a file under `--inline auto` (more than 1024 B). */
+/* Used by /guide/ and /guide/more/ alone: one sheet for the two — a blob
+   they share, and under 4096 B, so inlined in each under `--inline auto`. */
 .prose {
   line-height: 1.7;
   overflow-wrap: break-word;

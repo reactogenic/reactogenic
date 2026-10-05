@@ -1,0 +1,36 @@
+// Breadcrumbs: where the page is. The last crumb is the page: it has no
+// `href`. A fixture (bench/catalog/README.md).
+import type { ReactNode } from "react";
+import { Each, slotKeys, type KeyedSlot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./breadcrumbs.css";
+
+export interface CrumbProps {
+  /** Absent on the last crumb: the page itself. */
+  href?: string;
+  children?: ReactNode;
+}
+
+export interface BreadcrumbsProps {
+  /** The landmark's name. Default "Breadcrumb". */
+  label?: string;
+  /** In order, from the root to the page. */
+  $Crumb: KeyedSlot<CrumbProps>;
+}
+
+function Crumb({ href, children }: CrumbProps) {
+  return <li>{href !== undefined ? <a href>{children}</a> : <span aria-current="page">{children}</span>}</li>;
+}
+
+export function Breadcrumbs({ label = "Breadcrumb", $Crumb }: BreadcrumbsProps) {
+  return (
+    <nav className="bc-breadcrumbs" aria-label={label}>
+      <ol>
+        <Each items={slotKeys($Crumb)} { item: key }>
+          <Crumb key={key} slot={$Crumb} />
+        </Each>
+      </ol>
+    </nav>
+  );
+}

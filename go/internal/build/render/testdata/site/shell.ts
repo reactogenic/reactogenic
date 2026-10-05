@@ -7,7 +7,7 @@ import { useId } from "react";
 interface Build {
   pathname: string;
   id(prefix: string): string;
-  mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined): void;
+  mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined, data: Record<string, unknown> | undefined): void;
 }
 
 function build(): Build | undefined {
@@ -23,6 +23,6 @@ export function useShellId(prefix?: string): string {
   return b ? b.id(prefix ?? "") : useId();
 }
 
-export function mount(module: string, id?: string, flags?: Record<string, boolean>): void {
-  build()?.mount(module, id, flags);
+export function mount(module: string, id?: string, flags?: Record<string, boolean>, data?: Record<string, unknown>): void {
+  build()?.mount(module, id, flags, data);
 }

@@ -5,6 +5,8 @@
   "pages": [
     {
       "pathname": "/",
+      "variant": "index",
+      "path": "/",
       "file": "pages/index.rtsx",
       "output": "index.html",
       "document": {
@@ -28,7 +30,7 @@
         "gzip": 105,
         "delivery": "file",
         "url": "/docs/_rg/page-f561d7b7.js",
-        "pages": 2,
+        "pages": 1,
         "blob": "f561d7b7"
       },
       "components": [
@@ -63,19 +65,19 @@
         }
       ],
       "styles": {
-        "rules": 20,
-        "rulesDropped": 10,
-        "selectors": 22,
-        "selectorsDropped": 12,
+        "rules": 23,
+        "rulesDropped": 13,
+        "selectors": 25,
+        "selectorsDropped": 15,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 20,
-            "rulesDropped": 10,
-            "bytesIn": 658,
+            "rules": 23,
+            "rulesDropped": 13,
+            "bytesIn": 813,
             "bytesOut": 244
           }
         ]
@@ -83,6 +85,8 @@
     },
     {
       "pathname": "/edit/",
+      "variant": "index",
+      "path": "/edit/",
       "file": "pages/edit/index.rtsx",
       "output": "edit/index.html",
       "document": {
@@ -94,12 +98,12 @@
         "gzip": 146
       },
       "css": {
-        "raw": 504,
-        "gzip": 255,
+        "raw": 630,
+        "gzip": 311,
         "delivery": "file",
-        "url": "/docs/_rg/page-c08c523b.css",
-        "pages": 3,
-        "blob": "c08c523b"
+        "url": "/docs/_rg/page-412e17c4.css",
+        "pages": 2,
+        "blob": "412e17c4"
       },
       "components": [
         {
@@ -115,9 +119,9 @@
       "styles": {
         "unpruned": true,
         "why": "the page has an element the user edits (`contenteditable`)",
-        "rules": 20,
+        "rules": 23,
         "rulesDropped": 0,
-        "selectors": 22,
+        "selectors": 25,
         "selectorsDropped": 0,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
@@ -127,6 +131,8 @@
     },
     {
       "pathname": "/frame/",
+      "variant": "index",
+      "path": "/frame/",
       "file": "pages/frame/index.rtsx",
       "output": "frame/index.html",
       "document": {
@@ -138,12 +144,12 @@
         "gzip": 134
       },
       "css": {
-        "raw": 504,
-        "gzip": 255,
+        "raw": 630,
+        "gzip": 311,
         "delivery": "file",
-        "url": "/docs/_rg/page-c08c523b.css",
-        "pages": 3,
-        "blob": "c08c523b"
+        "url": "/docs/_rg/page-412e17c4.css",
+        "pages": 2,
+        "blob": "412e17c4"
       },
       "components": [
         {
@@ -159,9 +165,9 @@
       "styles": {
         "unpruned": true,
         "why": "the page has a document of the site in a frame (`<iframe>`)",
-        "rules": 20,
+        "rules": 23,
         "rulesDropped": 0,
-        "selectors": 22,
+        "selectors": 25,
         "selectorsDropped": 0,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
@@ -171,6 +177,8 @@
     },
     {
       "pathname": "/guide/",
+      "variant": "index",
+      "path": "/guide/",
       "file": "pages/guide/index.rtsx",
       "output": "guide/index.html",
       "document": {
@@ -201,123 +209,108 @@
       ],
       "mounts": [],
       "styles": {
-        "rules": 20,
-        "rulesDropped": 15,
-        "selectors": 22,
-        "selectorsDropped": 17,
+        "rules": 23,
+        "rulesDropped": 18,
+        "selectors": 25,
+        "selectorsDropped": 20,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 20,
-            "rulesDropped": 15,
-            "bytesIn": 658,
+            "rules": 23,
+            "rulesDropped": 18,
+            "bytesIn": 813,
             "bytesOut": 124
           }
         ]
       }
     },
     {
-      "pathname": "/own/",
-      "file": "pages/own/index.rtsx",
-      "output": "own/index.html",
+      "pathname": "/styled/",
+      "variant": "index",
+      "path": "/styled/",
+      "file": "pages/styled/index.rtsx",
+      "output": "styled/index.html",
       "document": {
-        "raw": 317,
-        "gzip": 236
+        "raw": 503,
+        "gzip": 337
       },
       "html": {
-        "raw": 195,
-        "gzip": 162
+        "raw": 445,
+        "gzip": 300
       },
       "css": {
-        "raw": 504,
-        "gzip": 255,
+        "raw": 116,
+        "gzip": 99,
         "delivery": "file",
-        "url": "/docs/_rg/page-c08c523b.css",
-        "pages": 3,
-        "blob": "c08c523b"
-      },
-      "js": {
-        "raw": 87,
-        "gzip": 105,
-        "delivery": "file",
-        "url": "/docs/_rg/page-f561d7b7.js",
-        "pages": 2,
-        "blob": "f561d7b7"
+        "url": "/docs/_rg/page-7ddfbd02.css",
+        "pages": 1,
+        "blob": "7ddfbd02"
       },
       "components": [
         {
-          "name": "Layout",
-          "count": 1
-        },
-        {
-          "name": "Marked",
-          "count": 1
-        },
-        {
-          "name": "OwnPage",
+          "name": "StyledPage",
           "count": 1
         }
       ],
-      "mounts": [
-        {
-          "module": "./behaviors/mark",
-          "id": "marked"
-        }
-      ],
-      "modules": [
-        {
-          "module": "./behaviors/mark",
-          "path": "behaviors/mark.ts",
-          "bytes": 50
-        },
-        {
-          "path": "<entry>",
-          "bytes": 37
-        }
-      ],
+      "mounts": [],
       "styles": {
-        "unpruned": true,
-        "why": "the page has a script of its own",
-        "rules": 20,
-        "rulesDropped": 0,
-        "selectors": 22,
-        "selectorsDropped": 0,
-        "customPropertiesDropped": 0,
-        "keyframesDropped": 0,
+        "rules": 33,
+        "rulesDropped": 22,
+        "selectors": 35,
+        "selectorsDropped": 24,
+        "customPropertiesDropped": 1,
+        "keyframesDropped": 1,
         "positionTryDropped": 0,
-        "sources": []
+        "sources": [
+          {
+            "file": "site.css",
+            "rules": 23,
+            "rulesDropped": 18,
+            "bytesIn": 813,
+            "bytesOut": 125
+          },
+          {
+            "file": "<style>",
+            "rules": 10,
+            "rulesDropped": 4,
+            "bytesIn": 439,
+            "bytesOut": 205
+          }
+        ]
       }
     },
     {
       "pathname": "/toggle/",
+      "variant": "index",
+      "path": "/toggle/",
       "file": "pages/toggle/index.rtsx",
       "output": "toggle/index.html",
       "document": {
         "raw": 411,
-        "gzip": 273
+        "gzip": 274
       },
       "html": {
         "raw": 289,
         "gzip": 200
       },
       "css": {
-        "raw": 247,
-        "gzip": 175,
+        "raw": 339,
+        "gzip": 225,
         "delivery": "file",
-        "url": "/docs/_rg/page-e2cd5ccc.css",
+        "url": "/docs/_rg/page-9f3abd87.css",
         "pages": 1,
-        "blob": "e2cd5ccc"
+        "blob": "9f3abd87"
       },
       "js": {
-        "raw": 282,
-        "gzip": 215,
+        "raw": 327,
+        "gzip": 244,
         "delivery": "file",
-        "url": "/docs/_rg/page-63652cb2.js",
+        "url": "/docs/_rg/page-b2b3ea7b.js",
         "pages": 1,
-        "blob": "63652cb2"
+        "blob": "b2b3ea7b"
       },
       "components": [
         {
@@ -343,7 +336,7 @@
         {
           "module": "./behaviors/toggle",
           "path": "behaviors/toggle.ts",
-          "bytes": 249
+          "bytes": 294
         },
         {
           "path": "<entry>",
@@ -351,20 +344,20 @@
         }
       ],
       "styles": {
-        "rules": 20,
-        "rulesDropped": 11,
-        "selectors": 22,
-        "selectorsDropped": 13,
+        "rules": 23,
+        "rulesDropped": 12,
+        "selectors": 25,
+        "selectorsDropped": 14,
         "customPropertiesDropped": 0,
         "keyframesDropped": 0,
         "positionTryDropped": 0,
         "sources": [
           {
             "file": "site.css",
-            "rules": 20,
-            "rulesDropped": 11,
-            "bytesIn": 658,
-            "bytesOut": 260
+            "rules": 23,
+            "rulesDropped": 12,
+            "bytesIn": 813,
+            "bytesOut": 359
           }
         ]
       }
@@ -394,23 +387,21 @@
       "delivery": "file",
       "file": "_rg/page-f561d7b7.js",
       "pages": [
-        "/",
-        "/own/"
+        "/"
       ]
     },
     {
       "kind": "css",
-      "hash": "c08c523b",
+      "hash": "412e17c4",
       "size": {
-        "raw": 504,
-        "gzip": 255
+        "raw": 630,
+        "gzip": 311
       },
       "delivery": "file",
-      "file": "_rg/page-c08c523b.css",
+      "file": "_rg/page-412e17c4.css",
       "pages": [
         "/edit/",
-        "/frame/",
-        "/own/"
+        "/frame/"
       ]
     },
     {
@@ -428,26 +419,39 @@
     },
     {
       "kind": "css",
-      "hash": "e2cd5ccc",
+      "hash": "7ddfbd02",
       "size": {
-        "raw": 247,
-        "gzip": 175
+        "raw": 116,
+        "gzip": 99
       },
       "delivery": "file",
-      "file": "_rg/page-e2cd5ccc.css",
+      "file": "_rg/page-7ddfbd02.css",
+      "pages": [
+        "/styled/"
+      ]
+    },
+    {
+      "kind": "css",
+      "hash": "9f3abd87",
+      "size": {
+        "raw": 339,
+        "gzip": 225
+      },
+      "delivery": "file",
+      "file": "_rg/page-9f3abd87.css",
       "pages": [
         "/toggle/"
       ]
     },
     {
       "kind": "js",
-      "hash": "63652cb2",
+      "hash": "b2b3ea7b",
       "size": {
-        "raw": 282,
-        "gzip": 215
+        "raw": 327,
+        "gzip": 244
       },
       "delivery": "file",
-      "file": "_rg/page-63652cb2.js",
+      "file": "_rg/page-b2b3ea7b.js",
       "pages": [
         "/toggle/"
       ]

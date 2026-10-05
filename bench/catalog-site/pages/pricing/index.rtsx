@@ -1,0 +1,74 @@
+// "/pricing/": monthly and yearly as tabs over the plan cards, a hint on a
+// limit, the FAQ as an accordion (README.md: a fixture).
+import type { ReactNode } from "react";
+import { Accordion, Badge, Button, Card, Tabs, Tooltip } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+const PLANS = [
+  { key: "free", name: "Free", monthly: "$0", yearly: "$0", text: "For a side project or a first look.", popular: false, has: ["1 project", "3 preview deploys a day", "1 region", "Community support"] },
+  { key: "team", name: "Team", monthly: "$24", yearly: "$19", text: "For a team that ships every day.", popular: true, has: ["Unlimited projects", "Unlimited previews", "4 regions", "Rollbacks kept 90 days", "Email support, next business day"] },
+  { key: "scale", name: "Scale", monthly: "$89", yearly: "$74", text: "For services with customers on call.", popular: false, has: ["Everything in Team", "14 regions", "Private networking", "Audit log, SSO", "Support within the hour"] },
+];
+
+function Plans({ period }: { period: "monthly" | "yearly" }) {
+  return (
+    <div className="grid">
+      {PLANS.map((plan) => (
+        <Card key={plan.key} variant={plan.popular ? "elevated" : "outline"}>
+          <$Eyebrow>{plan.name}</$Eyebrow>
+          <$Title>
+            {plan.text} {plan.popular ? <Badge tone="info">Most popular</Badge> : null}
+          </$Title>
+          <p className="price">
+            {plan[period]} <small>per seat / month{period === "yearly" ? ", billed yearly" : ""}</small>
+          </p>
+          <ul className="plan-list">
+            {plan.has.map((line): ReactNode => <li key={line}>{line}</li>)}
+          </ul>
+          <$Footer>
+            <Button href="/contact/" variant={plan.popular ? "solid" : "ghost"}>{plan.key === "free" ? "Start free" : "Talk to us"}</Button>
+          </$Footer>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Layout title="Pricing" description="Exemplar's plans: Free for one project, Team per seat, Scale for services with customers on call. Monthly or yearly.">
+      <h1>Pricing</h1>
+      <p className="lead">
+        Per seat, not per build minute. A{" "}
+        <Tooltip text="Anyone who can deploy. Viewers and billing contacts are free on every plan.">seat</Tooltip> is a
+        person who deploys;{" "}
+        <Tooltip text="Outbound traffic from your services to the internet, measured per project and month." side="bottom">egress</Tooltip>{" "}
+        is billed at cost above the plan's allowance.
+      </p>
+
+      <Tabs label="Billing period" variant="pills">
+        <$Tab key="monthly" label="Monthly"><Plans period="monthly" /></$Tab>
+        <$Tab key="yearly" label="Yearly — two months free"><Plans period="yearly" /></$Tab>
+      </Tabs>
+
+      <h2>Questions</h2>
+      <Accordion exclusive>
+        <$Item key="trial" title="Is there a trial of Team?" open>
+          <p>Fourteen days, every feature, no card. At the end the project drops to Free; nothing is deleted.</p>
+        </$Item>
+        <$Item key="seats" title="What counts as a seat?">
+          <p>A person who can start a deploy. Viewers, billing contacts and bots with a deploy token are not seats.</p>
+        </$Item>
+        <$Item key="overage" title="What happens when we pass a limit?">
+          <p>You choose, per project: a hard stop, or metered overage with an alert at 80%. The default is the hard stop.</p>
+        </$Item>
+        <$Item key="switch" title="Can we switch between monthly and yearly?">
+          <p>At any time. Moving to yearly credits what is left of the month; moving back takes effect at renewal.</p>
+        </$Item>
+        <$Item key="oss" title="Do you sponsor open source?">
+          <p>Public repositories under an OSI licence get Team for free. Write to us with a link to the project.</p>
+        </$Item>
+      </Accordion>
+    </Layout>
+  );
+}

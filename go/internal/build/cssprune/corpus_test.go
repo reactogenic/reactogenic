@@ -51,9 +51,10 @@ func corpus(t testing.TB) []sheet {
 	// The design system itself, and pages the builder built with it: the
 	// fixture site of internal/build, as its golden output has it — a page
 	// of each kind (a drawer, nothing that opens, a menu of links, a dialog,
-	// an action menu with a dialog, text). Last, so that the sheets above
-	// keep their places.
-	out = append(out, sheet{"ui", "testdata/ui/all.css", append(glob("../testdata/golden/never/out/index.html"), glob("../testdata/golden/never/out/*/index.html")...)})
+	// an action menu with a dialog, text), the variants of a route among
+	// them (`account/guest.html`). Last, so that the sheets above keep
+	// their places.
+	out = append(out, sheet{"ui", "testdata/ui/all.css", append(glob("../testdata/golden/never/out/index.html"), glob("../testdata/golden/never/out/*/*.html")...)})
 	// Pages as they are served — under a base, with the <link> and the
 	// <script> packaging put in them, which the sheet selects on — and one
 	// the user edits (`contenteditable`), which is not pruned.

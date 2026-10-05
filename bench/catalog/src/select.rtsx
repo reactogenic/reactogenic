@@ -1,0 +1,54 @@
+// Select: the platform's `<select>`, labelled, with a chevron of its own.
+// Options and nothing else inside it (the builder does not prune a page
+// whose `<select>` holds more: builder.md, *CSS*). No JS. A fixture
+// (bench/catalog/README.md).
+import type { ReactNode } from "react";
+import { Each, slotKeys, useShellId, type KeyedSlot } from "@reactogenic/core";
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./select.css";
+
+export interface SelectOptionProps {
+  disabled?: boolean;
+  /** The option's text. */
+  children?: ReactNode;
+}
+
+export interface SelectProps {
+  /** The field's id; the select is `<id>-i`. Generated when absent. */
+  id?: string;
+  label: string;
+  name: string;
+  /** The key of the option chosen as the page loads. */
+  value?: string;
+  hint?: ReactNode;
+  required?: boolean;
+  disabled?: boolean;
+  /** Option: `data-size`. Default "md". */
+  size?: "md" | "sm";
+  /** In order; an option's key is its value. */
+  $Option: KeyedSlot<SelectOptionProps>;
+}
+
+function Option({ value, disabled, children }: SelectOptionProps & { value: string }) {
+  return <option value disabled>{children}</option>;
+}
+
+export function Select({ id, label, name, value, hint, required, disabled, size, $Option }: SelectProps) {
+  const generated = useShellId("sel");
+  const field = id ?? generated;
+  const input = field + "-i";
+  return (
+    <div id={field} className="bc-select" data-size={size === "sm" ? size : undefined}>
+      <label htmlFor={input}>{label}</label>
+      <div data-part="control">
+        <select id={input} name defaultValue={value} required disabled aria-describedby={hint !== undefined ? field + "-h" : undefined}>
+          <Each items={slotKeys($Option)} { item: key }>
+            <Option key={key} slot={$Option} value={key} />
+          </Each>
+        </select>
+      </div>
+      {hint !== undefined ? <p id={field + "-h"} data-part="hint">{hint}</p> : null}
+    </div>
+  );
+}

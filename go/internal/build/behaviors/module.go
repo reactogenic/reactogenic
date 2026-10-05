@@ -245,7 +245,7 @@ func (o Options) modules(specs []string) []*module {
 func (o Options) sideEffects(page render.Page, m *module) []report.Report {
 	var reports []report.Report
 	for _, e := range m.effects {
-		related := []report.Report{{Severity: report.Message, Message: "mounted on the page " + page.Pathname}}
+		related := []report.Report{{Severity: report.Message, Message: "mounted on the page " + page.Path()}}
 		if e.runs != "" {
 			related = append([]report.Report{{Severity: report.Message, Message: "what runs" + e.when + ": `" + e.runs + "`"}}, related...)
 		}

@@ -1,0 +1,21 @@
+// "/404/": the page that uses almost none — a heading and a way home
+// (README.md: a fixture). A static host serves it for a path it does not
+// have.
+import { Button } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+export default function Page() {
+  return (
+    <Layout title="Not found" description="This page does not exist.">
+      <section className="not-found">
+        <p className="code">404</p>
+        <h1>There is nothing at this address</h1>
+        <p>The page may have moved, or the link that brought you here has a typo. The pages below are where most people were going.</p>
+        <div className="actions">
+          <Button href="/">Home</Button>
+          <Button href="/docs/" variant="ghost">Documentation</Button>
+        </div>
+      </section>
+    </Layout>
+  );
+}

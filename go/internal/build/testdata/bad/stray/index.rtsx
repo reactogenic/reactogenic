@@ -1,0 +1,6 @@
+// The page of the route; it does not mount `intro.rtsx` beside it.
+import { Page } from "../page.tsx";
+
+export default function StrayPage() {
+  return <Page title="Stray" />;
+}

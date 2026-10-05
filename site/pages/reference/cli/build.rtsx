@@ -5,10 +5,12 @@ import { Code } from "../../../code.rtsx";
 const USAGE = `reactogenic build [-p tsconfig.json] [--pages <dir>] [--out <dir>] [--base <path>]
                   [--inline auto|always|never] [--no-specialize] [--report]`;
 
-const ROUTES = `pages/index.rtsx                 /
-pages/guide/index.rtsx           /guide/
-pages/guide/editor.rtsx          not a page: a segment or a module of /guide/
-pages/reference/cli/index.rtsx   /reference/cli/`;
+const ROUTES = `pages/index.rtsx             /            a variant  → index.html
+pages/guide/index.rtsx       /guide/      a variant  → guide/index.html
+pages/guide/editor.rtsx      mounted by index.rtsx as #editor: a segment, no artifact of its own
+pages/account/index.rtsx     /account/    a variant  → account/index.html
+pages/account/guest.rtsx     /account/    a variant  → account/guest.html
+pages/account/server.ts      will choose between the two for a request: not read yet`;
 
 const PAGE = `import { Layout } from "../../layout.rtsx";
 
@@ -35,7 +37,7 @@ const FLAGS = [
   { flag: "--pages", meaning: "the root of the routes", fallback: "pages, next to the tsconfig" },
   { flag: "--out", meaning: "where the site is written. Emptied when the build writes, so only a directory that is empty or holds a previous build (its _rg/report.json) is taken; one that holds the tsconfig, the pages or public is refused", fallback: "dist, next to the tsconfig" },
   { flag: "--base", meaning: "the path the site is served under: prefixes the URLs of the build's own files and the pages' root-relative links", fallback: "/" },
-  { flag: "--inline", meaning: "auto: CSS or JS is a file when two or more pages share it and it is over 250 B gzipped — more than a request costs — otherwise it is inlined. always: inlined. never: a file", fallback: "auto" },
+  { flag: "--inline", meaning: "auto: CSS or JS is a file when two or more pages share it and it is 4096 B or more as written — the limit Vite and Astro inline under — otherwise it is inlined. always: inlined. never: a file", fallback: "auto" },
   { flag: "--no-specialize", meaning: "the control: one unpruned CSS bundle and every behaviour for the whole site, to measure what awareness of components is worth" },
   { flag: "--report", meaning: "print the byte report; it is always written to <out>/_rg/report.json" },
 ];
@@ -46,6 +48,7 @@ const SHELL_RULES = [
   { code: "shell-nondeterministic", when: "Date.now(), new Date() without arguments, Math.random(), a date string that is not ISO 8601" },
   { code: "shell-error", when: "anything else thrown while a page renders; a page that takes more than 30 s or 1 GiB; and what needs Intl: toLocaleString, localeCompare" },
   { code: "shell-console (warning)", when: "what a page printed with console" },
+  { code: "shell-script", when: "a script of the page's own in its HTML: a script element that runs, an on… attribute, a javascript: URL. A data block (application/json, an import map) is not one" },
 ];
 
 const PAGE_CHECKS = [
@@ -62,11 +65,11 @@ export default function Build() {
       <p>
         Compiles pages written in <code>.rtsx</code> with the framework's layout components into plain HTML, CSS
         and the minimal JS each page needs. <strong>No React in the output.</strong> React is a dependency of the
-        project at build time: the pages are React components, rendered once per pathname.
+        project at build time: the pages are React components, each rendered once.
       </p>
       <p>
         <strong>In development</strong>: the command builds this site, and is not in the published alpha yet. Every
-        page is static — there are no islands, no dev server and no watch mode.
+        page is static — there are no dynamic segments, no dev server and no watch mode.
       </p>
       <Code>{USAGE}</Code>
       <table>
@@ -98,14 +101,24 @@ export default function Build() {
 
       <h3 id="build-routes">Routes</h3>
       <p>
-        <code>index.rtsx</code> (or <code>index.tsx</code>) of a directory under <code>pages</code> is a page; its
-        pathname is the directory, with a trailing slash. The output is{" "}
-        <code>{"<out>/<pathname>index.html"}</code>. A <code>public</code> directory next to <code>pages</code> is
-        copied as it is.
+        A directory under <code>pages</code> is a <strong>route</strong>; its pathname is the directory, with a
+        trailing slash. An <code>.rtsx</code> file of it that nothing of the project mounts or imports is a{" "}
+        <strong>variant</strong> of the route, and is built to a document: <code>index.rtsx</code> to{" "}
+        <code>{"<out>/<pathname>index.html"}</code> — the one a static host serves at the pathname — and{" "}
+        <code>guest.rtsx</code> to <code>{"<out>/<pathname>guest.html"}</code>. Any other file of the directory is
+        a segment or a module of a variant. The files of the output — the documents, and the CSS and JS under{" "}
+        <code>_rg/</code> — are the <strong>artifacts</strong>. A <code>public</code> directory next to{" "}
+        <code>pages</code> is copied as it is.
       </p>
       <Code>{ROUTES}</Code>
       <p>
-        The page is the module's default export: a component without props that renders the whole document, from{" "}
+        Which files are variants is read from the project's imports, never from a name and never by running a
+        file: a segment that nothing mounts is a variant, and fails as one (<code>page-not-document</code>).{" "}
+        <code>pathname()</code> is the route's in every variant of it. A route's <code>server.ts</code> will select
+        among its artifacts for a request; the build does not read it yet, and builds every variant.
+      </p>
+      <p>
+        A variant is its module's default export: a component without props that renders the whole document, from{" "}
         <code>{"<html>"}</code>. A shared layout is an ordinary component.
       </p>
       <Code label="pages/guide/index.rtsx">{PAGE}</Code>
@@ -118,7 +131,10 @@ export default function Build() {
         <li>
           <strong>CSS</strong>: plain <code>.css</code> files, imported by the modules that need them, then pruned
           against the page as it is served and the script it ships — a rule stays only if some element of this
-          page may match it. A page with a script of its own, which the build cannot read, keeps its whole sheet.
+          page may match it. A <code>{"<style>"}</code> element of the page's own is CSS of the page too: it is
+          pruned by the same rules, and written back in its place. A <code>{"<link>"}</code> is what its{" "}
+          <code>rel</code> says: with <code>stylesheet</code> it is a sheet the build did not bundle, and every
+          custom property stays; a hint (<code>preload</code>) or a relation (<code>icon</code>) changes nothing.
         </li>
         <li>
           <strong>JS</strong>: the behaviours the page's components mounted, and nothing else. A menu of links
@@ -159,8 +175,9 @@ export default function Build() {
         </tbody>
       </table>
       <p>
-        Each is found by executing the page and reported at its <code>.rtsx</code> position, with the component
-        stack. The first one ends the page.
+        Each but the last is found by executing the page and reported at its <code>.rtsx</code> position, with
+        the component stack; the first one ends the page. The last is found on the page's HTML: a page has no
+        script but the behaviours its components mounted.
       </p>
       <Code>{SHELL_ERROR}</Code>
 

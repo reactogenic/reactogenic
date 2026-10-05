@@ -6,8 +6,8 @@
 [research/components.md](research/components.md),
 [research/platform.md](research/platform.md).
 
-Phase 2 has no islands: all three are layout components, executed in shell
-code. What `Dialog` is when an island drives it — `onClose`, open by being
+Phase 2 has no dynamic segments: all three are layout components, executed in shell
+code. What `Dialog` is when a dynamic segment drives it — `onClose`, open by being
 mounted, a `<template>` with holes — is layout.md's and is not specified here.
 
 Rules shared by all three:
@@ -26,8 +26,9 @@ Rules shared by all three:
    is executed (builder.md, S3): `align="end"`, and equally
    `align={wide ? "end" : "start"}`. Content flows into the HTML (labels,
    slot bodies).
-4. **Repeated things are a `KeyedSlot`**, rendered in the order written
-   (integer-like keys excepted: *Known limits*).
+4. **Repeated things are a `KeyedSlot`**, rendered in the order written —
+   whatever the keys look like: a component iterates `slotKeys($X)`
+   (phase01/syntax.md, *Keyed slots*), never `Object.keys($X)`.
 5. **A container takes items or sections, never both at one level**: slot
    elements become one prop per slot name, so the order *between* two slot
    names is lost.
@@ -104,6 +105,7 @@ interface DialogProps {
   $Trigger?: Slot<TriggerProps>;                // a button rendered where the dialog is written
   $Title: Slot<ComponentProps<"h2">>;           // required: the accessible name
   $Action?: KeyedSlot<ButtonLinkProps | TriggerProps>;   // footer buttons, in order: a link, or a button that closes
+  closeLabel?: string;                          // content: the close button's accessible name; default "Close"
   children?: ReactNode;                         // the body
 }
 ```
@@ -168,35 +170,32 @@ interface DialogProps {
 | `$Trigger` | a button, and the dialog's: `href`, `command`, `commandfor`, `popoverTarget` are type errors at the slot element (rule 2) |
 | `$Action` | with `href` a link; otherwise a button that closes the dialog — it takes no `command` of its own |
 | `<footer>` | only when `$Action` is filled |
+| the close button's name | `closeLabel`, printed as its `aria-label`; `"Close"` when absent. Content, not an option: a page in German writes `closeLabel="Schließen"`. The scrim has no name — it is `aria-hidden` |
 | the surface | `<dialog>` is the whole viewport, transparent; `[data-part="panel"]` is what is seen. So everything around the panel can be the scrim |
 | size | the panel never leaves the viewport: at most `32rem` wide, never wider or taller than the viewport less the dialog's padding. Header and footer stay; **the body scrolls**, both ways (a `<pre>` wider than the panel); a word wider than the panel breaks. The `<dialog>` itself never scrolls — that would carry the close button and the scrim out of view. (CSS: the open dialog is a grid of one `minmax(0, 1fr)` cell — in an `auto` track the panel's percentages resolve against its own content — with `overflow: hidden`) |
 | light dismiss (`closedby="any"`) | a **scrim**: one `<button command="close">` that covers the dialog under the panel, emitted **after** the panel — `closedby` itself is not in Safari. The close button in the header is the first focusable element, so that is where focus goes on opening, never to the scrim (`tabindex="-1"` does not keep a dialog from focusing an element; its place in the document does) |
-| delivery | a live `<dialog>` where it is written — anywhere flow content may be, the author's own `<form>` included: every button the dialog emits is `type="button"`. The top layer makes its position irrelevant, **except under a closed popover**: that is `display: none`, and nothing in a box that is not there is rendered — the dialog opens modal and unseen, the page inert until Esc. `SideMenu` sees to its own drawer (*SideMenu*, `$Header`, `$Footer`); under a popover of the author's own, a dialog may be opened only by a button inside that popover. (layout.md's `<template>` + clone is for dialogs with holes, opened from islands.) |
-| the body | `children`. When an island drives the dialog, `children` is a slot body in layout.md's sense: shell code, with holes |
+| delivery | a live `<dialog>` where it is written — anywhere flow content may be, the author's own `<form>` included: every button the dialog emits is `type="button"`. The top layer makes its position irrelevant, **except under a closed popover**: that is `display: none`, and nothing in a box that is not there is rendered — the dialog opens modal and unseen, the page inert until Esc. `SideMenu` sees to its own drawer (*SideMenu*, `$Header`, `$Footer`); under a popover of the author's own, a dialog may be opened only by a button inside that popover. (layout.md's `<template>` + clone is for dialogs with holes, opened from dynamic segments.) |
+| the body | `children`. When a dynamic segment drives the dialog, `children` is a slot body in layout.md's sense: shell code, with holes |
 | CSS | surface, `::backdrop`, header, body, footer, entry transition (`@starting-style`, `allow-discrete`; *CSS convention*, motion), scroll lock: `:root:has(.rg-dialog:modal) { overflow: hidden }` |
 | JS | `invokers` (the `commandfor` fallback) and `overlays` — both page-level, *Behaviours* |
 
 Missing `$Title` → phase 1's `missing-slot`. Exit animation is an
 enhancement: only Chromium animates leaving the top layer.
 
-> OPEN (for the owner, decisions.md, G): the close button's name is the
-> English word `Close`, here and on the drawer: a site with `<html lang="de">`
-> announces it on every page.
-> Recommended: `closeLabel?: string` (content; default `"Close"`) on
-> `DialogProps` and `SideMenuProps`, printed as that button's `aria-label`.
-> A slot (`$Close`) is more than a name needs.
+> Ruled by the owner (decisions.md, G): the close button's name is a
+> design-system matter, and a prop and a slot are both legitimate — neither
+> needs anything of the contract or the compiler. Built: the prop,
+> `closeLabel`, here and on `SideMenu`; a `$Close` slot is as valid, later.
 
-> OPEN (for the owner, decisions.md, H): a page check for the delivery
-> row's exception, in builder.md — `dialog-in-popover`: a `<dialog>` inside a
-> `[popover]` other than a `.rg-sidemenu`, named by a `commandfor` outside
-> that popover. Recommended: add it. It costs no byte, and the failure is
-> silent: every other check passes, and the page goes inert.
+> Ruled by the owner (decisions.md, H): a dialog under a closed popover of
+> the author's own is the design system's to solve, later — no page check
+> (`dialog-in-popover` is not built), and the delivery row's exception stays
+> a documented limit.
 
-> OPEN (for the owner, decisions.md, B): layout.md's `Dialog` has its body
-> in `<$Contents>`, and states the hole rule for slot bodies only; here the
-> body is `children`. Recommended:
-> `children` — the default slot, as on every other component — and layout.md
-> drops `$Contents` when islands are specified.
+> Ruled by the owner (decisions.md, B): the body as `children` or as
+> layout.md's `<$Contents>` is a design-system choice too — both are to be
+> supported, and the compiler treats them the same. The components keep
+> `children`.
 
 **Rejected:** the scrim as `<form method="dialog"><button>` — it needs no
 `command`, but a dialog written inside the author's `<form>` then nests a
@@ -272,7 +271,7 @@ element. That is the whole action vocabulary of a React-less page.
 
 ```html
 <button type="button" class="rg-button" id="more" popovertarget="m3" aria-haspopup="menu">More</button>
-<div id="m3" class="rg-menu" data-typeahead popover role="menu" aria-labelledby="more">
+<div id="m3" class="rg-menu" popover role="menu" aria-labelledby="more">
   <a role="menuitem" aria-disabled="true">Next page</a>
   <button type="button" role="menuitem" disabled>Print</button>
   <button type="button" role="menuitem" autofocus command="show-modal" commandfor="shortcuts">Keyboard shortcuts…</button>
@@ -287,18 +286,15 @@ element. That is the whole action vocabulary of a React-less page.
 | `disabled` | a button item: `disabled`. A link item: `<a>` without `href`, with `aria-disabled="true"` (`Button`). Neither takes focus, is reached by the arrow keys or typeahead, or closes the menu when clicked |
 | placement | the popover's implicit anchor is its invoker: `position-anchor: auto` (its initial value differs between engines; in Chrome 151+ `anchor()` resolves against nothing without it), `top: anchor(bottom)`, `left: anchor(left)` — `right: anchor(right)` for `align="end"`; no rule per use site. Not `position-area`: on a scrolled page it did not flip in Playwright's WebKit 26.0 (research/platform.md, correction C). It does in WebKit 26.6 (measured) and in Safari 27.0.1; Safari 26.2–26.5, the floor, is not verified — so the insets stay. Inside `@supports (top: anchor(bottom))`; without anchor positioning the UA's centred popover remains |
 | size, and where it goes when it does not fit | `width: max-content` (never less than the trigger), and never larger than the viewport less `1rem`, either way: a popover is fixed, so what of it is outside the viewport cannot be scrolled to. The room beside the trigger does not squeeze the menu — a menu that does not fit **moves**. `position-try-fallbacks`, in order: `flip-block` (above the trigger), `flip-inline` (the trigger's other edge — so `align` is where it goes *when there is room*), both; `--rg-menu-edge` (`@position-try`: `left: 0.5rem`), for a menu wider than the room on either side of its trigger — a phone; and last `--rg-menu-corner` (`top: 0.5rem; left: 0.5rem`), which always fits: for a menu taller than the room above and below its trigger (a phone on its side, a page zoomed to 400%), where **the menu scrolls**. Five fallbacks and no more: Chromium tries five and never a sixth (measured in 153; WebKit 26.6 tries a seventh) |
-| `typeahead` | the menu gets `data-typeahead`, and mounts `menu-keys` with `RG_MENU_TYPEAHEAD`: a printable key moves to the next item that starts with it. The flag is the page's (builder.md: the union of its mounts) — it puts the code in the page's script; the attribute is the menu's — a menu without it has no typeahead, whatever else is on the page |
+| `typeahead` | the menu mounts `menu-keys` with `RG_MENU_TYPEAHEAD` and with the data `{ typeahead: true }`: a printable key moves to the next item that starts with it. The flag is the page's (builder.md: the union of its mounts) — it puts the code in the page's script; the data is the menu's — the second argument of its mount's call: a menu without it has no typeahead, whatever else is on the page. No attribute: only the behaviour reads it (builder.md, *Behaviours*), so the menu's HTML is the same with and without |
 | `current` | `aria-current="true"` on the item |
 | opening a dialog from an item | `menu-keys` closes the menu first, with focus back on the trigger — so closing the dialog returns focus there. (Natively the menu closes too, but the dialog then returns focus to an item that is gone.) |
 | not in phase 2 | sections and separators, checkable items, submenus, icons |
 
-> OPEN (for the owner, decisions.md, I): a disabled item is skipped — by
-> focus, the arrow keys and typeahead (the `disabled` row). APG's menu pattern keeps it focusable ("focusable but
-> cannot be activated"), so that a screen-reader user learns it is there.
-> Recommended: APG's — `aria-disabled="true"` on a button item too, without
-> `disabled`, `command` or `commandfor`; the arrow keys stop at it,
-> activating it does nothing and keeps the menu open. No byte more: one
-> selector of `menu-keys` changes.
+> Ruled by the owner (decisions.md, I): whether a disabled item stays
+> focusable (APG's menu pattern) is the design system's to solve, later. As
+> built, for the tests: it is skipped — by focus, the arrow keys and
+> typeahead (the `disabled` row).
 
 ## `SideMenu`
 
@@ -333,6 +329,7 @@ interface SideMenuProps {
   $Section: KeyedSlot<SideMenuSectionProps>;
   $Footer?: Slot<ComponentProps<"div">>;
   $Toggle?: Slot<SideMenuToggleProps>;        // the drawer's button; fallback: the menu icon, named by `label`
+  closeLabel?: string;                        // content: the drawer's close button's accessible name; default "Close"
 }
 // A <button>'s props without what the side menu wires (rule 2).
 interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "popoverTarget" | "popoverTargetAction" | "command" | "commandfor"> {}
@@ -384,10 +381,10 @@ interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "p
 | --- | --- |
 | **the current page is the builder's, not the author's** | the item whose `href` is `pathname()` gets `aria-current="page"`, and every disclosure around it `open`. CSS styles `[aria-current]`. There is no `current` prop to get wrong; two pages' menus differ in exactly those attributes |
 | which `href` is the page | every form the builder's link check takes for the route (builder.md, *Checks on the page*): `/guide/`, `/guide`, `/guide/index.html`, percent-encoded or not (`/%C3%BCber/` is `pages/über/`; `%2F` is no separator). **Not** an `href` with a `?query` or a `#fragment` — `/guide/#keyed`, `#keyed`: that is a state or a place of a page, not the page |
-| a link into a page | `href="/guide/#install"` is not the page `/guide/`: with a fragment or a query an item is never current, and opens no group — which section is shown is run-time state, and six items of one page cannot all be the current one. So a group of a page's sections starts with the page itself (the example below; the OPEN note after it) |
+| a link into a page | `href="/guide/#install"` is not the page `/guide/`: with a fragment or a query an item is never current, and opens no group — which section is shown is run-time state, and six items of one page cannot all be the current one. So a group of a page's sections starts with the page itself (the example below; the note after it) |
 | drawer on small screens | **the same `<nav>` is a popover.** Above the breakpoint CSS shows it as a sticky column and hides the toggle and the close button; below it, the toggle opens it in the top layer: backdrop, Esc, focus return (to a toggle that had focus: *Known limits*) — native. One copy of the menu in the HTML |
 | `$Toggle` | `label` names the fallback, the icon: `aria-label="Documentation"`. A toggle with content of the author's is named by that content — `<$Toggle>Menu</$Toggle>` → `<button type="button" class="rg-sidemenu-toggle" popovertarget="s1">Menu</button>`, no `aria-label`: a button that shows "Menu" and is named "Documentation" answers to neither word by voice (WCAG 2.5.3, Label in Name). The `<nav>` keeps `label` |
-| the close button | always emitted, first in the `<nav>`: on iOS 17–18.2 a popover does not close on an outside tap. Its name: the OPEN note of *Dialog* |
+| the close button | always emitted, first in the `<nav>`: on iOS 17–18.2 a popover does not close on an outside tap. Its name: `closeLabel` (`aria-label`; default `"Close"`), as the dialog's |
 | the backdrop | a tap on it closes the drawer and activates nothing behind it. A popover's own `::backdrop` cannot do that: it lets pointer events through, and light dismiss closes the drawer on `pointerup` — *before* a tap's click is dispatched, which then lands on what was behind. (Measured in Chromium 153 and WebKit 26.6: `pointer-events: none` on `<body>` while the drawer is open stops a mouse click, not a touch tap.) So the drawer has a **scrim** of its own, as the dialog does: the last element of the `<nav>`, a button fixed over the rest of the viewport with `popovertargetaction="hide"`. A tap on it is a tap inside the popover: nothing closes until its click, and nothing behind is reached. It also closes the drawer where an outside tap does not (iOS 17–18.2). It is there only while the drawer is open. The drawer slides by its `left`, not by a transform, which would contain the fixed scrim |
 | `$Header`, `$Footer` | `<div data-part="header">` before the sections, `<div data-part="footer">` after them; neither is emitted when its slot is not filled. Free content, other components included (rule 7): a `Dialog` or a `DropdownMenu` there is itself — the side menu's rules for links, lists, titles, its close button and its scrim reach `> section`, `> details` and its own children only |
 | a `Dialog` in the drawer, opened from outside it | works: below the breakpoint the closed drawer is `display: none` (the user agent's rule for a closed popover), and a dialog in it would open modal and unseen — so the closed drawer has its box while a dialog in it is modal, `:not(:popover-open):has(dialog:modal) { display: block }`. That box is where a closed drawer is: beside the viewport |
@@ -432,14 +429,11 @@ interface SideMenuToggleProps extends Omit<ComponentProps<"button">, "type" | "p
 </nav>
 ```
 
-> OPEN (for the owner, decisions.md, J): links *into* the current page — a
-> page's headings as nested items:
-> `/guide/slots/#keyed`, `#keyed`, `?tab=api`. Today such an item is not
-> marked and does not open the disclosures around it (so the docs site's
-> groups start with an "Overview" link to the page, as above). Recommended:
-> it opens its disclosures (the group is about this page) and stays unmarked
-> — `aria-current="page"` on five items names none, and which place of the
-> page is current is in-page state: a script's, later.
+> Ruled by the owner (decisions.md, J): links *into* the current page — a
+> page's headings as nested items (`/guide/slots/#keyed`, `#keyed`,
+> `?tab=api`) — are out of scope. As built: such an item is not marked and
+> opens no disclosure, so the docs site's groups start with an "Overview"
+> link to the page, as above.
 
 ## Behaviours
 
@@ -450,7 +444,7 @@ is what its components mounted:
 | --- | --- | --- | --- |
 | `overlays` (page-level) | `Dialog`, `DropdownMenu`, `SideMenu` | closes open popovers and dialogs when the reader goes elsewhere. To another page, on `pagehide`: Back would otherwise restore the page with the overlay open (bfcache). To another place of this page: a same-page link (`#keyed`) in an open drawer, menu or dialog scrolls the page under it and would leave it open over what was asked for — on `navigate`, of the Navigation API (Chrome 102, Firefox 147, Safari 26.2: the floor has it). Not `hashchange`: the second click on the same link changes no hash | — |
 | `invokers` (page-level) | `Dialog`; a `Button` or a menu item with `command` | `command` / `commandfor` for `show-modal` and `close` — all of `Command` — where the browser has none; feature-detected (`"command" in HTMLButtonElement.prototype`), no listener at the floor | — |
-| `menu-keys` (per menu) | `DropdownMenu` with an action item | Arrow keys with wrap, Home, End, over the items that are not disabled (`:disabled`, `aria-disabled="true"`). Tab closes the menu and moves on from the trigger. Activating an item closes it. Whenever it closes the menu, focus is put back on the trigger (the element `aria-labelledby` names) — not left to the browser: WebKit does not focus a button on click, so a menu opened with the mouse has no invoker to return to. Esc and light dismiss stay native | `RG_MENU_TYPEAHEAD`: typeahead, on the menus that have `data-typeahead` |
+| `menu-keys` (per menu) | `DropdownMenu` with an action item | Arrow keys with wrap, Home, End, over the items that are not disabled (`:disabled`, `aria-disabled="true"`). Tab closes the menu and moves on from the trigger. Activating an item closes it. Whenever it closes the menu, focus is put back on the trigger (the element `aria-labelledby` names) — not left to the browser: WebKit does not focus a button on click, so a menu opened with the mouse has no invoker to return to. Esc and light dismiss stay native | `RG_MENU_TYPEAHEAD`: typeahead, on the menus whose mount hands it `{ typeahead: true }` (the mount's data) |
 
 A page with a menu of links and no dialog ships `overlays` alone; a page with
 nothing that opens ships no script.
@@ -464,9 +458,9 @@ What makes per-page pruning exact (builder.md, *CSS*):
 | one `.css` per component, imported by the component | `import "./dialog.css"` |
 | everything nested under the component's root class | `.rg-dialog { … > [data-part="panel"] { … } }`. A rule on an ancestor of the root cannot nest: it names the root in `:has()` — `:root:has(.rg-dialog:modal)`. `SideMenu` has a second root, its toggle: `.rg-sidemenu-toggle` |
 | a rule reaches the component's own structure, never a slot's content | parts through child combinators from the root: `.rg-dialog > [data-part="panel"] > header > [data-part="close"]`, `.rg-sidemenu > [data-part="scrim"]`, `.rg-menu > li > a`. A descendant selector only below an element that holds nothing of the author's but a label: `.rg-sidemenu > :is(section, details) a`. **Never** `.rg-sidemenu a` or `.rg-sidemenu [data-part="close"]`: a `Dialog` in `$Header` has a `[data-part="close"]` of its own, and the rule that hides the drawer's hides the dialog's |
-| compile-time options | `data-<option>` on the root: `[data-align="end"]`, `[data-variant="ghost"]`; read by a behaviour too (`data-typeahead`) |
+| compile-time options | an option a rule selects is `data-<option>` on the root: `[data-align="end"]`, `[data-variant="ghost"]`. An option only a behaviour reads is no attribute: it is the mount's data (`typeahead`; builder.md, *Behaviours*) |
 | internal parts, slot attachments among them | `data-part`: `[data-part="footer"]` is `$Footer`'s attachment. An attachment the component's tag already names has none (`header > h2`) |
-| runtime state | pseudo-classes and the attributes builder.md's *CSS* table calls "maybe" (`open`, `hidden`, `aria-*`, …) — never a class. **A behaviour of the design system writes nothing else**: no class, no other attribute, no element. The builder asks less — a class or an attribute a behaviour writes *by its name in full* is read off the page's script and is "maybe" too (builder.md, *CSS*, *The page's script*) — and what it cannot see is what this rule keeps out: a name that is computed (a rule the pruner dropped for this page would start to match), an element added or moved (the page is not pruned at all). The three here write nothing at all: they call the platform (`showModal()`, `close()`, `hidePopover()`, `focus()`); `test/convention.test.ts` holds them to it |
+| runtime state | a pseudo-class, or an attribute — never a class. **A behaviour names the state it writes**: the attribute's name in full (`setAttribute("aria-expanded", …)`, `toggleAttribute("inert")`), or the property that reflects it (`e.ariaExpanded`, `e.disabled`, `e.dataset.state` — builder.md, *CSS*, *The page's script*, has the table). That is what the builder reads off the page's script: state only a script can write (`aria-*`, `disabled`, `inert`, `data-state`, `checked`, `selected`, `value`) is decided on the page **unless the page's script names it** — on a page whose behaviours name no `aria-current`, a rule on `[aria-current]` with no such element is dropped; what the browser writes by itself (`open`, `hidden`, `style`) and every pseudo-class is "maybe" on every page. A name that is computed (`"aria-" + state`) is not seen, and a rule the pruner dropped for the page would start to match: that is what this rule keeps out, and an element added or moved leaves the page unpruned. **The three behaviours here write nothing at all**: they call the platform (`showModal()`, `close()`, `hidePopover()`, `focus()`); `test/convention.test.ts` holds them to it, and the builder's own test pins the state each of them names (`menu-keys` names `aria-disabled`, which it reads: its pages keep those rules) |
 | motion | every `transition` is inside `@media (prefers-reduced-motion: no-preference)`: the dialog's fade and the drawer's slide are for a reader who has not asked for less (WCAG 2.3.3) |
 | forced colours | a background is the canvas there, and a shadow is gone: every surface of the top layer — the dialog's panel, the menu, the drawer — has a `1px solid` border, and the current item is marked by more than a background (its weight) |
 | order | `@layer rg.base, rg.components;` declared once, in the tokens file every component imports before its own (`import "./tokens.css"; import "./dialog.css"`); component rules in `rg.components`. Author CSS is unlayered, so it wins |
@@ -487,7 +481,7 @@ rewrites the markup: the builder's HTML is React's, to the byte (builder.md,
 | `popovertarget="m1"`, `popovertargetaction="hide"` | `popoverTarget="m1"`, `popoverTargetAction="hide"` — attribute names are case-insensitive in HTML | `popoverTarget`, `popoverTargetAction` |
 | `popover` | `popover=""` | `popover=""` — **not** a bare `popover`: that is `true`, which React drops, and the menu would be no popover |
 | `autofocus` | `autofocus=""` | `autoFocus` — a lower-case `autofocus` is dropped too |
-| `open`, `disabled`, `data-typeahead` | `open=""`, `disabled=""`, `data-typeahead=""` | |
+| `open`, `disabled` | `open=""`, `disabled=""` | |
 | `command`, `commandfor`, `closedby`, `tabindex="-1"` | as here | `command`, `commandfor`, `closedby`, `tabIndex` |
 
 The contract tests compare after exactly that normalisation: names in lower
@@ -499,17 +493,12 @@ which covers a site's own `.css` imports too.
 
 ## Known limits
 
-- A keyed slot does not keep the written order for **integer-like keys**
-  (`key="2"`, `key="10"`: JavaScript enumerates them first, ascending).
-  syntax.md notes it; here it decides rendering order: a menu written
-  `b, 10, 9, a` is rendered `9, 10, b, a`, and `check` is silent.
-  > OPEN (for the owner, decisions.md, D): the `KEYED` marker carries the
-  > keys in the written order
-  > (recommended; a change to phase 1's emit and to `@reactogenic/core`, so a
-  > task of its own in plan.md, before the docs site is written). The
-  > alternative — the transpiler rejects integer-like keys where order
-  > matters — is not one: the transpiler is syntactic, and knows neither
-  > which container iterates a slot nor the value of `key={expr}`.
+- (Gone: a keyed slot did not keep the written order for integer-like keys —
+  a menu written `b, 10, 9, a` was rendered `9, 10, b, a`. Ruled a bug by the
+  owner (decisions.md, D) and fixed in phase 1's emit and in
+  `@reactogenic/core`: an entry's property name is its key encoded, and the
+  components iterate `slotKeys` — phase01/syntax.md, *Keyed slots*;
+  `test/site.test.ts`, "keyed slots keep the order written".)
 - A drawer left open while the window is widened stays in the top layer until
   the next click; a popover is not modal, so Tab can leave the open drawer.
 - `closedby="none"` does not stop Esc in Safari (no `closedby` there).

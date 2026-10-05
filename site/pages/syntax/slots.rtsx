@@ -18,7 +18,7 @@ interface ButtonProps {
 const TYPES = [
   { type: "Slot<P>", value: "one set of props P" },
   { type: "Slot<P, A>", value: "one set of props P, whose body is a function of the attachment's args A" },
-  { type: "KeyedSlot<P>", value: "entries by key, each a Slot<P> value" },
+  { type: "KeyedSlot<P>", value: "entries by key, in the order written, each a Slot<P> value" },
   { type: "KeyedSlot<P, A>", value: "entries by key, each a Slot<P, A> value" },
 ];
 
@@ -282,7 +282,9 @@ export default function Slots() {
       <Code label="table.rtsx">{KEYED_ATTACHMENT}</Code>
       <p>
         The slot elements of one slot carry a <code>key</code> on every element, or on none. Keys are strings or
-        numbers.
+        numbers, and the entries keep the order written — <code>key="10"</code> before <code>key="9"</code>, if
+        that is how they stand: a container that renders every entry iterates <code>slotKeys($Column)</code>,
+        never <code>Object.keys</code>.
       </p>
       <p>
         A singular function slot that the container attaches once per item is keyed by the caller, with an inline

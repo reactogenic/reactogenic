@@ -1,0 +1,11 @@
+// A segment of "/account/": `index.rtsx` mounts it by `<section #plans />`,
+// so it is no variant — an `.rtsx` file of a route directory is one only
+// when nothing mounts or imports it.
+export default function Plans() {
+  return (
+    <>
+      <h2>Plans</h2>
+      <p>Free, while the fixture lasts.</p>
+    </>
+  );
+}

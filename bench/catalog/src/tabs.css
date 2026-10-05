@@ -1,0 +1,65 @@
+@layer rg.components {
+  .bc-tabs {
+    margin: 1.5rem 0;
+
+    > [role="tablist"] {
+      display: flex;
+      gap: 0.25rem;
+      border-bottom: 1px solid var(--rg-line);
+      overflow-x: auto;
+
+      > [role="tab"] {
+        flex: none;
+        margin-bottom: -1px;
+        padding: 0.5rem 0.875rem;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--rg-muted);
+        font: inherit;
+        cursor: pointer;
+
+        &:hover {
+          color: var(--rg-fg);
+        }
+        &:focus-visible {
+          outline: var(--bc-ring);
+          outline-offset: -2px;
+        }
+        /* The selected tab: its rule and its weight, not colour alone. */
+        &[aria-selected="true"] {
+          border-bottom-color: var(--rg-accent);
+          color: var(--rg-fg);
+          font-weight: 600;
+        }
+      }
+    }
+    > [role="tabpanel"] {
+      padding-top: 1rem;
+
+      &:focus-visible {
+        outline: var(--bc-ring);
+        outline-offset: 4px;
+      }
+      > :first-child {
+        margin-top: 0;
+      }
+    }
+    &[data-variant="pills"] > [role="tablist"] {
+      display: inline-flex;
+      padding: 0.25rem;
+      border: 1px solid var(--rg-line);
+      border-radius: 999px;
+
+      > [role="tab"] {
+        margin: 0;
+        border: 0;
+        border-radius: 999px;
+
+        &[aria-selected="true"] {
+          background: var(--rg-hover);
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+// Pagination: the pages of a list, as links. The page number is in the
+// query string — in-page state of one route. A fixture
+// (bench/catalog/README.md).
+import "@reactogenic/ui/tokens.css";
+import "./tokens.css";
+import "./pagination.css";
+
+export interface PaginationProps {
+  /** The landmark's name. Default "Pagination". */
+  label?: string;
+  /** The page shown: 1…`total`. */
+  current: number;
+  total: number;
+  /** A page's link is `href` + its number: "/changelog/?page=". */
+  href: string;
+  /** Option: previous and next only, with "Page 2 of 7" between them. */
+  compact?: boolean;
+}
+
+// 1 … c−1 c c+1 … total; 0 stands for a gap.
+function numbers(current: number, total: number): number[] {
+  const shown = new Set([1, total, current - 1, current, current + 1]);
+  const out: number[] = [];
+  for (let page = 1; page <= total; page++) {
+    if (shown.has(page)) {
+      out.push(page);
+    } else if (out.at(-1) !== 0) {
+      out.push(0);
+    }
+  }
+  return out;
+}
+
+// A step that leads nowhere is HTML's placeholder link: `<a>` without `href`.
+function Step({ part, rel, to, children }: { part: "prev" | "next"; rel: "prev" | "next"; to: string | undefined; children: string }) {
+  return (
+    <li>
+      {to !== undefined ? <a data-part={part} rel href={to}>{children}</a> : <a data-part={part} aria-disabled="true">{children}</a>}
+    </li>
+  );
+}
+
+export function Pagination({ label = "Pagination", current, total, href, compact }: PaginationProps) {
+  return (
+    <nav className="bc-pagination" aria-label={label} data-variant={compact ? "compact" : undefined}>
+      <ul>
+        <Step part="prev" rel="prev" to={current > 1 ? href + (current - 1) : undefined}>Previous</Step>
+        {compact ? (
+          <li><span data-part="status">Page {current} of {total}</span></li>
+        ) : (
+          numbers(current, total).map((page, index) => (
+            <li key={index}>
+              {page === 0 ? <span data-part="gap" aria-hidden="true">…</span> : <a href={href + page} aria-current={page === current ? "page" : undefined}>{page}</a>}
+            </li>
+          ))
+        )}
+        <Step part="next" rel="next" to={current < total ? href + (current + 1) : undefined}>Next</Step>
+      </ul>
+    </nav>
+  );
+}

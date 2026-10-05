@@ -1,0 +1,19 @@
+/* The catalog's own tokens, beside the design system's (`--rg-*`,
+   @reactogenic/ui/tokens.css — which declares the order of the layers, and
+   which every component imports first). A fixture: bench/catalog/README.md. */
+@layer rg.base {
+  :root {
+    --bc-surface: light-dark(#fafafa, #1f1f23);
+    --bc-info: light-dark(#1d4ed8, #93c5fd);
+    --bc-info-bg: light-dark(#eff6ff, #172554);
+    --bc-success: light-dark(#15803d, #86efac);
+    --bc-success-bg: light-dark(#f0fdf4, #052e16);
+    --bc-warning: light-dark(#a16207, #fde047);
+    --bc-warning-bg: light-dark(#fefce8, #422006);
+    --bc-danger: light-dark(#b91c1c, #fca5a5);
+    --bc-danger-bg: light-dark(#fef2f2, #450a0a);
+    --bc-shadow: 0 1px 2px #0001, 0 6px 20px #0001;
+    --bc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --bc-ring: 2px solid var(--rg-accent);
+  }
+}

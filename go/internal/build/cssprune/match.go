@@ -17,14 +17,50 @@ const (
 	yes
 )
 
-// dynamic reports whether an attribute is runtime state: a selector on it
-// never decides anything (builder.md, CSS; components.md, CSS convention).
+// dynamic reports whether an attribute is runtime state whoever could write
+// it: one the browser writes by itself, with no script — so a selector on it
+// never decides anything (builder.md, CSS, *Runtime state*).
+//
+//   - `open`: a `<details>` the reader opens (and those of its `name` the
+//     browser closes for it, and one that find-in-page opens); a `<dialog>`
+//     that a `command` button, Esc or `closedby` opens and closes.
+//   - `hidden`: `hidden="until-found"`, which find-in-page and a fragment
+//     take away.
+//   - `style`: an element with `resize` gets its `width` and `height` there
+//     when the reader drags it.
+//
+// Every other attribute is written by a script or by nobody: `inert`,
+// `disabled`, `aria-*`, `data-state` have no writer in the browser; what the
+// reader does to a control changes its state — `:checked`, `:disabled`, the
+// value — and never `checked`, `selected` or `value`, which are its defaults
+// (a reset reads them); a popover and a modal dialog reflect nothing but
+// `open`. Those are decided on the page unless the page's script names them
+// (names.attribute) — the owner's ruling on M, decisions.md. An element the
+// reader edits, where the browser writes what it likes, leaves its page
+// unpruned (pruner.page).
 func dynamic(name string) bool {
 	switch name {
-	case "open", "hidden", "inert", "disabled", "checked", "selected", "value", "style", "data-state":
+	case "open", "hidden", "style":
 		return true
 	}
-	return strings.HasPrefix(name, "aria-")
+	return false
+}
+
+// readerWrites: an attribute the browser writes on this element alone, for
+// the reader, from the element's own menu:
+//
+//   - `dir` on a text control, which the reader may turn around (HTML, *The
+//     dir attribute*: the user agent sets the attribute);
+//   - `controls` and `loop` on a `<video>` or an `<audio>`: "Show controls"
+//     and "Loop" set them and take them away.
+func readerWrites(el *html.Node, name string) bool {
+	switch name {
+	case "dir":
+		return el.Data == "input" || el.Data == "textarea"
+	case "controls", "loop":
+		return el.Data == "video" || el.Data == "audio"
+	}
+	return false
 }
 
 // The attributes whose values HTML compares case-insensitively in selectors
@@ -285,7 +321,7 @@ func (m *matcher) simple(el *html.Node, s *simple) tri {
 		}
 		return yes
 	case sAttr:
-		if dynamic(s.name) || m.script.attribute(s.name) {
+		if dynamic(s.name) || readerWrites(el, s.name) || m.script.attribute(s.name) {
 			return maybe
 		}
 		v, ok := attribute(el, s.name)
@@ -442,15 +478,29 @@ func (n *names) value(name string) bool {
 }
 
 // attribute reports whether the script names an attribute: as it is written
-// (`setAttribute("data-open")`), or as the property that reflects it —
-// `tabIndex` for tabindex, `dataset.fooBar` for data-foo-bar, `className`
-// and `classList` for class, `htmlFor` for for.
+// (`setAttribute("data-open")`, `toggleAttribute("inert")`,
+// `removeAttribute("aria-disabled")`), or as a property that reflects it
+// (builder.md, CSS, *The page's script*, the table):
+//
+//   - its own name, whatever the case and the hyphens: `disabled`, `inert`,
+//     `tabIndex` for tabindex, `readOnly`, `ariaExpanded` for aria-expanded
+//     — and `value`, `checked`, `selected`, whose properties reflect on some
+//     elements and on others do not: named is named;
+//   - `default` before it: `defaultValue`, `defaultChecked`,
+//     `defaultSelected`, `defaultMuted`;
+//   - `Element` or `Elements` after it: `ariaControlsElements`,
+//     `ariaActiveDescendantElement`, `popoverTargetElement`,
+//     `commandForElement` — setting one writes the attribute, empty;
+//   - `dataset.fooBar` for data-foo-bar: the word after `data-`;
+//   - `className` and `classList` for class, `htmlFor` for for, `relList`
+//     for rel.
 func (n *names) attribute(name string) bool {
 	if n == nil {
 		return false
 	}
-	switch name = strings.ToLower(name); {
-	case n.folded[fold(name)]:
+	name = strings.ToLower(name)
+	switch folded := fold(name); {
+	case n.folded[folded], n.folded["default"+folded], n.folded[folded+"element"], n.folded[folded+"elements"]:
 		return true
 	case name == "class":
 		return n.words["className"] || n.words["classList"]

@@ -49,7 +49,7 @@ export default function Page() {
         <$Item key="k" href="/">Eleventh</$Item>
         <$Item key="l" href="/">Last</$Item>
       </DropdownMenu>{" "}
-      {/* Known limit (components.md): integer-like keys come first, ascending — not as written. */}
+      {/* Integer-like keys: rendered as written — b, 10, 9, a (phase01/syntax.md, *Keyed slots*). */}
       <DropdownMenu id="order">
         <$Trigger>Order</$Trigger>
         <$Item key="b" href="/">b</$Item>

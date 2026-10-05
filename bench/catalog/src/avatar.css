@@ -1,0 +1,45 @@
+@layer rg.components {
+  .bc-avatar {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: var(--rg-hover);
+    color: var(--rg-fg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    overflow: hidden;
+    user-select: none;
+    vertical-align: middle;
+
+    &[data-size="sm"] {
+      width: 1.75rem;
+      height: 1.75rem;
+      font-size: 0.6875rem;
+    }
+    &[data-size="lg"] {
+      width: 4rem;
+      height: 4rem;
+      font-size: 1.25rem;
+    }
+    &[data-shape="square"] {
+      border-radius: var(--rg-radius);
+    }
+    > img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    > [data-part="initials"] {
+      letter-spacing: 0.02em;
+    }
+    /* A background is the canvas in forced colours: a border says where it is. */
+    @media (forced-colors: active) {
+      border: 1px solid;
+    }
+  }
+}

@@ -1,0 +1,92 @@
+// "/settings/": the page that uses many components — tabs over three forms,
+// text fields (one counts, one shows its password), a select, switches, the
+// profile picture, the danger zone and its confirmation, and "Saved"
+// (README.md: a fixture; the forms post nowhere).
+import { Avatar, Button, Callout, Checkbox, Dialog, Field, Select, Tabs, Toast } from "@reactogenic/bench-catalog";
+import { Layout } from "../../layout.rtsx";
+
+const BIO = "Platform engineer. I keep the deploy pipeline boring.";
+
+export default function Page() {
+  return (
+    <Layout title="Settings" description="Your Exemplar account: profile, notifications and security.">
+      <h1>Settings</h1>
+      <Tabs label="Settings">
+        <$Tab key="profile" label="Profile">
+          <form className="form" action="/settings/" method="get">
+            <div className="profile">
+              <Avatar name="Dana Whitfield" size="lg" />
+              <p><strong>Dana Whitfield</strong>Owner of 2 projects · member since March 2024</p>
+            </div>
+            <div className="form-row">
+              <Field label="Name" name="name" value="Dana Whitfield" autoComplete="name" required />
+              <Field label="Email" name="email" type="email" value="dana@whitfield.example" autoComplete="email" required hint="Deploy mails and receipts go here." />
+            </div>
+            <Field label="Website" name="url" type="url" value="whitfield.example" hint="Shown on your public profile.">
+              <$Prefix>https://</$Prefix>
+            </Field>
+            <Field label="Bio" name="bio" multiline maxLength={160} counter value={BIO} hint="A line or two. Plain text." />
+            <div className="form-row">
+              <Select label="Time zone" name="tz" value="berlin" hint="Schedules and reports use it.">
+                <$Option key="utc">UTC</$Option>
+                <$Option key="lisbon">Lisbon (UTC+1)</$Option>
+                <$Option key="berlin">Berlin (UTC+2)</$Option>
+                <$Option key="newyork">New York (UTC−4)</$Option>
+                <$Option key="sf">San Francisco (UTC−7)</$Option>
+                <$Option key="singapore">Singapore (UTC+8)</$Option>
+              </Select>
+              <Select label="Language" name="lang" value="en">
+                <$Option key="en">English</$Option>
+                <$Option key="de">Deutsch</$Option>
+                <$Option key="fr">Français</$Option>
+                <$Option key="ja" disabled>日本語 (soon)</$Option>
+              </Select>
+            </div>
+            <div className="actions">
+              <Toast tone="success">
+                <$Trigger>Save changes</$Trigger>
+                Saved. Your profile is up to date.
+              </Toast>
+              <Button href="/dashboard/" variant="ghost">Cancel</Button>
+            </div>
+          </form>
+        </$Tab>
+        <$Tab key="notifications" label="Notifications">
+          <form className="form" action="/settings/" method="get">
+            <fieldset>
+              <legend>Email me when</legend>
+              <Checkbox name="mail-failed" label="A deploy fails" hint="At most one mail per branch and hour." checked variant="switch" />
+              <Checkbox name="mail-quota" label="A quota passes 80%" checked variant="switch" />
+              <Checkbox name="mail-live" label="A deploy goes live" variant="switch" />
+              <Checkbox name="mail-digest" label="A weekly digest is ready" hint="Mondays, in your time zone." variant="switch" />
+              <Checkbox name="mail-incident" label="There is an incident in one of my regions" checked disabled variant="switch" hint="Always on for project owners." />
+            </fieldset>
+            <fieldset>
+              <legend>Also</legend>
+              <Checkbox name="news" label="Product news, a few times a year" />
+              <Checkbox name="research" label="Invitations to user research" />
+            </fieldset>
+          </form>
+        </$Tab>
+        <$Tab key="security" label="Security">
+          <form className="form" action="/settings/" method="get">
+            <Field label="Current password" name="current" type="password" autoComplete="current-password" reveal required />
+            <Field label="New password" name="new" type="password" autoComplete="new-password" reveal required hint="Twelve characters or more." error="This password was in a known breach. Choose another." />
+            <Checkbox name="signout" label="Sign out of my other sessions" checked />
+            <Callout tone="danger">
+              <$Title>Danger zone</$Title>
+              <p>Deleting the account removes its projects, their deploys and their logs. Invoices are kept for ten years, as the law asks.</p>
+              <Dialog closedby="closerequest">
+                <$Trigger>Delete account…</$Trigger>
+                <$Title>Delete the account?</$Title>
+                <p>Two projects and 1,204 deploys go with it. This cannot be undone.</p>
+                <$Action key="keep" variant="ghost">Keep the account</$Action>
+                <$Action key="delete" href="/">Delete everything</$Action>
+              </Dialog>
+            </Callout>
+          </form>
+        </$Tab>
+      </Tabs>
+    </Layout>
+  );
+}

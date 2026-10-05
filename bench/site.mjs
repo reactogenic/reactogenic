@@ -21,7 +21,8 @@
 // what each page is (HTML as rendered, its CSS, its script), the control's
 // script split into its behaviours and its pathname table, the default
 // against the control page by page, and the thresholds this script can
-// decide: T1, T2, T3, T5, T6, T8. T4 is delta.mjs's, T7 verify.mjs's.
+// decide: T1, T2, T3, T5 (in brotli bytes), T6, T8. T4 is delta.mjs's, T7
+// verify.mjs's.
 //
 // The output is one Markdown file (and stdout); it names no path and no
 // version of this machine, so a second run writes the same bytes. Exit
@@ -35,7 +36,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, relative, resolve } from "node:path";
-import { BUILDS, PAGES, binary, controlEntry, cssItems, cssKey, minus, mustBuild, n, options, page, percent, repo, site, size, smaller, tri } from "./lib.mjs";
+import { BUILDS, PAGES, binary, controlEntry, cssItems, cssKey, minus, mustBuild, n, options, page, percent, repo, scriptChecks, site, size, smaller, tri } from "./lib.mjs";
 
 const opts = options();
 const mdOut = resolve(opts.md ?? join(repo, "bench/results/site.md"));
@@ -109,48 +110,8 @@ const control = {
 };
 
 // ---- T1: every byte of a page's script ------------------------------------------
-// A script is the behaviours' functions and constants, then the entry: the
-// mount calls. Nothing else is a statement of its top level.
-function topLevel(js) {
-  const out = [];
-  let depth = 0, start = 0, quote = "";
-  for (let i = 0; i < js.length; i++) {
-    const c = js[i];
-    if (quote) { if (c === "\\") i++; else if (c === quote) quote = ""; continue; }
-    if (c === '"' || c === "'" || c === "`") quote = c;
-    else if (c === "{" || c === "(" || c === "[") depth++;
-    else if (c === "}" || c === ")" || c === "]") {
-      depth--;
-      // A function declaration ends at its brace: no semicolon follows it.
-      if (depth === 0 && c === "}" && js.startsWith("function ", start)) { out.push(js.slice(start, i + 1)); start = i + 1; }
-    } else if (c === ";" && depth === 0) { out.push(js.slice(start, i + 1)); start = i + 1; }
-  }
-  if (start < js.length) out.push(js.slice(start));
-  return out;
-}
-const MOUNT_CALL = /^[\w$]+\((document\.getElementById\("[^"]*"\))?\);$/;
-const RUNTIME = /react|hydrat|createElement|createRoot|customElements|innerHTML|import\(|eval\(|new Function/i;
-const t1 = PAGES.map((pathname) => {
-  const p = builds.default.pages[pathname];
-  const rows = p.entry.modules ?? [];
-  const sum = rows.reduce((a, r) => a + r.bytes, 0);
-  const entryBytes = rows.find((r) => r.path === "<entry>")?.bytes ?? 0;
-  const statements = topLevel(p.js);
-  const calls = statements.filter((s) => !s.startsWith("function ") && !s.startsWith("var "));
-  const scripts = [...p.document.matchAll(/<script\b/g)].length;
-  const handlers = [...p.html.matchAll(/<[a-z][^>]*\s(on[a-z]+)=/gi)].map((m) => m[1]);
-  const mounted = new Set((p.entry.mounts ?? []).map((m) => m.module));
-  const checks = {
-    "the rows add up to the script": sum === p.sizes.js.raw,
-    "no <runtime> row": !rows.some((r) => r.path === "<runtime>"),
-    "every row is a mounted behaviour or the entry": rows.every((r) => r.path === "<entry>" || mounted.has(r.module)),
-    "the script's only statements that run are the entry's mount calls": calls.length > 0 && calls.every((s) => MOUNT_CALL.test(s)) && Buffer.byteLength(calls.join("")) === entryBytes,
-    "one <script> in the document, the builder's": scripts === 1,
-    "no handler attribute, no javascript: URL": handlers.length === 0 && !/javascript:/i.test(p.html),
-    "nothing of React or of a runtime in the script": !RUNTIME.test(p.js),
-  };
-  return { pathname, rows, sum, entryBytes, mounts: p.entry.mounts ?? [], checks, ok: Object.values(checks).every(Boolean) };
-});
+// lib.mjs reads the script: its statements, the report's rows, the document.
+const t1 = PAGES.map((pathname) => scriptChecks(pathname, builds.default.pages[pathname]));
 
 // ---- T6: the site's source --------------------------------------------------------
 function walk(dir, out = []) {
@@ -267,15 +228,21 @@ for (const name of Object.keys(BUILDS)) {
   md += `| \`${name}\` | ${[...new Set(m.pages.map((p) => p.requests))].join(", ")} | ${tri(total)} | ${m.session.requests} | ${tri(m.session.total)} |\n`;
 }
 const sessD = measure.default.session.total, sessC = measure.control.session.total;
-md += `\nOver the session the control is **${smaller(sessC.raw, sessD.raw)} / ${smaller(sessC.gz, sessD.gz)} / ${smaller(sessC.br, sessD.br)} smaller** than the default build (raw / gzip / brotli): `;
-md += `its one sheet and one script are fetched once, and the default build's four sheets — ${PAGES.map((p) => n(D[p].sizes.css.raw)).join(", ")} B, no two the same — are each inlined in their page.\n`;
+// Which of the two transfers less over the session, and how each delivers
+// its blobs (builder.md, *Packaging*: `--inline auto`).
+const lighter = sessC.br <= sessD.br ? ["control", sessC, "default build", sessD] : ["default build", sessD, "control", sessC];
+const how = (e) => (e.delivery === "file" ? `a file, fetched once` : `inlined in each of the ${e.pages} pages`);
+const controlPage = builds.control.pages["/"].entry;
+md += `\nOver the session the ${lighter[0]} is **${smaller(lighter[1].raw, lighter[3].raw)} / ${smaller(lighter[1].gz, lighter[3].gz)} / ${smaller(lighter[1].br, lighter[3].br)} smaller** than the ${lighter[2]} (raw / gzip / brotli). `;
+md += `The control's one sheet (${n(control.css.raw)} B) is ${how(controlPage.css)}, its one script (${n(control.js.raw)} B) ${how(controlPage.js)}; `;
+md += `the default build's four sheets — ${PAGES.map((p) => n(D[p].sizes.css.raw)).join(", ")} B, no two the same — are each inlined in their page.\n`;
 
 // T1.
 md += `\n## What each page's script is (T1)\n\nThe default build. The rows are \`_rg/report.json\`'s (\`modules\`: from esbuild's metafile).\n\n`;
 md += `| Page | Script, raw | Rows of the report | Sum | Mounts |\n| --- | ---: | --- | ---: | --- |\n`;
 for (const t of t1) {
   const rows = t.rows.map((r) => `${n(r.bytes)} \`${r.path === "<entry>" ? "<entry>" : r.path.split("/").at(-1)}\``).join(" + ");
-  const mounts = t.mounts.map((m) => `\`${m.module.split("/").at(-1)}\`${m.id ? ` on \`#${m.id}\`` : ""}${m.flags ? " " + Object.entries(m.flags).map(([k, v]) => `\`${k}=${v}\``).join(" ") : ""}`).join(", ");
+  const mounts = t.mounts.map((m) => `\`${m.module.split("/").at(-1)}\`${m.id ? ` on \`#${m.id}\`` : ""}${m.flags ? " " + Object.entries(m.flags).map(([k, v]) => `\`${k}=${v}\``).join(" ") : ""}${m.data ? ` with \`${JSON.stringify(m.data)}\`` : ""}`).join(", ");
   md += `| \`${t.pathname}\` | ${n(D[t.pathname].sizes.js.raw)} | ${rows} | ${n(t.sum)} | ${mounts} |\n`;
 }
 md += `\nChecked on every page, by reading the script and the document:\n\n`;
@@ -290,9 +257,13 @@ for (const [name, hits] of Object.entries(t6)) md += `- ${name}: ${hits.length =
 md += `- the stylesheet imports of the whole site: ${cssImports.map((at) => "`" + at + "`").join(", ") || "none"}\n`;
 
 // Thresholds.
-const cssPass = cssRows.filter((r) => percent(r.d.raw, r.c.raw) >= 20);
-const cssPassBr = cssRows.filter((r) => percent(r.d.br, r.c.br) >= 20);
-const jsFail = jsRows.filter((r) => r.d.raw > 0 && percent(r.d.raw, r.c.raw) < 30);
+// T5 is decided in brotli bytes — what a page transfers (plan.md, RGP2-050;
+// the owner's ruling, decisions.md, L); raw and gzip are reported beside it.
+const UNITS = { br: "brotli", gz: "gzip", raw: "raw" };
+const cssAt = (unit) => cssRows.filter((r) => percent(r.d[unit], r.c[unit]) >= 20);
+const jsUnder = (unit) => jsRows.filter((r) => r.d.raw > 0 && percent(r.d[unit], r.c[unit]) < 30);
+const t5css = (unit) => `${cssRows.map((r) => smaller(r.d[unit], r.c[unit])).join(", ")} ${UNITS[unit]} — ${cssAt(unit).length} page${cssAt(unit).length === 1 ? "" : "s"} at 20% or more`;
+const t5js = (unit) => `${jsRows.map((r) => smaller(r.d[unit], r.c[unit])).join(", ")} ${UNITS[unit]}${jsUnder(unit).length ? ` — under 30% on ${jsUnder(unit).map((r) => "`" + r.pathname + "`").join(", ")}` : ""}`;
 const heavy = D[heaviest].sizes.js;
 const ratios = PAGES.map((p, i) => baselineRows[i].parse / D[p].sizes.js.raw);
 const worst = Math.min(...baselineRows.map((r) => r.parse)) / heavy.raw;
@@ -306,9 +277,9 @@ const thresholds = [
   { id: "T3", refutes: false, threshold: "≥ 100× below the best React build of an equivalent site (Astro + React islands + Radix: 317 KB raw)",
     measured: `JS to parse, raw, page against page: ${ratios.map((r) => Math.round(r) + "×").join(", ")}; this site's heaviest page against that build's lightest: ${Math.round(worst)}× raw, ${Math.round(worstBr)}× brotli (external JS). Another site of the same shape, built during the research`, verdict: worst >= 100 ? "pass" : "fail" },
   { id: "T4", refutes: true, threshold: "deleting the Install dialog from `/` removes its markup, its CSS rules and `invokers` from that page, and nothing else", measured: "`node bench/delta.mjs`", verdict: "not-measured" },
-  { id: "T5", refutes: false, threshold: "against the control: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one",
-    measured: `CSS: ${cssRows.map((r) => smaller(r.d.raw, r.c.raw)).join(", ")} raw — ${cssPass.length} pages at 20% or more (brotli: ${cssRows.map((r) => smaller(r.d.br, r.c.br)).join(", ")} — ${cssPassBr.length}). JS: ${jsRows.map((r) => smaller(r.d.raw, r.c.raw)).join(", ")} raw${jsFail.length ? ` — under 30% on ${jsFail.map((r) => "`" + r.pathname + "`").join(", ")}` : ""}`,
-    verdict: cssPass.length >= 2 && jsFail.length === 0 ? "pass" : "fail" },
+  { id: "T5", refutes: false, threshold: "against the control, in brotli bytes — what a page transfers; raw and gzip beside: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one",
+    measured: `CSS: ${t5css("br")} (${t5css("gz")}; ${t5css("raw")}). JS: ${t5js("br")} (${t5js("gz")}; ${t5js("raw")})`,
+    verdict: cssAt("br").length >= 2 && jsUnder("br").length === 0 ? "pass" : "fail" },
   { id: "T6", refutes: true, threshold: "no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source",
     measured: `${shipped.length} source files, ${Object.keys(t6).length} greps: ${t6ok ? "nothing found" : "found"}; one stylesheet import, in \`layout.rtsx\``, verdict: t6ok ? "pass" : "fail" },
   { id: "T7", refutes: true, threshold: "the browser checks pass on the built site", measured: "`node bench/verify.mjs`", verdict: "not-measured" },
