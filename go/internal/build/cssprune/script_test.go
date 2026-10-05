@@ -174,6 +174,7 @@ func TestPruneWithScript(t *testing.T) {
 			`function m(e){e.dataset.placement="top";e.dataset.fooBar=""}`, `[data-placement=top]{x:y}[data-foo-bar]{x:y}`},
 		{"setAttribute", `[data-x=y]{x:y}[data-v=solid]{x:y}[for=i]{x:y}[class~=q]{x:y}`,
 			`function m(e){e.setAttribute("data-x","y");e.htmlFor="i";e.classList.toggle("q")}`, `[data-x=y]{x:y}[for=i]{x:y}[class~=q]{x:y}`},
+		{"a token list that reflects an attribute", `[rel~=next]{x:y}[title=x]{x:y}`, `function m(e){e.relList.add("next")}`, `[rel~=next]{x:y}`},
 		{"a custom property it reads, an animation it names", `:root{--rg-breakpoint:48rem;--unused:1}@keyframes spin{to{x:y}}@keyframes gone{to{x:y}}`,
 			`function m(e){matchMedia("(min-width:"+getComputedStyle(e).getPropertyValue("--rg-breakpoint")+")");e.style.animation="spin 1s"}`,
 			`:root{--rg-breakpoint:48rem}@keyframes spin{to{x:y}}`},
