@@ -23,7 +23,11 @@
 //      of every page, and of its ::before, ::after, ::marker and ::backdrop,
 //      is the same in the two builds — at rest, in dark, with reduced
 //      motion, under the pointer, with keyboard focus, and with each overlay
-//      open;
+//      open. The site's behaviours write nothing to the page, so the same
+//      comparison is made on the builder's own fixture
+//      (go/internal/build/testdata/served): a page whose behaviour takes
+//      away a class, an id and an element's content — before and after it
+//      does — and a page that a document in its frame writes to;
 //   3. the validity probe of the pruner (plan.md, RGP2-050): every
 //      pseudo-class and pseudo-element `cssprune` takes for known to every
 //      browser of the floor, and the `:nth-*()` forms it accepts, must parse
@@ -58,6 +62,12 @@ const flags = opts.inline ? ["--inline", String(opts.inline)] : [];
 const builtDir = join(work, "default"), controlDir = join(work, "control");
 mustBuild(bin, site, builtDir, flags);
 mustBuild(bin, site, controlDir, [...flags, "--no-specialize"]);
+// The builder's fixture for what a page's script does to pruning (builder.md,
+// *The page's script*), the same two ways.
+const fixture = join(repo, "go/internal/build/testdata/served");
+const fixtureDir = join(work, "fixture"), fixtureControlDir = join(work, "fixture-control");
+mustBuild(bin, fixture, fixtureDir, flags);
+mustBuild(bin, fixture, fixtureControlDir, [...flags, "--no-specialize"]);
 
 const require = createRequire(join(repo, "packages/ui/package.json"));
 const pw = await import(pathToFileURL(require.resolve("playwright")).href).then((m) => m.default ?? m);
@@ -502,6 +512,35 @@ for (const engineName of engineList) {
     await context.close();
   }
 
+  // ---- what a page's script takes away, and what a frame writes ----
+  // The docs site cannot show it: its behaviours write nothing. The fixture's
+  // `/toggle/` has a behaviour that, on a click, toggles a class off, removes
+  // one, writes an id over and sets a text over an element — four rules that
+  // match nothing in the page as written match then (`.card:not(.collapsed)
+  // > .body`, …), and must be in its sheet. Its `/frame/` holds a document of
+  // the site, whose script gives the page's body a class.
+  {
+    const pruned = await serve(fixtureDir), whole = await serve(fixtureControlDir);
+    const context = await browser.newContext({ viewport: { width: WIDE, height: 800 } });
+    const page = await context.newPage(), other = await context.newPage();
+    const orders = (p, selectors) => p.evaluate((selectors) => selectors.map((s) => { const el = document.querySelector(s); return el ? getComputedStyle(el).order : "none"; }), selectors);
+    await page.goto(pruned.origin + "/toggle/"); await other.goto(whole.origin + "/toggle/");
+    await compare("", "the fixture's /toggle/, as loaded", page, other);
+    const TAKEN = ["#c9 > .body", "#c9", "#c9 > .label", "#c9 > .status"];
+    const before = await orders(other, TAKEN);
+    await page.click("#c9"); await other.click("#c9");
+    await compare("", "the fixture's /toggle/, after its behaviour took a class, an id and an element away", page, other);
+    const after = await orders(other, TAKEN);
+    check("", "(the click makes four rules match that matched nothing: the comparison can fail)", before.join() === "0,0,0,0" && after.join() === "16,17,18,19", JSON.stringify({ before, after }));
+    await page.goto(pruned.origin + "/frame/"); await other.goto(whole.origin + "/frame/");
+    for (const p of [page, other]) await p.waitForFunction(() => document.body.classList.contains("never"), null, { timeout: 5000 }).catch(() => {});
+    await compare("", "the fixture's /frame/, written to by the document in its frame", page, other);
+    const lit = await orders(page, ["body"]);
+    check("", "(the frame's script gave the body a class, and its rule is in the page's sheet)", lit.join() === "15", JSON.stringify(lit));
+    await context.close();
+    pruned.close(); whole.close();
+  }
+
   // ---- the dialogs where the engine has no `command`: the invokers behaviour ----
   {
     const context = await browser.newContext({ viewport: { width: WIDE, height: 800 } });
@@ -588,7 +627,7 @@ for (const engineName of engineList) {
 // ---- the report --------------------------------------------------------------------
 const count = (s, e) => results.filter((r) => r.state === s && (!e || r.engine === e)).length;
 const engines = [...new Set(results.map((r) => r.engine))];
-let md = `# The built site in a browser\n\nWritten by \`node bench/verify.mjs${opts.inline ? " --inline " + opts.inline : ""}\` (specs/phase02/plan.md, RGP2-050, T7). The site as \`reactogenic build${flags.length ? " " + flags.join(" ") : ""}\` writes it, and the control (\`--no-specialize\`), served over HTTP; every page at ${WIDE} and ${NARROW} px.\n\n`;
+let md = `# The built site in a browser\n\nWritten by \`node bench/verify.mjs${opts.inline ? " --inline " + opts.inline : ""}\` (specs/phase02/plan.md, RGP2-050, T7). The site as \`reactogenic build${flags.length ? " " + flags.join(" ") : ""}\` writes it, and the control (\`--no-specialize\`), served over HTTP; every page at ${WIDE} and ${NARROW} px. With it the builder's fixture for what a page's script takes away (\`go/internal/build/testdata/served\`: \`/toggle/\`, \`/frame/\`), built the same two ways — the site's own behaviours write nothing to the page.\n\n`;
 md += `| Engine | Passed | Known | Failed |\n| --- | ---: | ---: | ---: |\n`;
 for (const e of engines) md += `| ${e} | ${count("ok", e)} | ${count("known", e)} | ${count("FAIL", e)} |\n`;
 const styles = results.filter((r) => r.name.startsWith("styles, "));

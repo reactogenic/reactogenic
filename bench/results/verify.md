@@ -1,13 +1,13 @@
 # The built site in a browser
 
-Written by `node bench/verify.mjs` (specs/phase02/plan.md, RGP2-050, T7). The site as `reactogenic build` writes it, and the control (`--no-specialize`), served over HTTP; every page at 1200 and 400 px.
+Written by `node bench/verify.mjs` (specs/phase02/plan.md, RGP2-050, T7). The site as `reactogenic build` writes it, and the control (`--no-specialize`), served over HTTP; every page at 1200 and 400 px. With it the builder's fixture for what a page's script takes away (`go/internal/build/testdata/served`: `/toggle/`, `/frame/`), built the same two ways — the site's own behaviours write nothing to the page.
 
 | Engine | Passed | Known | Failed |
 | --- | ---: | ---: | ---: |
-| chromium 153.0.8010.12 | 348 | 0 | 0 |
-| webkit 26.6 | 340 | 8 | 0 |
+| chromium 153.0.8010.12 | 353 | 0 | 0 |
+| webkit 26.6 | 345 | 8 | 0 |
 
-Of those, 248 are comparisons of computed styles between the two builds (248 equal): 2,363 elements and pseudo-elements each on average, custom properties included.
+Of those, 254 are comparisons of computed styles between the two builds (254 equal): 2,309 elements and pseudo-elements each on average, custom properties included.
 
 | Check | chromium 153.0.8010.12 | webkit 26.6 |
 | --- | --- | --- |
@@ -91,6 +91,11 @@ Of those, 248 are comparisons of computed styles between the two builds (248 equ
 | styles, drawer open, hover on a link: the two builds are equal | 3 of 3 | 3 of 3 |
 | a link of the drawer into this page closes the drawer | 3 of 3 | 3 of 3 |
 | the comparison: a build against itself is equal, and with one rule taken out of one page it is not | 1 of 1 | 1 of 1 |
+| styles, the fixture's /toggle/, as loaded: the two builds are equal | 1 of 1 | 1 of 1 |
+| styles, the fixture's /toggle/, after its behaviour took a class, an id and an element away: the two builds are equal | 1 of 1 | 1 of 1 |
+| (the click makes four rules match that matched nothing: the comparison can fail) | 1 of 1 | 1 of 1 |
+| styles, the fixture's /frame/, written to by the document in its frame: the two builds are equal | 1 of 1 | 1 of 1 |
+| (the frame's script gave the body a class, and its rule is in the page's sheet) | 1 of 1 | 1 of 1 |
 | without the engine's `command`, the page's script opens the Install dialog | 1 of 1 | 1 of 1 |
 | … and closes it | 1 of 1 | 1 of 1 |
 | … and the menu's item opens the cheat sheet | 1 of 1 | 1 of 1 |
