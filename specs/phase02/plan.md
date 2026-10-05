@@ -654,7 +654,7 @@ The result, with the tables, is written to `specs/phase02/bet.md`.
   | T4 | the *Install* dialog deleted from `/`: 1,070 B of markup in one span, 14 selectors that name `.rg-dialog`, `invokers`; the other pages the same bytes | pass |
   | T5 | CSS 22.8% and 23.2% raw on two pages (15.9%, 16.3% brotli); JS 12.1% on `/syntax/`, which mounts everything the site has | **fail** |
   | T6 | 21 source files; nothing found | pass |
-  | T7 | 688 checks pass, 8 known, none fails: Chromium 153, WebKit 26.6 | pass |
+  | T7 | 698 checks pass, 8 known, none fails: Chromium 153, WebKit 26.6 (688 of the site, 10 of the pruner's fixture) | pass |
   | T8 | 2 requests per page: the document and the favicon | pass |
 
   - Four builds, not three: `--inline never` too — the default's blobs as
@@ -669,11 +669,24 @@ The result, with the tables, is written to `specs/phase02/bet.md`.
   - The validity probe: each of the 119 selectors `cssprune` takes for
     known — its three tables of names, and 16 forms of each `:nth-*()` —
     parses in Chromium 153 and WebKit 26.6. No name leaves the table.
-  - The computed-style comparison: 248, all equal — at rest, dark, reduced
-    motion, hover, keyboard focus, each overlay open — and it sees a rule
-    taken out of one page.
+  - The computed-style comparison: 248 of the site, all equal — at rest,
+    dark, reduced motion, hover, keyboard focus, each overlay open — and it
+    sees a rule taken out of one page.
   - Corrected on the way: builder.md's "gzip: 0–5 B above `gzip -9`" (from
-    76 B below to 3 B above, on the docs site).
+    76 B below to 3 B above, on the docs site) — and, with the final round,
+    the comment in `bytes.go` that still said "a few bytes more".
+  - **Measured again on `rgp2-final`**, after the review's fixes to the
+    pruner (RGP2-020): `site.mjs` and `delta.mjs` write the same bytes as
+    before — the site's behaviours write nothing, so nothing of it was
+    wrongly dropped, and nothing is kept now that went before. No verdict
+    changes. `verify.mjs` gained the comparison the site cannot make: the
+    `served` fixture's `/toggle/`, as loaded and after its behaviour took a
+    class, an id and an element away, and its `/frame/` — 6 comparisons
+    and 4 checks that they can fail, all passing; with the pruner as it
+    was, the frame's fail.
+  - Found by the same measurement, and the owner's (decisions.md, M): 301 B
+    of each page's sheet are rules for a state no element of the page can
+    reach.
   - **Not run:** Firefox — the checks and the probe; Safari proper; the
     floor's versions (Chrome 135, Firefox 147, Safari 26.2); a touch
     device; Windows; `--base` (the site's own suite builds under one);

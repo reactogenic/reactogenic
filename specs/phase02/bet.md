@@ -1,8 +1,13 @@
 # The bet, measured
 
 RGP2-050 ([plan.md](plan.md)). The numbers are of 2026-10-05, on the tree
-that has the builder, the components and the docs site together
-(`rgp2-integrate`, afc30d7).
+that has the builder, the components and the docs site together — measured
+on `rgp2-integrate` (afc30d7), and **again on `rgp2-final`**, after the
+review of that tree changed the pruner (plan.md, RGP2-020: the page's script
+is asked before the page; a frame; `classList.remove`). `site.mjs` and
+`delta.mjs` wrote the same bytes both times: no byte of the docs site moved,
+and no verdict below did. `verify.mjs` has ten checks more — the pruner's
+fixture, for what the site cannot show.
 
 **Verdict: undecided.** Every threshold that could refute the bet holds.
 One that could not, T5 — the one that isolates what component awareness
@@ -131,7 +136,7 @@ for scale only:
 | T4 precision (refutes) | deleting the *Install* dialog from `/` removes its markup, the CSS rules only it matched and `invokers` from that page, nothing else; every other page the same bytes | HTML: one span of 1,070 B cut out — the trigger and the `<dialog>`, whole — every other byte where it was. CSS: −1,752 B, 14 selectors, each naming `.rg-dialog`; none came; none that stays names what left. JS: 563 → 252, `invokers` left, `overlays` the same bytes; the script is now `/guide/`'s. The other three documents: the same bytes, under `--inline always` and as the site ships | **pass** |
 | T5 awareness | against the control: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | CSS: 22.8% and 23.2% raw on two pages — 15.9% and 16.3% in brotli. JS: 12.1% on `/syntax/`, 0.0% against the control's behaviours alone | **fail** |
 | T6 authoring (refutes) | no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source | 21 source files: `.rtsx`, one `.css`, `.json`, `.md`, `.svg`. No `<script>`, `<style>`, stylesheet link, `style` attribute, handler, `mount(`, import of a behaviour or `dangerouslySetInnerHTML` outside the code samples the pages show; one stylesheet import in the whole site, `layout.rtsx:8`. `site/test/browser.mjs` is JS: a test of the built site, not built into it | **pass** |
-| T7 behaviour (refutes) | the browser checks pass on the built site | 688 passed, 8 known, 0 failed: Chromium 348; WebKit 340 and 8 known (below) | **pass** |
+| T7 behaviour (refutes) | the browser checks pass on the built site | 698 passed, 8 known, 0 failed: Chromium 353; WebKit 345 and 8 known (below). 688 of them are of the site; 10 of the pruner's fixture, which the threshold does not ask for | **pass** |
 | T8 requests | ≤ 3 per page, cold | 2: the document and the favicon. (`--inline never`: 4) | **pass** |
 
 **T5, as read.** plan.md gave no unit; it is read in raw bytes, as T2 and
@@ -167,19 +172,30 @@ from the page cache with nothing open — and the same page without its
 script comes back with it open.
 
 - **Computed styles**, the default build against the control: 248
-  comparisons (124 per engine), every element and its `::before`,
-  `::after`, `::marker`, `::backdrop`, 2,363 on average — at rest, dark,
-  with reduced motion, under the pointer (a link, a button, a menu item, a
-  summary, the dialog's close button), with keyboard focus, and with the
-  links menu, the drawer, each dialog and the action menu open. All equal.
-  The comparison is checked against itself: one matching rule taken out of
-  one page is seen.
+  comparisons of the site (124 per engine), every element and its
+  `::before`, `::after`, `::marker`, `::backdrop`, 2,363 on average — at
+  rest, dark, with reduced motion, under the pointer (a link, a button, a
+  menu item, a summary, the dialog's close button), with keyboard focus,
+  and with the links menu, the drawer, each dialog and the action menu
+  open. All equal. The comparison is checked against itself: one matching
+  rule taken out of one page is seen.
+- **What the site cannot show.** Its three behaviours write nothing to the
+  page, so no state of it has a class taken away or an element gone — and
+  that is where the review found the pruner wrong: `.card:not(.collapsed)`
+  was dropped for a card that is collapsed as it loads, and matched after
+  `classList.toggle`. So the same comparison runs on the builder's own
+  fixture (`go/internal/build/testdata/served`), 6 more (3 per engine):
+  `/toggle/` as loaded and after a click that toggles a class off, removes
+  one, writes an id over and sets a text over an element — four rules match
+  then that matched nothing — and `/frame/`, whose body gets a class from
+  the document in its `<iframe>`. All equal; with the pruner as it was, the
+  frame's is not.
 - **The probe** of the pruner's tables (`cssprune/selector.go`): each of
   119 selectors — 40 pseudo-classes, 11 pseudo-elements, the four legacy
   one-colon forms, 16 forms of each of the four `:nth-*()` names — is one
   rule in `SEL, p {}` in both engines. No name leaves the table.
 - **Another packaging**: `node bench/verify.mjs --inline never` — every
-  blob a file — gives the same 688, 8 and 0.
+  blob a file — gives the same 698, 8 and 0.
 - **Known**, 8, all WebKit: a dialog opened by a click leaves focus on
   `<body>` when it closes (2; components.md, *Known limits*); Playwright's
   WebKit has no page cache, so Back restores nothing (6).
@@ -193,7 +209,10 @@ script comes back with it open.
    exactly its markup, its selectors and its behaviour with it, and touches
    no other page.
 3. **The pruned build looks and behaves as the unpruned one** (T7), in two
-   engines, in every state that was tried.
+   engines, in every state that was tried. On this site that is a weaker
+   statement than it reads: its behaviours write nothing, and the pruner
+   was wrong exactly where one does (above; fixed, and tried on the
+   fixture).
 
 ## What component awareness itself added
 
@@ -228,6 +247,12 @@ without the per-page decisions. Against it:
   output to the byte. Nothing is done to it.
 - **Unused CSS at the site's level**: 3 of 94 selectors match nothing on
   any page.
+- **State nobody can reach**: every page's sheet has 301 B (raw) of rules
+  for a disabled button, a disabled menu item and a menu's current item —
+  `.rg-button:is(:disabled,[aria-disabled=true])` and two more — though no
+  page has such an element and no behaviour makes one. Runtime state is
+  "maybe" by rule, whoever could write it (builder.md, *CSS*; decisions.md,
+  M). 3–4% of a sheet.
 
 ## What the measurement does not show
 
@@ -249,6 +274,10 @@ without the per-page decisions. Against it:
   components where a page uses 3–5 — where per-page precision should
   matter, and where the control's sheet and table grow with the site — was
   not built.
+- **That pruning is sound for any behaviour.** For the three of the design
+  system, and for the fixture's one that toggles, removes and rewrites by
+  name. A behaviour that computes the name it writes (`"is-" + state`) is
+  outside the contract and is not seen (builder.md, *The page's script*).
 - **Time.** No CPU, parse or paint measurement: bytes and requests only.
 - **A real network.** A local server; each file compressed on its own; no
   header, connection or CDN cost.
@@ -270,4 +299,7 @@ this site; a hand-written floor of this site.
 | T5 | its JS half cannot hold on a page that mounts everything; its unit was not given. decisions.md, L |
 | builder.md, *The report* | "gzip: 0–5 B above `gzip -9`" was measured on small files. On the docs site Go's `compress/gzip` is from 76 B below to 3 B above zlib's, under 1%: corrected |
 | research.md | "CSS 39–76% of the one-bundle file per page": 77–97% here |
+| the pruner, by the review of this tree | the page was asked before its script: a class or an id the page has was "yes" though the script takes it away (`:not(.collapsed)` dropped, and matching after a click); `textContent` set over an element (`:not(:has(b))`); a document of the site in an `<iframe>` writing to a pruned page; `classList.remove` leaving its page unpruned. Fixed (plan.md, RGP2-020), with no byte of the docs site changed: its behaviours write nothing |
+| the pruner's precision | state rules stay on pages where nothing can reach the state: 301 B a page. As specified; decisions.md, M |
+| `bytes.go` | its comment on the report's gzip still said "a few bytes more" than `gzip -9`: from 76 B fewer to 3 B more, as builder.md has it. Corrected |
 | Safari's Tab | stops at neither links nor buttons by default (Option-Tab does): at 400 px, with the drawer closed, Tab reaches nothing on these pages. The engine's and the system's, as for every site; `verify.mjs` presses Option-Tab in WebKit |

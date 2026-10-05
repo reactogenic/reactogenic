@@ -589,6 +589,18 @@ order (the JS it makes of them is thrown away).
 What is kept is kept byte for byte, in order: nothing is rewritten, so the
 result can be minified again.
 
+> OPEN (for the owner, decisions.md, M): runtime state is "maybe" whoever
+> could write it — also on a page where nothing can. Every sheet of the docs
+> site keeps 301 B of `:is(:disabled,[aria-disabled=true])` and
+> `[aria-current]` rules for elements no page has (bet.md). The list above
+> was written before the pruner read the page's script; `aria-*` and the
+> other attributes only a script writes could be decided as any attribute
+> is, unless the script names them. Recommended: as now — 3–4% of a sheet
+> against a rule that is one line. Not a matter of the list: the arguments
+> of `:is()` are never trimmed (the row above), so on `/guide/`
+> `.rg-menu>:is(a,button)` stays inside `:is(…)` where it went from its own
+> list — an `:is()` has the specificity of its arguments, matched or not.
+
 **Lists.** One selector a browser cannot parse makes it drop the whole rule,
 so trimming a list around such a selector would bring a dead rule to life
 there:
