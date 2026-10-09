@@ -12,7 +12,7 @@
     text-decoration: none;
     cursor: pointer;
 
-    &[data-variant="ghost"] {
+    &.rg-button-ghost {
       border-color: transparent;
       background: none;
     }

@@ -30,7 +30,7 @@
         text-align: start;
         vertical-align: top;
 
-        &[data-align="end"] {
+        &.bc-table-end {
           text-align: end;
         }
       }
@@ -55,17 +55,17 @@
         }
       }
     }
-    &[data-density="compact"] > table > :is(thead, tbody) > tr > :is(th, td) {
+    &.bc-table-compact > table > :is(thead, tbody) > tr > :is(th, td) {
       padding: 0.4rem 0.75rem;
     }
-    &[data-striped] > table > tbody > tr:nth-child(even) {
+    &.bc-table-striped > table > tbody > tr:nth-child(even) {
       background: var(--bc-surface);
     }
     /* The header stays while the page scrolls, under the page's own sticky
        header — where the table fits: a sticky cell sticks to its nearest
        scroller, so the box must not be one, and on a narrow screen it is. */
     @media (width >= 64rem) {
-      &[data-sticky] {
+      &.bc-table-sticky {
         overflow: visible;
 
         > table > thead > tr > th {

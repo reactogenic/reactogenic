@@ -1,5 +1,6 @@
 // Avatar: a person — a picture, or the initials of the name. A fixture
 // (bench/catalog/README.md).
+import { variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./avatar.css";
@@ -9,9 +10,9 @@ export interface AvatarProps {
   name: string;
   /** A picture; without one, the initials. */
   src?: string;
-  /** Option: `data-size`. Default "md". */
+  /** Option: a class of its own per value. Default "md". */
   size?: "sm" | "md" | "lg";
-  /** Option: `data-shape`. Default "circle". */
+  /** Option: a class of its own per value. Default "circle". */
   shape?: "circle" | "square";
 }
 
@@ -22,9 +23,16 @@ function initials(name: string): string {
   return letters.toUpperCase();
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const avatarVariants = {
+  size: { sm: "bc-avatar-sm", md: "", lg: "bc-avatar-lg" },
+  shape: { circle: "", square: "bc-avatar-square" },
+} as const;
+
 export function Avatar({ name, src, size, shape }: AvatarProps) {
   return (
-    <span className="bc-avatar" role="img" aria-label={name} data-size={size === "md" ? undefined : size} data-shape={shape === "circle" ? undefined : shape}>
+    <span className={variants("bc-avatar", avatarVariants, { size, shape })} role="img" aria-label={name}>
       {src !== undefined ? <img src alt="" /> : <span data-part="initials" aria-hidden="true">{initials(name)}</span>}
     </span>
   );

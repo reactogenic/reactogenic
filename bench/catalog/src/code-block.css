@@ -57,12 +57,12 @@
         font: inherit;
       }
     }
-    &[data-wrap] > pre {
+    &.bc-code-wrap > pre {
       overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
     /* Numbered lines: a counter, so that a copy of the text has no numbers. */
-    &[data-lines] > pre > code {
+    &.bc-code-lines > pre > code {
       counter-reset: bc-line;
 
       > [data-part="line"]::before {

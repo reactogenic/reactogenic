@@ -2,7 +2,7 @@
 // `href`. Its behaviour is declarative — a link, a command on a dialog, a
 // popover's target — so it is legal shell code: no handlers.
 import type { ButtonHTMLAttributes } from "react";
-import { mount } from "@reactogenic/core";
+import { mount, variants } from "@reactogenic/core";
 import "./tokens.css";
 import "./button.css";
 
@@ -21,7 +21,7 @@ type Html = ButtonHTMLAttributes<HTMLButtonElement>;
 
 /** What a button, a link and a trigger share. */
 interface ButtonCommonProps extends Pick<Html, "id" | "disabled" | "aria-label" | "aria-current" | "children"> {
-  /** Option: `data-variant` on the element. */
+  /** Option: a class of its own for a variant that is not the default (`rg-button-ghost`). */
   variant?: "solid" | "ghost";
 }
 
@@ -58,16 +58,19 @@ export interface TriggerProps extends ButtonCommonProps {
   "aria-haspopup"?: undefined;
 }
 
+// A variant resolves into one class of its own (components.md, *CSS
+// convention*): its rule stays on exactly the pages with an element that
+// has it. The default has none: `.rg-button` is its look.
+const buttonVariants = { variant: { solid: "", ghost: "rg-button-ghost" } } as const;
+
 export function Button({ variant, children, ...rest }: ButtonProps) {
-  // Only a variant that differs from the default is in the HTML.
-  const dataVariant = variant === "ghost" ? variant : undefined;
+  const className = variants("rg-button", buttonVariants, { variant });
   if (rest.href !== undefined) {
     // A disabled link is HTML's placeholder link — `<a>` without `href`: not
     // focusable, not a link — and says so to assistive technology.
     return (
       <a
-        className="rg-button"
-        data-variant={dataVariant}
+        className
         id={rest.id}
         href={rest.disabled ? undefined : rest.href}
         aria-disabled={rest.disabled ? "true" : undefined}
@@ -83,7 +86,7 @@ export function Button({ variant, children, ...rest }: ButtonProps) {
     mount("@reactogenic/ui/behaviors/invokers");
   }
   return (
-    <button type="button" className="rg-button" data-variant={dataVariant} {...rest}>
+    <button type="button" className {...rest}>
       {children}
     </button>
   );

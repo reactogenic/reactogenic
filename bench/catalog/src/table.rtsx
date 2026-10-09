@@ -2,13 +2,13 @@
 // key; it scrolls sideways in its own box. A fixture
 // (bench/catalog/README.md).
 import type { ReactNode } from "react";
-import { Each, slotEntry, slotKeys, type KeyedSlot } from "@reactogenic/core";
+import { Each, slotEntry, slotKeys, variants, type KeyedSlot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./table.css";
 
 export interface TableColumnProps {
-  /** Option: `data-align` on the column's cells. Default "start". */
+  /** Option: a class of its own per value on the column's cells. Default "start". */
   align?: "start" | "end";
   /** The header. */
   children?: ReactNode;
@@ -17,7 +17,7 @@ export interface TableColumnProps {
 export interface TableProps {
   /** The table's name: its `<caption>`, and the scrolling region's label. */
   caption: string;
-  /** Option: `data-density`. Default "comfortable". */
+  /** Option: a class of its own per value. Default "comfortable". */
   density?: "comfortable" | "compact";
   /** Option: every other row is tinted. */
   striped?: boolean;
@@ -31,8 +31,19 @@ export interface TableProps {
   rows: readonly Readonly<Record<string, ReactNode>>[];
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const tableVariants = {
+  density: { comfortable: "", compact: "bc-table-compact" },
+  striped: { on: "bc-table-striped" },
+  sticky: { on: "bc-table-sticky" },
+} as const;
+// A column's option is on its cells, which have no class but this one.
+const cellVariants = { align: { start: "", end: "bc-table-end" } } as const;
+const cell = (align: TableColumnProps["align"]) => variants("", cellVariants, { align }) || undefined;
+
 function Head({ align, children }: TableColumnProps) {
-  return <th scope="col" data-align={align === "end" ? align : undefined}>{children}</th>;
+  return <th scope="col" className={cell(align)}>{children}</th>;
 }
 
 export function Table({ caption, density, striped, sticky, rowHeader, $Column, rows }: TableProps) {
@@ -40,13 +51,10 @@ export function Table({ caption, density, striped, sticky, rowHeader, $Column, r
   return (
     // A box that scrolls must be reachable by keyboard: a named region with a tab stop.
     <div
-      className="bc-table"
+      className={variants("bc-table", tableVariants, { density, striped: striped ? "on" : undefined, sticky: sticky ? "on" : undefined })}
       role="region"
       aria-label={caption}
       tabIndex={0}
-      data-density={density === "compact" ? density : undefined}
-      data-striped={striped ? "" : undefined}
-      data-sticky={sticky ? "" : undefined}
     >
       <table>
         <caption>{caption}</caption>
@@ -61,11 +69,11 @@ export function Table({ caption, density, striped, sticky, rowHeader, $Column, r
           {rows.map((row, index) => (
             <tr key={index}>
               {keys.map((key) => {
-                const align = slotEntry($Column, key)!.align === "end" ? "end" : undefined;
+                const className = cell(slotEntry($Column, key)!.align);
                 return key === rowHeader ? (
-                  <th key={key} scope="row" data-align={align}>{row[key]}</th>
+                  <th key={key} scope="row" className>{row[key]}</th>
                 ) : (
-                  <td key={key} data-align={align}>{row[key]}</td>
+                  <td key={key} className>{row[key]}</td>
                 );
               })}
             </tr>

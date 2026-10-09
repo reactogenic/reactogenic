@@ -344,8 +344,8 @@ pages/guide/index.rtsx: error link-not-found: Page /guide/: `href="/guide/instal
 pages/guide/index.rtsx: error idref-not-found: Page /guide/: `commandfor="install"` on `<button>` names no element of the page
 ```
 
-**`--report`** prints what `_rg/report.json` holds — for every page, why
-each byte is there:
+**`--report`** prints what `_rg/report.json` holds — for every page, what
+it needs and why each byte is there, and what it fetches:
 
 ```
 /  pages/index.rtsx
@@ -354,7 +354,9 @@ each byte is there:
   CSS            2533      965   inline
   JS              563      328   inline
   document       3967     1608   index.html
+  fetches        3967     1608   1 request: what the page needs, and no more
   components Action ×1, Button ×2, Dialog ×1, Each ×1, Layout ×1, Page ×1
+  classes    Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/invokers
   JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
@@ -373,6 +375,7 @@ each byte is there:
   CSS              79       93   inline
   JS                -        -   none
   document        332      243   guide/index.html
+  fetches         332      243   1 request: what the page needs, and no more
   components Layout ×1, Page ×1
   CSS rules    2 kept,   1 dropped  site.css
 ```

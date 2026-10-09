@@ -1,7 +1,7 @@
 // RGP2-012: both sides of the build-time protocol (specs/phase02/plan.md, M1).
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { mount, pathname, useShellId, type ShellBuild } from "./index.ts";
+import { mount, pathname, useShellId, variants, type ShellBuild } from "./index.ts";
 
 const host = globalThis as { __reactogenic_build?: ShellBuild };
 
@@ -9,6 +9,7 @@ const host = globalThis as { __reactogenic_build?: ShellBuild };
 function standIn(path: string) {
   const counters = new Map<string, number>();
   const mounts: unknown[][] = [];
+  resolved.length = 0;
   host.__reactogenic_build = {
     pathname: path,
     id(prefix) {
@@ -19,9 +20,17 @@ function standIn(path: string) {
     mount(...call) {
       mounts.push(call);
     },
+    classes(names) {
+      resolved.push([...names]);
+    },
   };
   return mounts;
 }
+
+// What `variants()` reported to the stand-in, call by call.
+const resolved: string[][] = [];
+
+const buttonVariants = { size: { sm: "rg-button-sm", md: "", lg: "rg-button-lg" }, look: { ghost: "rg-button-ghost" } } as const;
 
 function Ids({ prefix }: { prefix?: string }) {
   return <i id={useShellId(prefix)} />;
@@ -83,9 +92,44 @@ describe("at build time", () => {
     };
     expect(() => mount("@reactogenic/ui/behaviors/overlays", undefined, undefined, { typeahead: true })).toThrow("mount-data");
   });
+
+  test("variants: the base, then the class of each chosen value, in the map's order", () => {
+    standIn("/");
+    expect(variants("rg-button", buttonVariants, { look: "ghost", size: "sm" })).toBe("rg-button rg-button-sm rg-button-ghost");
+    expect(variants("rg-button", buttonVariants, { size: "lg" })).toBe("rg-button rg-button-lg");
+    // No choice, `undefined`, and a value without a class of its own add nothing.
+    expect(variants("rg-button", buttonVariants)).toBe("rg-button");
+    expect(variants("rg-button", buttonVariants, { size: undefined, look: undefined })).toBe("rg-button");
+    expect(variants("rg-button", buttonVariants, { size: "md" })).toBe("rg-button");
+    expect(variants("", buttonVariants, { look: "ghost" })).toBe("rg-button-ghost");
+    // What the types refuse adds nothing either: no class is made up.
+    expect(variants("rg-button", buttonVariants, { size: "toString" } as never)).toBe("rg-button");
+    expect(variants("rg-button", buttonVariants, { colour: "red" } as never)).toBe("rg-button");
+  });
+
+  test("variants reports every class of its result to the builder, call by call", () => {
+    standIn("/");
+    variants("rg-button", buttonVariants, { look: "ghost", size: "sm" });
+    variants("rg-button", buttonVariants, { size: "md" });
+    variants("rg-menu  rg-surface", { align: { end: "rg-menu-end rg-menu-flip" } }, { align: "end" });
+    variants("", buttonVariants);
+    expect(resolved).toEqual([["rg-button", "rg-button-sm", "rg-button-ghost"], ["rg-button"], ["rg-menu", "rg-surface", "rg-menu-end", "rg-menu-flip"], []]);
+  });
+
+  test("variants: a builder without `classes` is asked nothing", () => {
+    standIn("/");
+    delete host.__reactogenic_build!.classes;
+    expect(variants("rg-button", buttonVariants, { look: "ghost" })).toBe("rg-button rg-button-ghost");
+  });
 });
 
 describe("in React", () => {
+  test("variants only returns the string", () => {
+    resolved.length = 0;
+    expect(variants("rg-button", buttonVariants, { size: "sm", look: "ghost" })).toBe("rg-button rg-button-sm rg-button-ghost");
+    expect(resolved).toEqual([]);
+  });
+
   test("pathname is location.pathname", () => {
     vi.stubGlobal("location", { pathname: "/from/location/" });
     expect(pathname()).toBe("/from/location/");

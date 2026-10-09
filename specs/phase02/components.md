@@ -47,8 +47,8 @@ opens unanchored.
 ## `Button`
 
 The fourth export: `<button>` — or `<a>` when it has `href` — with
-`variant?: "solid" | "ghost"` (`data-variant`, only when it is not the
-default).
+`variant?: "solid" | "ghost"` — a class of its own, `rg-button-ghost`, only
+when it is not the default (*CSS convention*, variants).
 
 ```ts
 type ButtonProps = ButtonLinkProps | ButtonActionProps;   // one or the other
@@ -82,7 +82,7 @@ for a disabled link item of a menu.
 ```
 
 ```html
-<a class="rg-button" data-variant="ghost" href="/guide/">Guide</a>
+<a class="rg-button rg-button-ghost" href="/guide/">Guide</a>
 <a class="rg-button" aria-disabled="true">Next</a>
 ```
 
@@ -132,7 +132,7 @@ interface DialogProps {
     </header>
     <div data-part="body">This cannot be undone.</div>
     <footer>
-      <button type="button" class="rg-button" data-variant="ghost" command="close" commandfor="d1">Cancel</button>
+      <button type="button" class="rg-button rg-button-ghost" command="close" commandfor="d1">Cancel</button>
       <a class="rg-button" href="/">Delete</a>
     </footer>
   </div>
@@ -235,8 +235,8 @@ element. That is the whole action vocabulary of a React-less page.
 ```
 
 ```html
-<button type="button" class="rg-button" data-variant="ghost" popovertarget="m1">0.1 alpha</button>
-<ul id="m1" class="rg-menu" data-align="end" popover>
+<button type="button" class="rg-button rg-button-ghost" popovertarget="m1">0.1 alpha</button>
+<ul id="m1" class="rg-menu rg-menu-end" popover>
   <li><a href="/" aria-current="true">0.1 alpha</a></li>
   <li><a href="https://www.npmjs.com/package/@reactogenic/cli">npm</a></li>
 </ul>
@@ -284,7 +284,7 @@ element. That is the whole action vocabulary of a React-less page.
 | what the types exclude | `href` with `command` or `commandfor` — a link commands nothing (`Type 'string' is not assignable to type 'Command \| undefined'`, at the `command`); on `$Trigger`: `href`, `command`, `commandfor`, `popoverTarget` (rule 2). An item with neither `href` nor `command` is legal: a placeholder, usually `disabled`. A `command` without `commandfor` is the builder's command-target |
 | an action menu's name and focus | `role="menu"` needs a name: the trigger gets `id="<menu>-t"` — unless the author gave `$Trigger` an `id`, which is then the one used — and `aria-haspopup="menu"`, the menu `aria-labelledby`. Its first item that is not disabled has `autofocus`: opening the menu puts focus in it, where the arrow keys work. (A disclosure of links keeps focus on its button, as APG's does.) |
 | `disabled` | a button item: `disabled`. A link item: `<a>` without `href`, with `aria-disabled="true"` (`Button`). Neither takes focus, is reached by the arrow keys or typeahead, or closes the menu when clicked |
-| placement | the popover's implicit anchor is its invoker: `position-anchor: auto` (its initial value differs between engines; in Chrome 151+ `anchor()` resolves against nothing without it), `top: anchor(bottom)`, `left: anchor(left)` — `right: anchor(right)` for `align="end"`; no rule per use site. Not `position-area`: on a scrolled page it did not flip in Playwright's WebKit 26.0 (research/platform.md, correction C). It does in WebKit 26.6 (measured) and in Safari 27.0.1; Safari 26.2–26.5, the floor, is not verified — so the insets stay. Inside `@supports (top: anchor(bottom))`; without anchor positioning the UA's centred popover remains |
+| placement | the popover's implicit anchor is its invoker: `position-anchor: auto` (its initial value differs between engines; in Chrome 151+ `anchor()` resolves against nothing without it), `top: anchor(bottom)`, `left: anchor(left)` — `right: anchor(right)` for `align="end"`, the class `rg-menu-end`; no rule per use site. Not `position-area`: on a scrolled page it did not flip in Playwright's WebKit 26.0 (research/platform.md, correction C). It does in WebKit 26.6 (measured) and in Safari 27.0.1; Safari 26.2–26.5, the floor, is not verified — so the insets stay. Inside `@supports (top: anchor(bottom))`; without anchor positioning the UA's centred popover remains |
 | size, and where it goes when it does not fit | `width: max-content` (never less than the trigger), and never larger than the viewport less `1rem`, either way: a popover is fixed, so what of it is outside the viewport cannot be scrolled to. The room beside the trigger does not squeeze the menu — a menu that does not fit **moves**. `position-try-fallbacks`, in order: `flip-block` (above the trigger), `flip-inline` (the trigger's other edge — so `align` is where it goes *when there is room*), both; `--rg-menu-edge` (`@position-try`: `left: 0.5rem`), for a menu wider than the room on either side of its trigger — a phone; and last `--rg-menu-corner` (`top: 0.5rem; left: 0.5rem`), which always fits: for a menu taller than the room above and below its trigger (a phone on its side, a page zoomed to 400%), where **the menu scrolls**. Five fallbacks and no more: Chromium tries five and never a sixth (measured in 153; WebKit 26.6 tries a seventh) |
 | `typeahead` | the menu mounts `menu-keys` with `RG_MENU_TYPEAHEAD` and with the data `{ typeahead: true }`: a printable key moves to the next item that starts with it. The flag is the page's (builder.md: the union of its mounts) — it puts the code in the page's script; the data is the menu's — the second argument of its mount's call: a menu without it has no typeahead, whatever else is on the page. No attribute: only the behaviour reads it (builder.md, *Behaviours*), so the menu's HTML is the same with and without |
 | `current` | `aria-current="true"` on the item |
@@ -458,13 +458,50 @@ What makes per-page pruning exact (builder.md, *CSS*):
 | one `.css` per component, imported by the component | `import "./dialog.css"` |
 | everything nested under the component's root class | `.rg-dialog { … > [data-part="panel"] { … } }`. A rule on an ancestor of the root cannot nest: it names the root in `:has()` — `:root:has(.rg-dialog:modal)`. `SideMenu` has a second root, its toggle: `.rg-sidemenu-toggle` |
 | a rule reaches the component's own structure, never a slot's content | parts through child combinators from the root: `.rg-dialog > [data-part="panel"] > header > [data-part="close"]`, `.rg-sidemenu > [data-part="scrim"]`, `.rg-menu > li > a`. A descendant selector only below an element that holds nothing of the author's but a label: `.rg-sidemenu > :is(section, details) a`. **Never** `.rg-sidemenu a` or `.rg-sidemenu [data-part="close"]`: a `Dialog` in `$Header` has a `[data-part="close"]` of its own, and the rule that hides the drawer's hides the dialog's |
-| compile-time options | an option a rule selects is `data-<option>` on the root: `[data-align="end"]`, `[data-variant="ghost"]`. An option only a behaviour reads is no attribute: it is the mount's data (`typeahead`; builder.md, *Behaviours*) |
-| internal parts, slot attachments among them | `data-part`: `[data-part="footer"]` is `$Footer`'s attachment. An attachment the component's tag already names has none (`header > h2`) |
+| compile-time options: **variants** | an option a rule selects resolves into **one class, unique to it**, through `variants()` of `@reactogenic/core` (below): `align="end"` → `rg-menu-end`, `variant="ghost"` → `rg-button-ghost` — the root's class and the variant's name. The default has none: `.rg-button` is its look. The rule is `.rg-button.rg-button-ghost`, nested as `&.rg-button-ghost`. An option only a behaviour reads is neither a class nor an attribute: it is the mount's data (`typeahead`; builder.md, *Behaviours*) |
+| internal **parts**, slot attachments among them | `data-part`, **never a class**: `[data-part="footer"]` is `$Footer`'s attachment. A slot's props replace its attachment's, `className` among them (phase01/syntax.md, *Slots*) — `<$Footer className="mine">` is `<div data-part="footer" class="mine">`, and still the side menu's footer to its rules. A part that was a class would lose its rule to the first `className` an author wrote. An attachment the component's tag already names has none (`header > h2`) |
+| no `!important` | in no file of the design system. Its rules are in layers (*order*, below), and with layers `!important` turns the cascade round: a layered `!important` declaration beats an unlayered one — the design system's over the project's — so one would be an override no project's CSS can answer (measured in Chromium and WebKit; decisions.md, K, rule 6). `test/convention.test.ts` fails on one |
 | runtime state | a pseudo-class, or an attribute — never a class. **A behaviour names the state it writes**: the attribute's name in full (`setAttribute("aria-expanded", …)`, `toggleAttribute("inert")`), or the property that reflects it (`e.ariaExpanded`, `e.disabled`, `e.dataset.state` — builder.md, *CSS*, *The page's script*, has the table). That is what the builder reads off the page's script: state only a script can write (`aria-*`, `disabled`, `inert`, `data-state`, `checked`, `selected`, `value`) is decided on the page **unless the page's script names it** — on a page whose behaviours name no `aria-current`, a rule on `[aria-current]` with no such element is dropped; what the browser writes by itself (`open`, `hidden`, `style`) and every pseudo-class is "maybe" on every page. A name that is computed (`"aria-" + state`) is not seen, and a rule the pruner dropped for the page would start to match: that is what this rule keeps out, and an element added or moved leaves the page unpruned. **The three behaviours here write nothing at all**: they call the platform (`showModal()`, `close()`, `hidePopover()`, `focus()`); `test/convention.test.ts` holds them to it, and the builder's own test pins the state each of them names (`menu-keys` names `aria-disabled`, which it reads: its pages keep those rules) |
 | motion | every `transition` is inside `@media (prefers-reduced-motion: no-preference)`: the dialog's fade and the drawer's slide are for a reader who has not asked for less (WCAG 2.3.3) |
 | forced colours | a background is the canvas there, and a shadow is gone: every surface of the top layer — the dialog's panel, the menu, the drawer — has a `1px solid` border, and the current item is marked by more than a background (its weight) |
-| order | `@layer rg.base, rg.components;` declared once, in the tokens file every component imports before its own (`import "./tokens.css"; import "./dialog.css"`); component rules in `rg.components`. Author CSS is unlayered, so it wins |
+| order | `@layer rg.base, rg.components;` declared once, in the tokens file every component imports before its own (`import "./tokens.css"; import "./dialog.css"`); component rules in `rg.components`. Author CSS is unlayered, so it wins — over every normal declaration, which is all the design system has (*no `!important`*) |
 | tokens | custom properties on `:root`; `color-scheme: light dark` and `light-dark()` — the theme follows the OS (a toggle needs storage, so JS) |
+
+**Variants.** `variants(base, map, choice)` of `@reactogenic/core`
+(builder.md, *What shell code can ask the builder*) is how a component
+writes the `class` of an element with options: the base, then the class of
+each chosen value, in the order the map names its dimensions. `DropdownMenu`'s:
+
+```tsx
+const menuVariants = { align: { start: "", end: "rg-menu-end" } } as const;
+// …
+<ul id={menu} className={variants("rg-menu", menuVariants, { align })} popover="">
+```
+
+```html
+<ul id="m1" class="rg-menu rg-menu-end" popover>   <!-- align="end" -->
+<ul id="m4" class="rg-menu" popover>               <!-- the default, or no `align` -->
+```
+
+```css
+/* dropdown-menu.css */
+.rg-menu { …; &.rg-menu-end { left: auto; right: anchor(right) } }
+```
+
+| | |
+| --- | --- |
+| one class per value | unique to it: `rg-<component>-<value>`. A page's sheet keeps `.rg-menu.rg-menu-end` exactly when an element of that page has the class (builder.md, *CSS*: a class is matched exactly) — as it kept `[data-align="end"]`; what changes is that the variant has a name of its own, which a rule, a report and a later packaging step can refer to |
+| the default | `""` in the map: no class, and no rule of its own |
+| a value the map does not have | a type error at the call: a variant is a value of a closed union (rule 3) |
+| the record | the builder notes which classes each page's `variants()` calls resolved, and which component called: the report's `classes` (builder.md, *The report*). Nothing is decided by it — the page's HTML has the classes |
+| a part | is not a variant: it stays `data-part` (the table above) |
+
+**Rejected:** options as attributes on the root (`data-align="end"`,
+`data-variant="ghost"` — the convention until 2026-10-06: sound, and a
+variant had no name); parts as classes too (`rg-sidemenu-footer` — built
+with the ruling that was reversed, decisions.md, K: a slot's `className`
+then costs the part its rule, or stops replacing the attachment's — phase
+1's semantics changed to suit the optimizer).
 
 ## Types
 

@@ -45,7 +45,7 @@
         margin-top: 0;
       }
     }
-    &[data-variant="pills"] > [role="tablist"] {
+    &.bc-tabs-pills > [role="tablist"] {
       display: inline-flex;
       padding: 0.25rem;
       border: 1px solid var(--rg-line);

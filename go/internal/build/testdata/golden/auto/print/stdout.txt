@@ -4,6 +4,7 @@
   CSS            2934     1038   inline
   JS              252      179   inline, the same on 2 pages
   document       4400     1665   index.html
+  fetches        4400     1665   1 request: what the page needs, and no more
   components Each ×3, HomePage ×1, Item ×4, Items ×2, Layout ×1, Section ×1, SideMenu ×1
   behaviours @reactogenic/ui/behaviors/overlays
   JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
@@ -21,7 +22,10 @@
   CSS            2171      852   inline
   JS              822      461   inline
   document       4001     1736   account/index.html
+  fetches        4001     1736   1 request: what the page needs, and no more
   components AccountPage ×1, Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×2, Plans ×1
+  classes    DropdownMenu: rg-menu
+             Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #account RG_MENU_TYPEAHEAD=false
   JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
@@ -40,7 +44,9 @@
   CSS            2635     1001   inline
   JS              563      328   inline, the same on 2 pages
   document       4373     1809   account/guest.html
+  fetches        4373     1809   1 request: what the page needs, and no more
   components Button ×1, Dialog ×1, GuestPage ×1, Layout ×1
+  classes    Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/invokers
   JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
@@ -59,7 +65,10 @@
   CSS            3773     1276   inline
   JS             1448      708   inline
   document       6660     2510   actions/index.html
+  fetches        6660     2510   1 request: what the page needs, and no more
   components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
+  classes    DropdownMenu: rg-menu
+             Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true {"typeahead":true}
              @reactogenic/ui/behaviors/invokers
@@ -80,7 +89,9 @@
   CSS            2803     1048   inline
   JS              563      328   inline, the same on 2 pages
   document       4581     1830   dialog/index.html
+  fetches        4581     1830   1 request: what the page needs, and no more
   components Action ×1, Button ×2, Dialog ×1, DialogPage ×1, Each ×1, Layout ×1
+  classes    Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/invokers
   JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
@@ -99,6 +110,7 @@
   CSS             349      245   inline
   JS                -        -   none
   document        922      545   gate/closed.html
+  fetches         922      545   1 request: what the page needs, and no more
   components ClosedPage ×1, Layout ×1
   CSS rules    5 kept,  10 dropped  site.css
 
@@ -108,6 +120,7 @@
   CSS            1074      502   inline, the same on 2 pages
   JS                -        -   none
   document       1990      969   guide/index.html
+  fetches        1990      969   1 request: what the page needs, and no more
   components GuidePage ×1, Intro ×1, Layout ×1
   CSS rules   14 kept,   1 dropped  site.css
 
@@ -117,16 +130,20 @@
   CSS            1074      502   inline, the same on 2 pages
   JS                -        -   none
   document       1807      901   guide/more/index.html
+  fetches        1807      901   1 request: what the page needs, and no more
   components Layout ×1, MorePage ×1
   CSS rules   14 kept,   1 dropped  site.css
 
 /links/  pages/links/index.rtsx
                   raw     gzip
-  HTML            819      447
-  CSS            2306      897   inline
+  HTML            814      441
+  CSS            2302      888   inline
   JS              252      179   inline, the same on 2 pages
-  document       3423     1448   links/index.html
+  document       3414     1436   links/index.html
+  fetches        3414     1436   1 request: what the page needs, and no more
   components Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, LinksPage ×1, MenuItem ×3
+  classes    DropdownMenu: rg-menu
+             Button: rg-button rg-button-ghost
   behaviours @reactogenic/ui/behaviors/overlays
   JS bytes      248 B  @reactogenic/ui/src/behaviors/overlays.ts
                   4 B  <entry>  the mount calls
@@ -143,7 +160,9 @@
   CSS            1033      520   inline
   JS                -        -   none
   document       1606      821   plain/index.html
+  fetches        1606      821   1 request: what the page needs, and no more
   components Button ×1, Layout ×1, PlainPage ×1
+  classes    Button: rg-button
   CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
                3 kept,   1 dropped  @reactogenic/ui/src/button.css
                0 kept,  14 dropped  @reactogenic/ui/src/dialog.css
@@ -162,6 +181,6 @@ js   adead9cd     1448      708   inline                   /actions/
 css  84bd31d9     2803     1048   inline                   /dialog/
 css  288c2961      349      245   inline                   /gate/closed.html
 css  e28e8351     1074      502   inline                   /guide/ /guide/more/
-css  3a80b53d     2306      897   inline                   /links/
+css  d236f53c     2302      888   inline                   /links/
 css  5039d10c     1033      520   inline                   /plain/
 10 pages written to <out>

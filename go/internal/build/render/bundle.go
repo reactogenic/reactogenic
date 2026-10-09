@@ -74,17 +74,17 @@ type variant struct {
 // entry is the generated entry (builder.md, *What shell code can ask the
 // builder*; plan.md, *The build-time protocol*): `__reactogenic_render`
 // renders one document — a variant of a route, named by its path
-// (Route.Path) — and returns { html, mounts, components }, or throws; while
+// (Route.Path) — and returns { html, mounts, components, classes }, or throws; while
 // it renders, `__reactogenic_build` is the page's. `pathname` there is the
 // route's, in every variant of it (*Routes*).
 func entry(routes []Route, v variant) string {
 	var b strings.Builder
 	if v.plain {
 		b.WriteString("import { createElement as root } from \"react\";\n")
-		b.WriteString("const start = () => {}, components = () => ({}), owners = () => ({}), swallowed = () => null;\n")
+		b.WriteString("const start = () => {}, components = () => ({}), owners = () => ({}), swallowed = () => null, calling = () => \"\";\n")
 	} else {
 		b.WriteString("import \"" + namespace + ":sandbox\";\n")
-		b.WriteString("import { components, owners, root, start, swallowed } from \"" + jsxModule + "\";\n")
+		b.WriteString("import { calling, components, owners, root, start, swallowed } from \"" + jsxModule + "\";\n")
 	}
 	b.WriteString("import { renderToStaticMarkup } from \"" + namespace + ":renderer\";\n")
 	for i, route := range routes {
@@ -157,7 +157,7 @@ function render(path) {
   const [module, pathname] = pages[path];
   const page = module.default;
   if (typeof page !== "function") throw coded("page-no-default", "The page has no default export that is a component");
-  const mounts = [], ids = {};
+  const mounts = [], ids = {}, classes = [], resolved = new Map();
   globalThis.__reactogenic_build = {
     pathname,
     id(prefix) {
@@ -184,6 +184,22 @@ function render(path) {
       }
       mounts.push(mount);
     },
+    // What a variants() call resolved (builder.md, *What shell code can ask
+    // the builder*): each class once, in the order first resolved, with the
+    // components that called. For the report.
+    classes(names) {
+      const by = calling();
+      for (const each of Array.isArray(names) ? names : []) {
+        const name = String(each);
+        let entry = resolved.get(name);
+        if (entry === undefined) {
+          entry = { name, by: [] };
+          resolved.set(name, entry);
+          classes.push(entry);
+        }
+        if (by !== "" && !entry.by.includes(by)) entry.by.push(by);
+      }
+    },
   };
   try {
     const html = renderToStaticMarkup(root(page));
@@ -191,7 +207,7 @@ function render(path) {
     // fallback instead. No page is built around a swallowed error.
     const lost = swallowed();
     if (lost !== null) throw lost;
-    return { html, mounts, components: components() };
+    return { html, mounts, components: components(), classes };
   } finally {
     delete globalThis.__reactogenic_build;
   }

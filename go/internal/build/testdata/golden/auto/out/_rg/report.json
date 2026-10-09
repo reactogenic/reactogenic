@@ -13,6 +13,20 @@
         "raw": 4400,
         "gzip": 1665
       },
+      "fetches": {
+        "raw": 4400,
+        "gzip": 1665,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 2934,
+          "gzip": 1038
+        },
+        "js": {
+          "raw": 252,
+          "gzip": 179
+        }
+      },
       "html": {
         "raw": 1168,
         "gzip": 535
@@ -61,6 +75,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [
         {
           "module": "@reactogenic/ui/behaviors/overlays"
@@ -97,7 +112,7 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 4,
-            "bytesIn": 609,
+            "bytesIn": 605,
             "bytesOut": 0
           },
           {
@@ -111,7 +126,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 7,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 0
           },
           {
@@ -140,6 +155,20 @@
       "document": {
         "raw": 4001,
         "gzip": 1736
+      },
+      "fetches": {
+        "raw": 4001,
+        "gzip": 1736,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 2171,
+          "gzip": 852
+        },
+        "js": {
+          "raw": 822,
+          "gzip": 461
+        }
       },
       "html": {
         "raw": 962,
@@ -187,6 +216,20 @@
         {
           "name": "Plans",
           "count": 1
+        }
+      ],
+      "classes": [
+        {
+          "name": "rg-menu",
+          "by": [
+            "DropdownMenu"
+          ]
+        },
+        {
+          "name": "rg-button",
+          "by": [
+            "Button"
+          ]
         }
       ],
       "mounts": [
@@ -237,7 +280,7 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 1,
-            "bytesIn": 609,
+            "bytesIn": 605,
             "bytesOut": 416
           },
           {
@@ -251,7 +294,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 2,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 1297
           },
           {
@@ -280,6 +323,20 @@
       "document": {
         "raw": 4373,
         "gzip": 1809
+      },
+      "fetches": {
+        "raw": 4373,
+        "gzip": 1809,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 2635,
+          "gzip": 1001
+        },
+        "js": {
+          "raw": 563,
+          "gzip": 328
+        }
       },
       "html": {
         "raw": 1129,
@@ -315,6 +372,14 @@
         {
           "name": "Layout",
           "count": 1
+        }
+      ],
+      "classes": [
+        {
+          "name": "rg-button",
+          "by": [
+            "Button"
+          ]
         }
       ],
       "mounts": [
@@ -361,7 +426,7 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 1,
-            "bytesIn": 609,
+            "bytesIn": 605,
             "bytesOut": 416
           },
           {
@@ -375,7 +440,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 7,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 0
           },
           {
@@ -404,6 +469,20 @@
       "document": {
         "raw": 6660,
         "gzip": 2510
+      },
+      "fetches": {
+        "raw": 6660,
+        "gzip": 2510,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 3773,
+          "gzip": 1276
+        },
+        "js": {
+          "raw": 1448,
+          "gzip": 708
+        }
       },
       "html": {
         "raw": 1393,
@@ -451,6 +530,20 @@
         {
           "name": "MenuItem",
           "count": 3
+        }
+      ],
+      "classes": [
+        {
+          "name": "rg-menu",
+          "by": [
+            "DropdownMenu"
+          ]
+        },
+        {
+          "name": "rg-button",
+          "by": [
+            "Button"
+          ]
         }
       ],
       "mounts": [
@@ -512,7 +605,7 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 1,
-            "bytesIn": 609,
+            "bytesIn": 605,
             "bytesOut": 416
           },
           {
@@ -526,7 +619,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 2,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 1297
           },
           {
@@ -555,6 +648,20 @@
       "document": {
         "raw": 4581,
         "gzip": 1830
+      },
+      "fetches": {
+        "raw": 4581,
+        "gzip": 1830,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 2803,
+          "gzip": 1048
+        },
+        "js": {
+          "raw": 563,
+          "gzip": 328
+        }
       },
       "html": {
         "raw": 1169,
@@ -598,6 +705,14 @@
         {
           "name": "Layout",
           "count": 1
+        }
+      ],
+      "classes": [
+        {
+          "name": "rg-button",
+          "by": [
+            "Button"
+          ]
         }
       ],
       "mounts": [
@@ -644,7 +759,7 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 1,
-            "bytesIn": 609,
+            "bytesIn": 605,
             "bytesOut": 416
           },
           {
@@ -658,7 +773,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 7,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 0
           },
           {
@@ -688,6 +803,20 @@
         "raw": 922,
         "gzip": 545
       },
+      "fetches": {
+        "raw": 922,
+        "gzip": 545,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 349,
+          "gzip": 245
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 558,
         "gzip": 337
@@ -709,6 +838,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 15,
@@ -739,6 +869,20 @@
         "raw": 1990,
         "gzip": 969
       },
+      "fetches": {
+        "raw": 1990,
+        "gzip": 969,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 1074,
+          "gzip": 502
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 901,
         "gzip": 498
@@ -764,6 +908,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 15,
@@ -794,6 +939,20 @@
         "raw": 1807,
         "gzip": 901
       },
+      "fetches": {
+        "raw": 1807,
+        "gzip": 901,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 1074,
+          "gzip": 502
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 718,
         "gzip": 433
@@ -815,6 +974,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 15,
@@ -842,19 +1002,33 @@
       "file": "pages/links/index.rtsx",
       "output": "links/index.html",
       "document": {
-        "raw": 3423,
-        "gzip": 1448
+        "raw": 3414,
+        "gzip": 1436
+      },
+      "fetches": {
+        "raw": 3414,
+        "gzip": 1436,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 2302,
+          "gzip": 888
+        },
+        "js": {
+          "raw": 252,
+          "gzip": 179
+        }
       },
       "html": {
-        "raw": 819,
-        "gzip": 447
+        "raw": 814,
+        "gzip": 441
       },
       "css": {
-        "raw": 2306,
-        "gzip": 897,
+        "raw": 2302,
+        "gzip": 888,
         "delivery": "inline",
         "pages": 1,
-        "blob": "3a80b53d"
+        "blob": "d236f53c"
       },
       "js": {
         "raw": 252,
@@ -887,6 +1061,26 @@
         {
           "name": "MenuItem",
           "count": 3
+        }
+      ],
+      "classes": [
+        {
+          "name": "rg-menu",
+          "by": [
+            "DropdownMenu"
+          ]
+        },
+        {
+          "name": "rg-button",
+          "by": [
+            "Button"
+          ]
+        },
+        {
+          "name": "rg-button-ghost",
+          "by": [
+            "Button"
+          ]
         }
       ],
       "mounts": [
@@ -925,8 +1119,8 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 0,
-            "bytesIn": 609,
-            "bytesOut": 490
+            "bytesIn": 605,
+            "bytesOut": 486
           },
           {
             "file": "@reactogenic/ui/src/dialog.css",
@@ -939,7 +1133,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 1,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 1370
           },
           {
@@ -969,6 +1163,20 @@
         "raw": 1606,
         "gzip": 821
       },
+      "fetches": {
+        "raw": 1606,
+        "gzip": 821,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 1033,
+          "gzip": 520
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 558,
         "gzip": 332
@@ -994,6 +1202,14 @@
           "count": 1
         }
       ],
+      "classes": [
+        {
+          "name": "rg-button",
+          "by": [
+            "Button"
+          ]
+        }
+      ],
       "mounts": [],
       "styles": {
         "rules": 66,
@@ -1015,7 +1231,7 @@
             "file": "@reactogenic/ui/src/button.css",
             "rules": 4,
             "rulesDropped": 1,
-            "bytesIn": 609,
+            "bytesIn": 605,
             "bytesOut": 416
           },
           {
@@ -1029,7 +1245,7 @@
             "file": "@reactogenic/ui/src/dropdown-menu.css",
             "rules": 7,
             "rulesDropped": 7,
-            "bytesIn": 1743,
+            "bytesIn": 1739,
             "bytesOut": 0
           },
           {
@@ -1188,10 +1404,10 @@
     },
     {
       "kind": "css",
-      "hash": "3a80b53d",
+      "hash": "d236f53c",
       "size": {
-        "raw": 2306,
-        "gzip": 897
+        "raw": 2302,
+        "gzip": 888
       },
       "delivery": "inline",
       "pages": [

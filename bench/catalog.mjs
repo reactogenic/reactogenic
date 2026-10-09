@@ -169,6 +169,18 @@ const behaviourRows = BEHAVIOURS.map(([name, pkg]) => {
   const sizes = [...new Set(rows.map((r) => r.bytes))].sort((a, b) => a - b);
   return { name, pkg, written: statSync(join(srcDir(pkg), "behaviors", `${name}.ts`)).size, sizes, flags, pages: [...new Set(rows.map((r) => r.page))] };
 });
+// The convention both packages are held to (components.md, *CSS convention*),
+// asked of their source: no `!important` — a layered one beats the project's
+// unlayered CSS, and no project could answer it (decisions.md, K, rule 6) —
+// and no option as an attribute: a variant is a class through `variants()`,
+// so the only `data-*` a rule selects is a part, or state a behaviour writes
+// and names (`data-full`, field.ts).
+const sheetsOf = (pkg) => readdirSync(srcDir(pkg)).filter((f) => f.endsWith(".css")).sort().map((f) => ({ name: `${pkg === "catalog" ? "bench/catalog" : "packages/ui"}/src/${f}`, text: readFileSync(join(srcDir(pkg), f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
+const conventionSheets = [...sheetsOf("ui"), ...sheetsOf("catalog")];
+const important = conventionSheets.filter((f) => /!\s*important/i.test(f.text)).map((f) => f.name);
+must(important.length === 0, `\`!important\` in the design system's CSS: ${important.join(", ")}`);
+const optionAttributes = [...new Set(conventionSheets.flatMap((f) => [...f.text.matchAll(/\[(data-[\w-]+)/g)].map((m) => m[1])))].sort();
+must(optionAttributes.every((name) => name === "data-part" || name === "data-full"), `an option is an attribute in the catalog's CSS: ${optionAttributes.join(", ")}`);
 const siteCss = sources.find((s) => s.file === "site.css");
 const tokens = sources.filter((s) => s.file.endsWith("/tokens.css"));
 
@@ -385,6 +397,7 @@ md += `\n## The site's source (T6)\n\n${shipped.length} files under \`bench/cata
 for (const [name, hits] of Object.entries(t6)) md += `- ${name}: ${hits.length === 0 ? "yes" : "**NO** — " + hits.join(", ")}\n`;
 md += `- the stylesheet imports of the whole site: ${cssImports.map(tick).join(", ") || "none"}\n`;
 md += `\nThe catalog itself is the other side of the rule: its components import their CSS and call \`mount()\`, as a design system does (\`bench/catalog/src\`).\n`;
+md += `\nIts CSS, and \`@reactogenic/ui\`'s — ${conventionSheets.length} files — by the convention (specs/phase02/components.md, *CSS convention*): no \`!important\`: ${important.length === 0 ? "yes" : "**NO** — " + important.join(", ")}; the \`data-*\` attributes its rules select: ${optionAttributes.map(tick).join(", ")} — a part, and state a behaviour writes; every option is a class of its own, through \`variants()\`.\n`;
 
 // The delta.
 md += `\n## One component deleted from one page (T4's question)\n\nUnder \`--inline always\`. T4 itself is the docs site's (\`bench/delta.mjs\`); this asks the same of the catalog, twice.\n\n`;

@@ -1,8 +1,9 @@
 // The CSS convention (specs/phase02/components.md, *CSS convention*), checked
 // on the components' own CSS in the form the builder prunes — nesting
 // lowered — and on the behaviours, whose side of it is what they may write.
-// It is what makes per-page pruning exact: a rule goes with its component,
-// and no script makes a selector match that the page's HTML does not show.
+// It is what makes per-page pruning exact: a rule goes with its component
+// — its root, a variant's own class, a part — and no script makes a selector
+// match that the page's HTML does not show.
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as esbuild from "esbuild";
@@ -107,13 +108,53 @@ describe("CSS convention", () => {
     expect(rooted(".rg-dialogue > a", [".rg-dialog"]) || rooted("a.rg-dialog", [".rg-dialog"]) || rooted(":is(.rg-menu > a, li > a):hover", [".rg-menu"])).toBe(false);
   });
 
-  test("a class is a component's root; state is the platform's — a pseudo-class or one of these attributes", () => {
+  test("a class is a component's root or a variant of it; a part is `data-part`; state is the platform's — a pseudo-class or one of these attributes", () => {
     const roots = Object.values(sheets).flat();
+    for (const { sheet, selector } of rules) {
+      // Every class of a rule is its component's: a root, or a root and a variant's name (`rg-button-ghost`).
+      const own = sheets[sheet]!;
+      const stray = (selector.match(/\.[a-zA-Z][\w-]*/g) ?? []).filter((name) => !own.some((root) => name === root || name.startsWith(root + "-")));
+      expect(stray, `${sheet}: ${selector}`).toEqual([]);
+    }
+    // The variants, and nothing else: no part is a class. A slot's
+    // `className` replaces its attachment's (phase01/syntax.md, *Slots*), so
+    // a part that was a class would lose its rule to `<$Footer className="mine">`.
     const classes = new Set(rules.flatMap((rule) => rule.selector.match(/\.[a-zA-Z][\w-]*/g) ?? []));
-    expect([...classes].filter((name) => !roots.includes(name))).toEqual([]);
+    expect([...classes].filter((name) => !roots.includes(name)).sort()).toEqual([".rg-button-ghost", ".rg-menu-end"]);
+    // No option is an attribute. Parts are written by the component; `open`
+    // is the browser's, `aria-*` the component's or a behaviour's.
     const attributes = new Set(rules.flatMap((rule) => [...rule.selector.matchAll(/\[([\w-]+)/g)].map((match) => match[1])));
-    // Options and parts are written by the component; `open` and `aria-*` may be the user's doing.
-    expect([...attributes].sort()).toEqual(["aria-current", "aria-disabled", "data-align", "data-part", "data-variant", "open"]);
+    expect([...attributes].sort()).toEqual(["aria-current", "aria-disabled", "data-part", "open"]);
+  });
+
+  // A class a rule names and no component writes is a rule the builder drops
+  // on every page, silently: a typo in either file.
+  test("every class a sheet selects is one its component writes — a root in a `className`, a variant in a `variants()` map — and the other way", () => {
+    const components: Record<string, string> = { "button.css": "button.rtsx", "dialog.css": "dialog.rtsx", "dropdown-menu.css": "dropdown-menu.rtsx", "side-menu.css": "side-menu.rtsx" };
+    for (const [sheet, component] of Object.entries(components)) {
+      const source = readFileSync(resolve(src, component), "utf8");
+      const written = new Set([...source.matchAll(/"((?:rg-[\w-]+ ?)+)"/g)].flatMap((match) => match[1]!.split(" ")));
+      const selected = new Set(rules.filter((rule) => rule.sheet === sheet).flatMap((rule) => rule.selector.match(/\.[a-zA-Z][\w-]*/g) ?? []));
+      expect([...selected].filter((name) => !written.has(name.slice(1))), sheet).toEqual([]);
+      expect([...written].filter((name) => !selected.has("." + name)), component).toEqual([]);
+      // A variant's class is resolved, never written on an element: only a `variants()` map holds it.
+      const maps = [...source.matchAll(/const \w+Variants = (\{.*\}) as const;/g)].map((match) => match[1]!).join(" ");
+      const variant = [...selected].map((name) => name.slice(1)).filter((name) => !sheets[sheet]!.includes("." + name));
+      expect(variant.filter((name) => !maps.includes(`"${name}"`) || source.split(`"${name}"`).length !== 2), component).toEqual([]);
+    }
+  });
+
+  // The owner's rule 6 (decisions.md, K): the design system's rules are in
+  // layers, and a layered `!important` beats an unlayered one — no project's
+  // CSS could answer it.
+  test("no `!important`", () => {
+    const important = /!\s*important/i;
+    for (const file of readdirSync(src).filter((name) => name.endsWith(".css"))) {
+      const css = readFileSync(resolve(src, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      expect(important.test(css), file).toBe(false);
+    }
+    expect(rules.filter((rule) => important.test(rule.body)).map((rule) => `${rule.sheet}: ${rule.selector}`)).toEqual([]);
+    expect(important.test(".a { color: red !important }") && important.test(".a{color:red! IMPORTANT}")).toBe(true);
   });
 
   test("a rule reaches the component's own structure: child combinators — a descendant only in a side menu's sections, never in a slot's content", () => {

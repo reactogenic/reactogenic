@@ -2,7 +2,7 @@
 // (specs/phase02/decisions.md, 14) — with a title and, when asked, a button
 // that copies it: the `copy` behaviour, which a sample without the button
 // does not mount. A fixture (bench/catalog/README.md).
-import { mount, useShellId } from "@reactogenic/core";
+import { mount, useShellId, variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./code-block.css";
@@ -20,6 +20,10 @@ export interface CodeBlockProps {
   children: string;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const codeVariants = { wrap: { on: "bc-code-wrap" }, lines: { on: "bc-code-lines" } } as const;
+
 export function CodeBlock({ title, copy, wrap, lines, children }: CodeBlockProps) {
   const id = useShellId("c");
   if (copy) {
@@ -27,7 +31,7 @@ export function CodeBlock({ title, copy, wrap, lines, children }: CodeBlockProps
     mount("@reactogenic/bench-catalog/behaviors/copy", id, undefined, { done: "Copied" });
   }
   return (
-    <figure id className="bc-code" data-wrap={wrap ? "" : undefined} data-lines={lines ? "" : undefined}>
+    <figure id className={variants("bc-code", codeVariants, { wrap: wrap ? "on" : undefined, lines: lines ? "on" : undefined })}>
       {title !== undefined || copy ? (
         <figcaption>
           <span data-part="title">{title}</span>

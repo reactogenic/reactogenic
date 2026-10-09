@@ -52,7 +52,7 @@
         color: var(--rg-muted);
       }
     }
-    &[data-variant="compact"] > ul {
+    &.bc-pagination-compact > ul {
       justify-content: space-between;
     }
   }

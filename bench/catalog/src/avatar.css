@@ -16,17 +16,17 @@
     user-select: none;
     vertical-align: middle;
 
-    &[data-size="sm"] {
+    &.bc-avatar-sm {
       width: 1.75rem;
       height: 1.75rem;
       font-size: 0.6875rem;
     }
-    &[data-size="lg"] {
+    &.bc-avatar-lg {
       width: 4rem;
       height: 4rem;
       font-size: 1.25rem;
     }
-    &[data-shape="square"] {
+    &.bc-avatar-square {
       border-radius: var(--rg-radius);
     }
     > img {

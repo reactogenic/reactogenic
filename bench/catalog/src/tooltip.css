@@ -42,7 +42,7 @@
           visibility 0.1s;
       }
     }
-    &[data-side="bottom"] > [role="tooltip"] {
+    &.bc-tooltip-bottom > [role="tooltip"] {
       top: calc(100% + 0.4rem);
       bottom: auto;
     }
@@ -52,7 +52,7 @@
       position: static;
 
       > [role="tooltip"],
-      &[data-side="bottom"] > [role="tooltip"] {
+      &.bc-tooltip-bottom > [role="tooltip"] {
         inset: auto 1rem;
         width: auto;
         max-width: none;

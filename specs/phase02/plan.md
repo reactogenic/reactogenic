@@ -24,7 +24,7 @@ What each task waits for — the *Depends on* lines, in one place:
 001 ─▶ 002 ─▶ 010, 012, 020, 021, 022
 010, 012 ─▶ 011              012 ─▶ 025
 011, 020, 021, 022 ─▶ 030
-025, 030 ─▶ 040 ─▶ 050 ─▶ 060
+025, 030 ─▶ 040 ─▶ 050 ─▶ 060 ─▶ 071
 ```
 
 ## M0 — Research and spec
@@ -55,10 +55,12 @@ type Page struct {
 	HTML       string         // as rendered, without the doctype
 	Mounts     []Mount        // in render order, duplicates kept
 	Components map[string]int // function components React called, by the function's name
+	Classes    []string            // what `variants()` resolved, each once, in the order first resolved (RGP2-071)
+	Resolved   map[string][]string // for each of Classes, the components whose calls resolved it: for the report
 }
 type Options struct {
 	Dir     string        // the project's directory: react and react-dom are resolved from it; "": the program's
-	Timeout time.Duration // of one page; 0: 30 s
+	Timeout time.Duration // of one page; 0: 30 s — time the page ran (a Go timer), not a moment of the wall clock (RGP2-071)
 	Memory  uintptr       // of one page's runtime, in bytes; 0: 1 GiB
 }
 func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []report.Report)
@@ -125,20 +127,27 @@ a page renders, the engine provides
 globalThis.__reactogenic_build = {
   pathname: string,                                   // "/guide/"
   id(prefix: string): string,                         // "d1"
-  mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined): void,
+  mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined, data: MountData | undefined): void,
+  classes?(names: readonly string[]): void,           // what a `variants()` call resolved: ["rg-menu", "rg-menu-end"]
 }
 ```
 
-and `pathname()`, `useShellId()`, `mount()` of `@reactogenic/core` use it when
-it is there (builder.md, *What shell code can ask the builder*). Its absence
-means React: `location.pathname`, `React.useId()`, nothing.
+and `pathname()`, `useShellId()`, `mount()`, `variants()` of `@reactogenic/core`
+use it when it is there (builder.md, *What shell code can ask the builder*).
+Its absence means React: `location.pathname`, `React.useId()`, nothing, the
+string alone.
 
 - `id(prefix)` is the prefix and a counter per prefix, per page, from 1:
   `d1`, `d2`, `m1`. No prefix (`""`, `undefined`): `r`. A prefix that ends
   in a digit throws (shell-error): `d1` + `1` is also the eleventh `d`.
 - It is there only while a page renders: not while a module loads.
+- `classes(names)` (RGP2-071) is called by `variants()` with every class of
+  its result; the engine keeps each once, in the order first resolved, with
+  the name of the component being called. Optional: a builder without it is
+  asked nothing. It decides nothing — the page's HTML has the classes; it is
+  the report's provenance.
 - The render bundle's own globals: `__reactogenic_render(pathname)` returns
-  `{ html, mounts, components }` or throws; `__reactogenic_render_json` is
+  `{ html, mounts, components, classes }` or throws; `__reactogenic_render_json` is
   the same as JSON, for the engine; `__reactogenic_console()` hands over what
   `console` collected.
 
@@ -659,6 +668,25 @@ fails:
 | T7 behaviour | the browser checks pass on the built site | refutes |
 | T8 requests | ≤ 3 per page, cold | |
 
+**Where things stand** — the owner's statement (2026-10-06; decisions.md, K,
+rule 4), under thresholds that stay as written: *"Don't weaken the
+thresholds. Current implementation fails visit/request targets; cold T5
+remains undecided because the fixture doesn't exercise the stated
+condition."*
+
+| | Which measured facts that is |
+| --- | --- |
+| the visit | over a session the control transfers less than the default build: 12.7% less over the docs site's four pages, ahead from the second; 44.7% less over the catalog's ten, ahead from the third (bet.md; `bench/results/site.md`, `catalog.md`). The table above has no threshold for it: the owner names it as a target |
+| requests | none fails on this branch's packaging: 2 per page cold, 3 on the catalog's page with a picture (T8). What failed was the build of the owner's first ruling on K — one design-system sheet for the site and a page's own beside it: 4 requests a page (decisions.md, K; branch `rgp2-070-ds-css`, not merged). And every packaging of the study that shares a script as well as a sheet is at 4 (`bench/results/factor.md`) |
+| cold T5 | fails on the docs site (CSS 2.5% to 16.8% smaller, no page at 20%; JS 17.2% on the page that mounts everything) and passes on the catalog (CSS 41.8% to 72.9%, JS 41.9% to 91.6%). And neither fixture is a design system larger than what its site uses: the docs site uses three components of three in one layout, the catalog site every one of its twenty (16 of the 387 units of the control's sheet are needed by no page). The owner reads that as the stated condition not exercised: undecided |
+
+> OPEN (with the owner): **a fixture that exercises T5's stated condition**
+> — a site on a design system it uses a part of — and **whether "the visit"
+> becomes a numbered threshold** (as measured: the default build transfers
+> no more than the control over the session, in brotli, in the bench's
+> order). Until it is one, the study reports it beside T5 and T8
+> (`bench/factor.mjs`), and no verdict is drawn from it.
+
 What the table cannot measure on this site, and where it is tested instead:
 
 | | |
@@ -682,8 +710,10 @@ The result, with the tables, is written to `specs/phase02/bet.md`.
   it, and "undecided" if T5 must also hold on the docs site: the owner has
   not chosen the word.
 
-  The docs site, as measured last — 2026-10-05, on the tree with every
-  ruling built (`bench/results/site.md`, `delta.md`):
+  The docs site, as measured on 2026-10-05, on the tree with every ruling
+  of that day built (`bench/results/site.md`, `delta.md`) — measured again
+  with RGP2-071: the same outcomes, a few bytes moved, bet.md has the
+  numbers of now:
 
   | | Measured | |
   | --- | --- | --- |
@@ -908,6 +938,134 @@ A `site` job (build + the byte report as an artifact); getting-started gains
   getting-started before it had *Build*; they have `build` on
   `/reference/cli/` only.
 
+### RGP2-071 — Analysis and packaging apart; `variants()` · M · done
+The owner's seven rules of 2026-10-06 (decisions.md, *K, ruled and
+reversed*), on a branch from `main` — not on the build of the ruling they
+reverse (RGP2-070: `rgp2-070-ds-css`, a reference commit, never merged).
+`main` already had rules 1, 2, 5 and 6 as behaviour: analysis per page,
+parts as `data-part`, the project's CSS unlayered. What this adds:
+
+| Rule | Done |
+| --- | --- |
+| what stands of the first ruling | `variants(base, map, choice)` in `@reactogenic/core`, with its types and tests; the protocol's `classes` and `render.Page.Classes` / `Resolved`; the report's `classes`, per page, with the components that resolved each. `Button` (`rg-button-ghost`) and `DropdownMenu` (`rg-menu-end`) resolve their options through it, and fifteen of the catalog fixture's sixteen every option a rule selected (`data-tone`, `data-size`, `data-variant`, `data-dot`, …: 34 classes, each with a rule; `Breadcrumbs` has no option). Parts were not touched. Pruning is `main`'s: a page's sheet against the page as served |
+| 1–3 | builder.md, *Analysis and packaging*; *Packaging* rewritten around it, with the OPEN on the factoring policy. The report: `fetches` per page — the document and the files it links, the requests, the CSS and JS among it — beside what the page needs (`css`, `js`); a row of `--report` says what a page fetches over what it needs. `TestNeedsAndFetches`: a page needs the same under `auto`, `always` and `never`, fetches the document and each linked file, and — today — nothing it does not need. **No factoring policy is built** |
+| the study | `bench/factor.mjs` → `bench/results/factor.md`: ten packagings of the default build's analysis on both sites — cold page, requests, session, T5 and T8 as written, the visit, what a page fetches beyond its own sheet, what would keep the cascade. bet.md, *The factoring study*; builder.md, *Packaging*, OPEN |
+| 4 | the thresholds of RGP2-050 are as they were; under them, the owner's statement with the measured facts, and an OPEN: a fixture for T5's stated condition, and whether the visit becomes a threshold |
+| 5 | parts stay `data-part`. `packages/ui`: the convention test admits two classes beside the roots — the variants — and no part; a contract test and a browser check that `<$Footer className="tools">` on `SideMenu` is `<div data-part="footer" class="tools">` with the footer's styling, in the page's pruned sheet |
+| 6 | components.md, *CSS convention*: no `!important`, and why. `test/convention.test.ts` fails on one in any `.css` of `packages/ui/src`; `bench/catalog.mjs` on one in either package, and on an option left as an attribute |
+| 7 | `TestMemory`: below |
+
+- **`TestMemory` (rule 7).** It had failed twice in some thirty-five runs of
+  RGP2-070's work with the *timeout's* message — *Rendering did not end in
+  30s* — after 0.4 s, where the memory limit ends the page.
+  - **Not reproduced by repetition**: 100 runs (`-count=100`), then four
+    loops of 250 at once: 1,100 runs, none failed.
+  - **The cause.** The engine's own timeout (`SetEvalTimeout` of
+    `modernc.org/quickjs` 0.25.0) keeps a deadline as a moment of the
+    **wall clock** (`time.Now().Add(d).UnixNano()`) and its interrupt
+    handler compares the wall clock with it. A step of the wall clock
+    while a page renders — a machine that sleeps, a clock that is set —
+    ends the page at its next poll, whatever time it ran. Go's monotonic
+    clock stands still while a Mac sleeps: the test's own duration read
+    0.4 s. The machine slept between short wakes through the night those
+    runs were made (`pmset -g log`: 10–60 s awake every 15 minutes; the
+    logs that survive of that work are dated to the minute of a wake).
+    And `TestMemory`'s page — it allocates until the limit, some 0.2 s —
+    is the one long call of the package's tests whose outcome is not the
+    timeout already (`TestTimeout`'s is).
+  - **Reproduced** by giving the test a wall clock that steps 15 minutes
+    forward at a chosen moment (a library in front of `clock_gettime`,
+    macOS): at 35 of 61 moments, 5 ms apart, the test fails with exactly
+    that message, in 0.16 to 0.30 s.
+  - **Fixed at the cause**: the builder times a page itself — a Go timer,
+    the monotonic clock — and raises the engine's interrupt when it fires
+    (`engine.watch`); `SetEvalTimeout` is no longer called. The interrupt
+    is raised again every 10 ms until the call returns: the engine takes
+    the flag down as a call begins, and one raised just before that would
+    be lost. The same 61 moments: none fails. `TestTimeout` (a loop
+    without an end, 3 s) passes as before.
+  - **A test**: `TestTimeoutClock` runs `TestMemory` and `TestRealmPerPage`
+    again under a wall clock that steps a minute at every reading; with
+    `SetEvalTimeout` put back it fails with the timeout's message. macOS
+    with a C compiler only — it is skipped elsewhere: the Go runtime reads
+    the clock past libc on Linux.
+  - **Afterwards**: four loops of 250 at once — 1,000 runs — and, on the
+    final tree, two loops of 200 at once, one of them with
+    `TestTimeoutClock` each time (200 more runs of `TestMemory` under the
+    stepping clock): none failed.
+  - It was a defect of the builder, not of the test: a build on a laptop
+    that went to sleep would have failed with a false timeout.
+- **Measured again**, with one binary built from the final tree: bet.md.
+  The docs site's sheets are 8 B smaller each (two selectors), its HTML 10
+  to 20 B; no script changed; no threshold's outcome changed. The study's
+  rows for today's packaging and for the control are the bench's own
+  numbers, to the byte, on both sites.
+- **Goldens.** `TestGolden -update`, and the diff read: `class="rg-button
+  rg-button-ghost"` in place of `data-variant="ghost"` on one page of the
+  fixture and in the two selectors of the sheets that have them (the hash
+  of four files with it); `fetches` and `classes` in every report, and
+  their rows in `--report`. cssprune's corpus reads the same goldens and
+  has no recorded output of its own.
+- **Decided where the rules were silent.**
+  - `variants()` reports the base class too, so the report's `classes` has
+    a component's root beside its variants: one list says which component
+    wrote which class.
+  - `classes` is in the control's report as well: it is of the HTML, which
+    is the same.
+  - The report keeps its fields (`css`, `js`, `document`) and gains
+    `fetches`: the bench and the site's tests read the old ones.
+  - T5 under a packaging is read on what a page *fetches* cold ("what a
+    page transfers"); on what it needs it is today's in every row.
+  - The study counts the static files a page shows (the favicon, a
+    picture) as the bench does, so T8 is the bench's T8; and applies no
+    4096 B rule to a shared file — *CSS alone* is that rule for scripts.
+  - A unit of CSS is a rule per selector of its list, and per declaration
+    where the rule declares a custom property: what the pruner drops.
+  - The catalog's switches (`dot`, `wrap`, `striped`, …) are a dimension
+    with one value, `on`.
+- **Checked**, on the final tree (darwin-arm64, Go 1.27.1, Node 25.2.1):
+  `go vet` and `gofmt -l` (nothing); the module builds with `GOWORK=off`;
+  `go test` over `go/...`, uncached: every package passes. `pnpm -r
+  typecheck`. Unit tests, a package at a time: core 32, vite 9, cli 6, ui
+  85, the extension 727 — all pass. Browser suites: `@reactogenic/ui` 74
+  passed in Chromium 153, 67 passed and 7 known in WebKit 26.6, none
+  failed (two more checks per engine than before: the slot's `className`);
+  `@reactogenic/site` 326 passed, 2 known, none failed. The six bench
+  scripts with one binary: `site`, `delta`, `catalog`, `factor` without a
+  problem; `verify` 702 passed, 8 known, none failed; `catalog-verify`
+  1,348 passed, none known, none failed — the counts of before. All six
+  were run twice — a comment was edited in a Go file between, which
+  changes the binary's build id and nothing of its code — and wrote the
+  same bytes both times, but for `verify` (the next line).
+- **Found on the way: `bench/verify.mjs` has a check that can fail by
+  timing.** One of its three runs here reported 701 passed, 8 known, **1
+  failed**: WebKit, 1200 px, `/`, *styles, Install dialog open* — one
+  `button.rg-button` had the hover background in the default build's page
+  and not in the control's. Not a rule: both sheets have it. The pointer
+  rests on the *Install* button whose click opened the dialog; WebKit
+  takes `:hover` off an element that a modal dialog now covers on a timer
+  of its own, and the script waits (`settle`) on one of the two pages only
+  — so the two can be compared on either side of that moment. The runs
+  before and after it, of the same site to the byte, pass all 702.
+  **Not fixed**: `verify.mjs` is the measurement of T7 as it was reviewed,
+  and a fix of a rare race cannot be shown by a few runs. What it needs: a
+  move of the pointer on both pages after the dialog opens, or `settle` on
+  both.
+- **Not done.** No factoring policy (the owner's). No proof of any
+  cascade: the study counts the pairs of rules a packaging reorders, it
+  does not match them against a page. docs/getting-started.md's `--report`
+  sample: its example project is not in the repository, so the two new
+  rows were added by rule — `fetches` is the document's row while
+  everything is inlined, `classes` the one root the page's buttons have —
+  not by a run.
+- **Not verified.** Firefox, Safari proper, the floor's versions, a touch
+  device, as before. `TestTimeoutClock` on Linux and Windows (skipped
+  there), and that a machine's sleep was what failed those two runs: their
+  logs are gone — the mechanism is shown, the coincidence is argued from
+  the power log. The study's shared scripts are text, not a build: two
+  modules' one-letter names may collide in them. The binary's size was not
+  measured again. `-race`: not run (the phase's instruction).
+
 ## Later, noted here so it is not lost
 
 - ~~Keyed slots and integer-like keys~~: fixed (decisions.md, D — an
@@ -935,6 +1093,19 @@ A `site` job (build + the byte report as an artifact); getting-started gains
   table of `<link>`).
 - A route's `server.ts`, and the server it is middleware of (builder.md,
   *Routes*, *Variants*).
+- **The factoring policy** (builder.md, *Packaging*, OPEN; RGP2-071):
+  deferred by the owner (2026-10-09) until the design system is ready —
+  "for now I just need a solution that works"; the proper test is made
+  then, with all the components in place. Until then packaging is as built.
+  It was to be the owner's next decision, on the study. With it, if (b) or (c) is chosen:
+  the pruner saying, per page, whether an element may match both rules of
+  a pair — the proof of order those packagings need — and a script file
+  being a build of its own (an `export`, names that do not collide). And a
+  design system with a layer per component would make a component's place
+  in the cascade independent of where its rules are delivered.
+- A fixture that exercises T5's stated condition — a site on a design
+  system it uses a part of — and "the visit" as a numbered threshold
+  (RGP2-050, OPEN).
 - **Before the next release**: the notices of what the binary now links.
   `scripts/build-binaries.sh` puts tsgo's licence and notice into each
   platform package, and nothing else; since RGP2-030 the binary also holds

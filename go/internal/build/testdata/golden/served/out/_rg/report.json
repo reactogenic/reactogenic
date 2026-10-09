@@ -13,6 +13,20 @@
         "raw": 423,
         "gzip": 284
       },
+      "fetches": {
+        "raw": 423,
+        "gzip": 284,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 131,
+          "gzip": 93
+        },
+        "js": {
+          "raw": 87,
+          "gzip": 105
+        }
+      },
       "html": {
         "raw": 159,
         "gzip": 140
@@ -45,6 +59,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [
         {
           "module": "./behaviors/mark",
@@ -91,6 +106,20 @@
         "raw": 817,
         "gzip": 425
       },
+      "fetches": {
+        "raw": 817,
+        "gzip": 425,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 630,
+          "gzip": 311
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 172,
         "gzip": 146
@@ -112,6 +141,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "unpruned": true,
@@ -136,6 +166,20 @@
         "raw": 799,
         "gzip": 417
       },
+      "fetches": {
+        "raw": 799,
+        "gzip": 417,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 630,
+          "gzip": 311
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 154,
         "gzip": 134
@@ -157,6 +201,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "unpruned": true,
@@ -181,6 +226,20 @@
         "raw": 186,
         "gzip": 153
       },
+      "fetches": {
+        "raw": 186,
+        "gzip": 153,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 44,
+          "gzip": 50
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 127,
         "gzip": 122
@@ -202,6 +261,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 23,
@@ -232,6 +292,20 @@
         "raw": 514,
         "gzip": 323
       },
+      "fetches": {
+        "raw": 514,
+        "gzip": 323,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 54,
+          "gzip": 55
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 445,
         "gzip": 300
@@ -249,6 +323,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 33,
@@ -286,6 +361,20 @@
         "raw": 933,
         "gzip": 546
       },
+      "fetches": {
+        "raw": 933,
+        "gzip": 546,
+        "requests": 1,
+        "files": [],
+        "css": {
+          "raw": 271,
+          "gzip": 187
+        },
+        "js": {
+          "raw": 327,
+          "gzip": 244
+        }
+      },
       "html": {
         "raw": 289,
         "gzip": 200
@@ -318,6 +407,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [
         {
           "module": "./behaviors/toggle",

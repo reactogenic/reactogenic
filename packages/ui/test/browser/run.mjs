@@ -366,6 +366,19 @@ async function suite(name, launch, site, control) {
         await page.keyboard.press("Escape");
         await settle(page);
       });
+      // The owner's rule 5 (decisions.md, K): a slot's `className` replaces
+      // its attachment's, and a part is `data-part` — so the footer with a
+      // class of the author's is still the side menu's footer, in the page's
+      // pruned sheet too.
+      await check(`a slot's className, ${width}: the side menu's $Footer with a class of the author's keeps the footer's styling`, async () => {
+        await drawer();
+        const footer = await page.evaluate(() => {
+          const element = document.querySelector('#nav > [data-part="footer"]');
+          const style = getComputedStyle(element);
+          return [element.className, style.marginTop, style.paddingLeft, style.fontSize];
+        });
+        equal(footer, ["tools", "16px", "12px", "13px"], "class, margin-top, padding-left, font-size");
+      });
       await check(`in a side menu's $Footer, ${width}: an action menu has its keys, and its item opens the dialog in $Header`, async () => {
         await drawer();
         await page.click('[popovertarget="tools"]');

@@ -1,7 +1,7 @@
 // DropdownMenu (specs/phase02/components.md): a popover anchored to its
 // trigger. Links or actions decide its semantics and its JS, at compile time.
 import type { ReactNode } from "react";
-import { Each, isAssigned, mount, slotEntry, slotKeys, useShellId, type KeyedSlot, type Slot } from "@reactogenic/core";
+import { Each, isAssigned, mount, slotEntry, slotKeys, useShellId, variants, type KeyedSlot, type Slot } from "@reactogenic/core";
 import { Button, type Command, type TriggerProps } from "./button.rtsx";
 import "./tokens.css";
 import "./dropdown-menu.css";
@@ -64,6 +64,10 @@ function MenuItem({ href, current, children, ...rest }: ItemProps) {
   return <button type="button" {...rest} aria-current={ariaCurrent}>{children}</button>;
 }
 
+// An option a rule selects resolves into one class (components.md, *CSS
+// convention*); the default has none.
+const menuVariants = { align: { start: "", end: "rg-menu-end" } } as const;
+
 export function DropdownMenu({ id, align, typeahead, $Trigger, $Item }: DropdownMenuProps) {
   const generated = useShellId("m");
   const menu = id ?? generated;
@@ -71,8 +75,7 @@ export function DropdownMenu({ id, align, typeahead, $Trigger, $Item }: Dropdown
   // property name is its key encoded (phase01/syntax.md, *Keyed slots*).
   const keys = slotKeys($Item);
   const item = (key: string) => slotEntry($Item, key)!;
-  // Only an alignment that differs from the default is in the HTML.
-  const dataAlign = align === "end" ? align : undefined;
+  const className = variants("rg-menu", menuVariants, { align });
   // Back must not restore the page with the menu open.
   mount("@reactogenic/ui/behaviors/overlays");
   // Every item a link: a disclosure of links. A list, no `menu` role, Tab
@@ -81,7 +84,7 @@ export function DropdownMenu({ id, align, typeahead, $Trigger, $Item }: Dropdown
     return (
       <>
         <Button slot={$Trigger} popoverTarget={menu} />
-        <ul id={menu} className="rg-menu" data-align={dataAlign} popover="">
+        <ul id={menu} className popover="">
           <Each items={keys} { item: key }>
             <li key={key}><MenuItem key={key} slot={$Item} /></li>
           </Each>
@@ -106,7 +109,7 @@ export function DropdownMenu({ id, align, typeahead, $Trigger, $Item }: Dropdown
   return (
     <>
       <Button slot={$Trigger} id={trigger} popoverTarget={menu} aria-haspopup="menu" />
-      <div id={menu} className="rg-menu" data-align={dataAlign} popover="" role="menu" aria-labelledby={trigger}>
+      <div id={menu} className popover="" role="menu" aria-labelledby={trigger}>
         <Each items={keys} { item: key }>
           <MenuItem key={key} slot={$Item} role="menuitem" autoFocus={key === first} />
         </Each>

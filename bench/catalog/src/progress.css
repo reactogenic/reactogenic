@@ -5,13 +5,13 @@
     gap: 0.375rem;
     margin: 0 0 1rem;
 
-    &[data-tone="success"] {
+    &.bc-progress-success {
       --bc-progress-fg: var(--bc-success);
     }
-    &[data-tone="warning"] {
+    &.bc-progress-warning {
       --bc-progress-fg: var(--bc-warning);
     }
-    &[data-tone="danger"] {
+    &.bc-progress-danger {
       --bc-progress-fg: var(--bc-danger);
     }
 
@@ -65,7 +65,7 @@
         }
       }
     }
-    &[data-size="sm"] > progress {
+    &.bc-progress-sm > progress {
       height: 0.25rem;
     }
     @media (forced-colors: active) {

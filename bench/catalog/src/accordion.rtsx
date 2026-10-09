@@ -1,7 +1,7 @@
 // Accordion: disclosures in a column. `<details>`, and `<details name>` for
 // "one open at a time": no JS. A fixture (bench/catalog/README.md).
 import type { ReactNode } from "react";
-import { Each, slotKeys, useShellId, type KeyedSlot } from "@reactogenic/core";
+import { Each, slotKeys, useShellId, variants, type KeyedSlot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./accordion.css";
@@ -17,7 +17,7 @@ export interface AccordionItemProps {
 export interface AccordionProps {
   /** Option: opening one closes the others — the platform's `name` group. */
   exclusive?: boolean;
-  /** Option: `data-variant`. Default "separated": each item a box. */
+  /** Option: a class of its own per value. Default "separated": each item a box. */
   variant?: "separated" | "flush";
   /** In order. */
   $Item: KeyedSlot<AccordionItemProps>;
@@ -33,11 +33,15 @@ function Item({ title, open, group, children }: AccordionItemProps & { group: st
   );
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const accordionVariants = { variant: { separated: "", flush: "bc-accordion-flush" } } as const;
+
 export function Accordion({ exclusive, variant, $Item }: AccordionProps) {
   const generated = useShellId("a");
   const group = exclusive ? generated : undefined;
   return (
-    <div className="bc-accordion" data-variant={variant === "flush" ? variant : undefined}>
+    <div className={variants("bc-accordion", accordionVariants, { variant })}>
       <Each items={slotKeys($Item)} { item: key }>
         <Item key={key} slot={$Item} group />
       </Each>

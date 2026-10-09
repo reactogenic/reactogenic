@@ -1,7 +1,7 @@
 // Type-level tests: `tsc --noEmit` (pnpm typecheck) fails if an expectation
 // breaks. syntax.md, *Slots*.
 import type { ComponentProps, ReactNode } from "react";
-import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, SLOT_KEY, slotEntry, slotEntryName, slotKeys, type KeyedSlot, type Slot } from "./index.ts";
+import { Each, isAssigned, KEYED, NOT_ASSIGNED, renderSlot, SLOT_KEY, slotEntry, slotEntryName, slotKeys, variants, type KeyedSlot, type Slot } from "./index.ts";
 
 // Slot<P> is the complete contract: a body only if `children` is in it.
 type Box = Slot<{ color: string }>;
@@ -78,3 +78,19 @@ export const k1: Option = { [SLOT_KEY]: ({ value }) => value, children: ({ label
 export const k2: Option = { [SLOT_KEY]: ({ id }) => id };
 // @ts-expect-error a slot without args takes no key function
 export const k3: Slot<{ value?: string }> = { [SLOT_KEY]: () => "a" };
+
+// variants: a dimension or a value the map does not have is a type error
+// (builder.md, *What shell code can ask the builder*).
+const buttonVariants = { size: { sm: "rg-button-sm", md: "" }, look: { ghost: "rg-button-ghost" } } as const;
+declare const size: "sm" | "md" | undefined;
+export const v1: string = variants("rg-button", buttonVariants, { size, look: "ghost" });
+export const v2: string = variants("rg-button", buttonVariants);
+export const v3: string = variants("rg-button", buttonVariants, {});
+// @ts-expect-error `xl` is no value of `size`
+variants("rg-button", buttonVariants, { size: "xl" });
+// @ts-expect-error `colour` is no dimension of the map
+variants("rg-button", buttonVariants, { colour: "red" });
+// @ts-expect-error a value is a key of its dimension, not the class
+variants("rg-button", buttonVariants, { look: "rg-button-ghost" });
+// @ts-expect-error a map's values are classes: strings
+variants("rg-button", { size: { sm: 1 } }, { size: "sm" });

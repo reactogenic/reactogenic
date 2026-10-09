@@ -1,6 +1,7 @@
 // Pagination: the pages of a list, as links. The page number is in the
 // query string — in-page state of one route. A fixture
 // (bench/catalog/README.md).
+import { variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./pagination.css";
@@ -40,9 +41,13 @@ function Step({ part, rel, to, children }: { part: "prev" | "next"; rel: "prev" 
   );
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const paginationVariants = { compact: { on: "bc-pagination-compact" } } as const;
+
 export function Pagination({ label = "Pagination", current, total, href, compact }: PaginationProps) {
   return (
-    <nav className="bc-pagination" aria-label={label} data-variant={compact ? "compact" : undefined}>
+    <nav className={variants("bc-pagination", paginationVariants, { compact: compact ? "on" : undefined })} aria-label={label}>
       <ul>
         <Step part="prev" rel="prev" to={current > 1 ? href + (current - 1) : undefined}>Previous</Step>
         {compact ? (

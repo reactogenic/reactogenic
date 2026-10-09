@@ -117,6 +117,12 @@ func Render(program *rtsx.Program, routes []Route, opts Options) ([]Page, []repo
 			for _, m := range result.Page.Mounts {
 				page.Mounts = append(page.Mounts, Mount{Module: m.Module, ID: m.ID, Flags: m.Flags, Data: m.Data})
 			}
+			for _, c := range result.Page.Classes {
+				if page.Resolved == nil {
+					page.Resolved = map[string][]string{}
+				}
+				page.Classes, page.Resolved[c.Name] = append(page.Classes, c.Name), c.By
+			}
 			pages = append(pages, page)
 		}
 	}

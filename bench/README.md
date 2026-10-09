@@ -86,6 +86,27 @@ node bench/catalog-verify.mjs   # browsers: the pages load, and pruning changes 
 | `catalog.mjs` | type-checks the site (`reactogenic check`), builds it three ways — as it ships, the control `--no-specialize`, `--inline never` — each of which must print no diagnostic, and runs `measure.mjs` on each. Then: what each component weighs, what each page is, the default against the control page by page (CSS, JS, CSS + JS, and as a share of the page), the session of ten pages with its running total, **T5 page by page in brotli bytes** with gzip and raw beside, and T1, T2, T6, T8 as each can be read on a catalog. Last, one component deleted from one page, twice (the FAQ accordion of `/pricing/`, the toast of `/settings/`): what leaves, and that no other page changes. The same options as `site.mjs`; the same bytes on every run | Node ≥ 22; Chrome for the cold loads, or `--static` |
 | `catalog-verify.mjs` | the site and the control in Chromium and WebKit, at 1200 and 400 px: every page loads with no console error and no failed request; and in each of 244 states per engine — at rest, dark, reduced motion, forced colours, keyboard focus, the layout's menu and drawer, and what the catalog's own behaviours write (a tab selected by a click, a key and the hash, a field counted to its limit, a password shown, a toast, a sample copied, …) — the computed style of every element is the same in the two builds, **and no selector that the page's sheet lacks matches an element**: that one names what was wrongly dropped. `--engines`, `--inline never`, `--shots <dir>` | Playwright and its browsers, as `verify.mjs` |
 
+## The factoring study
+
+```sh
+node bench/factor.mjs           # packagings of one analysis: cold page, requests, session, T5, T8, the visit → results/factor.md
+```
+
+A **study**, for the owner's decision on the factoring policy
+(`specs/phase02/builder.md`, *Packaging*, OPEN; decisions.md, K): it builds
+nothing that ships. From the default build and the control of both sites it
+takes each page's exact rule set — its pruned sheet, split into units with a
+stable identity, in the order of the source — and its script's modules, and
+writes the files that each candidate packaging would: everything inlined
+(today), the rules every page needs as one shared file, rules needed by two,
+three or half of the pages, a file per component, one sheet for the site,
+and the control. For each: what a cold page fetches, requests, the session,
+the thresholds as plan.md writes them (T5, T8) and the visit, what a page
+fetches beyond its own sheet, and what would guarantee the same cascade. Its
+header has the method and what it does not do — no browser, and its shared
+scripts are the pages' own modules with an `export`, not a build. The same
+bytes on every run. Node ≥ 22.
+
 `compare.mjs` is the comparison of two builds of one page, lifted from
 `verify.mjs` — which keeps its own copy, so that the measurement of the docs
 site is the script that was reviewed.

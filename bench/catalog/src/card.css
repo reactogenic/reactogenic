@@ -10,7 +10,7 @@
     color: var(--rg-fg);
     overflow: hidden;
 
-    &[data-variant="elevated"] {
+    &.bc-card-elevated {
       border-color: transparent;
       box-shadow: var(--bc-shadow);
 
@@ -19,7 +19,7 @@
         border-color: CanvasText;
       }
     }
-    &[data-variant="filled"] {
+    &.bc-card-filled {
       border-color: transparent;
       background: var(--bc-surface);
     }

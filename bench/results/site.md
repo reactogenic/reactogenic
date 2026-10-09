@@ -8,20 +8,20 @@ As delivered. Loaded with headless Chrome, cold cache. Bytes are raw / gzip -9 /
 
 | Page | Req | HTML | CSS | JS | Other | Total | Inline JS / CSS / data (raw, inside HTML) | JS to parse (raw) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/` | 2 | 19,276 / 6,112 / 5,124 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 19,510 / 6,288 / 5,280 | 563 / 8,969 / 0 | 563 |
-| `/guide/` | 2 | 17,998 / 5,862 / 4,969 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 18,232 / 6,038 / 5,125 | 252 / 7,152 / 0 | 252 |
-| `/syntax/` | 2 | 46,873 / 13,161 / 11,399 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 47,107 / 13,337 / 11,555 | 1,443 / 8,842 / 0 | 1,443 |
-| `/reference/cli/` | 2 | 30,736 / 9,699 / 8,265 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 30,970 / 9,875 / 8,421 | 252 / 7,107 / 0 | 252 |
-| **session (4 pages, warm cache)** | 5 | 114,883 / 34,834 / 29,757 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 115,117 / 35,010 / 29,913 | | |
+| `/` | 2 | 19,248 / 6,095 / 5,113 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 19,482 / 6,271 / 5,269 | 563 / 8,961 / 0 | 563 |
+| `/guide/` | 2 | 17,980 / 5,844 / 4,963 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 18,214 / 6,020 / 5,119 | 252 / 7,144 / 0 | 252 |
+| `/syntax/` | 2 | 46,855 / 13,144 / 11,388 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 47,089 / 13,320 / 11,544 | 1,443 / 8,834 / 0 | 1,443 |
+| `/reference/cli/` | 2 | 30,718 / 9,682 / 8,251 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 30,952 / 9,858 / 8,407 | 252 / 7,099 / 0 | 252 |
+| **session (4 pages, warm cache)** | 5 | 114,801 / 34,765 / 29,715 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 115,035 / 34,941 / 29,871 | | |
 
 What each page is, whatever the delivery — the HTML as rendered, without what packaging writes into it:
 
 | Page | HTML as rendered | CSS | JS | CSS delivered | JS delivered |
 | --- | ---: | ---: | ---: | --- | --- |
-| `/` | 9,698 / 3,455 / 2,810 | 8,969 / 2,414 / 2,100 | 563 / 327 / 250 | inline | inline |
-| `/guide/` | 10,548 / 3,688 / 3,061 | 7,152 / 2,086 / 1,807 | 252 / 176 / 126 | inline | inline |
-| `/syntax/` | 36,542 / 10,148 / 8,712 | 8,842 / 2,390 / 2,078 | 1,443 / 707 / 588 | inline | inline |
-| `/reference/cli/` | 23,331 / 7,515 / 6,342 | 7,107 / 2,075 / 1,800 | 252 / 176 / 126 | inline | inline |
+| `/` | 9,678 / 3,451 / 2,806 | 8,961 / 2,405 / 2,091 | 563 / 327 / 250 | inline | inline |
+| `/guide/` | 10,538 / 3,680 / 3,054 | 7,144 / 2,076 / 1,797 | 252 / 176 / 126 | inline | inline |
+| `/syntax/` | 36,532 / 10,142 / 8,697 | 8,834 / 2,382 / 2,068 | 1,443 / 707 / 588 | inline | inline |
+| `/reference/cli/` | 23,321 / 7,508 / 6,338 | 7,099 / 2,066 / 1,785 | 252 / 176 / 126 | inline | inline |
 
 ## `always` — `reactogenic build --inline always`
 
@@ -29,20 +29,20 @@ As delivered. Loaded with headless Chrome, cold cache. Bytes are raw / gzip -9 /
 
 | Page | Req | HTML | CSS | JS | Other | Total | Inline JS / CSS / data (raw, inside HTML) | JS to parse (raw) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/` | 2 | 19,276 / 6,112 / 5,124 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 19,510 / 6,288 / 5,280 | 563 / 8,969 / 0 | 563 |
-| `/guide/` | 2 | 17,998 / 5,862 / 4,969 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 18,232 / 6,038 / 5,125 | 252 / 7,152 / 0 | 252 |
-| `/syntax/` | 2 | 46,873 / 13,161 / 11,399 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 47,107 / 13,337 / 11,555 | 1,443 / 8,842 / 0 | 1,443 |
-| `/reference/cli/` | 2 | 30,736 / 9,699 / 8,265 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 30,970 / 9,875 / 8,421 | 252 / 7,107 / 0 | 252 |
-| **session (4 pages, warm cache)** | 5 | 114,883 / 34,834 / 29,757 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 115,117 / 35,010 / 29,913 | | |
+| `/` | 2 | 19,248 / 6,095 / 5,113 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 19,482 / 6,271 / 5,269 | 563 / 8,961 / 0 | 563 |
+| `/guide/` | 2 | 17,980 / 5,844 / 4,963 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 18,214 / 6,020 / 5,119 | 252 / 7,144 / 0 | 252 |
+| `/syntax/` | 2 | 46,855 / 13,144 / 11,388 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 47,089 / 13,320 / 11,544 | 1,443 / 8,834 / 0 | 1,443 |
+| `/reference/cli/` | 2 | 30,718 / 9,682 / 8,251 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 30,952 / 9,858 / 8,407 | 252 / 7,099 / 0 | 252 |
+| **session (4 pages, warm cache)** | 5 | 114,801 / 34,765 / 29,715 | 0 / 0 / 0 | 0 / 0 / 0 | 234 / 176 / 156 | 115,035 / 34,941 / 29,871 | | |
 
 What each page is, whatever the delivery — the HTML as rendered, without what packaging writes into it:
 
 | Page | HTML as rendered | CSS | JS | CSS delivered | JS delivered |
 | --- | ---: | ---: | ---: | --- | --- |
-| `/` | 9,698 / 3,455 / 2,810 | 8,969 / 2,414 / 2,100 | 563 / 327 / 250 | inline | inline |
-| `/guide/` | 10,548 / 3,688 / 3,061 | 7,152 / 2,086 / 1,807 | 252 / 176 / 126 | inline | inline |
-| `/syntax/` | 36,542 / 10,148 / 8,712 | 8,842 / 2,390 / 2,078 | 1,443 / 707 / 588 | inline | inline |
-| `/reference/cli/` | 23,331 / 7,515 / 6,342 | 7,107 / 2,075 / 1,800 | 252 / 176 / 126 | inline | inline |
+| `/` | 9,678 / 3,451 / 2,806 | 8,961 / 2,405 / 2,091 | 563 / 327 / 250 | inline | inline |
+| `/guide/` | 10,538 / 3,680 / 3,054 | 7,144 / 2,076 / 1,797 | 252 / 176 / 126 | inline | inline |
+| `/syntax/` | 36,532 / 10,142 / 8,697 | 8,834 / 2,382 / 2,068 | 1,443 / 707 / 588 | inline | inline |
+| `/reference/cli/` | 23,321 / 7,508 / 6,338 | 7,099 / 2,066 / 1,785 | 252 / 176 / 126 | inline | inline |
 
 ## `control` — `reactogenic build --no-specialize`
 
@@ -50,20 +50,20 @@ As delivered. Loaded with headless Chrome, cold cache. Bytes are raw / gzip -9 /
 
 | Page | Req | HTML | CSS | JS | Other | Total | Inline JS / CSS / data (raw, inside HTML) | JS to parse (raw) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/` | 3 | 11,449 / 4,271 / 3,518 | 9,352 / 2,482 / 2,155 | 0 / 0 / 0 | 234 / 176 / 156 | 21,035 / 6,929 / 5,829 | 1,667 / 0 / 0 | 1,667 |
-| `/guide/` | 3 | 12,299 / 4,518 / 3,773 | 9,352 / 2,482 / 2,155 | 0 / 0 / 0 | 234 / 176 / 156 | 21,885 / 7,176 / 6,084 | 1,667 / 0 / 0 | 1,667 |
-| `/syntax/` | 3 | 38,293 / 10,993 / 9,445 | 9,352 / 2,482 / 2,155 | 0 / 0 / 0 | 234 / 176 / 156 | 47,879 / 13,651 / 11,756 | 1,667 / 0 / 0 | 1,667 |
-| `/reference/cli/` | 3 | 25,082 / 8,348 / 7,045 | 9,352 / 2,482 / 2,155 | 0 / 0 / 0 | 234 / 176 / 156 | 34,668 / 11,006 / 9,356 | 1,667 / 0 / 0 | 1,667 |
-| **session (4 pages, warm cache)** | 6 | 87,123 / 28,130 / 23,781 | 9,352 / 2,482 / 2,155 | 0 / 0 / 0 | 234 / 176 / 156 | 96,709 / 30,788 / 26,092 | | |
+| `/` | 3 | 11,429 / 4,262 / 3,515 | 9,344 / 2,472 / 2,145 | 0 / 0 / 0 | 234 / 176 / 156 | 21,007 / 6,910 / 5,816 | 1,667 / 0 / 0 | 1,667 |
+| `/guide/` | 3 | 12,289 / 4,510 / 3,764 | 9,344 / 2,472 / 2,145 | 0 / 0 / 0 | 234 / 176 / 156 | 21,867 / 7,158 / 6,065 | 1,667 / 0 / 0 | 1,667 |
+| `/syntax/` | 3 | 38,283 / 10,985 / 9,436 | 9,344 / 2,472 / 2,145 | 0 / 0 / 0 | 234 / 176 / 156 | 47,861 / 13,633 / 11,737 | 1,667 / 0 / 0 | 1,667 |
+| `/reference/cli/` | 3 | 25,072 / 8,340 / 7,048 | 9,344 / 2,472 / 2,145 | 0 / 0 / 0 | 234 / 176 / 156 | 34,650 / 10,988 / 9,349 | 1,667 / 0 / 0 | 1,667 |
+| **session (4 pages, warm cache)** | 6 | 87,073 / 28,097 / 23,763 | 9,344 / 2,472 / 2,145 | 0 / 0 / 0 | 234 / 176 / 156 | 96,651 / 30,745 / 26,064 | | |
 
 What each page is, whatever the delivery — the HTML as rendered, without what packaging writes into it:
 
 | Page | HTML as rendered | CSS | JS | CSS delivered | JS delivered |
 | --- | ---: | ---: | ---: | --- | --- |
-| `/` | 9,698 / 3,455 / 2,810 | 9,352 / 2,482 / 2,155 | 1,667 / 841 / 710 | file, 4 pages | inline |
-| `/guide/` | 10,548 / 3,688 / 3,061 | 9,352 / 2,482 / 2,155 | 1,667 / 841 / 710 | file, 4 pages | inline |
-| `/syntax/` | 36,542 / 10,148 / 8,712 | 9,352 / 2,482 / 2,155 | 1,667 / 841 / 710 | file, 4 pages | inline |
-| `/reference/cli/` | 23,331 / 7,515 / 6,342 | 9,352 / 2,482 / 2,155 | 1,667 / 841 / 710 | file, 4 pages | inline |
+| `/` | 9,678 / 3,451 / 2,806 | 9,344 / 2,472 / 2,145 | 1,667 / 841 / 710 | file, 4 pages | inline |
+| `/guide/` | 10,538 / 3,680 / 3,054 | 9,344 / 2,472 / 2,145 | 1,667 / 841 / 710 | file, 4 pages | inline |
+| `/syntax/` | 36,532 / 10,142 / 8,697 | 9,344 / 2,472 / 2,145 | 1,667 / 841 / 710 | file, 4 pages | inline |
+| `/reference/cli/` | 23,321 / 7,508 / 6,338 | 9,344 / 2,472 / 2,145 | 1,667 / 841 / 710 | file, 4 pages | inline |
 
 The control's script, split: its behaviours — every module any page mounts, every flag on — are 1,387 / 683 / 563; its own cost, the list of modules, the table from pathname to mounts and the loop that reads it, is 280 / 230 / 178 (compressed apart; the script as a whole is 1,667 / 841 / 710):
 
@@ -77,20 +77,20 @@ As delivered. Loaded with headless Chrome, cold cache. Bytes are raw / gzip -9 /
 
 | Page | Req | HTML | CSS | JS | Other | Total | Inline JS / CSS / data (raw, inside HTML) | JS to parse (raw) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/` | 4 | 9,810 / 3,520 / 2,852 | 8,969 / 2,414 / 2,100 | 563 / 327 / 250 | 234 / 176 / 156 | 19,576 / 6,437 / 5,358 | 0 / 0 / 0 | 563 |
-| `/guide/` | 4 | 10,660 / 3,747 / 3,105 | 7,152 / 2,086 / 1,807 | 252 / 176 / 126 | 234 / 176 / 156 | 18,298 / 6,185 / 5,194 | 0 / 0 / 0 | 252 |
-| `/syntax/` | 4 | 36,654 / 10,216 / 8,774 | 8,842 / 2,390 / 2,078 | 1,443 / 707 / 588 | 234 / 176 / 156 | 47,173 / 13,489 / 11,596 | 0 / 0 / 0 | 1,443 |
-| `/reference/cli/` | 4 | 23,443 / 7,570 / 6,372 | 7,107 / 2,075 / 1,800 | 252 / 176 / 126 | 234 / 176 / 156 | 31,036 / 9,997 / 8,454 | 0 / 0 / 0 | 252 |
-| **session (4 pages, warm cache)** | 12 | 80,567 / 25,053 / 21,103 | 32,070 / 8,965 / 7,785 | 2,258 / 1,210 / 964 | 234 / 176 / 156 | 115,129 / 35,404 / 30,008 | | |
+| `/` | 4 | 9,790 / 3,513 / 2,848 | 8,961 / 2,405 / 2,091 | 563 / 327 / 250 | 234 / 176 / 156 | 19,548 / 6,421 / 5,345 | 0 / 0 / 0 | 563 |
+| `/guide/` | 4 | 10,650 / 3,740 / 3,086 | 7,144 / 2,076 / 1,797 | 252 / 176 / 126 | 234 / 176 / 156 | 18,280 / 6,168 / 5,165 | 0 / 0 / 0 | 252 |
+| `/syntax/` | 4 | 36,644 / 10,207 / 8,764 | 8,834 / 2,382 / 2,068 | 1,443 / 707 / 588 | 234 / 176 / 156 | 47,155 / 13,472 / 11,576 | 0 / 0 / 0 | 1,443 |
+| `/reference/cli/` | 4 | 23,433 / 7,565 / 6,380 | 7,099 / 2,066 / 1,785 | 252 / 176 / 126 | 234 / 176 / 156 | 31,018 / 9,983 / 8,447 | 0 / 0 / 0 | 252 |
+| **session (4 pages, warm cache)** | 12 | 80,517 / 25,025 / 21,078 | 32,038 / 8,929 / 7,741 | 2,258 / 1,210 / 964 | 234 / 176 / 156 | 115,047 / 35,340 / 29,939 | | |
 
 What each page is, whatever the delivery — the HTML as rendered, without what packaging writes into it:
 
 | Page | HTML as rendered | CSS | JS | CSS delivered | JS delivered |
 | --- | ---: | ---: | ---: | --- | --- |
-| `/` | 9,698 / 3,455 / 2,810 | 8,969 / 2,414 / 2,100 | 563 / 327 / 250 | file, 1 page | file, 1 page |
-| `/guide/` | 10,548 / 3,688 / 3,061 | 7,152 / 2,086 / 1,807 | 252 / 176 / 126 | file, 1 page | file, 2 pages |
-| `/syntax/` | 36,542 / 10,148 / 8,712 | 8,842 / 2,390 / 2,078 | 1,443 / 707 / 588 | file, 1 page | file, 1 page |
-| `/reference/cli/` | 23,331 / 7,515 / 6,342 | 7,107 / 2,075 / 1,800 | 252 / 176 / 126 | file, 1 page | file, 2 pages |
+| `/` | 9,678 / 3,451 / 2,806 | 8,961 / 2,405 / 2,091 | 563 / 327 / 250 | file, 1 page | file, 1 page |
+| `/guide/` | 10,538 / 3,680 / 3,054 | 7,144 / 2,076 / 1,797 | 252 / 176 / 126 | file, 1 page | file, 2 pages |
+| `/syntax/` | 36,532 / 10,142 / 8,697 | 8,834 / 2,382 / 2,068 | 1,443 / 707 / 588 | file, 1 page | file, 1 page |
+| `/reference/cli/` | 23,321 / 7,508 / 6,338 | 7,099 / 2,066 / 1,785 | 252 / 176 / 126 | file, 1 page | file, 2 pages |
 
 ## Summary
 
@@ -98,10 +98,10 @@ Means over 4 cold page loads; brotli -q 11 unless marked raw.
 
 | Approach | Req / page | HTML br | CSS br (ext + inline raw) | JS br (ext) | JS to parse, raw | Other br | Page total br | Session total br | Session JS br |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| default | 2 | 7,439 | 0 + 8,018 | 0 | 628 | 156 | 7,595 | 29,913 | 0 |
-| always | 2 | 7,439 | 0 + 8,018 | 0 | 628 | 156 | 7,595 | 29,913 | 0 |
-| control | 3 | 5,945 | 2,155 + 0 | 0 | 1,667 | 156 | 8,256 | 26,092 | 0 |
-| never | 4 | 5,276 | 1,946 + 0 | 273 | 628 | 156 | 7,651 | 30,008 | 964 |
+| default | 2 | 7,429 | 0 + 8,010 | 0 | 628 | 156 | 7,585 | 29,871 | 0 |
+| always | 2 | 7,429 | 0 + 8,010 | 0 | 628 | 156 | 7,585 | 29,871 | 0 |
+| control | 3 | 5,941 | 2,145 + 0 | 0 | 1,667 | 156 | 8,242 | 26,064 | 0 |
+| never | 4 | 5,270 | 1,935 + 0 | 273 | 628 | 156 | 7,633 | 29,939 | 964 |
 
 ## The default build against the control
 
@@ -109,10 +109,10 @@ What component awareness changes, page by page: the same HTML in both builds; "s
 
 | Page | CSS, default | CSS, control | smaller: raw / gzip / brotli |
 | --- | ---: | ---: | ---: |
-| `/` | 8,969 / 2,414 / 2,100 | 9,352 / 2,482 / 2,155 | 4.1% / 2.7% / 2.6% |
-| `/guide/` | 7,152 / 2,086 / 1,807 | 9,352 / 2,482 / 2,155 | 23.5% / 16.0% / 16.1% |
-| `/syntax/` | 8,842 / 2,390 / 2,078 | 9,352 / 2,482 / 2,155 | 5.5% / 3.7% / 3.6% |
-| `/reference/cli/` | 7,107 / 2,075 / 1,800 | 9,352 / 2,482 / 2,155 | 24.0% / 16.4% / 16.5% |
+| `/` | 8,961 / 2,405 / 2,091 | 9,344 / 2,472 / 2,145 | 4.1% / 2.7% / 2.5% |
+| `/guide/` | 7,144 / 2,076 / 1,797 | 9,344 / 2,472 / 2,145 | 23.5% / 16.0% / 16.2% |
+| `/syntax/` | 8,834 / 2,382 / 2,068 | 9,344 / 2,472 / 2,145 | 5.5% / 3.6% / 3.6% |
+| `/reference/cli/` | 7,099 / 2,066 / 1,785 | 9,344 / 2,472 / 2,145 | 24.0% / 16.4% / 16.8% |
 
 | Page | JS, default | JS, control | smaller: raw / gzip / brotli | default without its entry | control without its table | smaller, raw |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -130,18 +130,18 @@ How much of a page's sheet is the page's own. A sheet is read as its selectors a
 | `/syntax/` | 88 | 72 | 16 | 1,838 | 6 |
 | `/reference/cli/` | 72 | 72 | 0 | 0 | 22 |
 
-72 of the control's 94 are on all four pages (≈ 6,884 B of selectors and declarations): the layout's — the side menu, the links menu, the button — and the site's own sheet. 4 are on no page: `:is(.rg-menu>:is(a,button),.rg-menu>li>a)[aria-current]`, `.rg-sidemenu>[data-part=header]`, `.rg-sidemenu>[data-part=footer]`, `.rg-sidemenu:not(:popover-open):has(dialog:modal)`.
+72 of the control's 94 are on all four pages (≈ 6,876 B of selectors and declarations): the layout's — the side menu, the links menu, the button — and the site's own sheet. 4 are on no page: `:is(.rg-menu>:is(a,button),.rg-menu>li>a)[aria-current]`, `.rg-sidemenu>[data-part=header]`, `.rg-sidemenu>[data-part=footer]`, `.rg-sidemenu:not(:popover-open):has(dialog:modal)`.
 
 What a visitor's browser fetches, as each build delivers it (from the tables above):
 
 | Build | Requests per page, cold | Page, cold: mean total | Session of 4 pages, warm cache: requests | … total |
 | --- | ---: | ---: | ---: | ---: |
-| `default` | 2 | 28,955 / 8,885 / 7,595 | 5 | 115,117 / 35,010 / 29,913 |
-| `always` | 2 | 28,955 / 8,885 / 7,595 | 5 | 115,117 / 35,010 / 29,913 |
-| `control` | 3 | 31,367 / 9,691 / 8,256 | 6 | 96,709 / 30,788 / 26,092 |
-| `never` | 4 | 29,021 / 9,027 / 7,651 | 12 | 115,129 / 35,404 / 30,008 |
+| `default` | 2 | 28,934 / 8,867 / 7,585 | 5 | 115,035 / 34,941 / 29,871 |
+| `always` | 2 | 28,934 / 8,867 / 7,585 | 5 | 115,035 / 34,941 / 29,871 |
+| `control` | 3 | 31,346 / 9,672 / 8,242 | 6 | 96,651 / 30,745 / 26,064 |
+| `never` | 4 | 29,000 / 9,011 / 7,633 | 12 | 115,047 / 35,340 / 29,939 |
 
-Over the session the control is **16.0% / 12.1% / 12.8% smaller** than the default build (raw / gzip / brotli). The control's one sheet (9,352 B) is a file, fetched once, its one script (1,667 B) inlined in each of the 4 pages; the default build's four sheets — 8,969, 7,152, 8,842, 7,107 B, no two the same — are each inlined in their page.
+Over the session the control is **16.0% / 12.0% / 12.7% smaller** than the default build (raw / gzip / brotli). The control's one sheet (9,344 B) is a file, fetched once, its one script (1,667 B) inlined in each of the 4 pages; the default build's four sheets — 8,961, 7,144, 8,834, 7,099 B, no two the same — are each inlined in their page.
 
 ## What each page's script is (T1)
 
@@ -207,7 +207,7 @@ plan.md, RGP2-050. T4 and T7 are measured by their own scripts.
 | T2 (refutes) | JS ≤ 1.5 KB raw (≈ 0.7 KB brotli) on the heaviest page; refutes above 5 KB brotli | `/syntax/`: 1,443 / 707 / 588 B | **pass** |
 | T3 | ≥ 100× below the best React build of an equivalent site (Astro + React islands + Radix: 317 KB raw) | JS to parse, raw, page against page: 564×, 1257×, 223×, 1266×; this site's heaviest page against that build's lightest: 219× raw, 152× brotli (external JS). Another site of the same shape, built during the research | **pass** |
 | T4 (refutes) | deleting the Install dialog from `/` removes its markup, its CSS rules and `invokers` from that page, and nothing else | `node bench/delta.mjs` | not measured here |
-| T5 | against the control, in brotli bytes — what a page transfers; raw and gzip beside: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | CSS: 2.6%, 16.1%, 3.6%, 16.5% brotli — 0 pages at 20% or more (2.7%, 16.0%, 3.7%, 16.4% gzip — 0 pages at 20% or more; 4.1%, 23.5%, 5.5%, 24.0% raw — 2 pages at 20% or more). JS: 64.8%, 82.3%, 17.2%, 82.3% brotli — under 30% on `/syntax/` (61.1%, 79.1%, 15.9%, 79.1% gzip — under 30% on `/syntax/`; 66.2%, 84.9%, 13.4%, 84.9% raw — under 30% on `/syntax/`) | **fail** |
+| T5 | against the control, in brotli bytes — what a page transfers; raw and gzip beside: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | CSS: 2.5%, 16.2%, 3.6%, 16.8% brotli — 0 pages at 20% or more (2.7%, 16.0%, 3.6%, 16.4% gzip — 0 pages at 20% or more; 4.1%, 23.5%, 5.5%, 24.0% raw — 2 pages at 20% or more). JS: 64.8%, 82.3%, 17.2%, 82.3% brotli — under 30% on `/syntax/` (61.1%, 79.1%, 15.9%, 79.1% gzip — under 30% on `/syntax/`; 66.2%, 84.9%, 13.4%, 84.9% raw — under 30% on `/syntax/`) | **fail** |
 | T6 (refutes) | no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source | 21 source files, 7 greps: nothing found; one stylesheet import, in `layout.rtsx` | **pass** |
 | T7 (refutes) | the browser checks pass on the built site | `node bench/verify.mjs` | not measured here |
 | T8 | ≤ 3 requests per page, cold | 2 per page (the document and the favicon); `--inline never`: 4 | **pass** |

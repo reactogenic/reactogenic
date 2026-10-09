@@ -40,9 +40,31 @@ below is of that tree. What moved:
 No script changed, of either site, and no HTML but `/syntax/`'s: D and G
 are no byte at the defaults.
 
+**And on the branch of the owner's seven rules** (2026-10-06;
+decisions.md, *K, ruled and reversed*; plan.md, RGP2-071) — an option a
+rule selects is a class of its own, through `variants()`
+(`data-variant="ghost"` → `rg-button-ghost`, `data-align="end"` →
+`rg-menu-end`, and every option of the catalog fixture); nothing else that
+ships changed: parts are `data-part` and pruning is what it was. Both sites
+with one binary, built from that tree; every number below is of it. What
+moved:
+
+| | Before | Now | Why |
+| --- | ---: | ---: | --- |
+| the docs site's four sheets | 8,969, 7,152, 8,842, 7,107 | 8,961, 7,144, 8,834, 7,099 | two selectors, 4 B each: `[data-variant=ghost]` → `.rg-button-ghost`, `[data-align=end]` → `.rg-menu-end` |
+| the control's sheet | 9,352 | 9,344 | the same two |
+| the docs site's HTML | 9,698, 10,548, 36,542, 23,331 | 9,678, 10,538, 36,532, 23,321 | a class is shorter than its attribute: 5 B a ghost button or an end-aligned menu |
+| the catalog's ten sheets; the control's | 8,816 to 16,479, `/404/` 5,852; 31,961 | 8,798 to 16,449, `/404/` 5,844; 31,883 | its options — tone, size, variant, … — as classes |
+| a page, cold, default against control (brotli, mean) | 8.0% smaller; 50.7% | 8.0%; 50.7% | |
+| the session, control against default (brotli) | 12.8% smaller; 44.8% | 12.7%; 44.7% | |
+| T5 on the docs site, CSS (brotli) | 2.6%, 16.1%, 3.6%, 16.5% | 2.5%, 16.2%, 3.6%, 16.8% | |
+
+No script changed, of either site; no threshold's outcome did.
+
 <!-- The numbers of this file are copied from bench/results/site.md,
-     delta.md and catalog.md, and the counts of the browser runs from
-     verify.md and catalog-verify.md — all five written on this tree. -->
+     delta.md, catalog.md and factor.md, and the counts of the browser runs
+     from verify.md and catalog-verify.md — all six written on this tree,
+     with one binary. -->
 
 **Verdict: holds for a page loaded cold; does not hold over a visit.**
 
@@ -50,9 +72,9 @@ are no byte at the defaults.
 | --- | --- | --- |
 | what it is | `site/`: four pages, three components in one shared layout | `bench/catalog-site`: ten pages on twenty components, three to five to a page — **a fixture**, written for this measurement |
 | the thresholds that can refute | hold: T1, T2, T4, T6, T7 (702 browser checks pass, 8 known, none fails) | hold, as far as each can be asked there: T1, T2's bound, T6, T4's question twice — and the pruned pages against the unpruned in two engines (1,348 checks pass, none known, none fails) |
-| **T5**, in brotli | **fails**, on both halves: no page's CSS is 20% smaller than the control's (2.6% to 16.5%); `/syntax/`'s script is 17.2% smaller | **holds**, on every page: CSS 41.7% to 73.0% smaller, JS 41.9% to 91.6% |
+| **T5**, in brotli | **fails**, on both halves: no page's CSS is 20% smaller than the control's (2.5% to 16.8%); `/syntax/`'s script is 17.2% smaller | **holds**, on every page: CSS 41.8% to 72.9% smaller, JS 41.9% to 91.6% |
 | a page, cold | 8.0% lighter than the control's | 50.7% lighter |
-| a visit | the control transfers 12.8% less over four pages, and is ahead from the second | the control transfers 44.8% less over ten, and is ahead from the third |
+| a visit | the control transfers 12.7% less over four pages, and is ahead from the second | the control transfers 44.7% less over ten, and is ahead from the third |
 
 **Cold.** Every threshold that can refute the bet holds, on both sites.
 T5 — what awareness adds over the same build without it — fails on the
@@ -62,16 +84,23 @@ control's bytes — of a fixture whose pages are short (*The catalog*); a
 page of the docs site is 0.2–0.9 KB lighter.
 
 **A visit.** The build without awareness transfers less from the second
-page of the docs site (9,602 B against 10,249 after two, in brotli; 26,092
-against 29,913 over four) and from the third of the catalog (12,930
-against 13,825 after three; 24,034 against 43,505 over ten), because
-per-page pruned sheets share nothing: decisions.md, K — open with the
-owner, and not designed here.
+page of the docs site (9,580 B against 10,232 after two, in brotli; 26,064
+against 29,871 over four) and from the third of the catalog (12,870
+against 13,748 after three; 23,953 against 43,305 over ten), because
+per-page pruned sheets share nothing. What packaging could share instead —
+with analysis left as it is — is the factoring policy: open with the owner
+(decisions.md, K), with a study (*The factoring study*, below).
 
-**The word.** By plan.md's rule — all eight thresholds — this reads
-"confirmed" if T5 is taken where ruling L sent it, the catalog, and
-"undecided" if T5 must also hold on the docs site. The owner has not
-chosen the word.
+**The word.** The owner's, since 2026-10-06 (decisions.md, K, rule 4;
+plan.md, RGP2-050): the thresholds stay as written; "current
+implementation fails visit/request targets; cold T5 remains undecided
+because the fixture doesn't exercise the stated condition." The visit: the
+paragraph above — and plan.md has no threshold for it yet. Requests: none
+fails on this build (T8: 2 a page); 4 a page was the build of the ruling
+that was reversed (*The ruling that was reversed*, below). Cold T5: it
+fails on the docs site and holds on the catalog, and neither is a design
+system larger than what its site uses — the docs site uses three
+components of three, the catalog site all twenty.
 
 ## The question
 
@@ -92,12 +121,14 @@ node bench/delta.mjs    # T4                     → bench/results/delta.md
 node bench/verify.mjs   # T7                     → bench/results/verify.md
 node bench/catalog.mjs          # the catalog: T5, T1, T2, T6, T8, T4's question → bench/results/catalog.md
 node bench/catalog-verify.mjs   # the catalog in browsers                        → bench/results/catalog-verify.md
+node bench/factor.mjs           # the factoring study: packagings of one analysis → bench/results/factor.md
 ```
 
 Each script builds the binary from `go/` (`go build -trimpath
-./cmd/reactogenic`) and its site — the first three the docs site (`site/`:
-four pages), the last two the catalog site (`bench/catalog-site`: ten) —
-into a temporary directory; `bench/README.md` has the options. The full
+./cmd/reactogenic`) — or takes `$REACTOGENIC_BINARY`: the numbers here are
+of one binary for all six — and its site — the first three the docs site
+(`site/`: four pages), the next two the catalog site (`bench/catalog-site`:
+ten), the last both — into a temporary directory; `bench/README.md` has the options. The full
 tables are in `bench/results/`; what follows is taken from them.
 
 | | |
@@ -117,11 +148,11 @@ and `--inline never` — and what the control ships on every page:
 
 | Page | HTML as rendered | CSS | JS | Behaviours |
 | --- | ---: | ---: | ---: | --- |
-| `/` | 9,698 / 3,455 / 2,810 | 8,969 / 2,414 / 2,100 | 563 / 327 / 250 | `overlays`, `invokers` |
-| `/guide/` | 10,548 / 3,688 / 3,061 | 7,152 / 2,086 / 1,807 | 252 / 176 / 126 | `overlays` |
-| `/syntax/` | 36,542 / 10,148 / 8,712 | 8,842 / 2,390 / 2,078 | 1,443 / 707 / 588 | `overlays`, `menu-keys` with typeahead — the flag, and the mount's data `{"typeahead":true}` — `invokers` |
-| `/reference/cli/` | 23,331 / 7,515 / 6,342 | 7,107 / 2,075 / 1,800 | 252 / 176 / 126 | `overlays` |
-| the control, every page | the same HTML | 9,352 / 2,482 / 2,155 | 1,667 / 841 / 710 | all three, and a table |
+| `/` | 9,678 / 3,451 / 2,806 | 8,961 / 2,405 / 2,091 | 563 / 327 / 250 | `overlays`, `invokers` |
+| `/guide/` | 10,538 / 3,680 / 3,054 | 7,144 / 2,076 / 1,797 | 252 / 176 / 126 | `overlays` |
+| `/syntax/` | 36,532 / 10,142 / 8,697 | 8,834 / 2,382 / 2,068 | 1,443 / 707 / 588 | `overlays`, `menu-keys` with typeahead — the flag, and the mount's data `{"typeahead":true}` — `invokers` |
+| `/reference/cli/` | 23,321 / 7,508 / 6,338 | 7,099 / 2,066 / 1,785 | 252 / 176 / 126 | `overlays` |
+| the control, every page | the same HTML | 9,344 / 2,472 / 2,145 | 1,667 / 841 / 710 | all three, and a table |
 
 The control's script is its behaviours, 1,387 / 683 / 563, and its own cost
 — the list of modules, the table from a document's path to its mounts, the
@@ -132,10 +163,10 @@ loop that reads it — 280 / 230 / 178. `/syntax/` without its mount calls is
 
 | Page | CSS | JS | JS, against the control's behaviours alone (raw) | CSS + JS, brotli | … of the page |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `/` | 4.1% / 2.7% / 2.6% | 66.2% / 61.1% / 64.8% | 60.0% | 2,865 → 2,350 | 9.1% |
-| `/guide/` | 23.5% / 16.0% / 16.1% | 84.9% / 79.1% / 82.3% | 82.1% | 2,865 → 1,933 | 15.7% |
-| `/syntax/` | 5.5% / 3.7% / 3.6% | 13.4% / 15.9% / 17.2% | 0.0% | 2,865 → 2,666 | 1.7% |
-| `/reference/cli/` | 24.0% / 16.4% / 16.5% | 84.9% / 79.1% / 82.3% | 82.1% | 2,865 → 1,926 | 10.2% |
+| `/` | 4.1% / 2.7% / 2.5% | 66.2% / 61.1% / 64.8% | 60.0% | 2,855 → 2,341 | 9.1% |
+| `/guide/` | 23.5% / 16.0% / 16.2% | 84.9% / 79.1% / 82.3% | 82.1% | 2,855 → 1,923 | 15.8% |
+| `/syntax/` | 5.5% / 3.6% / 3.6% | 13.4% / 15.9% / 17.2% | 0.0% | 2,855 → 2,656 | 1.7% |
+| `/reference/cli/` | 24.0% / 16.4% / 16.8% | 84.9% / 79.1% / 82.3% | 82.1% | 2,855 → 1,911 | 10.3% |
 
 "Of the page" is HTML + CSS + JS, each compressed apart. 72 of the control
 sheet's 94 selectors and at-rules are on all four pages; `/reference/cli/`
@@ -146,22 +177,22 @@ of 4096 B or more ([builder.md](builder.md), *Packaging*) — every blob of
 the default build is inlined: no two pages have the same sheet, and the one
 script two pages share is 252 B. So the default build is `--inline
 always`'s. Of the control's two blobs, which all four pages share, the sheet
-(9,352 B) is a file and the script (1,667 B) is inlined in every page.
+(9,344 B) is a file and the script (1,667 B) is inlined in every page.
 
 | Build | Requests per page, cold | Page, cold, mean | Session: requests | Session: total |
 | --- | ---: | ---: | ---: | ---: |
-| default, and `--inline always` | 2 | 28,955 / 8,885 / 7,595 | 5 | 115,117 / 35,010 / 29,913 |
-| control | 3 | 31,367 / 9,691 / 8,256 | 6 | 96,709 / 30,788 / 26,092 |
-| `--inline never` | 4 | 29,021 / 9,027 / 7,651 | 12 | 115,129 / 35,404 / 30,008 |
+| default, and `--inline always` | 2 | 28,934 / 8,867 / 7,585 | 5 | 115,035 / 34,941 / 29,871 |
+| control | 3 | 31,346 / 9,672 / 8,242 | 6 | 96,651 / 30,745 / 26,064 |
+| `--inline never` | 4 | 29,000 / 9,011 / 7,633 | 12 | 115,047 / 35,340 / 29,939 |
 
 The second request of the default build is the favicon (234 B). Cold, the
 default build is 8.0% smaller than the control (brotli, mean) with two
-requests to its three. **Over the session the control is 12.8% smaller**
-(16.0% raw): cumulative brotli after each page, default 5,280 → 10,249 →
-21,648 → 29,913, control 5,829 → 9,602 → 19,047 → 26,092 — the control is
+requests to its three. **Over the session the control is 12.7% smaller**
+(16.0% raw): cumulative brotli after each page, default 5,269 → 10,232 →
+21,620 → 29,871, control 5,816 → 9,580 → 19,016 → 26,064 — the control is
 ahead from the visitor's second page. Its sheet is fetched once (its script
 is in every page: 710 B brotli of each); the default build's four sheets —
-8,969, 7,152, 8,842 and 7,107 B, of which 7,107 B are the same rules:
+8,961, 7,144, 8,834 and 7,099 B, of which 7,099 B are the same rules:
 `/reference/cli/`'s sheet is what every page has — are each inlined in
 their page, and as files (`--inline never`) they are four files.
 
@@ -184,7 +215,7 @@ for scale only:
 | the hand-written floor (`d-floor-page`) | 897 | 7,527 | 3 |
 | the floor at behaviour parity | 1,584 | — | 3 |
 | Astro + hand-written scripts (`c2-astro-vanilla`) | 829 | 7,668 | 2 |
-| this site, default build | 628 | 7,595 | 2 |
+| this site, default build | 628 | 7,585 | 2 |
 
 ## The thresholds
 
@@ -193,8 +224,8 @@ for scale only:
 | T1 runtime (refutes) | 0 bytes of React or of any generic runtime: every JS byte of a page is in a row of its report, no `<runtime>` row | on all four pages the report's rows add up to the script — 248 `overlays` + 307 `invokers` + 8 entry = 563; 248 + 4 = 252; 248 + 832 `menu-keys` + 307 + 56 = 1,443 — every row is a mounted behaviour or the entry, none is `<runtime>`. Read: each script is function declarations and one constant, then the mount calls — one of them with its data, `{typeahead:!0}` — which are the only statements that run; one `<script>` per document, no handler attribute. (Since the rulings the builder refuses a page that has any other: shell-script.) The three distinct scripts are printed whole in `bench/results/site.md` | **pass** |
 | T2 JS per page (refutes above 5 KB brotli) | ≤ 1.5 KB raw (≈ 0.7 KB brotli) on the heaviest page | `/syntax/`: 1,443 raw, 588 brotli. 57 B under the budget: one more behaviour of `invokers`' size would exceed it | **pass** |
 | T3 against React | ≥ 100× below the best React build of an equivalent site | 219× raw at the worst pairing, 152× brotli. Another site (above) | **pass** |
-| T4 precision (refutes) | deleting the *Install* dialog from `/` removes its markup, the CSS rules only it matched and `invokers` from that page, nothing else; every other page the same bytes | HTML: one span of 1,070 B cut out — the trigger and the `<dialog>`, whole — every other byte where it was. CSS: −1,752 B, 14 selectors, each naming `.rg-dialog`; none came; none that stays names what left. JS: 563 → 252, `invokers` left, `overlays` the same bytes; the script is now `/guide/`'s. The other three documents: the same bytes, under `--inline always` and as the site ships | **pass** |
-| T5 awareness | against the control, in brotli bytes: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | CSS: 2.6%, 16.1%, 3.6%, 16.5% — no page at 20% (raw: 23.5% and 24.0% on two). JS: 17.2% on `/syntax/` (raw: 13.4%; against the control's behaviours alone, 0.0%). On the catalog it holds: *The catalog* | **fail** here |
+| T4 precision (refutes) | deleting the *Install* dialog from `/` removes its markup, the CSS rules only it matched and `invokers` from that page, nothing else; every other page the same bytes | HTML: one span of 1,065 B cut out — the trigger and the `<dialog>`, whole — every other byte where it was. CSS: −1,752 B, 14 selectors, each naming `.rg-dialog`; none came; none that stays names what left. JS: 563 → 252, `invokers` left, `overlays` the same bytes; the script is now `/guide/`'s. The other three documents: the same bytes, under `--inline always` and as the site ships | **pass** |
+| T5 awareness | against the control, in brotli bytes: per-page CSS ≥ 20% smaller on at least two pages, JS ≥ 30% smaller on every page that ships one | CSS: 2.5%, 16.2%, 3.6%, 16.8% — no page at 20% (raw: 23.5% and 24.0% on two). JS: 17.2% on `/syntax/` (raw: 13.4%; against the control's behaviours alone, 0.0%). On the catalog it holds: *The catalog* | **fail** here |
 | T6 authoring (refutes) | no `<script>`, no hand-written JS, no per-page list of styles or behaviours in the site's source | 21 source files: `.rtsx`, one `.css`, `.json`, `.md`, `.svg`. No `<script>`, `<style>`, stylesheet link, `style` attribute, handler, `mount(`, import of a behaviour or `dangerouslySetInnerHTML` outside the code samples the pages show; one stylesheet import in the whole site, `layout.rtsx:8`. `site/test/browser.mjs` is JS: a test of the built site, not built into it | **pass** |
 | T7 behaviour (refutes) | the browser checks pass on the built site | 702 passed, 8 known, 0 failed: Chromium 153.0.8010.12, 355; WebKit 26.6, 347 and 8 known (below). 688 of them are of the site; 14 of the builder's fixture, which the threshold does not ask for | **pass** |
 | T8 requests | ≤ 3 per page, cold | 2: the document and the favicon. (`--inline never`: 4) | **pass** |
@@ -299,46 +330,46 @@ fixes to the fixture's CSS, listed there.
 
 **The numbers**, in brotli bytes (`bench/results/catalog.md` has raw and
 gzip, and every table whole), of the same tree and binary as the docs
-site's. The control ships every page the same sheet — 31,961 / 6,486 /
-5,777 B — and the same script, 4,277 / 1,703 / 1,507 B:
+site's. The control ships every page the same sheet — 31,883 / 6,446 /
+5,740 B — and the same script, 4,277 / 1,703 / 1,507 B:
 
-| Page | Beyond the layout | CSS | smaller than the control's 5,777 | JS | smaller than the control's 1,507 | CSS + JS | the page, smaller by |
+| Page | Beyond the layout | CSS | smaller than the control's 5,740 | JS | smaller than the control's 1,507 | CSS + JS | the page, smaller by |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/` | `Card`, `Badge`, `Avatar` | 2,150 | 62.8% | 126 | 91.6% | 2,276 against 7,284 | 56.2% |
-| `/pricing/` | `Tabs`, `Card`, `Badge`, `Tooltip`, `Accordion` | 2,598 | 55.0% | 404 | 73.2% | 3,002 against 7,284 | 48.0% |
-| `/docs/` | `Breadcrumbs`, `Tabs`, `CodeBlock`, `Callout` | 2,446 | 57.7% | 649 | 56.9% | 3,095 against 7,284 | 45.3% |
-| `/docs/api/` | `Breadcrumbs`, `Table`, `Badge`, `CodeBlock` | 2,420 | 58.1% | 307 | 79.6% | 2,727 against 7,284 | 49.6% |
-| `/changelog/` | `Badge`, `Callout`, `Pagination` | 2,280 | 60.5% | 126 | 91.6% | 2,406 against 7,284 | 55.7% |
-| `/blog/` | `Avatar`, `Badge`, `Callout`, `CodeBlock` | 2,251 | 61.0% | 126 | 91.6% | 2,377 against 7,284 | 54.7% |
-| `/dashboard/` | `Card`, `Progress`, `Table`, `Badge`, `Dialog`, an action `DropdownMenu` | 2,775 | 52.0% | 588 | 61.0% | 3,363 against 7,284 | 43.8% |
-| `/settings/` | `Tabs`, `Field`, `Select`, `Checkbox`, `Avatar`, `Callout`, `Toast`, `Dialog` | 3,367 | 41.7% | 876 | 41.9% | 4,243 against 7,284 | 32.3% |
-| `/contact/` | `Field`, `Select`, `Checkbox` | 2,217 | 61.6% | 126 | 91.6% | 2,343 against 7,284 | 58.2% |
-| `/404/` | — | 1,557 | 73.0% | 126 | 91.6% | 1,683 against 7,284 | 70.2% |
+| `/` | `Card`, `Badge`, `Avatar` | 2,141 | 62.7% | 126 | 91.6% | 2,267 against 7,247 | 56.1% |
+| `/pricing/` | `Tabs`, `Card`, `Badge`, `Tooltip`, `Accordion` | 2,581 | 55.0% | 404 | 73.2% | 2,985 against 7,247 | 48.1% |
+| `/docs/` | `Breadcrumbs`, `Tabs`, `CodeBlock`, `Callout` | 2,440 | 57.5% | 649 | 56.9% | 3,089 against 7,247 | 45.2% |
+| `/docs/api/` | `Breadcrumbs`, `Table`, `Badge`, `CodeBlock` | 2,399 | 58.2% | 307 | 79.6% | 2,706 against 7,247 | 49.6% |
+| `/changelog/` | `Badge`, `Callout`, `Pagination` | 2,266 | 60.5% | 126 | 91.6% | 2,392 against 7,247 | 55.6% |
+| `/blog/` | `Avatar`, `Badge`, `Callout`, `CodeBlock` | 2,246 | 60.9% | 126 | 91.6% | 2,372 against 7,247 | 54.6% |
+| `/dashboard/` | `Card`, `Progress`, `Table`, `Badge`, `Dialog`, an action `DropdownMenu` | 2,756 | 52.0% | 588 | 61.0% | 3,344 against 7,247 | 43.8% |
+| `/settings/` | `Tabs`, `Field`, `Select`, `Checkbox`, `Avatar`, `Callout`, `Toast`, `Dialog` | 3,342 | 41.8% | 876 | 41.9% | 4,218 against 7,247 | 32.3% |
+| `/contact/` | `Field`, `Select`, `Checkbox` | 2,213 | 61.4% | 126 | 91.6% | 2,339 against 7,247 | 58.1% |
+| `/404/` | — | 1,553 | 72.9% | 126 | 91.6% | 1,679 against 7,247 | 70.2% |
 
 A page's HTML is the same in both builds. The control's script is its
 behaviours — 3,587 / 1,412 / 1,210 B — and its table, 690 / 364 / 330 B;
 against the behaviours alone the page's own are 32.6% to 89.9% smaller.
 
-**The session.** Cold, a page of the default build transfers 4,474 B
+**The session.** Cold, a page of the default build transfers 4,454 B
 (brotli, mean of ten) in 2 requests — 3 on `/`, which has a picture — and
-the control's 9,082 B in 4: 50.7% less. With a warm cache, the ten pages in
+the control's 9,041 B in 4: 50.7% less. With a warm cache, the ten pages in
 the order of the table:
 
 | After | default | control | |
 | --- | ---: | ---: | --- |
-| 1 page | 4,202 | 9,266 | the default build, by 54.7% |
-| 2 pages | 8,794 | 10,934 | the default build, by 19.6% |
-| 3 pages | 13,825 | 12,930 | the control, by 6.5% |
-| 5 pages | 22,294 | 16,403 | the control, by 26.4% |
-| 10 pages | 43,505 | 24,034 | the control, by 44.8% |
+| 1 page | 4,169 | 9,218 | the default build, by 54.8% |
+| 2 pages | 8,737 | 10,879 | the default build, by 19.7% |
+| 3 pages | 13,748 | 12,870 | the control, by 6.4% |
+| 5 pages | 22,169 | 16,336 | the control, by 26.3% |
+| 10 pages | 43,305 | 23,953 | the control, by 44.7% |
 
-The control's sheet and script are two files, fetched once: 7,284 B, and
+The control's sheet and script are two files, fetched once: 7,247 B, and
 after that a page is its HTML. The default build's ten sheets are ten
 different blobs of 1.6–3.4 KB, each inlined in its page, and of its six
 scripts the one five pages share is 252 B, under the 4096 B at which a
 shared blob becomes a file (builder.md, *Packaging*). As files
 (`--inline never`) they are ten sheets and six scripts all the same:
-43,782 B, and 28 requests. A reader who sees one page or two is better off
+43,602 B, and 28 requests. A reader who sees one page or two is better off
 with the default build; from the third, with the control.
 
 **The thresholds, on it** — as each can be read on a fixture that is not
@@ -349,8 +380,8 @@ the site they were written for:
 | T1 runtime (refutes) | as written | on all ten pages the report's rows add up to the script — 252 B to 2,448 B — every row a mounted behaviour or the entry, none `<runtime>`; the only statements that run are the mount calls | **pass** |
 | T2 JS per page (refutes above 5 KB brotli) | the 1.5 KB budget is for the docs site's three behaviours (decisions.md, F) and is not carried over; its bound is, and the heaviest page is reported | `/settings/`, five behaviours: 2,448 / 1,022 / 876 B. Eight of ten pages are under 1.5 KB raw. The docs site's budget is 500 B a behaviour mounted; here `/settings/` is at 490 B and `/docs/` — three behaviours, 341 B of mount calls — at 583 B: said, and not judged, the reading being made after the fact | **pass** on the bound; the budget is not judged |
 | T3 against React | not applicable: no React build of this fixture exists | — | not measured |
-| T4 precision (refutes) | the same question of two other components (T4 names the docs site's dialog) | the FAQ `Accordion` deleted from `/pricing/`: 1,115 B of markup in one span, 12 selectors that all name `.bc-accordion`, no behaviour; the `Toast` from `/settings/`: 387 B, 8 selectors that name `.bc-toast` and the token only it read, the `toast` behaviour (2,448 → 1,932 B). No other page changed, either time | **pass** |
-| T5 awareness | in brotli bytes; "at least two pages" reads "at least half of the pages" | CSS: 41.7% to 73.0% smaller, ten pages of ten at 20% or more. JS: 41.9% to 91.6%, every page at 30% or more. It holds in gzip and raw too | **pass** |
+| T4 precision (refutes) | the same question of two other components (T4 names the docs site's dialog) | the FAQ `Accordion` deleted from `/pricing/`: 1,115 B of markup in one span, 12 selectors that all name `.bc-accordion`, no behaviour; the `Toast` from `/settings/`: 384 B, 8 selectors that name `.bc-toast` and the token only it read, the `toast` behaviour (2,448 → 1,932 B). No other page changed, either time | **pass** |
+| T5 awareness | in brotli bytes; "at least two pages" reads "at least half of the pages" | CSS: 41.8% to 72.9% smaller, ten pages of ten at 20% or more. JS: 41.9% to 91.6%, every page at 30% or more. It holds in gzip and raw too | **pass** |
 | T6 authoring (refutes) | of the site's source; the catalog is the design system's side of the rule | 17 files: no `<script>`, `<style>`, handler, `mount(` or behaviour import; one stylesheet import, in `layout.rtsx` | **pass** |
 | T7 behaviour (refutes) | a sanity pass and the style comparison, not a suite per component | *In a browser*, below: 1,348 checks pass, none is known, none fails | **pass**, as far as it was asked |
 | T8 requests | as written | 2 per page, 3 on `/` (the document, the favicon, a picture). The control: 4 and 5 | **pass** |
@@ -428,7 +459,7 @@ control in Chromium 153.0.8010.12 and WebKit 26.6, at 1200 and 400 px:
 4. **Where a page uses a few components of many, awareness halves the
    page** (T5, on the catalog): 42–73% of the control's CSS and 42–92% of
    its JS do not ship, on every one of ten pages, and a page is 3.0–5.6 KB
-   lighter cold — in brotli, of a control that is 7.3 KB.
+   lighter cold — in brotli, of a control that is 7.2 KB.
 
 ## What component awareness itself added
 
@@ -438,8 +469,8 @@ without the per-page decisions. Against it:
 | | The docs site | The catalog |
 | --- | --- | --- |
 | JS | 224 to 1,415 B raw per page (122 to 584 B brotli). 280 B of it is the control's own table | 1,829 to 4,025 B raw (631 to 1,381 B brotli). 690 B of it is the control's table, which grows with the site |
-| CSS | 383 to 2,245 B raw per page (55 to 355 B brotli) | 15,482 to 26,109 B raw (2,410 to 4,220 B brotli) |
-| a page | 199 to 939 B brotli: 1.7% to 15.7% of what the page transfers | 3,041 to 5,601 B brotli: 32% to 70% of what a page transfers — of pages that are short (*The catalog*) |
+| CSS | 383 to 2,245 B raw per page (54 to 360 B brotli) | 15,434 to 26,039 B raw (2,398 to 4,187 B brotli) |
+| a page | 199 to 944 B brotli: 1.7% to 15.8% of what the page transfers | 3,029 to 5,568 B brotli: 32% to 70% of what a page transfers — of pages that are short (*The catalog*) |
 | a flag | the site has one, `RG_MENU_TYPEAHEAD`, and one mount with data, `{ typeahead: true }`: turning `typeahead` off takes 300 of `menu-keys`' 832 B and 15 B of the entry from `/syntax/` — 315 B — and no CSS and no byte of HTML (`delta.mjs`) | four. `tabs` is 799 B on the page whose tabs follow the hash and 626 B on the two whose tabs do not; a `Field` without a counter or a password mounts no script at all (`/contact/`: 252 B, `overlays` alone) |
 | tokens | no custom property is dropped: every page reads all eight | a page's `:root` keeps the custom properties the page reads: 3 to 14 declarations are dropped per page, of the fixture's twelve tokens, the design system's eight and the site's two |
 | requests | 2 instead of 3 — packaging, which the control could have too (`--no-specialize --inline always` was not measured) | 2 instead of 4: the control's sheet and script are both files there |
@@ -457,19 +488,21 @@ without the per-page decisions. Against it:
 - **A visit**: per-page sheets are different blobs, so nothing is cached
   across pages. On the docs site, where they differ by a rule or two, the
   control wins from the second page (above); splitting a sheet into what
-  every page keeps and the page's own rest would put ≈ 7.1 KB in one file
-  and leave ≈ 1.8 KB on two pages and under 0.1 KB on the others — an
-  estimate from the selectors, not a build. **On the catalog awareness
+  every page keeps and the page's own rest — (b) of the factoring study,
+  computed from the sheets and not built — puts 89 of the sheet's units in
+  one file and leaves two pages some 1.8 KB and two a rule or none: over
+  the four pages it transfers 4.1% less than the control (*The factoring
+  study*). **On the catalog awareness
   still loses a visit, and by more**: the sheets differ by whole
   components, the control wins from the third page, and over ten it
-  transfers 44.8% less (*The catalog*, *The session*). There 47 of the
+  transfers 44.7% less (*The catalog*, *The session*). There 47 of the
   control's 313 selectors are on every page — ≈ 4.7 KB raw: the layout's.
   The better awareness prunes, the less two pages' sheets have in common;
-  what to share is the owner's (decisions.md, K), and is not designed
-  here.
+  what packaging should share of it is the owner's (decisions.md, K), with
+  the study below, and is not designed here.
 - **The page that uses many**: `/settings/` of the catalog, eight
   components and five behaviours, is where T5 is nearest its bar — CSS
-  41.7% smaller, JS 41.9% (32.6% against the control's behaviours alone,
+  41.8% smaller, JS 41.9% (32.6% against the control's behaviours alone,
   bar 30%). A site whose typical page is that page would fail it.
 - **The HTML**: 54–77% of what a page transfers, and React's static
   output to the byte. Nothing is done to it.
@@ -516,10 +549,12 @@ without the per-page decisions. Against it:
   spec, no contract tests, and a browser pass in place of a suite. What it
   shows is how the builder behaves when pages differ in what they use —
   not what a given product would save.
-- **That a visit is ever better with awareness.** On neither site is it,
-  from the third page on. A split of a sheet into shared and own was
-  estimated on the docs site and neither built nor estimated on the
-  catalog.
+- **That a visit is ever better with awareness, as built.** On neither
+  site is it, from the third page on. What other packagings of the same
+  analysis would transfer is computed, for both sites, and none is built
+  (*The factoring study*): on the docs site sharing what every page needs
+  wins the visit by a few percent; on the catalog nothing that keeps T5
+  does.
 - **That pruning is sound for any behaviour.** For the three of the design
   system, and for the fixture's one that toggles, removes and rewrites by
   name. A behaviour that computes the name it writes (`"is-" + state`) is
@@ -528,6 +563,104 @@ without the per-page decisions. Against it:
 - **A real network.** A local server; each file compressed on its own; no
   header, connection or CDN cost.
 - **`--base`**: not measured here; the site's own suite builds under one.
+
+## The ruling that was reversed
+
+The owner first ruled on K (2026-10-06): one sheet for all of the design
+system's CSS, chosen for the site by the classes its pages resolved — parts
+and variants as classes, through `variants()` — with a page's own CSS
+apart, in a layer of its own, a file per page. It was built (branch
+`rgp2-070-ds-css`: kept as a reference commit, not merged) and measured
+with these scripts:
+
+| | The build of that ruling | This build |
+| --- | --- | --- |
+| a visit | the control still transferred less: 4.4% on the docs site, 25.0% on the catalog | 12.7%, 44.7% |
+| a page cold, on the catalog | its CSS within 6–9% of the control's: T5 from pass to **fail** | 41.8% to 72.9% smaller: pass |
+| requests | 4 a page: T8 **fails** | 2 |
+| a dialog deleted from one page | its rules stayed in what that page fetched — the site's sheet has them while any page does: T4's question, **failed** | they leave |
+| a slot's `className` | cost a part its rule: a part was a class, and a slot's props replace its attachment's | parts are `data-part` |
+
+It bought two thirds of the visit on the docs site and under half on the
+catalog, and paid with what the bet is about: the page loaded cold, and
+per-page precision. The owner: "a step in a wrong direction" — and seven
+rules in its place (decisions.md): analysis is per artifact and exact, and
+is never turned into a site-wide union because packaging shares files;
+factoring across pages is the packager's problem, for CSS and JS alike; the
+thresholds are not weakened; phase 1's `className` semantics stand; the
+design system has no `!important`. What stands of the first ruling is that
+a variant resolves into a class of its own.
+
+## The factoring study
+
+**Deferred by the owner (2026-10-09)**: no packaging is tuned until the
+design system is ready — "for now I just need a solution that works. Later,
+when we have all the components in place we'll be able to do a proper
+test." What follows is kept for that test; packaging is as built.
+
+`bench/factor.mjs` → `bench/results/factor.md`. **A study, not a build**:
+what the owner's next decision — the factoring policy (builder.md,
+*Packaging*, OPEN) — has to go on. The analysis is the default build's, as
+built: each page's pruned sheet, split into units with a stable identity in
+source order (387 on the catalog, 111 on the docs site; every sheet is
+written back from its units to the byte), and its script's modules. Ten
+packagings of it are written out as files and sized as `measure.mjs` sizes
+them; today's packaging and the control come out as the bench measured
+them in Chrome, to the byte (29,871 and 26,064 B over the docs site's
+session; 43,305 and 23,953 over the catalog's). In brotli, CSS and JS
+factored alike:
+
+| Packaging | Docs site: cold page, mean | requests | session | Catalog: cold page, mean | requests | session |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| (a) today: everything inlined | 7,585 | 2 | 29,871 | 4,454 | 2–3 | 43,305 |
+| (b′) the rules every sheet starts with, as one file | 7,830 | 4 | 29,446 | 4,606 | 4–5 | 42,349 |
+| (b) what every page needs, as one sheet and one script; the rest inlined | 7,803 | 4 | 24,992 | 4,842 | 4–5 | 33,290 |
+| (c) what two pages or more need, shared | 7,918 | 4 | 24,256 | 6,588 | 4–5 | 26,348 |
+| (c) … three or more | 7,803 | 4 | 24,992 | 5,432 | 4–5 | 28,917 |
+| (c) … half of the pages or more | 7,918 | 4 | 24,256 | 4,950 | 4–5 | 31,298 |
+| (d) a file per component and per behaviour, whole | 8,471 | 8–11 | 25,149 | 6,820 | 8–20 | 29,394 |
+| (d) … each page's own part of it, a file where two pages' are the same | 8,285 | 7–8 | 28,148 | 5,191 | 5–9 | 38,688 |
+| (e) one sheet — the union of what the pages need — and one script | 8,210 | 3 | 26,032 | 8,858 | 4–5 | 23,771 |
+| (f) the control | 8,242 | 3 | 26,064 | 9,041 | 4–5 | 23,953 |
+
+| | The docs site | The catalog |
+| --- | --- | --- |
+| T5 as written, on what a page fetches cold | fails under every packaging: it fails on the analysis itself, (a) | holds under (a), (b′), (b) and (c) from three pages up; fails under (c) from two (JS: 24.7% at the least), both (d) (JS: 8.3%, 22.3%), and (e) |
+| T8, ≤ 3 requests | (a), (e) and the control; every packaging that shares a sheet *and* a script is at 4 | (a) alone: the control is at 4–5 |
+| the visit — no more than the control over the session | (b), (c), (d, whole), (e): by 0.1% to 6.9% | (e) alone, by 0.8% |
+| all three | **none** | **none** |
+| the cascade | (b′), (d), (e) keep it by construction; (b) changes the order of 45 pairs of rules that could matter, (c) from two pages of 1 | (b): 53 pairs, (c): 34 to 92 |
+
+- **Over a visit that reaches every page, one sheet of the union is the
+  floor — and the control's sheet is that union but for the rules no page
+  uses**: 4 of 111 units on the docs site, 16 of 387 on the catalog. Any
+  exact packaging transfers every needed rule at least once over such a
+  session, in more and smaller pieces, each compressed on its own: on the
+  catalog the CSS over the session is 5,740 B for the control, 5,557 B for
+  the union, 14,125 B for (b) and 23,937 B as inlined today. So awareness
+  can win a long visit by its CSS only where the design system is larger
+  than what the site uses — neither fixture is that — or where the visit
+  is short.
+- **On the docs site it is the script that decides**: the control's, under
+  4096 B, is inlined in every page — 2,840 B over the session against
+  1,090 B for the pages' own. That is why (b) wins the visit there by 4.1%
+  though its CSS over the session is more than the control's: 3,051 B
+  against 2,145.
+- **Cold and the visit pull apart.** Today's packaging is the lightest cold
+  page, in one request; every shared file costs the cold page a request,
+  and — unless it is exact for that page — bytes: 0.9 KB of CSS a page for
+  (c) from two pages on the docs site, 9.1 KB on the catalog.
+- **Scripts are too small to share**: every script (b) and (c) would share
+  is under 4096 B (258 to 1,557 B). With `auto`'s rule kept, those
+  packagings are the study's *CSS alone* rows: one request fewer — 3 on the
+  docs site, and 3 on the catalog but for the page with a picture.
+- **Order.** (b) and (c) put a rule after rules it preceded. Whether that
+  changes a computed style is a question about the page — does one element
+  match both — which the pruner could answer and today does not.
+
+Not in it: time, a network, a browser (the cold loads are computed from the
+files); scripts that run — a shared script there is the pages' own modules
+with an `export`, not a build; any policy: it recommends none.
 
 ## Not run
 
@@ -544,9 +677,9 @@ checked once each, where a state was needed for the comparison.
 
 | | |
 | --- | --- |
-| packaging | per-page pruning leaves nothing to share: the control transfers 12.8% less over four pages (19.8% while its script was a file: under the 4096 B rule the script is in every page). builder.md, *Packaging*, has the OPEN; decisions.md, K |
+| packaging | per-page pruning leaves nothing to share: the control transfers 12.7% less over four pages (19.8% while its script was a file: under the 4096 B rule the script is in every page). builder.md, *Packaging*, has the OPEN; decisions.md, K |
 | T5 | its JS half cannot hold on a page that mounts everything; its unit was not given. decisions.md, L — ruled: brotli, and measured again on a catalog, where it holds on every page |
-| packaging, on the catalog | the control transfers 44.8% less over ten pages, and `--inline never` does not help the default build: ten sheets are ten files. decisions.md, K, at a scale where it matters more |
+| packaging, on the catalog | the control transfers 44.7% less over ten pages, and `--inline never` does not help the default build: ten sheets are ten files. decisions.md, K, at a scale where it matters more |
 | the catalog's own CSS, by its first browser pass | a tooltip centred on its word left a 400 px screen, and a table with a sticky header was `overflow: visible` at every width: fixed in the fixture (`bench/catalog-site/README.md`). Neither was the builder's |
 | builder.md, *The report* | "gzip: 0–5 B above `gzip -9`" was measured on small files. On the docs site Go's `compress/gzip` is from 77 B below to 3 B above zlib's, under 1%: corrected |
 | research.md | "CSS 39–76% of the one-bundle file per page": 76–96% here |
@@ -556,4 +689,7 @@ checked once each, where a state was needed for the comparison.
 | `bench/site.mjs`, with the rulings | T1's check for a `javascript:` URL looked for the word anywhere in the page, and the `build` reference now says it in its text: the check reads attributes. And `bench/measure.mjs` once counted three requests for `/` in the `--inline never` build, the favicon's missed; repeated, it is four, and the report the same bytes on two runs |
 | `bench/verify.mjs`, with the rulings | it waits for a page's animations to end: a paused one in the fixture's new page hung it. The fixture's animation runs |
 | `bytes.go` | its comment on the report's gzip still said "a few bytes more" than `gzip -9`: from 76 B fewer to 3 B more, as builder.md has it. Corrected |
+| the render engine's timeout, with the owner's rule 7 | `TestMemory` (`go/internal/build/render`) had failed twice in some thirty-five runs, with the *timeout's* message after 0.4 s. Not the memory limit: the engine's own timeout is a deadline on the wall clock, and the machine slept between short wakes while those runs were made — a page that was rendering when the clock stepped was ended on its next poll. Not reproduced by repetition (1,100 runs); reproduced by stepping the wall clock under the test (35 of 61 moments fail, in 0.16–0.30 s), and fixed: the builder times a page on the monotonic clock (0 of 61; 1,000 runs). A build on a laptop that slept would have failed the same way (plan.md, RGP2-071) |
+| the report, with rules 1–3 | it had one number for what a page needs and what it fetches — a blob's size. They are two columns now (`fetches`), equal while packaging shares only identical blobs |
+| `bench/verify.mjs`, a check that can fail by timing | one run of three on this tree reported 701 passed, 8 known, 1 failed: in WebKit at 1200 px, with the Install dialog open, the *Install* button under the pointer still had its hover background in one build's page and not in the other's. The two sheets have the same rule; the script waits on one of the two pages, and WebKit drops `:hover` from what a modal dialog covers on a timer. The same site, to the byte, passes all 702 in the runs before and after. Not fixed: plan.md, RGP2-071 |
 | Safari's Tab | stops at neither links nor buttons by default (Option-Tab does): at 400 px, with the drawer closed, Tab reaches nothing on these pages. The engine's and the system's, as for every site; `verify.mjs` presses Option-Tab in WebKit |

@@ -61,7 +61,8 @@ fixture that broke them would measure something else.
 | one `.css` per component, imported by the component | after the tokens: `@reactogenic/ui/tokens.css` (which orders the layers), then `./tokens.css` (the fixture's tones) |
 | everything nested under the root class | `.bc-<name>`, in `@layer rg.components` |
 | parts through child combinators | `.bc-field > [data-part="control"] > [data-part="reveal"]`; a slot's content is never reached |
-| options | `data-<option>` on the root, only when it differs from the default |
+| options a rule selects are classes | a **variant**: one class per value, unique to it, resolved by `variants()` of `@reactogenic/core` on the element the rule selects — `variants("bc-badge", badgeVariants, { tone, variant, dot: dot ? "on" : undefined })` → `bc-badge bc-badge-info bc-badge-dot`. The default has none. A switch (`dot`, `wrap`, `striped`) is a dimension with one value, `on`. Parts stay `data-part`: a slot's `className` replaces its attachment's (`Card`'s `$Footer`, `Callout`'s `$Title`) |
+| no `!important` | as `@reactogenic/ui`: the rules are in layers, and a layered `!important` beats a project's unlayered CSS. `bench/catalog.mjs` fails on one, in either package |
 | runtime state | pseudo-classes (`:checked`, `:popover-open`, `:indeterminate`, `:focus-within`), platform state (`[open]`), `aria-*` — and one named attribute: `data-full`, which `field` writes by that name |
 | motion | every `transition` and `animation` inside `@media (prefers-reduced-motion: no-preference)` |
 | forced colours | a border where a background or a shadow carried the meaning |

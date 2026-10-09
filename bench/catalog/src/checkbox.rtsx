@@ -1,6 +1,7 @@
 // Checkbox: the platform's own, restyled — or, with `variant="switch"`, a
 // switch (`role="switch"`). No JS. A fixture (bench/catalog/README.md).
 import type { ReactNode } from "react";
+import { variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./checkbox.css";
@@ -16,14 +17,18 @@ export interface CheckboxProps {
   checked?: boolean;
   required?: boolean;
   disabled?: boolean;
-  /** Option: `data-variant`. Default "checkbox". */
+  /** Option: a class of its own per value. Default "checkbox". */
   variant?: "checkbox" | "switch";
 }
+
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const checkVariants = { variant: { checkbox: "", switch: "bc-check-switch" } } as const;
 
 export function Checkbox({ name, label, hint, value, checked, required, disabled, variant }: CheckboxProps) {
   const isSwitch = variant === "switch";
   return (
-    <label className="bc-check" data-variant={isSwitch ? "switch" : undefined}>
+    <label className={variants("bc-check", checkVariants, { variant })}>
       <input type="checkbox" role={isSwitch ? "switch" : undefined} name value defaultChecked={checked} required disabled />
       <span data-part="text">
         {label}

@@ -1,39 +1,48 @@
 /  pages/index.rtsx
                   raw     gzip
   HTML           1168      535
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2982     1384   index.html
+  document       2982     1385   index.html
+  fetches       10505     3467   2 requests
   components Each ×3, HomePage ×1, Item ×4, Items ×2, Layout ×1, Section ×1, SideMenu ×1
   behaviours @reactogenic/ui/behaviors/overlays
 
 /account/  pages/account/index.rtsx
                   raw     gzip
   HTML            962      515
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2776     1355   account/index.html
+  document       2776     1356   account/index.html
+  fetches       10299     3438   2 requests
   components AccountPage ×1, Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×2, Plans ×1
+  classes    DropdownMenu: rg-menu
+             Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #account RG_MENU_TYPEAHEAD=false
 
 /account/guest.html  pages/account/guest.rtsx
                   raw     gzip
   HTML           1129      554
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2943     1396   account/guest.html
+  document       2943     1397   account/guest.html
+  fetches       10466     3479   2 requests
   components Button ×1, Dialog ×1, GuestPage ×1, Layout ×1
+  classes    Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/invokers
 
 /actions/  pages/actions/index.rtsx
                   raw     gzip
   HTML           1393      628
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       3207     1461   actions/index.html
+  document       3207     1462   actions/index.html
+  fetches       10730     3544   2 requests
   components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
+  classes    DropdownMenu: rg-menu
+             Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true {"typeahead":true}
              @reactogenic/ui/behaviors/invokers
@@ -41,54 +50,64 @@
 /dialog/  pages/dialog/index.rtsx
                   raw     gzip
   HTML           1169      534
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2983     1381   dialog/index.html
+  document       2983     1382   dialog/index.html
+  fetches       10506     3464   2 requests
   components Action ×1, Button ×2, Dialog ×1, DialogPage ×1, Each ×1, Layout ×1
+  classes    Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/invokers
 
 /gate/closed.html  pages/gate/closed.rtsx
                   raw     gzip
   HTML            558      337
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2372     1193   gate/closed.html
+  document       2372     1191   gate/closed.html
+  fetches        9895     3273   2 requests
   components ClosedPage ×1, Layout ×1
 
 /guide/  pages/guide/index.rtsx
                   raw     gzip
   HTML            901      498
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2715     1356   guide/index.html
+  document       2715     1357   guide/index.html
+  fetches       10238     3439   2 requests
   components GuidePage ×1, Intro ×1, Layout ×1
 
 /guide/more/  pages/guide/more/index.rtsx
                   raw     gzip
   HTML            718      433
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2532     1295   guide/more/index.html
+  document       2532     1296   guide/more/index.html
+  fetches       10055     3378   2 requests
   components Layout ×1, MorePage ×1
 
 /links/  pages/links/index.rtsx
                   raw     gzip
-  HTML            819      447
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  HTML            814      441
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
-  document       2633     1300   links/index.html
+  document       2628     1295   links/index.html
+  fetches       10151     3377   2 requests
   components Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, LinksPage ×1, MenuItem ×3
+  classes    DropdownMenu: rg-menu
+             Button: rg-button rg-button-ghost
   behaviours @reactogenic/ui/behaviors/overlays
 
 /plain/  pages/plain/index.rtsx
                   raw     gzip
   HTML            558      332
-  CSS            7531     2093   /_rg/site-1622bb1d.css, the same on 10 pages
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
   JS             1730      855   inline, the same on 10 pages
   document       2372     1191   plain/index.html
+  fetches        9895     3273   2 requests
   components Button ×1, Layout ×1, PlainPage ×1
+  classes    Button: rg-button
 
-css  1622bb1d     7531     2093   _rg/site-1622bb1d.css    / /account/ /account/guest.html /actions/ /dialog/ /gate/closed.html /guide/ /guide/more/ /links/ /plain/
+css  a05e499c     7523     2082   _rg/site-a05e499c.css    / /account/ /account/guest.html /actions/ /dialog/ /gate/closed.html /guide/ /guide/more/ /links/ /plain/
 js   380a64ec     1730      855   inline                   / /account/ /account/guest.html /actions/ /dialog/ /gate/closed.html /guide/ /guide/more/ /links/ /plain/
 10 pages written to <out>

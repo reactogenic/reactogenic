@@ -1,21 +1,25 @@
 // Callout: a note beside the text — a tip, a warning. A fixture
 // (bench/catalog/README.md).
 import type { ComponentProps, ReactNode } from "react";
-import type { Slot } from "@reactogenic/core";
+import { variants, type Slot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./callout.css";
 
 export interface CalloutProps {
-  /** Option: `data-tone`. Default "note". */
+  /** Option: a class of its own per value. Default "note". */
   tone?: "note" | "tip" | "warning" | "danger";
   $Title?: Slot<ComponentProps<"p">>;
   children?: ReactNode;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const calloutVariants = { tone: { note: "", tip: "bc-callout-tip", warning: "bc-callout-warning", danger: "bc-callout-danger" } } as const;
+
 export function Callout({ tone, $Title, children }: CalloutProps) {
   return (
-    <aside className="bc-callout" role="note" data-tone={tone === "note" ? undefined : tone}>
+    <aside className={variants("bc-callout", calloutVariants, { tone })} role="note">
       <p slot={$Title} data-part="title" />
       <div data-part="body">{children}</div>
     </aside>

@@ -99,7 +99,7 @@
       }
     }
     /* Invalid: the border and the message, and the message is text. */
-    &[data-invalid] {
+    &.bc-field-invalid {
       > [data-part="control"] {
         border-color: var(--bc-danger);
       }

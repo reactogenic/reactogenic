@@ -1,13 +1,13 @@
 // Card: a surface for one thing — a feature, a plan, a figure. With `href`
 // the whole card is one link. A fixture (bench/catalog/README.md).
 import type { ComponentProps, ReactNode } from "react";
-import type { Slot } from "@reactogenic/core";
+import { variants, type Slot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./card.css";
 
 export interface CardProps {
-  /** Option: `data-variant`. Default "outline". */
+  /** Option: a class of its own per value. Default "outline". */
   variant?: "outline" | "elevated" | "filled";
   /** Option: the card is a link — an `<a>`, so nothing in it may be one. */
   href?: string;
@@ -22,8 +22,12 @@ export interface CardProps {
   children?: ReactNode;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const cardVariants = { variant: { outline: "", elevated: "bc-card-elevated", filled: "bc-card-filled" } } as const;
+
 export function Card({ variant, href, $Media, $Eyebrow, $Title, $Footer, children }: CardProps) {
-  const dataVariant = variant === "outline" ? undefined : variant;
+  const className = variants("bc-card", cardVariants, { variant });
   const parts = (
     <>
       <div slot={$Media} data-part="media" />
@@ -36,7 +40,7 @@ export function Card({ variant, href, $Media, $Eyebrow, $Title, $Footer, childre
     </>
   );
   if (href !== undefined) {
-    return <a className="bc-card" data-variant={dataVariant} href>{parts}</a>;
+    return <a className href>{parts}</a>;
   }
-  return <article className="bc-card" data-variant={dataVariant}>{parts}</article>;
+  return <article className>{parts}</article>;
 }

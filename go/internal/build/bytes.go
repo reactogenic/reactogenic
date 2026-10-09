@@ -20,6 +20,15 @@ import (
 // page ships, how, and why each byte is there. It is written to
 // `<out>/_rg/report.json`, and `--report` prints it.
 //
+// It keeps two things apart (builder.md, *Analysis and packaging*). What a
+// page **needs** is analysis, per page and exact: its HTML, its CSS — the
+// rules that can match on it — its script — the behaviours it mounted —
+// with why (Styles, Modules, Mounts, Classes). What it **fetches** is
+// packaging: the document as written, the files it links (Fetches, and how
+// each blob is delivered). Packaging may make a page fetch what another
+// needs; it never changes what a page needs. As the builder packages today
+// — a blob is shared only when it is the same bytes — the two are equal.
+//
 // Nothing in it names the machine: a file of the project is named from the
 // project directory, a file of a package by the package (naming).
 type Report struct {
@@ -58,13 +67,21 @@ type PageReport struct {
 	// Document is the file as written — what the request for the page
 	// carries: the HTML and whatever is inlined in it.
 	Document Size `json:"document"`
+	// Fetches is what a cold load of the page fetches of the build's own:
+	// the document and the files it links. Packaging's.
+	Fetches Fetches `json:"fetches"`
 	// HTML is the page alone, without what packaging adds to it; CSS and JS
-	// are its blobs. The three do not depend on how the blobs are delivered.
+	// are what the page needs — the sizes are of its own sheet and script,
+	// as analysis left them. The three do not depend on how they are
+	// delivered.
 	HTML Size   `json:"html"`
 	CSS  *Asset `json:"css,omitempty"` // absent: the page has no `<style>`
 	JS   *Asset `json:"js,omitempty"`  // absent: the page has no `<script>`
 	// Components are the function components React called for the page.
 	Components []Component `json:"components"`
+	// Classes are the classes that `variants()` resolved for the page, in
+	// the order first resolved, each with the components that resolved it.
+	Classes []Class `json:"classes"`
 	// Mounts are the page's behaviours, in the order they were first
 	// mounted: a module and the element it is mounted on, once.
 	Mounts []Mount `json:"mounts"`
@@ -76,7 +93,8 @@ type PageReport struct {
 	Styles *Styles `json:"styles,omitempty"`
 }
 
-// Asset is a page's CSS or JS: a blob, and how the page gets it.
+// Asset is a page's CSS or JS: what the page needs of it — the Size — and
+// how packaging delivers that: the blob that holds it.
 type Asset struct {
 	Size
 	Delivery string `json:"delivery"`       // "inline", "file"
@@ -85,9 +103,33 @@ type Asset struct {
 	Blob     string `json:"blob,omitempty"` // its content hash
 }
 
+// Fetches is what packaging makes a cold load of a page fetch of the build's
+// own files: Size is all of it — the document and each file it links, each
+// compressed on its own — and CSS and JS the styles and the script among
+// it, wherever they are: inlined or in a file, the page's own or shared.
+// Against the page's CSS and JS — what it needs — they say what a page
+// fetches for another's sake: nothing, while a blob is shared only when it
+// is the same bytes.
+type Fetches struct {
+	Size
+	Requests int      `json:"requests"` // the document and each file
+	Files    []string `json:"files"`    // the files, by URL under the base
+	CSS      Size     `json:"css"`
+	JS       Size     `json:"js"`
+}
+
 type Component struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+}
+
+// Class is a class that `variants()` of @reactogenic/core resolved while the
+// page rendered (render.Page.Classes): a component's root, or a variant's
+// own class. By are the components whose calls resolved it, in the order of
+// their first call; none, for a call outside any component.
+type Class struct {
+	Name string   `json:"name"`
+	By   []string `json:"by"`
 }
 
 type Mount struct {
@@ -173,12 +215,23 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 		}
 		r.Blobs = append(r.Blobs, out)
 	}
-	asset := func(at int) *Asset {
+	// What a page needs is its own sheet and script, as analysis left them
+	// (built.css, built.js); the blob says how that is delivered.
+	needs := map[string]Size{}
+	for i, b := range blobs {
+		needs[b.content] = sizes[i]
+	}
+	asset := func(at int, own string) *Asset {
 		if at < 0 {
 			return nil
 		}
+		need, known := needs[own]
+		if !known {
+			need = sizeOf(own)
+			needs[own] = need
+		}
 		b := blobs[at]
-		a := &Asset{Size: sizes[at], Delivery: delivery(b), Pages: len(b.pages), Blob: b.hash}
+		a := &Asset{Size: need, Delivery: delivery(b), Pages: len(b.pages), Blob: b.hash}
 		if b.file {
 			a.URL = opts.Base + b.path(opts.NoSpecialize)
 		}
@@ -193,11 +246,33 @@ func byteReport(opts Options, site []built, blobs []*blob, of [][2]int, document
 		page := PageReport{
 			Pathname: p.page.Pathname, Variant: p.page.Name(), Path: p.page.Path(), File: file, Output: p.page.Output(),
 			Document: sizeOf(documents[i]), HTML: sizeOf(bare[i]),
-			CSS: asset(of[i][0]), JS: asset(of[i][1]),
-			Components: []Component{}, Mounts: []Mount{},
+			CSS: asset(of[i][0], p.css), JS: asset(of[i][1], p.js),
+			Components: []Component{}, Classes: []Class{}, Mounts: []Mount{},
+		}
+		// What the page fetches is read off its blobs — packaging's — not
+		// off what it needs.
+		page.Fetches = Fetches{Size: page.Document, Requests: 1, Files: []string{}}
+		for k, at := range of[i] {
+			if at < 0 {
+				continue
+			}
+			kind := [2]*Size{&page.Fetches.CSS, &page.Fetches.JS}[k]
+			kind.Raw, kind.Gzip = kind.Raw+sizes[at].Raw, kind.Gzip+sizes[at].Gzip
+			if b := blobs[at]; b.file {
+				page.Fetches.Requests++
+				page.Fetches.Files = append(page.Fetches.Files, opts.Base+b.path(opts.NoSpecialize))
+				page.Fetches.Raw, page.Fetches.Gzip = page.Fetches.Raw+sizes[at].Raw, page.Fetches.Gzip+sizes[at].Gzip
+			}
 		}
 		for _, name := range slices.Sorted(maps.Keys(p.page.Components)) {
 			page.Components = append(page.Components, Component{name, p.page.Components[name]})
+		}
+		for _, name := range p.page.Classes {
+			by := p.page.Resolved[name]
+			if by == nil {
+				by = []string{}
+			}
+			page.Classes = append(page.Classes, Class{name, by})
 		}
 		// A module on an element once, however often the page's components
 		// mounted it — every Dialog mounts `overlays` — with the flags any
@@ -306,9 +381,11 @@ func (r *Report) JSON() ([]byte, error) {
 }
 
 // Print writes the report as `--report` shows it: per page, the bytes of its
-// HTML, CSS and JS, raw and gzip, and how each is delivered; the components
-// it rendered; the behaviours it mounted, with their flags and their data; the bytes of its
-// script by module; the rules of its CSS kept and dropped, by source file.
+// HTML, CSS and JS — what it needs — raw and gzip, and how each is
+// delivered; what it fetches; the components it rendered and the classes
+// their variants resolved; the behaviours it mounted, with their flags and
+// their data; the bytes of its script by module; the rules of its CSS kept
+// and dropped, by source file.
 func (r *Report) Print(w io.Writer) {
 	for _, p := range r.Pages {
 		fmt.Fprintf(w, "%s  %s\n", p.Path, p.File)
@@ -335,6 +412,27 @@ func (r *Report) Print(w io.Writer) {
 			row(a.name, a.asset.Size, note)
 		}
 		row("document", p.Document, p.Output)
+		// Packaging's side: what a cold load fetches, against what analysis
+		// says the page needs. The control has no analysis to compare with.
+		fetched := fmt.Sprintf("%d request", p.Fetches.Requests)
+		if p.Fetches.Requests != 1 {
+			fetched += "s"
+		}
+		if r.Specialize {
+			var css, js int
+			if p.CSS != nil {
+				css = p.CSS.Raw
+			}
+			if p.JS != nil {
+				js = p.JS.Raw
+			}
+			if more := [2]int{p.Fetches.CSS.Raw - css, p.Fetches.JS.Raw - js}; more == [2]int{} {
+				fetched += ": what the page needs, and no more"
+			} else {
+				fetched += fmt.Sprintf(": %d B of CSS and %d B of JS more than the page needs", more[0], more[1])
+			}
+		}
+		row("fetches", p.Fetches.Size, fetched)
 
 		list := func(name string, lines []string) {
 			for i, line := range lines {
@@ -351,6 +449,18 @@ func (r *Report) Print(w io.Writer) {
 		if len(components) > 0 {
 			list("components", []string{strings.Join(components, ", ")})
 		}
+		// The classes `variants()` resolved, by who resolved them.
+		var classes, callers []string
+		for _, c := range p.Classes {
+			by := strings.Join(c.By, ", ")
+			at := slices.Index(callers, by)
+			if at < 0 {
+				at = len(callers)
+				callers, classes = append(callers, by), append(classes, by+":")
+			}
+			classes[at] += " " + c.Name
+		}
+		list("classes", classes)
 		var mounts []string
 		for _, m := range p.Mounts {
 			line := m.Module

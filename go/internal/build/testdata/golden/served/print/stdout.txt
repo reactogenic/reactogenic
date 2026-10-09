@@ -4,6 +4,7 @@
   CSS             131       93   inline
   JS               87      105   inline
   document        423      284   index.html
+  fetches         423      284   1 request: what the page needs, and no more
   components HomePage ×1, Layout ×1, Marked ×1
   behaviours ./behaviors/mark #marked
   JS bytes       50 B  behaviors/mark.ts
@@ -16,6 +17,7 @@
   CSS             630      311   inline, the same on 2 pages
   JS                -        -   none
   document        817      425   edit/index.html
+  fetches         817      425   1 request: what the page needs, and no more
   components EditPage ×1, Layout ×1
   CSS rules  not pruned: the page has an element the user edits (`contenteditable`)
 
@@ -25,6 +27,7 @@
   CSS             630      311   inline, the same on 2 pages
   JS                -        -   none
   document        799      417   frame/index.html
+  fetches         799      417   1 request: what the page needs, and no more
   components FramePage ×1, Layout ×1
   CSS rules  not pruned: the page has a document of the site in a frame (`<iframe>`)
 
@@ -34,6 +37,7 @@
   CSS              44       50   inline
   JS                -        -   none
   document        186      153   guide/index.html
+  fetches         186      153   1 request: what the page needs, and no more
   components GuidePage ×1, Layout ×1
   CSS rules    3 kept,  20 dropped  site.css
 
@@ -43,6 +47,7 @@
   CSS              54       55   inline
   JS                -        -   none
   document        514      323   styled/index.html
+  fetches         514      323   1 request: what the page needs, and no more
   components StyledPage ×1
   CSS rules    3 kept,  20 dropped  site.css
                6 kept,   4 dropped  <style>  the page's own, in its HTML
@@ -53,6 +58,7 @@
   CSS             271      187   inline
   JS              327      244   inline
   document        933      546   toggle/index.html
+  fetches         933      546   1 request: what the page needs, and no more
   components Card ×1, Layout ×1, TogglePage ×1
   behaviours ./behaviors/toggle #c9
   JS bytes      294 B  behaviors/toggle.ts
