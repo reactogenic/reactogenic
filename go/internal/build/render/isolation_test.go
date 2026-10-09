@@ -1,6 +1,10 @@
 package render
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -102,5 +106,70 @@ func TestMemory(t *testing.T) {
 	}
 	if len(pages) != 1 || pages[0].Pathname != "/fine/" || pages[0].HTML != `<html lang="en"><head></head><body>fine</body></html>` {
 		t.Errorf("pages: %+v", pages)
+	}
+}
+
+// The timeout is time the page ran, not a moment of the wall clock: a
+// machine that sleeps while a page renders, or whose clock is set, moves the
+// wall clock and not the page. The engine's own timeout is such a moment, and
+// ended TestMemory's page with the timeout's message after a fraction of a
+// second (plan.md, RGP2-071) — so the test is run again under a wall clock
+// that steps a minute at every reading. On macOS, where a library can stand
+// in for the system's clock; elsewhere the Go runtime reads it past libc.
+func TestTimeoutClock(t *testing.T) {
+	if os.Getenv("RG_CLOCK_STEPS") != "" {
+		// The child: is the clock the stepping one?
+		if first, second := time.Now().Unix(), time.Now().Unix(); second-first < 60 {
+			t.Fatalf("the wall clock does not step: %d, %d", first, second)
+		}
+		return
+	}
+	cc, err := exec.LookPath("cc")
+	if runtime.GOOS != "darwin" || err != nil {
+		t.Skip("needs macOS and a C compiler: the wall clock is replaced by a library")
+	}
+	library := filepath.Join(t.TempDir(), "steps.dylib")
+	if out, err := exec.Command(cc, "-dynamiclib", "-o", library, filepath.Join("testdata", "clock", "steps.c")).CombinedOutput(); err != nil {
+		t.Skipf("the stepping clock does not compile: %v\n%s", err, out)
+	}
+	child := exec.Command(os.Args[0], "-test.run", "^(TestTimeoutClock|TestMemory|TestRealmPerPage)$", "-test.v")
+	child.Env = append(os.Environ(), "DYLD_INSERT_LIBRARIES="+library, "RG_CLOCK_STEPS=1")
+	out, err := child.CombinedOutput()
+	if !strings.Contains(string(out), "--- PASS: TestTimeoutClock") {
+		t.Skipf("the stepping clock was not loaded: %v\n%s", err, out)
+	}
+	if err != nil || !strings.Contains(string(out), "--- PASS: TestMemory") || !strings.Contains(string(out), "--- PASS: TestRealmPerPage") {
+		t.Errorf("under a wall clock that steps: %v\n%s", err, out)
+	}
+}
+
+// What `variants()` of @reactogenic/core resolves is in the page's record
+// (builder.md, *What shell code can ask the builder*): each class
+// once, in the order first resolved, with the components that resolved it —
+// per page, and only while a page renders.
+func TestClasses(t *testing.T) {
+	f := load(t, "classes")
+	pages, reports := Render(f.program, f.routes, Options{})
+	if len(reports) != 0 || len(pages) != 2 {
+		t.Fatalf("pages %q, reports %q", pathnames(pages), lines(f.dir, reports))
+	}
+	home, other := pages[0], pages[1]
+	if want := []string{"button", "button-sm", "toolbar", "button-ghost"}; !slices.Equal(home.Classes, want) {
+		t.Errorf("/: classes %q, want %q", home.Classes, want)
+	}
+	for class, by := range map[string][]string{"button": {"Button", "Toolbar"}, "button-sm": {"Button"}, "toolbar": {"Toolbar"}, "button-ghost": {"Toolbar", "Button"}} {
+		if !slices.Equal(home.Resolved[class], by) {
+			t.Errorf("/: %s was resolved by %q, want %q", class, home.Resolved[class], by)
+		}
+	}
+	// The call of a module's top level was not a page's: `loaded`, and the
+	// class of the value it chose, are in no record — the HTML has what was
+	// written (`data-loaded`), and a class written on an element is there.
+	if len(home.Resolved) != 4 || !strings.Contains(home.HTML, `<body data-loaded="loaded button-lg"><button class="button button-sm">Small</button><button class="button">Medium</button><div class="toolbar button button-ghost"></div><button class="button button-sm button-ghost">Ghost</button><p class="literal">`) {
+		t.Errorf("/: resolved %v in\n%s", home.Resolved, home.HTML)
+	}
+	// A page's record is its own.
+	if !slices.Equal(other.Classes, []string{"button"}) || !slices.Equal(other.Resolved["button"], []string{"Button"}) || len(other.Resolved) != 1 {
+		t.Errorf("/other/: classes %q, resolved %v", other.Classes, other.Resolved)
 	}
 }

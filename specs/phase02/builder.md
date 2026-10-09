@@ -118,9 +118,10 @@ tsconfig ─▶ program (phase 1: mapper + tsgo) ─▶ diagnostics ─ any erro
    ├─ render bundle     esbuild: every variant + React's static renderer, in memory
    ├─ execute           embedded engine, a runtime per page: render(variant) → HTML + record
    ├─ check the page    ids, references, commands, links
-   ├─ JS                the record's behaviours → generated entry → esbuild with the page's flags
-   ├─ CSS               esbuild: the page's CSS in import order → pruned against the page as it is served, and its script
-   └─ package           dedupe by content, inline or file, write, report
+   ├─ JS                the record's behaviours → generated entry → esbuild with the page's flags     ┐ analysis:
+   ├─ CSS               esbuild: the page's CSS in import order → pruned against the page as it is      ┘ per artifact, exact
+   │                    served, and its script
+   └─ package           dedupe by content, inline or file, write, report                                ← packaging
 ```
 
 | Stage | Owner | |
@@ -130,6 +131,35 @@ tsconfig ─▶ program (phase 1: mapper + tsgo) ─▶ diagnostics ─ any erro
 | execution | `modernc.org/quickjs` embedded in the binary | no Node at build time |
 | serialisation | React's own `renderToStaticMarkup`, from the project's `react-dom` | shell HTML is what React renders for the same component, under `TZ=UTC` |
 | everything component-aware | ours | the record, the checks, CSS pruning, behaviour selection, packaging |
+
+### Analysis and packaging
+
+Two things, kept apart (the owner's rules, 2026-10-06: decisions.md, K,
+rules 1–3):
+
+| | Analysis | Packaging |
+| --- | --- | --- |
+| asks | what does this artifact **need**? | how does what the artifacts need **reach the browser**? |
+| unit | one artifact — a page — at a time | the site |
+| answer | exact: the CSS rules that can match on that page (*CSS*); the behaviours it mounted, with its flags and each mount's data (*Behaviours*) | each piece inlined in the document, a file of the page's own, or factored into files that several artifacts share (*Packaging*) |
+| for | CSS and JS alike | CSS and JS alike |
+| may | — | make an artifact **fetch** what another needs: a shared file may hold more than one page uses |
+| may not | take another page into account — a page's needs depend on its own source alone — nor become a site-wide union because packaging shares files | change what analysis says an artifact needs |
+| in the report | `html`, `css`, `js`, with why: `styles`, `modules`, `mounts`, `classes` | `document`, `fetches`, each blob's delivery (*The report*) |
+
+```
+analysis    /guide/ needs    CSS: 69 of the bundle's 89 rules — these —  JS: overlays
+            /syntax/ needs   CSS: 83 of them — these —  JS: overlays, menu-keys (RG_MENU_TYPEAHEAD on), invokers
+packaging   today            each page's sheet and script in its document; a blob is shared only where two
+                             pages' are the same bytes
+            could be         the rules both need as one file and the rest in each page — or any other cut
+```
+
+As the builder packages today, **what a page fetches is what it needs**:
+a blob is one page's own sheet or script, shared only where another page's
+is the same bytes. How much further packaging should factor is open, with
+the owner (*Packaging*, OPEN: the factoring policy) — and whatever is
+decided there, the first column does not move.
 
 **One resolver.** Every import of a project file is resolved by the program
 (the esbuild plugin's `OnResolve` asks it), and a program file's text is the
@@ -436,7 +466,7 @@ What that means for the code of a page:
 | date strings | ISO 8601 as ECMAScript defines it — `2026-10-04`, `2026-10-04T12:00` (no zone: UTC), `2026-10-04T12:00+02:00` — and what `toString()` and `toUTCString()` write. Any other string is parsed as each engine likes, and in local time: shell-nondeterministic |
 | `Intl` | **there is none**: `Intl.NumberFormat` is a `ReferenceError`. The methods that would answer without it — a number unformatted, strings compared by code unit — throw shell-error instead: `toLocaleString`, `toLocaleDateString`, `toLocaleTimeString` (of `Number`, `BigInt`, `Date`), `localeCompare`, `toLocaleUpperCase`, `toLocaleLowerCase`. Format in code: `toFixed`, `padStart`, a table of month names |
 | not there (a `ReferenceError`) | `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `structuredClone`, `atob`, `btoa`, `queueMicrotask`, `setTimeout`, `setInterval`, `fetch`, `Temporal`, `process`, `require`; no `Array.fromAsync`. `WeakRef` and `FinalizationRegistry`: when an object is freed is the collector's business, not the page's |
-| a runtime per page | the bundle's bytecode, loaded anew: 2.9 ms a page on the fixture site (27.6 from its text). A page has the timeout (30 s) and 1 GiB; the bundle's own loading, the same |
+| a runtime per page | the bundle's bytecode, loaded anew: 2.9 ms a page on the fixture site (27.6 from its text). A page has the timeout (30 s) and 1 GiB; the bundle's own loading, the same. The 30 s are time the page **ran** — the builder's own timer, on the monotonic clock, which interrupts the engine — not the engine's own timeout, whose deadline is a moment of the wall clock: a machine that slept while a page rendered, or whose clock was set, ended that page with the timeout's message after a fraction of a second (plan.md, RGP2-071) |
 | `Math`'s transcendental functions | the engine's: `Math.tan(1)` is `1.557407724654902` here and `1.5574077246549023` in V8. The standard leaves the last digit to the implementation: round what is rendered |
 
 ```tsx
@@ -456,12 +486,13 @@ different pages from one source); an engine with `Intl` (ICU's data, or cgo).
 
 ### What shell code can ask the builder
 
-Three functions of `@reactogenic/core`, usable in any component:
+Four functions of `@reactogenic/core`, usable in any component:
 
 ```ts
 pathname(): string                       // the route being rendered: "/guide/"
 useShellId(prefix?: string): string      // "d1", "m1", "m2": per page, in render order
 mount(module: string, id?: string, flags?: Record<string, boolean>, data?: MountData): void
+variants<M>(base: string, map: M, choice?: { [D in keyof M]?: keyof M[D] }): string   // "rg-menu rg-menu-end"
 ```
 
 | | At build time | In React (a dynamic segment, Vite) |
@@ -469,9 +500,34 @@ mount(module: string, id?: string, flags?: Record<string, boolean>, data?: Mount
 | `pathname()` | the route being rendered — in every variant of it (*Routes*): from the site's root, whatever `--base` | `location.pathname` |
 | `useShellId(p)` | `p` + a counter per prefix, per page; no prefix is the prefix `r`: `r1`, `r2`. A prefix that ends in a digit is shell-error — the counter follows it, and the first `d1` would be the eleventh `d` | `React.useId()` |
 | `mount(m, id, flags, data)` | recorded for the page (*Behaviours*): `flags` are the page's, `data` this use site's | nothing in phase 2 |
+| `variants(base, map, choice)` | the string — and each class of it recorded for the page, with the component that called (*The record*) | the string |
 
 `useShellId` exists because React's `useId` gives `_R_3e_`: valid, and
 unreadable in view-source. Ids are stable while the page's tree is.
+
+**`variants()`** resolves a component's options into classes: **a variant
+is one class, unique to it** (the owner's rule, decisions.md, K; the
+convention is components.md's, *CSS convention*).
+
+```ts
+const buttonVariants = { size: { sm: "rg-button-sm", md: "" }, look: { ghost: "rg-button-ghost" } } as const;
+variants("rg-button", buttonVariants, { look: "ghost", size: "sm" })   // "rg-button rg-button-sm rg-button-ghost"
+variants("rg-button", buttonVariants, { size: "md" })                  // "rg-button": "" is the default — no class
+variants("rg-button", buttonVariants, { size: "xl" })                  // error TS2322: no such value
+```
+
+| | |
+| --- | --- |
+| the result | `base`, then the class of each chosen value, in the order **the map** names its dimensions — the same element has the same `class` however a use site wrote its props. A dimension without a choice (`undefined`) adds nothing; nor does a value whose class is `""` |
+| the types | `map` is read as written (`as const`, or a literal at the call): a dimension or a value it does not have is a type error. At run time such a choice adds nothing: no class is made up |
+| it is a pure function | of its arguments, in both worlds: no hook, callable anywhere a string is — a module's top level too, where nothing is recorded (no page renders) |
+| the record | at build time each class of the result is noted for the page, once, with the components whose calls resolved it — the report's `classes` (*The report*) |
+| **what the record decides** | **nothing.** A page's CSS is pruned against the page as it is served (*CSS*): the class is on an element, and a class is matched exactly. A rule for a variant is kept on exactly the pages with an element of that variant — as a rule on `[data-variant="ghost"]` was. What the class adds is a name: for the rule, for the report, and for a packaging step that may one day want to say which component a rule is of |
+
+**Rejected:** the record of resolved classes as the *input* of pruning — a
+sheet for the whole site, chosen by the classes any page resolved (built on
+the owner's first ruling on K, measured, and reversed: decisions.md): it is
+analysis turned into a site-wide union because packaging wanted one file.
 
 ## The record
 
@@ -484,6 +540,7 @@ it is what executing the page **recorded**:
 | the HTML | React's renderer | the page; CSS pruning; the checks |
 | mounts: `(module, id, flags, data)` | `mount()` | the page's JS |
 | components rendered, with counts | the builder's JSX runtime | the report |
+| classes resolved, each with the components that resolved it | `variants()` | the report |
 
 In the render bundle, `react` and React's JSX runtime are the builder's own,
 for every module: the project's files (`jsxImportSource`), a file with a
@@ -1022,13 +1079,13 @@ The page's HTML does not carry what only the script reads:
 ```
 
 **Only what the script alone reads moves** (the owner, 2026-10-05: an
-attribute may carry CSS state rather than JS — `open` → `data-open`). An
-attribute a rule selects is the page's, not the mount's:
+attribute may carry CSS state rather than JS — `open` → `data-open`). What
+a rule selects is the page's, not the mount's:
 
 | A use site's value is read by… | It is… | |
 | --- | --- | --- |
 | the behaviour only | the mount's data: an argument of its call | `typeahead` |
-| CSS, at build time (an option) | an attribute on the root, `data-<option>` | `data-align="end"`, `data-variant="ghost"` |
+| CSS, at build time (an option) | a class of its own on the element the rule selects, through `variants()` (*What shell code can ask the builder*; components.md, *CSS convention*) | `rg-menu-end`, `rg-button-ghost` |
 | CSS, at run time (state) | the platform's state, or an attribute the behaviour writes and names in full — by its name or by the property that reflects it | `[open]`, `:popover-open`, `data-open="true"`, `aria-expanded` |
 | CSS **and** the behaviour | the attribute, once: the behaviour reads it there — never a second copy in the mount's call that could disagree | |
 
@@ -1078,9 +1135,17 @@ pages/syntax/index.rtsx: error mount-data: Page /syntax/: `mount("@reactogenic/u
 
 ## Packaging
 
-Per page: its HTML, its pruned CSS, its JS. Identical CSS or JS on several
-pages is **one blob**, by content hash. The documents and the blobs that are
-files are the build's artifacts (*Routes*).
+How what the artifacts need reaches the browser (*Analysis and packaging*):
+each piece inlined in its document, a file of its own, or factored into
+files several artifacts share — for CSS and JS by the same rules. It may
+make a page fetch what another needs; it never changes what a page needs,
+and the report has both (*The report*).
+
+**Today** packaging factors nothing below a page's whole sheet or script:
+per page its HTML, its pruned CSS, its JS; identical CSS or JS on several
+pages is **one blob**, by content hash. So a page fetches exactly what it
+needs. The documents and the blobs that are files are the build's artifacts
+(*Routes*). What it should factor beyond that is the OPEN below.
 
 | `--inline` | A blob is… |
 | --- | --- |
@@ -1115,8 +1180,8 @@ files are the build's artifacts (*Routes*).
 ```html
 <!-- /guide/, --inline auto: its CSS is /guide/more/'s too, and 1,074 B: inlined in both; it mounts nothing -->
 <!doctype html><html lang="en"><head>…<style>…</style></head><body>…</body></html>
-<!-- the same page of the control: the site's one sheet, 7,531 B, is a file; its one script, 1,730 B, is in every page -->
-<!doctype html><html lang="en"><head>…<link rel="stylesheet" href="/_rg/site-1622bb1d.css"></head><body>…<script type="module">…</script></body></html>
+<!-- the same page of the control: the site's one sheet, 7,523 B, is a file; its one script, 1,730 B, is in every page -->
+<!doctype html><html lang="en"><head>…<link rel="stylesheet" href="/_rg/site-a05e499c.css"></head><body>…<script type="module">…</script></body></html>
 ```
 
 **`auto`.** Agreed with the owner (2026-10-05): the threshold is the
@@ -1130,7 +1195,7 @@ ecosystem's, **4096 B** of the blob as written.
 ```
 a script that is `overlays` alone (252 B), on all four pages of the docs site     inlined in each
 a sheet that is the same 1,074 B on two pages                                     inlined in each
-a sheet of 7,531 B that every page has (the control's)                            /_rg/site-<hash>.css, once
+a sheet of 7,523 B that every page has (the control's)                            /_rg/site-<hash>.css, once
 a sheet of 9 KB that differs from every other by one selector                     inlined: it is one page's
 ```
 
@@ -1158,16 +1223,70 @@ only on pages whose pruned sheets are equal to the byte, and the site's four
 are not — each is inlined, and nothing of them is cached from page to page
 (the OPEN below).
 
-> OPEN (with the owner; decisions.md, *For the owner*, K): **blobs that
-> differ by a rule.** Sharing is by content hash, so two pages whose sheets
-> share 99.9% are two blobs, and pruned sheets seldom are the same bytes. On
-> the docs site the four pages' sheets are four blobs — 7,107 B of each
-> the same rules — so every one is inlined, nothing is cached from page to
-> page, and over a four-page visit the control, whose one sheet is a file,
-> transfers 12.8% less; over ten pages of the catalog, 44.8% less, ahead
-> from the third page (bet.md). Recommended: the
-> rules every page keeps as one file, the page's own rest beside it. A
-> discussion of its own: not designed here.
+> **Deferred by the owner until the design system is ready** (2026-10-09:
+> "I don't want to fine-tune it until the design system is ready. For now I
+> just need a solution that works"). Packaging stays as this section has
+> it — a blob is shared where two pages' are the same bytes — and the
+> study below is kept for the day the proper test can be made: with all the
+> components in place.
+>
+> OPEN, then (decisions.md, K): **the factoring policy.** Sharing
+> is by content hash, so two pages whose sheets share 99% are two blobs,
+> each inlined, and nothing is cached from page to page: over a visit the
+> control, whose one sheet is a file, transfers less (bet.md). The owner's
+> rules (2026-10-06) settle whose problem it is — packaging's, for CSS and
+> JS alike, with analysis left exact — and not the policy. The study for it
+> is `bench/factor.mjs` → `bench/results/factor.md`: the same analysis under
+> ten packagings, on both sites.
+>
+> What the numbers show (brotli; `bench/results/factor.md` has raw and gzip,
+> CSS alone and JS alone, and every table whole). **Cold and the visit pull
+> apart**: today's packaging is the lightest cold page, in one request, and
+> leaves nothing in the cache; every shared file costs the cold page a
+> request and, unless the file is exact for it, bytes. **Over a visit that
+> reaches every page one sheet of the union is the floor, and the control's
+> sheet is that union but for the rules no page uses** (4 of its 111 units
+> on the docs site, 16 of 387 on the catalog): on the catalog nothing but
+> (e) — the control without those rules — transfers as little as the
+> control, and the candidates that keep T5 lose the visit by 17% to 45%; on
+> the docs site (b), (c), (d, whole) and (e) do transfer less, by 0.1% to
+> 6.9%, because the control's script is under 4096 B and so in every page.
+> **No candidate meets T5, T8 and the visit together, on either site** —
+> awareness can win a long visit only where the design system is larger
+> than what the site uses, and neither fixture is that. And only (b′), (d)
+> and (e) keep the cascade by construction: (b) and (c) put a rule after
+> ones it preceded, and need the pruner to say that no element matches both
+> — it reports only kept or dropped today.
+>
+> | Packaging — CSS and JS alike | A page fetches only what it needs | The cascade | Docs site: cold page, mean | requests | session | Catalog: cold page, mean | requests | session | T5, docs / catalog | T8 | The visit |
+> | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
+> | (a) today: everything inlined | yes | as written | 7,585 | 2 | 29,871 | 4,454 | 2–3 | 43,305 | fail / pass | pass / pass | fails / fails: the control transfers 12.7% / 44.7% less |
+> | (b′) the rules every sheet starts with, as one file | yes | by construction: a prefix | 7,830 | 4 | 29,446 | 4,606 | 4–5 | 42,349 | fail / pass | fail / fail | fails / fails: 11.5% / 43.4% |
+> | (b) needed by every page → one sheet, one script; the rest inlined | yes | **needs a proof** (45 and 53 pairs of rules) | 7,803 | 4 | 24,992 | 4,842 | 4–5 | 33,290 | fail / pass | fail / fail | **holds**, 4.1% less / fails: 28.0% |
+> | (c) needed by ≥ 2 pages | no: 0.9 KB and 9.1 KB of CSS a page, mean | **needs a proof** | 7,918 | 4 | 24,256 | 6,588 | 4–5 | 26,348 | fail / fail (JS) | fail / fail | **holds**, 6.9% / fails: 9.1% |
+> | (c) needed by ≥ 3 | no: 3.4 KB on the catalog (on the docs site it is (b)) | **needs a proof** | 7,803 | 4 | 24,992 | 5,432 | 4–5 | 28,917 | fail / pass | fail / fail | **holds**, 4.1% / fails: 17.2% |
+> | (c) needed by ≥ half | no: 0.9 KB and 0.5 KB | **needs a proof** | 7,918 | 4 | 24,256 | 4,950 | 4–5 | 31,298 | fail / pass | fail / fail | **holds**, 6.9% / fails: 23.5% |
+> | (d) a file per component and per module, whole | no: 0.2 KB and 4.3 KB | by construction: source order | 8,471 | 8–11 | 25,149 | 6,820 | 8–20 | 29,394 | fail / fail (JS) | fail / fail | **holds**, 3.5% / fails: 18.5% |
+> | (d) … each page's own part, a file where two pages' are the same bytes | yes | by construction | 8,285 | 7–8 | 28,148 | 5,191 | 5–9 | 38,688 | fail / fail (JS) | fail / fail | fails / fails: 7.4% / 38.1% |
+> | (e) one sheet — the union — and one script | no: 1.0 KB and 20.3 KB | by construction: source order | 8,210 | 3 | 26,032 | 8,858 | 4–5 | 23,771 | fail / fail | pass / fail | **holds**, 0.1% / **holds**, 0.8% |
+> | (f) the control | — | — | 8,242 | 3 | 26,064 | 9,041 | 4–5 | 23,953 | — | pass / fail | — |
+>
+> With the scripts left inlined — every script (b) and (c) would share is
+> under the 4096 B of `auto` — each of (b′), (b) and (c) is one request
+> fewer: 3 on the docs site, where T8 then passes, and 3 on the catalog but
+> on `/`, whose picture makes it 4. Their sessions move by under 4%, and no
+> verdict on the visit changes. (e) with each page's own script inlined is
+> 24,282 B on the docs site and 25,355 B on the catalog — 5.5% more than
+> the control there, whose script is a file.
+>
+> The thresholds are plan.md's as written (T5: what a page fetches cold
+> against the control's, each blob on its own; T8: ≤ 3 requests cold). "The
+> visit" — no more than the control over the session — is not a threshold
+> of plan.md: the owner named it as a target (decisions.md, K, rule 4), and
+> whether it becomes one is open (plan.md, RGP2-050).
+>
+> Not designed here, and nothing of it is built: the policy is the owner's
+> next decision.
 
 **Rejected:** `(pages − 1) × bytes > 1024` (the first draft: no unit, and
 `pages` was the site's — the 176 B of `overlays` were a file on a 200-page
@@ -1210,10 +1329,12 @@ root, that is every link: the check is off whenever `--base` is set).
 ## The report
 
 `<out>/_rg/report.json`, and `--report` prints it: per page — a variant of a
-route: `pathname`, `variant`, `path`, its module and its document — the bytes of
-HTML, CSS and JS (raw and gzip — brotli is the bench's, plan.md RGP2-050: Go
-has none), how each blob is delivered, the
-components rendered, the behaviours mounted with their flags and their data, and per
+route: `pathname`, `variant`, `path`, its module and its document — **what it
+needs**, the bytes of its HTML, CSS and JS (raw and gzip — brotli is the
+bench's, plan.md RGP2-050: Go has none), and **what it fetches**: the
+document as written and the files it links, with how each blob is delivered
+(*Analysis and packaging*); the components rendered and the classes their
+`variants()` resolved, the behaviours mounted with their flags and their data, and per
 behaviour module its bytes in the page's script (from esbuild's metafile) —
 *why is this byte here*. The rows add up to the script: the mounted modules,
 the files they import, the generated entry (`<entry>`), and what is of no
@@ -1229,15 +1350,19 @@ CSS: rules kept and dropped per source file, and of the page's own
   CSS            2635     1001   inline
   JS              563      328   inline, the same on 2 pages
   document       4373     1809   account/guest.html
+  fetches        4373     1809   1 request: what the page needs, and no more
   …
 
 /actions/  pages/actions/index.rtsx
                   raw     gzip
   HTML           1393      628
-  CSS            3845     1295   inline
+  CSS            3773     1276   inline
   JS             1448      708   inline
-  document       6732     2528   actions/index.html
+  document       6660     2510   actions/index.html
+  fetches        6660     2510   1 request: what the page needs, and no more
   components ActionsPage ×1, Button ×1, Dialog ×1, DropdownMenu ×1, Each ×1, Layout ×1, MenuItem ×3
+  classes    DropdownMenu: rg-menu
+             Button: rg-button
   behaviours @reactogenic/ui/behaviors/overlays
              @reactogenic/ui/behaviors/menu-keys #actions RG_MENU_TYPEAHEAD=true {"typeahead":true}
              @reactogenic/ui/behaviors/invokers
@@ -1248,25 +1373,51 @@ CSS: rules kept and dropped per source file, and of the page's own
   CSS rules    1 kept,   0 dropped  @reactogenic/ui/src/tokens.css
                3 kept,   1 dropped  @reactogenic/ui/src/button.css
               13 kept,   1 dropped  @reactogenic/ui/src/dialog.css
-               6 kept,   1 dropped  @reactogenic/ui/src/dropdown-menu.css
+               5 kept,   2 dropped  @reactogenic/ui/src/dropdown-menu.css
                0 kept,  25 dropped  @reactogenic/ui/src/side-menu.css
                5 kept,  10 dropped  site.css
 
-css  f55a2378     3845     1295   inline                   /actions/
+css  6c082bb9     3773     1276   inline                   /actions/
 js   560fac5c      563      328   inline                   /account/guest.html /dialog/
 css  e28e8351     1074      502   inline                   /guide/ /guide/more/
 ```
 
+```
+/links/  pages/links/index.rtsx                 ← --inline never: the same needs, fetched in three requests
+                  raw     gzip
+  HTML            814      441
+  CSS            2302      888   /_rg/page-d236f53c.css
+  JS              252      179   /_rg/page-2f3112a3.js, the same on 2 pages
+  document        926      502   links/index.html
+  fetches        3480     1569   3 requests: what the page needs, and no more
+  components Button ×1, DropdownMenu ×1, Each ×1, Layout ×1, LinksPage ×1, MenuItem ×3
+  classes    DropdownMenu: rg-menu
+             Button: rg-button rg-button-ghost
+  …
+
+/links/  pages/links/index.rtsx                 ← --no-specialize: the control decides nothing per page
+                  raw     gzip
+  HTML            814      441
+  CSS            7523     2082   /_rg/site-a05e499c.css, the same on 10 pages
+  JS             1730      855   inline, the same on 10 pages
+  document       2628     1295   links/index.html
+  fetches       10151     3377   2 requests
+  …
+```
+
 | | |
 | --- | --- |
-| HTML, CSS, JS | the page alone — with its doctype and the base, without what packaging puts in it — and its two blobs. They do not depend on `--inline` |
+| **needs** — HTML, CSS, JS | analysis: the page alone — with its doctype and the base, without what packaging puts in it — its own sheet and its own script. They do not depend on `--inline`, nor on any other page |
+| **fetches** | packaging: what a cold load of the page fetches of the build's own files — the document and each file it links, each compressed on its own — and the number of requests. In the JSON, `fetches`: `raw`, `gzip`, `requests`, `files` (the URLs), and `css` and `js`: the styles and the script among it, inlined or in a file, the page's own or shared |
+| needs against fetches | the row says what a page fetches over what it needs: *what the page needs, and no more* — always, as the builder packages today (*Packaging*: a blob is shared only where it is the same bytes) — or *N B of CSS and M B of JS more than the page needs*, once a shared file holds another page's rules. The control decides nothing per page: its row has the requests alone |
+| classes | the classes the page's `variants()` calls resolved (*What shell code can ask the builder*), by the components that resolved them, in the order first resolved: a component's root and its variants' own classes. In the JSON, `classes`: `name`, `by`. A class written as a literal is not there: the HTML has it |
 | document | the file as written: what the request for the page carries. With a blob inlined, the page and the blob |
 | the first line | the document's path and the variant's module: the route's pathname for `index`, the file for another variant (*Routes*). In the JSON: `pathname` (the route), `variant`, `path`, `file`, `output` |
 | a behaviour | a module and the element it is mounted on, once, however many components mounted it, with the flags any of them turned on and the data its call is given (`mounts[].data` in the JSON) |
 | the last lines | the site's blobs: kind, hash, raw, gzip, `inline` or its file, the documents it serves, by path |
 | CSS rules | of the sheet before it is minified; a file whose rules all went is a row: that is the saving. A file's bytes (`bytesIn`, `bytesOut` in the JSON) are its rules', before and after pruning. The last row, `<style>`, is the page's own `<style>` elements, together: their bytes are in the page's HTML, not in its CSS |
 | a page that is not pruned | one line in place of the rows, with the reason: ``not pruned: the page has an element the user edits (`contenteditable`)``, ``not pruned: the page has a document of the site in a frame (`<iframe>`)``, ``not pruned: the page's script may change the tree: it names `append` `` — the word to look for in the behaviour (*CSS*). In the JSON: `styles.unpruned`, and the reason in `styles.why` |
-| a blob's delivery | `inline`, or its file. Under `auto` a blob that pages share is a file when its raw column is 4096 or more: the script of `/account/guest.html` and `/dialog/` above and the sheet of the two guide pages are under it; the control's one sheet — 7,531 B, on every page — is over (*Packaging*) |
+| a blob's delivery | `inline`, or its file. Under `auto` a blob that pages share is a file when its raw column is 4096 or more: the script of `/account/guest.html` and `/dialog/` above and the sheet of the two guide pages are under it; the control's one sheet — 7,523 B, on every page — is over (*Packaging*) |
 | files | the project's own, from the project directory: `site.css`. A package's, by the package and the path in it: `@reactogenic/ui/src/dialog.css` — whether the install put it in `node_modules/`, in pnpm's store or behind a link out of the project. Nothing in the report is the machine's: two builds of one input write the same report, on any checkout |
 | a file of no package, outside the project | where it is, from the project directory: `../shared/tokens.css` |
 | gzip | DEFLATE at level 9, as Go's `compress/gzip` writes it: within 1% of what `gzip -9` (zlib) gives — on the docs site from 76 B below, on its largest page's HTML, to 3 B above, on a 252 B script (`bench/site.mjs`). The measuring scripts have the reference numbers |
@@ -1323,12 +1474,18 @@ for (const [i, id, d] of t[decodeURIComponent(location.pathname).replace(/(\/ind
 The difference between the two builds is what component awareness is worth
 (plan.md, RGP2-050).
 
+The control is **analysis turned off**, not a packaging: its one sheet is
+everything any page imports, used or not. One sheet of what the pages
+*need* — the union of exact per-page analysis — is a packaging, and the
+study has it as (e) (*Packaging*, OPEN).
+
 ## Not in phase 2
 
 | | |
 | --- | --- |
 | dynamic segments, `Dynamic`, `<template>` delivery, holes | layout.md stands, and the engine already renders what React renders. To be redone with them, not carried over: CSS pruning (what a dynamic segment renders is not in the page's HTML, and a `<template>` turns pruning off for its page — research/css.md has the fallback: every rule of a component a dynamic segment imports stays, a template's content matches as "maybe"); the generated entry and the record (*Behaviours*); shell-handler when an element is *made* (`<Dynamic><button onClick={…}>` is made in shell code) |
 | a server, and a route's `server.ts` | every variant is built; nothing selects among them at request time, and a static host serves `index.html` (*Routes*) |
+| a factoring policy | packaging shares a blob only where two pages' are the same bytes; what it should factor beyond that is open with the owner (*Packaging*, OPEN), with a study and no build |
 | a dev server, watch mode, HMR | out of scope |
 | view transitions | out of scope |
 | shell rules in `check` and the editor | `build` reports them: every one is found by executing the page |

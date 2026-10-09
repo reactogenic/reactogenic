@@ -41,7 +41,8 @@ export default function Page() {
             <$Item key="intro" href="/">Introduction</$Item>
             <$Item key="here" href="#content">On this page</$Item>
           </$Section>
-          <$Footer>
+          {/* A class of the author's on a slot replaces the attachment's: the footer is still the side menu's part. */}
+          <$Footer className="tools">
             <DropdownMenu id="tools">
               <$Trigger>Tools</$Trigger>
               <$Item key="search" command="show-modal" commandfor="search">Search…</$Item>

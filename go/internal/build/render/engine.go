@@ -80,6 +80,10 @@ type rendered struct {
 			Data   string          `json:"data"` // JSON text, its keys sorted; "": none
 		} `json:"mounts"`
 		Components map[string]int `json:"components"`
+		Classes    []struct {
+			Name string   `json:"name"`
+			By   []string `json:"by"` // the components that resolved it
+		} `json:"classes"`
 	} `json:"page"`
 	Error *thrown `json:"error"`
 }
@@ -120,14 +124,13 @@ func boot(within limits, bundle func(*quickjs.VM) error) (*engine, *thrown, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := vm.SetEvalTimeout(within.timeout); err != nil {
-		vm.Close()
-		return nil, nil, err
-	}
 	vm.SetMaxStackSize(maxDepth)
 	vm.SetMemoryLimit(within.memory)
 	e := &engine{vm, within}
-	if err := bundle(vm); err != nil {
+	stop := e.watch()
+	err = bundle(vm)
+	stop()
+	if err != nil {
 		return e, e.exception(err), nil
 	}
 	return e, nil, nil
@@ -137,8 +140,44 @@ func (e *engine) close() {
 	e.vm.Close()
 }
 
+// again is how often the watch raises its interrupt once the timeout has
+// passed: the engine takes the flag down whenever a call begins, so one
+// raised before that is lost, and the next is not.
+const again = 10 * time.Millisecond
+
+// watch ends what the engine runs from here on once it has run for the
+// timeout; the stop it returns is called when the engine has returned, and
+// before it is closed. The time is a Go timer's — the monotonic clock, which
+// stands still while the machine sleeps. The engine's own SetEvalTimeout is
+// not used: its deadline is a moment of the wall clock, so a page that had
+// run for a fraction of a second when the machine went to sleep, or when the
+// clock was set, was ended on waking with the timeout's message (plan.md,
+// RGP2-071: that was TestMemory's failure, twice in some thirty-five runs).
+func (e *engine) watch() (stop func()) {
+	done, gone := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(gone)
+		timer := time.NewTimer(e.timeout)
+		defer timer.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-timer.C:
+				e.vm.Interrupt()
+				timer.Reset(again)
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-gone // no interrupt is raised on an engine that may be closed
+	}
+}
+
 // render renders one document: path is its Route.Path.
 func (e *engine) render(path string) (*rendered, error) {
+	defer e.watch()()
 	value, err := e.vm.Call("__reactogenic_render_json", path)
 	if err != nil {
 		// Not an exception of the page — those come back as JSON: the
@@ -161,6 +200,7 @@ func (e *engine) render(path string) (*rendered, error) {
 
 // console returns what shell code printed since the last call.
 func (e *engine) console() []printed {
+	defer e.watch()()
 	value, err := e.vm.Call("__reactogenic_console")
 	text, ok := value.(string)
 	if err != nil || !ok {

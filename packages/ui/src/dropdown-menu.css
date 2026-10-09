@@ -64,7 +64,7 @@
         --rg-menu-edge,
         --rg-menu-corner;
 
-      &[data-align="end"] {
+      &.rg-menu-end {
         left: auto;
         right: anchor(right);
       }

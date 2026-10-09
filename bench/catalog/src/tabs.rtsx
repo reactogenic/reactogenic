@@ -3,7 +3,7 @@
 // Without the script the first panel is shown and the others are not
 // reachable: said in bench/catalog/README.md. A fixture.
 import type { ReactNode } from "react";
-import { mount, slotEntry, slotKeys, useShellId, type KeyedSlot } from "@reactogenic/core";
+import { mount, slotEntry, slotKeys, useShellId, variants, type KeyedSlot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./tabs.css";
@@ -20,13 +20,17 @@ export interface TabsProps {
   id?: string;
   /** The tab list's name. */
   label: string;
-  /** Option: `data-variant`. Default "line". */
+  /** Option: a class of its own per value. Default "line". */
   variant?: "line" | "pills";
   /** Option: the tab the URL's hash names is the one shown (`#<id>-<key>`), and follows it. */
   hash?: boolean;
   /** In order; the first is shown. A key is part of an `id`: a word. */
   $Tab: KeyedSlot<TabProps>;
 }
+
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const tabsVariants = { variant: { line: "", pills: "bc-tabs-pills" } } as const;
 
 export function Tabs({ id, label, variant, hash, $Tab }: TabsProps) {
   const generated = useShellId("t");
@@ -36,7 +40,7 @@ export function Tabs({ id, label, variant, hash, $Tab }: TabsProps) {
   // these tabs follow the hash is this mount's data (builder.md, *Behaviours*).
   mount("@reactogenic/bench-catalog/behaviors/tabs", tabs, { RG_TABS_HASH: hash === true }, hash ? { hash: true } : undefined);
   return (
-    <div id={tabs} className="bc-tabs" data-variant={variant === "pills" ? variant : undefined}>
+    <div id={tabs} className={variants("bc-tabs", tabsVariants, { variant })}>
       <div role="tablist" aria-label={label}>
         {keys.map((key, index) => (
           <button

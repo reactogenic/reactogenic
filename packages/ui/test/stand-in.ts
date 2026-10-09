@@ -1,7 +1,7 @@
 // A stand-in for the builder's engine (specs/phase02/plan.md, *The build-time
 // protocol*): renders with React's static renderer while
-// `globalThis.__reactogenic_build` answers `pathname()`, `useShellId()` and
-// `mount()`, and returns what the builder would record.
+// `globalThis.__reactogenic_build` answers `pathname()`, `useShellId()`,
+// `mount()` and `variants()`, and returns what the builder would record.
 import type { MountData, ShellBuild } from "@reactogenic/core";
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -15,9 +15,11 @@ export interface Mount {
   data?: MountData;
 }
 
-/** A page being rendered: its pathname, its id counters, its mounts. */
+/** A page being rendered: its pathname, its id counters, its mounts, the classes its variants resolved. */
 export class Page {
   readonly mounts: Mount[] = [];
+  /** What `variants()` reported: each class once, in the order first resolved (builder.md, *What shell code can ask the builder*). */
+  readonly classes: string[] = [];
   readonly #counters = new Map<string, number>();
 
   constructor(readonly pathname: string) {}
@@ -33,6 +35,9 @@ export class Page {
       },
       mount: (module, id, flags, data) => {
         this.mounts.push({ module, ...(id === undefined ? {} : { id }), ...(flags === undefined ? {} : { flags }), ...(data === undefined ? {} : { data }) });
+      },
+      classes: (names) => {
+        this.classes.push(...names.filter((name) => !this.classes.includes(name)));
       },
     };
     const host = globalThis as { __reactogenic_build?: ShellBuild };

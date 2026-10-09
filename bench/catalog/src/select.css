@@ -58,7 +58,7 @@
       color: var(--rg-muted);
       font-size: 0.8125rem;
     }
-    &[data-size="sm"] > [data-part="control"] > select {
+    &.bc-select-sm > [data-part="control"] > select {
       padding-block: 0.25rem;
       font-size: 0.875rem;
     }

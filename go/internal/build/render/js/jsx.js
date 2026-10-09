@@ -34,6 +34,12 @@ export function components() {
   return counts;
 }
 
+// The component being called, by its name; "" outside any: who asked the
+// builder (the provenance of a class that `variants()` resolved).
+export function calling() {
+  return current === null ? "" : current.name;
+}
+
 // What a component threw when the render ended all the same: something
 // swallowed it. React's static renderer does that for a Suspense boundary —
 // it renders the fallback and tells nobody — and a boundary is refused when

@@ -13,6 +13,23 @@
         "raw": 286,
         "gzip": 214
       },
+      "fetches": {
+        "raw": 603,
+        "gzip": 462,
+        "requests": 3,
+        "files": [
+          "/docs/_rg/page-76dcf0b8.css",
+          "/docs/_rg/page-f561d7b7.js"
+        ],
+        "css": {
+          "raw": 230,
+          "gzip": 143
+        },
+        "js": {
+          "raw": 87,
+          "gzip": 105
+        }
+      },
       "html": {
         "raw": 164,
         "gzip": 143
@@ -47,6 +64,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [
         {
           "module": "./behaviors/mark",
@@ -93,6 +111,22 @@
         "raw": 230,
         "gzip": 189
       },
+      "fetches": {
+        "raw": 860,
+        "gzip": 500,
+        "requests": 2,
+        "files": [
+          "/docs/_rg/page-412e17c4.css"
+        ],
+        "css": {
+          "raw": 630,
+          "gzip": 311
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 172,
         "gzip": 146
@@ -115,6 +149,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "unpruned": true,
@@ -139,6 +174,22 @@
         "raw": 212,
         "gzip": 177
       },
+      "fetches": {
+        "raw": 842,
+        "gzip": 488,
+        "requests": 2,
+        "files": [
+          "/docs/_rg/page-412e17c4.css"
+        ],
+        "css": {
+          "raw": 630,
+          "gzip": 311
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 154,
         "gzip": 134
@@ -161,6 +212,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "unpruned": true,
@@ -185,6 +237,22 @@
         "raw": 190,
         "gzip": 163
       },
+      "fetches": {
+        "raw": 307,
+        "gzip": 260,
+        "requests": 2,
+        "files": [
+          "/docs/_rg/page-2c3b9795.css"
+        ],
+        "css": {
+          "raw": 117,
+          "gzip": 97
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 132,
         "gzip": 126
@@ -207,6 +275,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 23,
@@ -237,6 +306,22 @@
         "raw": 503,
         "gzip": 337
       },
+      "fetches": {
+        "raw": 619,
+        "gzip": 436,
+        "requests": 2,
+        "files": [
+          "/docs/_rg/page-7ddfbd02.css"
+        ],
+        "css": {
+          "raw": 116,
+          "gzip": 99
+        },
+        "js": {
+          "raw": 0,
+          "gzip": 0
+        }
+      },
       "html": {
         "raw": 445,
         "gzip": 300
@@ -255,6 +340,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [],
       "styles": {
         "rules": 33,
@@ -292,6 +378,23 @@
         "raw": 411,
         "gzip": 274
       },
+      "fetches": {
+        "raw": 1077,
+        "gzip": 743,
+        "requests": 3,
+        "files": [
+          "/docs/_rg/page-9f3abd87.css",
+          "/docs/_rg/page-b2b3ea7b.js"
+        ],
+        "css": {
+          "raw": 339,
+          "gzip": 225
+        },
+        "js": {
+          "raw": 327,
+          "gzip": 244
+        }
+      },
       "html": {
         "raw": 289,
         "gzip": 200
@@ -326,6 +429,7 @@
           "count": 1
         }
       ],
+      "classes": [],
       "mounts": [
         {
           "module": "./behaviors/toggle",

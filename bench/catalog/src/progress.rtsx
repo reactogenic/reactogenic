@@ -1,7 +1,7 @@
 // Progress: the platform's `<progress>`, labelled, with its value in text.
 // Without a value it is indeterminate, and moves. No JS. A fixture
 // (bench/catalog/README.md).
-import { useShellId } from "@reactogenic/core";
+import { useShellId, variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./progress.css";
@@ -14,17 +14,24 @@ export interface ProgressProps {
   max?: number;
   /** The value as the reader should see it: "6.2 of 10 GB". Default: a percentage. */
   text?: string;
-  /** Option: `data-tone`. Default "accent". */
+  /** Option: a class of its own per value. Default "accent". */
   tone?: "accent" | "success" | "warning" | "danger";
-  /** Option: `data-size`. Default "md". */
+  /** Option: a class of its own per value. Default "md". */
   size?: "md" | "sm";
 }
+
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const progressVariants = {
+  tone: { accent: "", success: "bc-progress-success", warning: "bc-progress-warning", danger: "bc-progress-danger" },
+  size: { md: "", sm: "bc-progress-sm" },
+} as const;
 
 export function Progress({ label, value, max = 100, text, tone, size }: ProgressProps) {
   const id = useShellId("p");
   const shown = text ?? (value !== undefined ? `${Math.round((value / max) * 100)}%` : undefined);
   return (
-    <div className="bc-progress" data-tone={tone === "accent" ? undefined : tone} data-size={size === "sm" ? size : undefined}>
+    <div className={variants("bc-progress", progressVariants, { tone, size })}>
       <div data-part="header">
         <label htmlFor={id}>{label}</label>
         {shown !== undefined ? <span data-part="value">{shown}</span> : null}

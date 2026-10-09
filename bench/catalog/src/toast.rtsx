@@ -4,7 +4,7 @@
 // (bench/catalog/README.md): on a static page nothing but a button can say
 // "show it", so the trigger stands for what a form's handler would do.
 import type { ReactNode } from "react";
-import { mount, useShellId, type Slot } from "@reactogenic/core";
+import { mount, useShellId, variants, type Slot } from "@reactogenic/core";
 import { Button, type TriggerProps } from "@reactogenic/ui";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
@@ -12,7 +12,7 @@ import "./toast.css";
 
 export interface ToastProps {
   id?: string;
-  /** Option: `data-tone`. Default "neutral". */
+  /** Option: a class of its own per value. Default "neutral". */
   tone?: "neutral" | "success" | "danger";
   /** Milliseconds until it hides itself; 0 keeps it until it is dismissed. Default 4000. */
   timeout?: number;
@@ -21,6 +21,10 @@ export interface ToastProps {
   /** The message. */
   children?: ReactNode;
 }
+
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const toastVariants = { tone: { neutral: "", success: "bc-toast-success", danger: "bc-toast-danger" } } as const;
 
 export function Toast({ id, tone, timeout = 4000, $Trigger, children }: ToastProps) {
   const generated = useShellId("toast");
@@ -33,7 +37,7 @@ export function Toast({ id, tone, timeout = 4000, $Trigger, children }: ToastPro
   return (
     <>
       <Button slot={$Trigger} popoverTarget={toast} popoverTargetAction="show" />
-      <div id={toast} className="bc-toast" popover="manual" role="status" data-tone={tone === "neutral" ? undefined : tone}>
+      <div id={toast} className={variants("bc-toast", toastVariants, { tone })} popover="manual" role="status">
         <div data-part="body">{children}</div>
         <button type="button" data-part="close" popoverTarget={toast} popoverTargetAction="hide" aria-label="Dismiss">✕</button>
       </div>

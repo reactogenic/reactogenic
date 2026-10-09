@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
@@ -508,6 +509,81 @@ func TestInline(t *testing.T) {
 			t.Errorf("the fixture has %d inlined blobs (%d of them shared) and %d files: it tests one side of the rule only", inline, shared, file)
 		}
 	})
+}
+
+// TestNeedsAndFetches: the report keeps analysis and packaging apart
+// (builder.md, *Analysis and packaging*, *The report*). What a page needs —
+// its CSS, its script — is the same however it is packaged; what it fetches
+// is the document and the files it links. As the builder packages today a
+// page fetches what it needs, and nothing of another page's.
+func TestNeedsAndFetches(t *testing.T) {
+	sites := map[string]site{}
+	for _, inline := range []string{"auto", "always", "never"} {
+		sites[inline] = load(t, "-p", "site", "--inline", inline)
+	}
+	raw := func(a *Asset) int {
+		if a == nil {
+			return 0
+		}
+		return a.Raw
+	}
+	files := 0
+	for inline, s := range sites {
+		for _, p := range s.report.Pages {
+			// Analysis: the same page needs the same, whatever the packaging.
+			if want := sites["always"].page(t, p.Path); raw(p.CSS) != raw(want.CSS) || raw(p.JS) != raw(want.JS) || p.HTML != want.HTML ||
+				!reflect.DeepEqual(p.Styles, want.Styles) || !reflect.DeepEqual(p.Modules, want.Modules) || !reflect.DeepEqual(p.Classes, want.Classes) {
+				t.Errorf("--inline %s, %s: what the page needs depends on how it is packaged", inline, p.Path)
+			}
+			// Packaging: the document, and each file it links — as written.
+			f := p.Fetches
+			total, requests := len(s.files[p.Output]), 1
+			for _, url := range f.Files {
+				file, ok := s.files[strings.TrimPrefix(url, "/")]
+				if !ok || !strings.Contains(s.files[p.Output], `"`+url+`"`) {
+					t.Errorf("--inline %s, %s: fetches %s, which the document does not link or the output does not have", inline, p.Path, url)
+				}
+				total, requests = total+len(file), requests+1
+			}
+			files += len(f.Files)
+			if f.Raw != total || f.Requests != requests || p.Document.Raw != len(s.files[p.Output]) {
+				t.Errorf("--inline %s, %s: fetches %d B in %d requests, the files are %d B in %d", inline, p.Path, f.Raw, f.Requests, total, requests)
+			}
+			if want := map[string]int{"auto": 1, "always": 1, "never": 1 + min(raw(p.CSS), 1) + min(raw(p.JS), 1)}[inline]; f.Requests != want {
+				t.Errorf("--inline %s, %s: %d requests, want %d", inline, p.Path, f.Requests, want)
+			}
+			// Today's packaging shares a blob only when it is the same
+			// bytes: what a page fetches is what it needs.
+			if f.CSS.Raw != raw(p.CSS) || f.JS.Raw != raw(p.JS) {
+				t.Errorf("--inline %s, %s: fetches %d B of CSS and %d B of JS, needs %d and %d", inline, p.Path, f.CSS.Raw, f.JS.Raw, raw(p.CSS), raw(p.JS))
+			}
+		}
+	}
+	if files == 0 {
+		t.Error("no page of the fixture links a file: one side only")
+	}
+	// The classes `variants()` resolved, and who resolved them: the root and
+	// the variant of the ghost button, in the order first resolved.
+	links := sites["auto"].page(t, "/links/")
+	if want := []Class{{"rg-menu", []string{"DropdownMenu"}}, {"rg-button", []string{"Button"}}, {"rg-button-ghost", []string{"Button"}}}; !reflect.DeepEqual(links.Classes, want) {
+		t.Errorf("/links/: classes %+v, want %+v", links.Classes, want)
+	}
+	if home := sites["auto"].page(t, "/"); home.Classes == nil || len(home.Classes) != 0 {
+		t.Errorf("/: classes %+v, want none — and a list", home.Classes)
+	}
+	_, stdout := buildSite(t, "-p", "site", "--report")
+	for _, line := range []string{
+		"  fetches        6660     2510   1 request: what the page needs, and no more\n",
+		"  classes    DropdownMenu: rg-menu\n             Button: rg-button rg-button-ghost\n",
+	} {
+		if !strings.Contains(stdout, line) {
+			t.Errorf("--report has no line %q", line)
+		}
+	}
+	// The control decides nothing per page: no need is claimed for it.
+	if _, stdout := buildSite(t, "-p", "site", "--no-specialize", "--report"); !strings.Contains(stdout, "   2 requests\n") || strings.Contains(stdout, "what the page needs") {
+		t.Errorf("the control's report:\n%s", stdout)
+	}
 }
 
 // TestControl: `--no-specialize` (builder.md, *The control*) — the same

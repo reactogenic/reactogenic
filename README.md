@@ -17,7 +17,7 @@ JS per page, with no React in the output.
 | Path | What |
 | --- | --- |
 | `go/` | the transpiler, the builder (`go/internal/build`) and the `reactogenic` CLI, in Go, on a vendored TypeScript 7 (`go/third_party/tsgo`, patched through `go/patches/`) |
-| `packages/core` | `@reactogenic/core` — the runtime: slot types, `Each`, `Switch` / `Match`, and what a component asks the builder (`pathname`, `useShellId`, `mount`) |
+| `packages/core` | `@reactogenic/core` — the runtime: slot types, `Each`, `Switch` / `Match`, and what a component asks the builder (`pathname`, `useShellId`, `mount`, `variants`) |
 | `packages/vite` | `@reactogenic/vite` — the Vite plugin |
 | `packages/cli` | `@reactogenic/cli` — the `reactogenic` command (`check`, `build`, `lsp`, `content-mapper`) and platform binaries |
 | `packages/ui` | `@reactogenic/ui` — the first components of the design system: `Button`, `Dialog`, `DropdownMenu`, `SideMenu`, their CSS and behaviours. Not published |

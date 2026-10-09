@@ -131,7 +131,7 @@ describe("Dialog", () => {
   });
 
   test("an author's id names it for a button elsewhere, and no trigger is rendered", () => {
-    expect(html).toContain('<button type="button" class="rg-button" data-variant="ghost" command="show-modal" commandfor="shortcuts">Shortcuts</button>');
+    expect(html).toContain('<button type="button" class="rg-button rg-button-ghost" command="show-modal" commandfor="shortcuts">Shortcuts</button>');
     expect(html).toContain('</main><dialog id="shortcuts" class="rg-dialog" closedby="any" aria-labelledby="shortcuts-t">');
   });
 });
@@ -274,6 +274,56 @@ describe("references by id", () => {
     expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
     const references = [...html.matchAll(/ (commandfor|popovertarget|aria-labelledby|aria-describedby|aria-controls|for)="([^"]*)"/g)];
     expect(references.filter(([, , id]) => !ids.includes(id!)).map(([, attribute, id]) => `${attribute}="${id}"`)).toEqual([]);
+  });
+});
+
+// components.md, *CSS convention*: an option a rule selects resolves into a
+// class of its own, through `variants()` — so its rule is on exactly the
+// pages that have it — and a part stays `data-part`.
+describe("what a page resolves", () => {
+  const resolved = (pathname: string, component: ComponentType) => {
+    const page = new Page(pathname);
+    return { html: normalise(page.render(component)), classes: page.classes };
+  };
+
+  test("a variant is a class of its own; the default has none", () => {
+    const { html, classes } = resolved("/", Index);
+    // The layout's menu of versions lines up with its trigger's end; the trigger is a ghost button.
+    expect(html).toContain('<button type="button" class="rg-button rg-button-ghost" popovertarget="versions">0.1 alpha</button>');
+    expect(html).toContain('<ul id="versions" class="rg-menu rg-menu-end" popover>');
+    // In render order: a component is called before the components it renders.
+    expect(classes).toEqual(["rg-menu", "rg-menu-end", "rg-button", "rg-button-ghost"]);
+    expect(html).not.toMatch(/data-(variant|align)/);
+    // The default: no class beside the root's, and nothing reported for it.
+    const plain = resolved("/plain/", Plain);
+    expect(plain.html).toContain('<a class="rg-button" href="/">Home</a>');
+    expect(plain.classes).toEqual(["rg-button"]);
+    expect(resolved("/actions/", Actions).html).toContain('<div id="m2" class="rg-menu" popover role="menu" aria-labelledby="m2-t">');
+  });
+
+  test.each([
+    ["/", Index],
+    ["/actions/", Actions],
+    ["/nested/", Nested],
+    ["/menus/", Menus],
+  ] as [string, ComponentType][])("%s: every class that was resolved is on an element, and every `rg-` class of the page is a root that is written or was resolved", (pathname, component) => {
+    const { html, classes } = resolved(pathname, component);
+    const written = new Set([...html.matchAll(/ class="([^"]*)"/g)].flatMap((match) => match[1]!.split(" ")));
+    expect(classes.filter((name) => !written.has(name))).toEqual([]);
+    expect([...written].filter((name) => name.startsWith("rg-") && !classes.includes(name) && !/^rg-(dialog|sidemenu|sidemenu-toggle)$/.test(name))).toEqual([]);
+  });
+
+  // The owner's rule 5 (decisions.md, K): phase 1's `className` semantics
+  // stand — a slot's props replace its attachment's, `className` among them
+  // (phase01/syntax.md, *Slots*) — so a part is not a class: the footer with
+  // a class of the author's is still the side menu's footer to its rules.
+  // In a browser: test/browser/run.mjs, "a slot's className".
+  test("a slot's className replaces its attachment's, and the part keeps its `data-part`", () => {
+    const { html } = resolved("/nested/", Nested);
+    expect(html).toContain('<div data-part="footer" class="tools">');
+    expect(html).not.toContain('class="rg-sidemenu-footer');
+    // The same footer without a class of the author's.
+    expect(resolved("/", Index).html).toContain('<div data-part="footer">MIT licensed</div>');
   });
 });
 

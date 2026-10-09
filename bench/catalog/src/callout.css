@@ -25,7 +25,7 @@
       font: 700 0.75rem/1.25rem var(--bc-mono);
       text-align: center;
     }
-    &[data-tone="tip"] {
+    &.bc-callout-tip {
       --bc-callout-fg: var(--bc-success);
       --bc-callout-bg: var(--bc-success-bg);
 
@@ -33,7 +33,7 @@
         content: "✓";
       }
     }
-    &[data-tone="warning"] {
+    &.bc-callout-warning {
       --bc-callout-fg: var(--bc-warning);
       --bc-callout-bg: var(--bc-warning-bg);
 
@@ -41,7 +41,7 @@
         content: "!";
       }
     }
-    &[data-tone="danger"] {
+    &.bc-callout-danger {
       --bc-callout-fg: var(--bc-danger);
       --bc-callout-bg: var(--bc-danger-bg);
 

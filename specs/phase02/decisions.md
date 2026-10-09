@@ -5,8 +5,9 @@ owner was away: each is the research's recommended choice — except 16 to
 20, which the specs, their review and the integration took against it or
 without it — with what would reverse it. **For review** marks the ones that
 touch something CLAUDE.md fixes or that are a matter of taste. What was
-*not* decided then is at the end: *For the owner* — ruled since, but for A
-and K.
+*not* decided then is at the end: *For the owner* — ruled since, but for A;
+K was ruled and reversed (below), and what is left of it is the factoring
+policy.
 
 ## Ruled by the owner (2026-10-05)
 
@@ -21,7 +22,7 @@ and K.
 | templates | No `text/template` in the binary: agreed; a carrier for shells on a server is "too early to think about" | 6: stands; the question waits for the server |
 | awareness | The record of execution, not the import graph: "absolutely agree" | 7: stands |
 | CSS | Plain files, pruned per page against the page as served and the page's script, runtime state as "maybe": agreed | 8: stands |
-| behaviours | **"The builder creates one behavior entrypoint per page. Page-wide behavior capabilities are passed to esbuild via Define, allowing unused behavior branches to be eliminated; instance-specific flags remain in generated mount data/calls."** | 9: its last clause was new, and is built: a use site's own value that only the script reads is the mount's **data** — the fourth argument of `mount()`, the second of that mount's call in the generated entry — and no attribute (`typeahead`). With the owner's caution: an attribute that carries **CSS** state or an option a rule selects (`data-open`, `data-align`) stays an attribute (builder.md, *Behaviours*) |
+| behaviours | **"The builder creates one behavior entrypoint per page. Page-wide behavior capabilities are passed to esbuild via Define, allowing unused behavior branches to be eliminated; instance-specific flags remain in generated mount data/calls."** | 9: its last clause was new, and is built: a use site's own value that only the script reads is the mount's **data** — the fourth argument of `mount()`, the second of that mount's call in the generated entry — and no attribute (`typeahead`). With the owner's caution: an attribute that carries **CSS** state or an option a rule selects (`data-open`, `data-align`) stays an attribute (builder.md, *Behaviours*) — it does not move into the mount's data. (Since 2026-10-06 an option a rule selects is a class of its own, through `variants()`: *K, ruled and reversed*, below; state stays an attribute) |
 | packaging | The threshold: 250 B gzipped was our own byte break-even of one request; agreed to take the ecosystem's sourced one, **4096 B** (Vite, Astro). Two pages sharing 99.9% of their CSS being two blobs "needs a separate discussion" | 10: the threshold is 4096 B of the blob as written, built (builder.md, *Packaging*); the rest is *For the owner*, K |
 | the floor | Confirmed | 11: stands |
 | routes | **A directory is a route; its `server.ts` is the artifact-selection middleware** (out of scope for now). **Artifacts are the output files — `.html`, `.css`, `.js`** — not the sources: an `.rtsx` file of the directory that nothing mounts or imports is a *variant* of the route, built into artifacts; `index` is the one served without a server | 12: replaced, and built: every variant is a document — `index.html`, `guest.html` — and `server.ts` is not read (builder.md, *Routes*) |
@@ -40,9 +41,88 @@ and K.
 | T2's budget | an absolute budget for this site's three behaviours | F: as plan.md has it |
 | a dialog under a closed popover; disabled menu items | "will be solved by the design system; do whatever works for test purposes — no need to solve it now" | H, I: no page check, no change; the design system's, later |
 | links into the current page | out of scope | J: as built |
-| per-page sheets share nothing | "as agreed, needs a separate discussion. Keep it as is" | K: **open** |
+| per-page sheets share nothing | "as agreed, needs a separate discussion. Keep it as is" | K: ruled and reversed on 2026-10-06 (below); **open: the factoring policy**, with a study |
 | T5 | "fix the ambiguity around units and rerun on a catalog of ~20 components" | L: plan.md, RGP2-050; bet.md |
 | state only a script can write | "inclined towards option 2" | M: built — decided on the page unless the page's script names it; what the browser writes by itself, and every pseudo-class, stay "maybe" (builder.md, *CSS*, *Runtime state*) |
+
+**K, ruled and reversed (2026-10-06).** The owner first ruled one sheet for
+all of the design system's CSS, chosen for the site by the classes its pages
+resolved, with a page's own CSS apart, in a layer of its own, a file per
+page. Built and measured (branch `rgp2-070-ds-css`, kept as a reference
+commit, not merged): over a visit the control still transferred less (4.4%
+on the docs site, 25.0% on the catalog), the cold page's CSS came within
+6–9% of the control's on the catalog (T5: from pass to fail), a page made
+four requests (T8), and a dialog deleted from one page left its rules in
+what that page fetched (T4). The owner: "a step in a wrong direction", and
+in its place —
+
+| | The owner's rule |
+| --- | --- |
+| 1 | "Reverse 'page CSS is exclusively per-page.' Analysis is per artifact; packaging may share it." |
+| 2 | "Keep per-artifact awareness exact. Never turn the semantic model into site-wide union just because packaging shares assets." |
+| 3 | "Treat cross-page asset factoring as a packager problem, applying equally to CSS and JS." |
+| 4 | "Don't weaken the thresholds. Current implementation fails visit/request targets; cold T5 remains undecided because the fixture doesn't exercise the stated condition." |
+| 5 | "Keep Phase 1 className semantics; revert parts to data-part rather than changing language semantics to accommodate the optimizer." |
+| 6 | "Treat the !important change as a correctness regression, not an acceptable side effect." |
+| 7 | "Investigate TestMemory, though 2/35 suggests flake until proven otherwise." |
+
+What stands of the first ruling: **a variant resolves into a unique class**,
+through `variants()` of `@reactogenic/core`. What does not: the site-wide
+sheet, parts as classes, the `ds` / `page` layers, the 250 B rule.
+
+So there are two things, and they are kept apart (builder.md, *CSS*,
+*Packaging*):
+
+- **analysis** — what an artifact needs, exactly: the rules that can match
+  on that page, the behaviours it mounted with its flags. Per artifact,
+  always;
+- **packaging** — how what the artifacts need reaches the browser: inlined,
+  a file of its own, or factored into files that several artifacts share.
+  For CSS and JS alike. It may make an artifact fetch what another needs;
+  it never changes what analysis says an artifact needs, and the report
+  keeps the two apart.
+
+On 6: under CSS layers an `!important` declaration of a layered sheet wins
+over an unlayered one — the design system's over the project's — and has
+since the design system took `@layer` (measured in Chromium and WebKit, on
+`main`'s arrangement and on the reversed one alike: the same answer). What
+the reversed build did change was the order between the project's sheet and
+an author's own `<style>`. Both go back to what they were: the project's CSS
+is unlayered. And the design system's CSS has no `!important` — now a rule
+of its convention with a test, since one would be an override no project can
+answer.
+
+**Built on the seven rules (plan.md, RGP2-071), and what was found.**
+
+| Rule | Built | Where |
+| --- | --- | --- |
+| a variant is a class | `variants(base, map, choice)` in `@reactogenic/core`; `Button`'s `variant` and `DropdownMenu`'s `align` resolve through it (`rg-button-ghost`, `rg-menu-end`), and every option of the catalog fixture. The builder records the classes each page resolved, and by which component, for the report — and decides nothing by them: a page's CSS is pruned against the page as served, as before | builder.md, *What shell code can ask the builder*; components.md, *CSS convention* |
+| 1–3 | analysis and packaging are two sections of the spec and two sides of the report: per page what it **needs** (`css`, `js`, with why) and what it **fetches** (`fetches`: the document, the files, the requests). They are equal under today's packaging, which shares a blob only where it is the same bytes — a test holds the report to that. **No factoring policy is built**: it is the owner's next decision | builder.md, *Analysis and packaging*, *Packaging*, *The report* |
+| 4 | the thresholds are as they were; under them, the owner's statement of where things stand, with the measured facts, and two questions | plan.md, RGP2-050 |
+| 5 | parts are `data-part`, as on `main`; a contract test and a browser check that `<$Footer className="…">` on `SideMenu` keeps the footer's styling | components.md, *CSS convention* |
+| 6 | no `!important` in the design system's CSS: a rule of the convention, a test in `packages/ui`, a check in `bench/catalog.mjs` | components.md, *CSS convention* |
+| 7 | **found, and it is not the memory limit.** The engine's own timeout (`SetEvalTimeout` of `modernc.org/quickjs`) is a deadline on the **wall clock**: a page that had rendered for a fraction of a second when the wall clock stepped forward was ended on its next poll with the timeout's message. A machine's sleep is such a step — the monotonic clock stands still through it, which is why the test's own time read 0.4 s — and the machine was asleep between short wakes through the night those runs were made (`pmset -g log`; the earlier logs are dated to the minute of a wake). `TestMemory`'s page is the one long engine call of the package whose outcome is not the timeout already. Not reproduced by repetition (1,100 runs, four at once: none failed); reproduced by stepping the wall clock under the test: 35 of 61 moments of a 15-minute step fail with exactly that message, in 0.16–0.30 s. Fixed at the cause: the builder times a page itself, on a Go timer — the monotonic clock — and interrupts the engine; the engine's deadline is not used. The same sweep: 0 of 61; 1,000 runs of the loop, four at once: none failed. A build on a laptop that slept could fail the same way: it was a defect of the builder, not of the test | `go/internal/build/render/engine.go`, `TestTimeoutClock` |
+
+**Deferred (2026-10-09).** The owner (2026-10-09): "I don't want to fine-tune it until the design system is ready. For now I just need a solution that works. Later, when we have all the components in place we'll be able to do a proper test." So: packaging stays
+as it is — analysis per artifact and exact, a blob shared where two pages'
+are the same bytes; no factoring policy is chosen or built; the thresholds
+stand as written, with their outcomes as measured (plan.md, RGP2-050); and
+the proper test — the factoring study, T5's stated condition, the visit —
+is run again when the design system has its components. Nothing in phase 2
+waits on it.
+
+**The study's headline** (`bench/factor.mjs` → `bench/results/factor.md`;
+builder.md, *Packaging*, OPEN: the factoring policy). Ten packagings of the
+same exact analysis, on both sites, in brotli: **none meets T5, T8 and the
+visit together.** Over a visit that reaches every page, one sheet of the
+union is the floor, and the control's sheet is that union but for the rules
+no page uses — 4 of 111 units on the docs site, 16 of 387 on the catalog —
+so on the catalog every packaging that keeps T5 loses the visit, by 17% to
+45%, and the one that wins it, the union as one file, is the control less
+1%. On the docs site sharing the rules every page needs wins the visit by
+4.1% — by the script: the control's is in every page. Awareness can win a
+long visit only where the design system is larger than what the site uses;
+neither fixture is that (plan.md, RGP2-050, OPEN).
 
 ```
                  BUILD
@@ -79,7 +159,7 @@ shell components would be plain functions, with no hook at all.
 | 7 | **Component awareness comes from the record of execution**, not the import graph | the graph over-reports (a layout that can attach a dialog imports it on every page) | dynamic segments: what a dynamic segment renders is known only from its imports (layout.md, *Delivery*) — the record covers shell code |
 | 8 | **CSS: plain files, pruned per page against the page as it is served and the page's script, with runtime state as "maybe"** — since the ruling on M: state only a script can write is "maybe" only where the page's script names it | sound by construction, and the largest untapped saving; no vendored CSS parser — the public API's flat output is regular | pruning proves unsound in the browser comparison; dynamic segments: the HTML is no longer the whole DOM |
 | 9 | **JS: `mount(module, id, flags, data)`; flags are `Define`d per page; a use site's data is an argument of its mount's call; one build per page** — the data by the owner's rule (2026-10-05, above) | −45% from flags alone, with no AST work; the `(root, data)` signature is layout.md's own | dynamic segments: a clone has no id at load, and its mount returns a handle |
-| 10 | **Packaging by content hash; inline unless shared and 4096 B or more as written** — the threshold agreed with the owner (2026-10-05, above), in place of 250 B gzipped; what blobs that differ by a rule share is **open with the owner** (K; builder.md, *Packaging*, OPEN) | a blob of one page is never worth a request; one that several pages share is a file from the size the ecosystem takes (Vite's `assetsInlineLimit`, Astro's `inlineStylesheets: "auto"`) | hosting cannot cache `/_rg/*` forever |
+| 10 | **Packaging by content hash; inline unless shared and 4096 B or more as written** — the threshold agreed with the owner (2026-10-05, above), in place of 250 B gzipped; what packaging factors beyond identical blobs — the factoring policy — is **open with the owner** (K, ruled and reversed, above; builder.md, *Packaging*, OPEN, with the study) | a blob of one page is never worth a request; one that several pages share is a file from the size the ecosystem takes (Vite's `assetsInlineLimit`, Astro's `inlineStylesheets: "auto"`) | hosting cannot cache `/_rg/*` forever |
 | 11 | **Browser floor: Chrome/Edge 135, Firefox 147, Safari 26.2**; the `commandfor` fallback ships with every dialog — confirmed by the owner (2026-10-05) | no JS to open / close / focus / place at the floor (`overlays` per page with an overlay all the same — 176 B in the research, for Back; 252 B as built, since it also closes on a link into the page); below it a dialog button would be dead for ≈15% of usage | a lower floor is wanted: +411 B (anchored placement) on top of the fallback already shipped reaches Baseline 2024 — on iOS, 18.3. The shims were measured by their author only |
 | 12 | ~~Routes are files: `index.rtsx` of a directory under `pages/`~~ — **replaced by the owner (2026-10-05, above): a directory under `pages/` is a route; an `.rtsx` file of it that nothing mounts or imports is a variant, built to a document (`index.rtsx` → `index.html`, `guest.rtsx` → `guest.html`); the output files are the artifacts.** Built so (builder.md, *Routes*): a variant is found in the program's graph, `index.tsx` makes no page, `pathname()` is the route's in every variant. The layout is an ordinary component; a variant renders from `<html>` | the owner's rule; segments stay next to the page that mounts them | a route table arrives with the server (`route-table.md`), and `server.ts` with it |
 | 13 | **The current page is the design system's to mark; the compiler only offers `pathname()`**: `SideMenu` compares `href` with it, and that the current item is `aria-current="page"` is the component's decision — confirmed by the owner (2026-10-05, above) | no `current` prop to get wrong | — |
@@ -96,9 +176,10 @@ shell components would be plain functions, with no hook at all.
 Not decided when the phase was: each would relitigate something CLAUDE.md or
 a phase 1 spec fixes, or is a choice between two specs — K, L and M are what
 the measurement left open ([bet.md](bet.md)). The recommended option is
-first. **Ruled by the owner on 2026-10-05, but for A and K**, which stay
+first. **Ruled by the owner on 2026-10-05, but for A and K**, which stayed
 open — the fourth column; the place in the spec carries the ruling where it
-carried an `> OPEN:`. Built: D, G, M. Recorded, with nothing to build: B, C,
+carried an `> OPEN:`. (K since: ruled and reversed on 2026-10-06, above;
+its row is as it stood, with the numbers of its day.) Built: D, G, M. Recorded, with nothing to build: B, C,
 E, F, H, I, J. L is measured again in plan.md (RGP2-050) and bet.md.
 
 | | Question | Options | Ruling (2026-10-05) | Where |
@@ -113,7 +194,7 @@ E, F, H, I, J. L is measured again in plan.md (RGP2-050) and bet.md.
 | H | **A dialog under a closed popover** of the author's own opens modal and unseen; only `SideMenu`'s drawer is seen to | **1. a page check, `dialog-in-popover`** (no byte; the failure is silent otherwise). 2. a documented limit, as now | **"Will be solved by the design system; do whatever works for test purposes — no need to solve it now."** No page check; a documented limit, as now. The design system's, later | components.md, `Dialog`; builder.md, *Checks on the page* |
 | I | **A disabled menu item** is skipped by focus, arrow keys and typeahead; APG's menu pattern keeps it focusable | **1. APG's**: `aria-disabled="true"` on a button item too, the arrow keys stop at it. 2. as now (two wave-1 decisions with tests) | The same ruling as H: the design system's, later. As now — a disabled item is skipped | components.md, `DropdownMenu` |
 | J | **Links into the current page** in a `SideMenu` (`/guide/#install`) are not marked and open no group — so the docs site's groups each start with an "Overview" link | **1. such an item opens its disclosures and stays unmarked.** 2. as now | **Out of scope.** As now | components.md, `SideMenu` |
-| K | **Per-page sheets share nothing.** Measured (bet.md): the docs site's four pruned sheets are four blobs — 7,107 B of each the same rules — so each is inlined in its page, and over a four-page visit the control, with one cached sheet, transfers 12.8% less (brotli; 19.8% before the 4096 B threshold, while its script was a file too). **On the catalog of twenty components it is the result that decides the visit: ten pages, ten sheets, 47 of 313 selectors on every page — the control transfers 44.8% less over the ten, and is ahead from the third page.** Decision 10 shares a blob only when it is the same bytes | **1. two blobs per page: the rules every page of the site keeps, as one file, and the page's own rest** (on the docs site ≈ 7.1 KB once, then ≈ 1.8 KB on two pages and under 0.1 KB on two — estimated, not built; the order of rules has to survive the split: a rule that moves behind one it preceded can win where it lost). 2. as now: the cold page is what is optimised. 3. per-page pruning only where it saves more than the request it costs a visit | **open** — "as agreed, needs a separate discussion. Keep it as is" | builder.md, *Packaging* |
+| K | **Per-page sheets share nothing.** Measured (bet.md): the docs site's four pruned sheets are four blobs — 7,107 B of each the same rules — so each is inlined in its page, and over a four-page visit the control, with one cached sheet, transfers 12.8% less (brotli; 19.8% before the 4096 B threshold, while its script was a file too). **On the catalog of twenty components it is the result that decides the visit: ten pages, ten sheets, 47 of 313 selectors on every page — the control transfers 44.8% less over the ten, and is ahead from the third page.** Decision 10 shares a blob only when it is the same bytes | **1. two blobs per page: the rules every page of the site keeps, as one file, and the page's own rest** (on the docs site ≈ 7.1 KB once, then ≈ 1.8 KB on two pages and under 0.1 KB on two — estimated, not built; the order of rules has to survive the split: a rule that moves behind one it preceded can win where it lost). 2. as now: the cold page is what is optimised. 3. per-page pruning only where it saves more than the request it costs a visit | "As agreed, needs a separate discussion. Keep it as is" — then, on 2026-10-06, ruled (one design-system sheet for the site) and **reversed** (*K, ruled and reversed*, above). **Open: the factoring policy** — analysis stays per page and exact, packaging may share; the study is `bench/results/factor.md` | builder.md, *Analysis and packaging*, *Packaging* |
 | L | **T5 and the verdict.** T5's JS half ("≥ 30% smaller on every page that ships one") cannot hold on a page that mounts everything the site mounts — `/syntax/`: 13.4%, 0.0% without the control's table — and T5 gave no unit: its CSS half holds raw (22.8%, 23.2%) and not compressed (≤ 16.3%). By plan.md's rule the bet is then neither confirmed nor refuted | **1. the verdict stays "undecided" and T5 is measured again on a catalog of ~20 components** (plan.md, *Later*), where a page that uses everything is not the common case. 2. T5 restated after the fact — "on every page that mounts less than the site does", in raw bytes — under which it holds here: a threshold moved to where the number is | **"Fix the ambiguity around units and rerun on a catalog of ~20 components."** The threshold's units and the catalog: plan.md, RGP2-050, and bet.md — which carry the result | plan.md, RGP2-050; bet.md |
 | M | **State that nothing can reach stays "maybe".** Measured (bet.md): each page's sheet of the docs site keeps 301 B (raw; 3–4%) of `.rg-button:is(:disabled,[aria-disabled=true])`, the menu's same rule and its `[aria-current]`, on pages with no such element and no behaviour that makes one. builder.md's list of runtime state — every pseudo-class, and `open`, `hidden`, `inert`, `disabled`, `checked`, `selected`, `value`, `style`, `aria-*`, `data-state` — is "what the browser and a behaviour write *without saying*", and predates the pruner reading the page's script | **1. as now**: one line of rule, sound whoever writes; the cost is 3–4% of a sheet. 2. the attributes of the list that only a script writes (all but `open`, and `hidden` for `until-found`) are decided on the page unless the page's script names them, as any other attribute is — 72 B a page here; components.md's convention then reads "a behaviour names the state it writes". 3. and `:disabled`, `:checked`, … decided from the attributes on a page whose script names none of them — the other 229 B, and a model of each pseudo-class to keep sound | **"Inclined towards option 2"** — built: of the list, only what the browser writes by itself is "maybe" whoever could write it (`open`, `hidden`, `style`; `dir` on a text control, `controls` and `loop` on a player); `inert`, `disabled`, `checked`, `selected`, `value`, `aria-*`, `data-state` are decided on the page unless the page's script names them — by the attribute's name or by a property that reflects it. Pseudo-classes are unchanged (option 3 was not chosen). On the docs site: 72 B raw off each page's sheet — the menu's `[aria-current]` rule; the two rules that hold `:disabled` (229 B) stay | builder.md, *CSS*, *Runtime state*; components.md, *CSS convention* |
 

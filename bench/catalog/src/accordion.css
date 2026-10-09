@@ -62,7 +62,7 @@
       }
     }
     /* One list under rules, not boxes. */
-    &[data-variant="flush"] {
+    &.bc-accordion-flush {
       gap: 0;
 
       > details {

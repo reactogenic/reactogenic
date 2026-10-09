@@ -1,30 +1,30 @@
 // Badge: a label on something — a status, a count, a tag. A fixture
 // (bench/catalog/README.md); the conventions are specs/phase02/components.md's.
 import type { ReactNode } from "react";
+import { variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./badge.css";
 
 export interface BadgeProps {
-  /** Option: `data-tone`. Default "neutral". */
+  /** Option: a class of its own per value. Default "neutral". */
   tone?: "neutral" | "info" | "success" | "warning" | "danger";
-  /** Option: `data-variant`. Default "soft". */
+  /** Option: a class of its own per value. Default "soft". */
   variant?: "soft" | "solid" | "outline";
   /** Option: a dot before the label — a status. */
   dot?: boolean;
   children?: ReactNode;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const badgeVariants = {
+  tone: { neutral: "", info: "bc-badge-info", success: "bc-badge-success", warning: "bc-badge-warning", danger: "bc-badge-danger" },
+  variant: { soft: "", solid: "bc-badge-solid", outline: "bc-badge-outline" },
+  dot: { on: "bc-badge-dot" },
+} as const;
+
 export function Badge({ tone, variant, dot, children }: BadgeProps) {
   // Only what differs from the default is in the HTML.
-  return (
-    <span
-      className="bc-badge"
-      data-tone={tone === "neutral" ? undefined : tone}
-      data-variant={variant === "soft" ? undefined : variant}
-      data-dot={dot ? "" : undefined}
-    >
-      {children}
-    </span>
-  );
+  return <span className={variants("bc-badge", badgeVariants, { tone, variant, dot: dot ? "on" : undefined })}>{children}</span>;
 }

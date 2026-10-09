@@ -1,6 +1,7 @@
 // What shell code can ask the builder (specs/phase02/builder.md, *What shell
 // code can ask the builder*): the page being rendered, an id that is readable
-// in view-source, and the behaviours a component needs.
+// in view-source, the behaviours a component needs, and the classes its
+// variants resolve to.
 //
 // This module is the first of the package to import React at run time
 // (`useId`); everything else here takes only types from it. `react` is a
@@ -26,6 +27,14 @@ export interface ShellBuild {
    * given without an id.
    */
   mount(module: string, id: string | undefined, flags: Record<string, boolean> | undefined, data: MountData | undefined): void;
+  /**
+   * Records the classes a `variants()` call resolved, for the page's report:
+   * which variant classes the document has, and which component resolved
+   * each. Optional, and nothing is decided by it: a page's CSS is pruned
+   * against the page as served, whose elements carry the classes (builder.md,
+   * *CSS*).
+   */
+  classes?(names: readonly string[]): void;
 }
 
 /** A value a mount's data may hold: JSON, and nothing else. */
@@ -78,4 +87,47 @@ export function useShellId(prefix = "r"): string {
  */
 export function mount(module: string, id?: string, flags?: Record<string, boolean>, data?: MountData): void {
   build()?.mount(module, id, flags, data);
+}
+
+/**
+ * The variants of a component (components.md, *CSS convention*): per
+ * dimension, the class each value resolves to — one class, unique to it.
+ * `""` is a value without a class of its own: the default.
+ */
+export type VariantMap = { readonly [dimension: string]: { readonly [value: string]: string } };
+
+/** A choice among a map's variants: a value of a dimension, or none of it. */
+export type VariantChoice<M extends VariantMap> = { readonly [D in keyof M]?: keyof M[D] | undefined };
+
+/**
+ * The classes of an element with variants: `base`, then the class of each
+ * chosen value, in the order the map names its dimensions. A dimension
+ * without a choice (`undefined`) adds nothing, and so does a value whose
+ * class is `""`. A dimension or a value the map does not have is a type
+ * error.
+ *
+ * ```ts
+ * const buttonVariants = { size: { sm: "rg-button-sm", md: "" }, look: { ghost: "rg-button-ghost" } } as const;
+ * variants("rg-button", buttonVariants, { size: "sm", look });   // "rg-button rg-button-sm rg-button-ghost"
+ * ```
+ *
+ * A variant is a class of its own, so a rule for it is kept on exactly the
+ * pages with an element that has it (builder.md, *CSS*). At build time every
+ * class of the result is also reported to the builder, for the page's
+ * report; in React it only returns the string.
+ */
+export function variants<const M extends VariantMap>(base: string, map: M, choice: VariantChoice<M> = {}): string {
+  const names = [base];
+  // The map's order, not the choice's: the same element has the same
+  // `class` however a use site wrote its props.
+  for (const dimension of Object.keys(map)) {
+    const value = choice[dimension] as string | undefined;
+    if (value !== undefined && Object.hasOwn(map[dimension]!, value)) {
+      names.push(map[dimension]![value]!);
+    }
+  }
+  // Class by class: a base of two classes is two classes to the builder.
+  const classes = names.flatMap((name) => name.split(/\s+/)).filter((name) => name !== "");
+  build()?.classes?.(classes);
+  return classes.join(" ");
 }

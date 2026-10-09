@@ -3,7 +3,7 @@
 // count (`counter`), and a password that can be shown (`reveal`). A fixture
 // (bench/catalog/README.md).
 import type { ComponentProps, ReactNode } from "react";
-import { mount, useShellId, type Slot } from "@reactogenic/core";
+import { mount, useShellId, variants, type Slot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./field.css";
@@ -36,6 +36,10 @@ export interface FieldProps {
   $Prefix?: Slot<ComponentProps<"span">>;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const fieldVariants = { invalid: { on: "bc-field-invalid" } } as const;
+
 export function Field({ id, label, name, type = "text", multiline, value, placeholder, autoComplete, required, disabled, maxLength, hint, error, counter, reveal, $Prefix }: FieldProps) {
   const generated = useShellId("f");
   const field = id ?? generated;
@@ -67,7 +71,7 @@ export function Field({ id, label, name, type = "text", multiline, value, placeh
     "aria-invalid": error !== undefined ? ("true" as const) : undefined,
   };
   return (
-    <div id={field} className="bc-field" data-invalid={error !== undefined ? "" : undefined}>
+    <div id={field} className={variants("bc-field", fieldVariants, { invalid: error !== undefined ? "on" : undefined })}>
       <label htmlFor={input}>
         {label}
         {required ? <span data-part="required" aria-hidden="true">*</span> : null}

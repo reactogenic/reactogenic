@@ -16,32 +16,32 @@
     white-space: nowrap;
     vertical-align: middle;
 
-    &[data-tone="info"] {
+    &.bc-badge-info {
       --bc-badge-fg: var(--bc-info);
       --bc-badge-bg: var(--bc-info-bg);
     }
-    &[data-tone="success"] {
+    &.bc-badge-success {
       --bc-badge-fg: var(--bc-success);
       --bc-badge-bg: var(--bc-success-bg);
     }
-    &[data-tone="warning"] {
+    &.bc-badge-warning {
       --bc-badge-fg: var(--bc-warning);
       --bc-badge-bg: var(--bc-warning-bg);
     }
-    &[data-tone="danger"] {
+    &.bc-badge-danger {
       --bc-badge-fg: var(--bc-danger);
       --bc-badge-bg: var(--bc-danger-bg);
     }
-    &[data-variant="solid"] {
+    &.bc-badge-solid {
       background: var(--bc-badge-fg);
       color: var(--rg-bg);
     }
     /* Forced colours drop a background: the outline is what is left of it. */
-    &[data-variant="outline"] {
+    &.bc-badge-outline {
       border-color: currentColor;
       background: none;
     }
-    &[data-dot]::before {
+    &.bc-badge-dot::before {
       content: "";
       width: 0.5em;
       height: 0.5em;

@@ -71,6 +71,16 @@ type Page struct {
 	HTML       string         // as rendered, without the doctype
 	Mounts     []Mount        // in render order, duplicates kept
 	Components map[string]int // function components rendered, by name
+	// Classes are the classes that `variants()` of @reactogenic/core resolved
+	// while the page rendered (builder.md, *What shell code can ask the
+	// builder*): each once, in the order they were first resolved. For the
+	// report, and nothing is decided by them: the page's CSS is pruned
+	// against the page as served, whose elements carry the classes.
+	Classes []string
+	// Resolved names, for each of Classes, the components whose `variants()`
+	// call resolved it, in the order of their first call: the provenance of
+	// the report. A call outside any component names none.
+	Resolved map[string][]string
 }
 
 // Options are the builder's choices for Render.
@@ -79,8 +89,9 @@ type Options struct {
 	// `react-dom` are resolved from it. "": the program's own.
 	Dir string
 	// Timeout ends a page that does not finish rendering — a loop without an
-	// end — and, the same, the bundle that does not finish loading. 0: thirty
-	// seconds.
+	// end — and, the same, the bundle that does not finish loading. It is time
+	// the engine ran, on the monotonic clock: a machine that sleeps meanwhile,
+	// or whose clock is set, ends nothing. 0: thirty seconds.
 	Timeout time.Duration
 	// Memory ends a page that takes more than that many bytes — a loop that
 	// keeps what it makes fills the machine's memory long before the

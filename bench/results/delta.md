@@ -25,24 +25,24 @@ Deleted from `site/pages/index.rtsx`:
 
 | Page | Document, before | after | The same bytes | … as the site ships (`--inline auto`) |
 | --- | ---: | ---: | --- | --- |
-| `/guide/` | 17,998 | 17,998 | yes: HTML, CSS and script | yes |
-| `/syntax/` | 46,873 | 46,873 | yes: HTML, CSS and script | yes |
-| `/reference/cli/` | 30,736 | 30,736 | yes: HTML, CSS and script | yes |
+| `/guide/` | 17,980 | 17,980 | yes: HTML, CSS and script | yes |
+| `/syntax/` | 46,855 | 46,855 | yes: HTML, CSS and script | yes |
+| `/reference/cli/` | 30,718 | 30,718 | yes: HTML, CSS and script | yes |
 
 ### `/`
 
 | | Before | After | Left |
 | --- | ---: | ---: | ---: |
-| HTML as rendered | 9,698 | 8,628 | 1,070 |
-| CSS | 8,969 | 7,217 | 1,752 |
+| HTML as rendered | 9,678 | 8,613 | 1,065 |
+| CSS | 8,961 | 7,209 | 1,752 |
 | JS | 563 | 252 | 311 |
-| document | 19,276 | 16,143 | 3,133 |
+| document | 19,248 | 16,120 | 3,128 |
 
-**HTML.** The page after is the page before with one span of 1,070 B cut out, at byte 2,847; every other byte is where it was. The span is the dialog's trigger and the `<dialog>`, whole, and nothing else:
+**HTML.** The page after is the page before with one span of 1,065 B cut out, at byte 2,837; every other byte is where it was. The span is the dialog's trigger and the `<dialog>`, whole, and nothing else:
 
 ```html
 <button type="button" class="rg-button" command="show-modal" commandfor="d1">Install</button><dialog id="d1" class="rg-dialog" closedby="any" aria-labelledby="d1-t"><div data-part="panel"><header><h2 id="d1-t">Install</h2><button type="button" data-part="close" command="close" commandfor="d1" aria-label="Close">✕</button></header><div data-part="body"><p>In a Vite + React project (React 19, Vite 8, Node 22 or later):</p><figure class="code"><pre><code>pnpm add @reactogenic/core@alpha
-pnpm add -D @reactogenic/vite@alpha @reactogenic/cli@alpha</code></pre></figure><p>The packages are published under the <code>alpha</code> tag. <code>@reactogenic/cli</code> brings the <code>reactogenic</code> binary for macOS, Linux and Windows, arm64 and x64.</p></div><footer><button type="button" class="rg-button" data-variant="ghost" command="close" commandfor="d1">Close</button><a class="rg-button" href="/guide/">Getting started</a></footer></div><button type="button" data-part="scrim" command="close" commandfor="d1" tabindex="-1" aria-hidden="true"></button></dialog>
+pnpm add -D @reactogenic/vite@alpha @reactogenic/cli@alpha</code></pre></figure><p>The packages are published under the <code>alpha</code> tag. <code>@reactogenic/cli</code> brings the <code>reactogenic</code> binary for macOS, Linux and Windows, arm64 and x64.</p></div><footer><button type="button" class="rg-button rg-button-ghost" command="close" commandfor="d1">Close</button><a class="rg-button" href="/guide/">Getting started</a></footer></div><button type="button" data-part="scrim" command="close" commandfor="d1" tabindex="-1" aria-hidden="true"></button></dialog>
 ```
 
 What that markup had and the page no longer has: `command` (attr), `commandfor` (attr), `dialog` (tag), `d1` (id), `rg-dialog` (class), `closedby` (attr), `aria-labelledby` (attr), `data-part=panel` (value), `d1-t` (id), `data-part=body` (value).
@@ -121,18 +121,18 @@ Deleted from `site/pages/syntax/index.rtsx`:
 
 | Page | Document, before | after | The same bytes | … as the site ships (`--inline auto`) |
 | --- | ---: | ---: | --- | --- |
-| `/` | 19,276 | 19,276 | yes: HTML, CSS and script | yes |
-| `/guide/` | 17,998 | 17,998 | yes: HTML, CSS and script | yes |
-| `/reference/cli/` | 30,736 | 30,736 | yes: HTML, CSS and script | yes |
+| `/` | 19,248 | 19,248 | yes: HTML, CSS and script | yes |
+| `/guide/` | 17,980 | 17,980 | yes: HTML, CSS and script | yes |
+| `/reference/cli/` | 30,718 | 30,718 | yes: HTML, CSS and script | yes |
 
 ### `/syntax/`
 
 | | Before | After | Left |
 | --- | ---: | ---: | ---: |
-| HTML as rendered | 36,542 | 33,839 | 2,703 |
-| CSS | 8,842 | 7,172 | 1,670 |
+| HTML as rendered | 36,532 | 33,829 | 2,703 |
+| CSS | 8,834 | 7,164 | 1,670 |
 | JS | 1,443 | 252 | 1,191 |
-| document | 46,873 | 41,309 | 5,564 |
+| document | 46,855 | 41,291 | 5,564 |
 
 **HTML.** Between the first and the last tag that differ, 2,993 B became 290 B; every byte before and after is where it was.
 
@@ -191,18 +191,18 @@ Deleted from `site/pages/syntax/index.rtsx`:
 
 | Page | Document, before | after | The same bytes | … as the site ships (`--inline auto`) |
 | --- | ---: | ---: | --- | --- |
-| `/` | 19,276 | 19,276 | yes: HTML, CSS and script | yes |
-| `/guide/` | 17,998 | 17,998 | yes: HTML, CSS and script | yes |
-| `/reference/cli/` | 30,736 | 30,736 | yes: HTML, CSS and script | yes |
+| `/` | 19,248 | 19,248 | yes: HTML, CSS and script | yes |
+| `/guide/` | 17,980 | 17,980 | yes: HTML, CSS and script | yes |
+| `/reference/cli/` | 30,718 | 30,718 | yes: HTML, CSS and script | yes |
 
 ### `/syntax/`
 
 | | Before | After | Left |
 | --- | ---: | ---: | ---: |
-| HTML as rendered | 36,542 | 36,542 | 0 |
-| CSS | 8,842 | 8,842 | 0 |
+| HTML as rendered | 36,532 | 36,532 | 0 |
+| CSS | 8,834 | 8,834 | 0 |
 | JS | 1,443 | 1,128 | 315 |
-| document | 46,873 | 46,558 | 315 |
+| document | 46,855 | 46,540 | 315 |
 
 **HTML.** The page's HTML is the same bytes before and after: the option is no attribute — only the behaviour reads it, so it is the mount's data, in the script.
 

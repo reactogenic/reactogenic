@@ -38,9 +38,26 @@ refuting threshold hold. What component awareness adds over the control
 layout) and large on a catalog of twenty (`bench/catalog-site`, a fixture:
 CSS 42–73% and JS 42–92% smaller per page, brotli) — but per-page sheets
 share nothing, so over a visit the control transfers less from the second or
-third page (*For the owner*, K: open). The owner has not chosen the
-verdict's word.
+third page. The owner (2026-10-06): the thresholds stay as written; the
+current implementation fails the visit and request targets, and cold T5 is
+**undecided** — neither fixture is a design system larger than what its
+site uses (`plan.md`, RGP2-050).
 No dynamic segments, no dev server, no view transitions.
+
+**Analysis and packaging are apart** (the owner, 2026-10-06; `decisions.md`,
+*K, ruled and reversed*; `builder.md`, *Analysis and packaging*). Analysis
+is per artifact and exact: the rules that can match on that page, the
+behaviours it mounted with its flags and data. Packaging decides how what
+the artifacts need reaches the browser — inlined, a file, or factored into
+files several share — for CSS and JS alike; it may make a page fetch what
+another needs, and never changes what analysis says. **Never turn analysis
+into a site-wide union because packaging shares files.** The report has
+both sides: what a page needs, what it fetches. Today packaging shares only
+identical blobs, so the two are equal. **The factoring policy is deferred
+until the design system is ready** (the owner, 2026-10-09: "for now I just
+need a solution that works"; the proper test is made when all the
+components are in place) — do not tune packaging before then; the study
+(`bench/factor.mjs`) is kept for that day.
 
 - `research.md` — esbuild is the linker (public Go API, in-process, never
   forked); our compiler sits in front and executes pages in an embedded
@@ -49,12 +66,18 @@ No dynamic segments, no dev server, no view transitions.
   execution, page checks (a script of the page's own is `shell-script`; a
   `<link>` is what its `rel` says), CSS pruned per page — its own `<style>`
   elements with it — behaviours (`mount()`: `Define` flags for the page,
-  data for the use site), packaging (a shared blob is a file from 4096 B),
-  the report, the control (`--no-specialize`).
+  data for the use site), `variants()`, analysis and packaging, packaging
+  (a shared blob is a file from 4096 B; OPEN: the factoring policy), the
+  report (needs and fetches), the control (`--no-specialize`).
 - `components.md` — the three components (and `Button`) on platform
-  primitives.
+  primitives. Its CSS convention: a **variant** is one class of its own,
+  through `variants()` of `@reactogenic/core` (`rg-button-ghost`); a
+  **part** is `data-part`, never a class — a slot's `className` replaces
+  its attachment's (phase 1's semantics stand); no `!important`.
 - `decisions.md` — what was decided, what is **for review**, the list *For
-  the owner* (A–M) with its rulings — A and K are open — the binary's size.
+  the owner* (A–M) with its rulings — A is open; K was ruled and reversed
+  (seven rules), and what is open of it is the factoring policy — the
+  binary's size.
 - `plan.md` — tasks `RGP2-xxx`, each with what was measured, what was not
   done and what was not verified.
 
@@ -71,8 +94,8 @@ What exists:
 - Its tests build fixture sites (`testdata/`: the whole output golden in six
   modes — `-update` rewrites it, and cssprune's corpus reads it) and `site/`
   itself. They need `pnpm install` at the root and `node`.
-- `packages/core` — `pathname`, `useShellId`, `mount`: what a component asks
-  the builder. `packages/ui` — the components in `.rtsx`, their CSS, the
+- `packages/core` — `pathname`, `useShellId`, `mount`, `variants`: what a
+  component asks the builder. `packages/ui` — the components in `.rtsx`, their CSS, the
   behaviours (`src/behaviors/`). Not published yet: `"private": true` in its
   manifest is the flag that keeps it off npm, no more — the aim is public,
   under a branded name the owner will pick (`@reactogenic/ui` is a working
@@ -87,7 +110,12 @@ What exists:
   the bet's scripts: `site.mjs`, `delta.mjs`, `verify.mjs` on the docs site,
   `catalog.mjs`, `catalog-verify.mjs` on `bench/catalog` (twenty components,
   sixteen of them measurement fixtures — not the design system) and
-  `bench/catalog-site` (ten pages); results in `bench/results/`.
+  `bench/catalog-site` (ten pages); `factor.mjs`, the study of packagings on
+  both; results in `bench/results/`.
+- A page's timeout (`render`) is time the page ran — a Go timer — never the
+  engine's own `SetEvalTimeout`: that is a wall-clock deadline, and a
+  machine that slept mid-build ended pages with the timeout's message
+  (RGP2-071; it was `TestMemory`'s flake).
 - Never link `text/template` / `html/template` into the binary: +18.6 MiB.
 - Docs for users: *Build* in `docs/getting-started.md`; `CHANGELOG.md`,
   *Unreleased*.
@@ -173,13 +201,26 @@ are the mount's data; a shared blob is a file from 4096 B; a page with a
 script of its own is an error; the browser floor; the current page is
 marked by the design system, the compiler only offers `pathname()`; theme,
 search and code samples as they are. Still the owner's to rule on — the
-rows marked **for review**, and of the list *For the owner* A and K:
+rows marked **for review**, of the list *For the owner* A, and what K
+became:
 
 - **"Go templates for shells"** (*Compiler*, above) — no `text/template` in
   the binary; HTML is written as strings. Agreed; what carries shells on a
   server is too early to decide (decision 6).
-- **Packaging** — blobs that differ by a rule share nothing: a discussion of
-  its own (`builder.md`, *Packaging*, OPEN; *For the owner*, K).
+- **The factoring policy** (K) — **deferred by the owner (2026-10-09) until
+  the design system is ready**; nothing waits on it. Its history: no longer
+  "may pages share sheets": the
+  owner ruled one design-system sheet for the site, it was built
+  (`rgp2-070-ds-css`: a reference commit, never merged) and measured worse,
+  and the owner reversed it with seven rules (`decisions.md`, *K, ruled and
+  reversed*): analysis per artifact and exact, factoring a packager's
+  problem for CSS and JS alike, thresholds not weakened, parts `data-part`,
+  no `!important`. What is open is the policy itself — which of what the
+  artifacts need goes into shared files — with the study's numbers
+  (`bench/results/factor.md`; `builder.md`, *Packaging*, OPEN): no
+  candidate meets T5, T8 and the visit together on either site. With it
+  (`plan.md`, RGP2-050): a fixture that exercises T5's stated condition,
+  and whether "the visit" becomes a numbered threshold.
 - **"Loop-produced slot items (`Each` around slot elements — phase 2)"**
   (*Deferred*) — no task of `plan.md` has them; the site writes its menu out
   (*For the owner*, A).
@@ -194,7 +235,7 @@ rows marked **for review**, and of the list *For the owner* A and K:
   the design system's decision, and the owner will bring a generic "portal"
   idea). For review: 4's other half (context in shell code).
 - *For the owner*, A–M: ruled (2026-10-05) but for **A** (above: the owner
-  asked back) and **K** (packaging, above). Built: D — keyed slots keep the
+  asked back); **K**: above. Built: D — keyed slots keep the
   written order, an entry's property name is its key encoded and a container
   iterates `slotKeys($X)`, never `Object.keys` (`phase01/syntax.md`, *Keyed
   slots*); G — `closeLabel` on `Dialog` and `SideMenu`; M — state only a
@@ -298,8 +339,8 @@ shell code is executed at build time.)
 | `phase01/ide.md` | implemented and released (RGP1-100–113: npm 0.1.0-alpha.1, the extension 0.1.1); 114 (re-vendor) later |
 | `phase02/research.md`, `phase02/research/` | done (RGP2-001) |
 | `phase02/builder.md`, `phase02/components.md` | implemented (RGP2-010–040): `reactogenic build`, `@reactogenic/ui`, `site/`; `> OPEN:` notes inside |
-| `phase02/plan.md`, `phase02/decisions.md` | RGP2-001–060 done; the owner's rulings of 2026-10-05 built (plan.md, RGP2-050, *The rulings, built*). *For the owner* A–M: ruled, D, G and M built (decisions.md) — A and K open; what is **for review** or not final: not ruled on |
-| `phase02/bet.md` | the measured bet, on the docs site and on a catalog of twenty components: holds for a page loaded cold, not over a visit (K, open); the verdict's word is the owner's. Re-run: `bench/README.md` |
+| `phase02/plan.md`, `phase02/decisions.md` | RGP2-001–060 done; the owner's rulings of 2026-10-05 built (plan.md, RGP2-050, *The rulings, built*); RGP2-071 done: the seven rules of 2026-10-06 (`variants()`, analysis and packaging apart, the study). *For the owner* A–M: ruled, D, G and M built (decisions.md) — A open, K ruled and reversed: the factoring policy is open; what is **for review** or not final: not ruled on |
+| `phase02/bet.md` | the measured bet, on the docs site and on a catalog of twenty components: holds for a page loaded cold, not over a visit; cold T5 undecided (the owner); the reversed ruling and the factoring study. Re-run: `bench/README.md` |
 | `later/layout.md`, `later/persistent-state.md` | parked; phase 2 reads the shell rules as in `phase02/builder.md` |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 

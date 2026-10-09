@@ -56,7 +56,7 @@
     }
 
     /* The switch: a track, and a thumb that slides. */
-    &[data-variant="switch"] > input {
+    &.bc-check-switch > input {
       position: relative;
       width: 2.25rem;
       height: 1.25rem;

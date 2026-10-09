@@ -30,7 +30,12 @@ The builder (specs/phase02/builder.md). In the repository; not published.
   kept for a page only if the page has the state or its script names it
   (the attribute, or the property that reflects it: `ariaExpanded`); what
   the browser writes by itself (`open`, `hidden`, `style`) and every
-  pseudo-class always may match. Docs: *Build* in docs/getting-started.md.
+  pseudo-class always may match. The report says, per page, what it
+  **needs** — its CSS and script, as analysed for that page alone — and
+  what it **fetches**: the document, the files it links, the requests
+  (`fetches` in the JSON, a row of `--report`); and the classes its
+  components' `variants()` resolved (`classes`). Docs: *Build* in
+  docs/getting-started.md.
 - `@reactogenic/core`: `pathname()`, `useShellId(prefix?)` and
   `mount(module, id?, flags?, data?)` — what a component asks the builder:
   the route being built, an id that reads well in view-source (`d1`, `m2`),
@@ -41,15 +46,36 @@ The builder (specs/phase02/builder.md). In the repository; not published.
   page's script at all. Types: `MountData`, `MountValue`. In React (Vite) they are `location.pathname`,
   `useId()` and nothing. With `useShellId` the package imports `react` at
   run time, no longer its types alone; it was a peer dependency already.
+- `@reactogenic/core`: `variants(base, map, choice?)` — the `class` of an
+  element with options: the base, then **one class per chosen value**, in
+  the order the map names its dimensions; a value mapped to `""` (the
+  default) adds none, and a dimension or a value the map does not have is a
+  type error. `variants("rg-button", { variant: { solid: "", ghost:
+  "rg-button-ghost" } } as const, { variant })`. A pure function, in React
+  as in the builder; at build time the classes are also noted for the
+  page's report. Types: `VariantMap`, `VariantChoice`; `ShellBuild` gains
+  the optional `classes(names)`.
 - `@reactogenic/ui` — `Button`, `Dialog`, `DropdownMenu`, `SideMenu`
   (specs/phase02/components.md). `closeLabel` on `Dialog` and `SideMenu`
-  names their close button (default "Close"). Not published yet: `"private": true` in
+  names their close button (default "Close"). An option a rule selects is a
+  class of its own, through `variants()` — `variant="ghost"` is
+  `class="rg-button rg-button-ghost"`, `align="end"` `rg-menu rg-menu-end`
+  (before: `data-variant`, `data-align`); a part stays `data-part`, so a
+  slot's `className` replaces its attachment's and the part keeps its
+  rules. Its CSS has no `!important`: its rules are in layers, and a
+  layered `!important` would beat a project's own CSS. Not published yet: `"private": true` in
   its manifest only keeps it off npm. It is to be public, under a branded
   name the owner will pick — `@reactogenic/ui` is a working name; the
   components live in `packages/ui`.
 
 **Fixed**
 
+- **A page's timeout is time the page ran.** The engine's own timeout was a
+  deadline on the wall clock, so a build that was under way when the
+  machine went to sleep — or when its clock was set — ended the page it was
+  rendering with *Rendering did not end in 30s: a loop without an end?*
+  after a fraction of a second. The builder times a page itself now, on the
+  monotonic clock. (In the repository only: `build` is not published.)
 - **Keyed slots keep the order written** (specs/phase01/syntax.md, *Keyed
   slots*). A container that renders every entry of a `KeyedSlot` — a menu's
   items, a table's columns — got integer-like keys first, ascending: written

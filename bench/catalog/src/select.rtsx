@@ -3,7 +3,7 @@
 // whose `<select>` holds more: builder.md, *CSS*). No JS. A fixture
 // (bench/catalog/README.md).
 import type { ReactNode } from "react";
-import { Each, slotKeys, useShellId, type KeyedSlot } from "@reactogenic/core";
+import { Each, slotKeys, useShellId, variants, type KeyedSlot } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./select.css";
@@ -24,7 +24,7 @@ export interface SelectProps {
   hint?: ReactNode;
   required?: boolean;
   disabled?: boolean;
-  /** Option: `data-size`. Default "md". */
+  /** Option: a class of its own per value. Default "md". */
   size?: "md" | "sm";
   /** In order; an option's key is its value. */
   $Option: KeyedSlot<SelectOptionProps>;
@@ -34,12 +34,16 @@ function Option({ value, disabled, children }: SelectOptionProps & { value: stri
   return <option value disabled>{children}</option>;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const selectVariants = { size: { md: "", sm: "bc-select-sm" } } as const;
+
 export function Select({ id, label, name, value, hint, required, disabled, size, $Option }: SelectProps) {
   const generated = useShellId("sel");
   const field = id ?? generated;
   const input = field + "-i";
   return (
-    <div id={field} className="bc-select" data-size={size === "sm" ? size : undefined}>
+    <div id={field} className={variants("bc-select", selectVariants, { size })}>
       <label htmlFor={input}>{label}</label>
       <div data-part="control">
         <select id={input} name defaultValue={value} required disabled aria-describedby={hint !== undefined ? field + "-h" : undefined}>

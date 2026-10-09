@@ -342,9 +342,9 @@ for (const engineName of engineList) {
         // The second tab: switches.
         await click("#t1-notifications");
         await state("the notifications tab");
-        await click('.bc-check[data-variant="switch"] > input:not(:checked):not(:disabled)');
+        await click('.bc-check.bc-check-switch > input:not(:checked):not(:disabled)');
         await state("a switch thrown, focus on it");
-        await click('.bc-check:not([data-variant]) > input');
+        await click('.bc-check:not(.bc-check-switch) > input');
         await state("a checkbox checked");
         // The third: a password shown, the danger zone.
         await click("#t1-security");

@@ -6,5 +6,5 @@ export { Each } from "./each.ts";
 export type { EachProps } from "./each.ts";
 export { Match, noMatch, Switch } from "./flow.ts";
 export type { MatchProps, SwitchCase, SwitchProps } from "./flow.ts";
-export { mount, pathname, useShellId } from "./shell.ts";
-export type { MountData, MountValue, ShellBuild } from "./shell.ts";
+export { mount, pathname, useShellId, variants } from "./shell.ts";
+export type { MountData, MountValue, ShellBuild, VariantChoice, VariantMap } from "./shell.ts";

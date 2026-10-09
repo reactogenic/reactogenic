@@ -5,7 +5,7 @@
 // dismiss it (WCAG 1.4.13) — a limit of this fixture
 // (bench/catalog/README.md).
 import type { ReactNode } from "react";
-import { useShellId } from "@reactogenic/core";
+import { useShellId, variants } from "@reactogenic/core";
 import "@reactogenic/ui/tokens.css";
 import "./tokens.css";
 import "./tooltip.css";
@@ -13,16 +13,20 @@ import "./tooltip.css";
 export interface TooltipProps {
   /** The description. */
   text: string;
-  /** Option: `data-side`. Default "top". */
+  /** Option: a class of its own per value. Default "top". */
   side?: "top" | "bottom";
   /** What is described: a word, an abbreviation. It gets a tab stop. */
   children?: ReactNode;
 }
 
+// Options a rule selects: one class per value, unique to it; the default has
+// none (specs/phase02/components.md, *CSS convention*).
+const tooltipVariants = { side: { top: "", bottom: "bc-tooltip-bottom" } } as const;
+
 export function Tooltip({ text, side, children }: TooltipProps) {
   const id = useShellId("tt");
   return (
-    <span className="bc-tooltip" data-side={side === "bottom" ? side : undefined}>
+    <span className={variants("bc-tooltip", tooltipVariants, { side })}>
       <span data-part="trigger" tabIndex={0} aria-describedby={id}>{children}</span>
       <span role="tooltip" id>{text}</span>
     </span>
