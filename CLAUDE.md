@@ -1,8 +1,9 @@
 # Reactogenic — context for working in this repo
 
 You are working in `reactogenic/reactogenic`, a monorepo for a React-based UI
-framework. Current task: phase 2 (the builder), following
-`specs/phase02/plan.md` task by task (`RGP2-xxx`); phase 1 is released
+framework. Current task: phase 3 (the design system, **Iota**) — its specs
+first (`specs/phase03/`); phase 2, the builder, is built
+(`specs/phase02/plan.md`, `RGP2-xxx`) and phase 1 is released
 (`specs/phase01/plan.md`, `RGP1-xxx`). Specs come first: settle a task's
 spec, then implement.
 
@@ -22,7 +23,60 @@ Conformance: `go/internal/conformance` runs the syntax.md examples plus
 The specs are the source of truth. When this file and a spec disagree, the
 spec wins; update this file.
 
-## Current phase: phase 2 (`specs/phase02/`)
+## Current phase: phase 3 (`specs/phase03/`)
+
+The design system: **Iota** — "Small by design" (the owner, 2026-10-11). Three
+layers: `core` — design tokens; `bits` — internal building blocks and
+utils; `ui` — React components. Its layout backbone is the **Iota Viewport
+Model** (IVM): a base and a stacking layer, floating viewports with inset
+and outset anchors on main/cross axes, threshold expansion, base-space
+reservation, one ordered stack for modality.
+
+- `ivm.md` — the owner's draft (v0.1), imported unchanged. **Under review:
+  nothing in it is ruled**, its *Agreed* items included.
+- `decisions.md` — the review. Its finding: the draft is three independent
+  choices — where an overlay is rendered (the layer or the browser's top
+  layer), who computes geometry (CSS or script), how content is delivered
+  (a live element or a `<template>`) — and phase 2's evidence is against
+  script geometry (Floating UI) and against templates in shell code, and
+  settles nothing on the layer. Twenty decisions, **for review** but where
+  a ruling replaced them; the findings; *Not verified*: nothing was run in
+  a browser, the playground was not inspected.
+- **Ruled (2026-10-11): the draft's §16, all fourteen rows**
+  (`decisions.md`, *The draft's §16, ruled*): offsets on a centred axis are
+  right/down; a threshold expands at `>=` with hysteresis (a system
+  constant); an expanded outset's inset comes from the *preferred*
+  placement; the shared corner is "first accepted request wins, for now",
+  reservation order apart from paint order; a reservation is the panel's
+  size plus its main offset, released when exit starts; **the stack is of
+  modal viewports only** — push and pop, a modal immutable until at the
+  top; collision policy is the system's, internal; Scale-Up starts at 30%;
+  an operation reverses from the rendered state, the latest request wins,
+  the superseded one settles as cancelled; **focus and dismissal are not
+  the model's** — "viewport only is responsible for dimensions and
+  position"; a lost reference closes with its exit, one out of sight is
+  hidden by `position-visibility`; placement names are physical only —
+  logical names, direction and writing modes are deferred ("will solve
+  later").
+- **Ruled after them (*For the owner*, M–Q):** a threshold written as a
+  query is exact at `>=`, with no hysteresis — only a threshold script
+  evaluates has enter and leave values, and the contract says which;
+  **a lost reference comes before stack order**: a modal whose reference
+  is lost, or that is unmounted, leaves the stack wherever it stands —
+  otherwise a modal not at the top stays immutable, nothing deferred;
+  `position-visibility` is native, written `anchors-visible` (the floor's
+  spelling) then `anchor-visible` — so such a viewport is anchor-positioned
+  in CSS; **focus and dismissal get an interaction spec of `bits`**, beside
+  `ivm.md`, before any component.
+- Still the owner's: *For the owner* A–C, E, G–L.
+- **The owner on this review: "overthinking".** Record a ruling as said;
+  do not grow a list of what it leaves.
+
+Nothing of phase 3 is implemented, and there is no `plan.md` yet. `ivm.md`
+reads as drafted: build on it only through `decisions.md`, and not on what
+is still **for review** there.
+
+## Phase 2 (`specs/phase02/`) — built
 
 The builder: `reactogenic build` compiles pages in `.rtsx` — the variants of
 the routes: a directory under `pages/` is a route, an `.rtsx` file of it that
@@ -98,8 +152,8 @@ What exists:
   component asks the builder. `packages/ui` — the components in `.rtsx`, their CSS, the
   behaviours (`src/behaviors/`). Not published yet: `"private": true` in its
   manifest is the flag that keeps it off npm, no more — the aim is public,
-  under a branded name the owner will pick (`@reactogenic/ui` is a working
-  name). Browser suites
+  as **Iota** (the owner, 2026-10-11); `@reactogenic/ui` is a working name
+  until its packages are named (`specs/phase03/decisions.md`, J). Browser suites
   (Playwright, Chromium and WebKit): `pnpm --filter @reactogenic/ui
   test:browser`, `pnpm --filter @reactogenic/site test:browser`.
 - `site/` — built by `reactogenic build` (`$REACTOGENIC_BINARY`:
@@ -193,7 +247,7 @@ owner* there), and built: esbuild stays; pages are executed in an embedded
 engine, each in a runtime of its own; React is a build-time dependency for
 the foreseeable future; the shell has no browser-time variance (above); an
 island is called a **dynamic segment**; the design system is authored in
-`.rtsx`, to be public under a branded name the owner will pick; awareness is
+`.rtsx`, to be public as **Iota** (named 2026-10-11); awareness is
 the record of execution; CSS is pruned per page, a page's own `<style>`
 with it, and a `<link>` is classified by its `rel`; routes are directories
 and their variants `.rtsx` files nothing imports; a use site's own values
@@ -341,6 +395,8 @@ shell code is executed at build time.)
 | `phase02/builder.md`, `phase02/components.md` | implemented (RGP2-010–040): `reactogenic build`, `@reactogenic/ui`, `site/`; `> OPEN:` notes inside |
 | `phase02/plan.md`, `phase02/decisions.md` | RGP2-001–060 done; the owner's rulings of 2026-10-05 built (plan.md, RGP2-050, *The rulings, built*); RGP2-071 done: the seven rules of 2026-10-06 (`variants()`, analysis and packaging apart, the study). *For the owner* A–M: ruled, D, G and M built (decisions.md) — A open, K ruled and reversed: the factoring policy is open; what is **for review** or not final: not ruled on |
 | `phase02/bet.md` | the measured bet, on the docs site and on a catalog of twenty components: holds for a page loaded cold, not over a visit; cold T5 undecided (the owner); the reversed ruling and the factoring study. Re-run: `bench/README.md` |
+| `phase03/ivm.md` | the owner's draft of the Iota Viewport Model (v0.1, 2026-10-11), imported unchanged; under review |
+| `phase03/decisions.md` | the review of it: twenty decisions, the findings, the draft's §16 **ruled** (2026-10-11); *For the owner* A–Q: D, F and M–Q ruled, the rest open; nothing verified in a browser |
 | `later/layout.md`, `later/persistent-state.md` | parked; phase 2 reads the shell rules as in `phase02/builder.md` |
 | `slot-contract.md`, `route-table.md`, `resource.md` | later |
 
